@@ -44,7 +44,7 @@ const DARK_GREY_UI_COLOR: Color32 = Color32::from_rgb(49,53,71);
 const A_BACKGROUND_COLOR_TOP: Color32 = Color32::from_rgb(185,186,198);
 const A_BACKGROUND_COLOR_BOTTOM: Color32 = Color32::from_rgb(60,60,68);
 const SYNTH_BARS_PURPLE: Color32 = Color32::from_rgb(45,41,99);
-const PASTEL_PURPLE: Color32 = Color32::from_rgb(160,162,203);
+const SYNTH_MIDDLE_BLUE: Color32 = Color32::from_rgb(98,145,204);
 
 // Font
 const FONT: nih_plug_egui::egui::FontId = FontId::monospace(14.0);
@@ -224,7 +224,7 @@ impl Plugin for Actuate {
                                         KNOB_SIZE)
                                         .preset_style(ui_knob::KnobStyle::NewPresets1)
                                         .set_fill_color(DARK_GREY_UI_COLOR)
-                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                        .set_line_color(SYNTH_MIDDLE_BLUE)
                                         .set_text_size(TEXT_SIZE);
                                     ui.add(osc_1_type_knob);
 
@@ -234,7 +234,7 @@ impl Plugin for Actuate {
                                         KNOB_SIZE)
                                         .preset_style(ui_knob::KnobStyle::NewPresets1)
                                         .set_fill_color(DARK_GREY_UI_COLOR)
-                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                        .set_line_color(SYNTH_MIDDLE_BLUE)
                                         .set_text_size(TEXT_SIZE);
                                     ui.add(osc_1_mod_knob);
 
@@ -244,7 +244,7 @@ impl Plugin for Actuate {
                                         KNOB_SIZE)
                                         .preset_style(ui_knob::KnobStyle::NewPresets1)
                                         .set_fill_color(DARK_GREY_UI_COLOR)
-                                        .set_line_color(PASTEL_PURPLE)
+                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                         .set_text_size(TEXT_SIZE);
                                     ui.add(osc_1_attack_knob);
 
@@ -254,7 +254,7 @@ impl Plugin for Actuate {
                                         KNOB_SIZE)
                                         .preset_style(ui_knob::KnobStyle::NewPresets1)
                                         .set_fill_color(DARK_GREY_UI_COLOR)
-                                        .set_line_color(PASTEL_PURPLE)
+                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                         .set_text_size(TEXT_SIZE);
                                     ui.add(osc_1_decay_knob);
 
@@ -264,7 +264,7 @@ impl Plugin for Actuate {
                                         KNOB_SIZE)
                                         .preset_style(ui_knob::KnobStyle::NewPresets1)
                                         .set_fill_color(DARK_GREY_UI_COLOR)
-                                        .set_line_color(PASTEL_PURPLE)
+                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                         .set_text_size(TEXT_SIZE);
                                     ui.add(osc_1_sustain_knob);
 
@@ -274,7 +274,7 @@ impl Plugin for Actuate {
                                         KNOB_SIZE)
                                         .preset_style(ui_knob::KnobStyle::NewPresets1)
                                         .set_fill_color(DARK_GREY_UI_COLOR)
-                                        .set_line_color(PASTEL_PURPLE)
+                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                         .set_text_size(TEXT_SIZE);
                                     ui.add(osc_1_release_knob);
 
@@ -478,18 +478,21 @@ impl Actuate {
                 }
 
                 // Attack is over so use decay amount to reach sustain level - reusing current smoother
-                if  self.osc_1.get_attack_smoother().steps_left() == 0 && 
-                    self.osc_1.get_release_smoother().steps_left() == 0 && 
+                if  self.osc_1_current_gain.steps_left() == 0 && 
                     self.osc_1.get_osc_state() == Oscillator::OscState::Attacking
                 {
                     self.osc_1.set_osc_state(Oscillator::OscState::Decaying);
-                    self.osc_1_current_gain.reset(self.params.osc_1_decay.value());
+                    let temp_gain = self.osc_1_current_gain.next();
+                    self.osc_1_current_gain = Smoother::new(SmoothingStyle::Linear(self.params.osc_1_decay.value()));
+                    self.osc_1_current_gain.reset(temp_gain);
                     let sustain_scaled = self.params.osc_1_sustain.value() / 999.9;
                     self.osc_1_current_gain.set_target(self.sample_rate, sustain_scaled);
                 }
 
-                // Sustain hold
-                if self.osc_1_current_gain.steps_left() == 0 && self.osc_1.get_osc_state() == Oscillator::OscState::Decaying {
+                // Move from Decaying to Sustain hold
+                if  self.osc_1_current_gain.steps_left() == 0 && 
+                    self.osc_1.get_osc_state() == Oscillator::OscState::Decaying
+                {
                     let sustain_scaled = self.params.osc_1_sustain.value() / 999.9;
                     self.osc_1_current_gain.set_target(self.sample_rate, sustain_scaled);
                     self.osc_1.set_osc_state(Oscillator::OscState::Sustaining);
@@ -497,7 +500,7 @@ impl Actuate {
 
                 // End of release
                 if  self.osc_1.get_osc_state() == Oscillator::OscState::Releasing &&
-                    self.osc_1.get_release_smoother().steps_left() == 0
+                    self.osc_1_current_gain.steps_left() == 0
                 {
                     self.osc_1.set_osc_state(Oscillator::OscState::Off);
                 }
