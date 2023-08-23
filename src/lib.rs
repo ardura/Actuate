@@ -27,6 +27,7 @@ use nih_plug::prelude::*;
 
 // My Files
 mod Oscillator;
+mod state_variable_filter;
 mod ui_knob;
 
 pub struct LoadedSample(Vec<Vec<f32>>);
