@@ -74,6 +74,7 @@ pub struct ArcKnob<'a, P: Param> {
     hover_text: bool,
     hover_text_content: String,
     label_text: String,
+    show_center_value: bool,
     text_size: f32,
     outline: bool,
     padding: f32
@@ -107,6 +108,7 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             hover_text_content: String::new(),
             text_size: 16.0,
             label_text: String::new(),
+            show_center_value: true,
             outline: false,
             padding: 10.0
         }
@@ -178,6 +180,12 @@ impl<'a, P: Param> ArcKnob<'a, P> {
         self
     }
 
+    // Set center value of knob visibility
+    pub fn set_show_center_value(mut self, new_bool: bool) -> Self {
+        self.show_center_value = new_bool;
+        self
+    }
+
     pub fn preset_style(mut self, style_id: KnobStyle) -> Self
     {
         // These are all calculated off radius to scale better
@@ -217,7 +225,7 @@ impl<'a, P: Param> ArcKnob<'a, P> {
                 self.center_size = self.radius * 0.6;
                 self.line_width = self.radius * 0.4;
                 self.center_to_line_space = self.radius * 0.0125;
-                self.padding = 2.0;
+                self.padding = 0.0;
             }
         }
         self
@@ -276,14 +284,20 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             }
 
             // Label text from response rect bound
-            let label_pos = Pos2::new(response.rect.center_bottom().x,response.rect.center_bottom().y - self.padding);
+            let label_y = if self.padding == 0.0 {
+                4.0
+            } else {
+                self.padding * 2.0
+            };
+            let label_pos = Pos2::new(response.rect.center_bottom().x,response.rect.center_bottom().y - label_y);
+            let value_pos = Pos2::new(response.rect.center().x,response.rect.center().y);
             if self.label_text.is_empty() {
                 painter.text(label_pos, Align2::CENTER_CENTER, self.slider_region.get_string(), FontId::proportional(self.text_size), self.line_color);
-                //ui.label(self.slider_region.get_string());
+                painter.text(value_pos, Align2::CENTER_CENTER, self.slider_region.param.name(), FontId::proportional(self.text_size), self.line_color);
             }
             else {
                 painter.text(label_pos, Align2::CENTER_CENTER, self.label_text, FontId::proportional(self.text_size), self.line_color);
-                //ui.label(self.label_text);
+                painter.text(value_pos, Align2::CENTER_CENTER, self.slider_region.param.name(), FontId::proportional(self.text_size), self.line_color);
             }
             
         });

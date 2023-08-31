@@ -266,62 +266,62 @@ impl Default for ActuateParams {
             _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off),
             _audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off),
 
-            audio_module_1_level: FloatParam::new("Module 1 Level", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
-            audio_module_2_level: FloatParam::new("Module 2 Level", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
-            audio_module_3_level: FloatParam::new("Module 3 Level", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
+            audio_module_1_level: FloatParam::new("Level", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_2_level: FloatParam::new("Level", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_3_level: FloatParam::new("Level", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
 
             // Oscillators
             ////////////////////////////////////////////////////////////////////////////////////
-            osc_1_type: EnumParam::new("Osc 1 Type", VoiceType::Sine),
-            osc_1_octave: IntParam::new("Osc 1 Octave", 0, IntRange::Linear { min: -2, max: 2 }),
-            osc_1_semitones: IntParam::new("Osc 1 Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
-            osc_1_detune: FloatParam::new("Osc 1 Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
-            osc_1_attack: FloatParam::new("Osc 1 Attack", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_unit(" Attack").with_value_to_string(format_nothing()),
-            osc_1_decay: FloatParam::new("Osc 1 Decay", 0.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_unit(" Decay").with_value_to_string(format_nothing()),
-            osc_1_sustain: FloatParam::new("Osc 1 Sustain", 999.9, FloatRange::Linear { min: 0.0, max: 999.9 }).with_unit(" Sustain").with_value_to_string(format_nothing()),
-            osc_1_release: FloatParam::new("Osc 1 Release", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_unit(" Release").with_value_to_string(format_nothing()),
-            osc_1_mod_amount: FloatParam::new("Osc 1 Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit(" Mod").with_value_to_string(formatters::v2s_f32_rounded(2)),
-            osc_1_retrigger: EnumParam::new("Osc 1 Retrigger", RetriggerStyle::Free),
-            osc_1_atk_curve: EnumParam::new("Osc 1 Atk Curve", Oscillator::SmoothStyle::Linear),
-            osc_1_rel_curve: EnumParam::new("Osc 1 Rel Curve", Oscillator::SmoothStyle::Linear),
+            osc_1_type: EnumParam::new("Wave", VoiceType::Sine),
+            osc_1_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
+            osc_1_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
+            osc_1_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
+            osc_1_attack: FloatParam::new("Attack", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_1_decay: FloatParam::new("Decay", 0.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_1_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0, max: 999.9 }).with_value_to_string(format_nothing()),
+            osc_1_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_1_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            osc_1_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Free),
+            osc_1_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
+            osc_1_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
 
-            osc_2_type: EnumParam::new("Osc 2 Type", VoiceType::Sine),
-            osc_2_octave: IntParam::new("Osc 2 Octave", 0, IntRange::Linear { min: -2, max: 2 }),
-            osc_2_semitones: IntParam::new("Osc 2 Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
-            osc_2_detune: FloatParam::new("Osc 2 Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
-            osc_2_attack: FloatParam::new("Osc 2 Attack", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_unit(" Attack").with_value_to_string(format_nothing()),
-            osc_2_decay: FloatParam::new("Osc 2 Decay", 0.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_unit(" Decay").with_value_to_string(format_nothing()),
-            osc_2_sustain: FloatParam::new("Osc 2 Sustain", 999.9, FloatRange::Linear { min: 0.0, max: 999.9 }).with_unit(" Sustain").with_value_to_string(format_nothing()),
-            osc_2_release: FloatParam::new("Osc 2 Release", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_unit(" Release").with_value_to_string(format_nothing()),
-            osc_2_mod_amount: FloatParam::new("Osc 2 Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit(" Mod").with_value_to_string(formatters::v2s_f32_rounded(2)),
-            osc_2_retrigger: EnumParam::new("Osc 2 Retrigger", RetriggerStyle::Free),
-            osc_2_atk_curve: EnumParam::new("Osc 2 Atk Curve", Oscillator::SmoothStyle::Linear),
-            osc_2_rel_curve: EnumParam::new("Osc 2 Rel Curve", Oscillator::SmoothStyle::Linear),
+            osc_2_type: EnumParam::new("Wave", VoiceType::Sine),
+            osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
+            osc_2_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
+            osc_2_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
+            osc_2_attack: FloatParam::new("Attack", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_2_decay: FloatParam::new("Decay", 0.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_2_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0, max: 999.9 }).with_value_to_string(format_nothing()),
+            osc_2_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_2_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            osc_2_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Free),
+            osc_2_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
+            osc_2_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
 
-            osc_3_type: EnumParam::new("Osc 3 Type", VoiceType::Sine),
-            osc_3_octave: IntParam::new("Osc 3 Octave", 0, IntRange::Linear { min: -2, max: 2 }),
-            osc_3_semitones: IntParam::new("Osc 3 Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
-            osc_3_detune: FloatParam::new("Osc 3 Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
-            osc_3_attack: FloatParam::new("Osc 3 Attack", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_unit(" Attack").with_value_to_string(format_nothing()),
-            osc_3_decay: FloatParam::new("Osc 3 Decay", 0.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_unit(" Decay").with_value_to_string(format_nothing()),
-            osc_3_sustain: FloatParam::new("Osc 3 Sustain", 999.9, FloatRange::Linear { min: 0.0, max: 999.9 }).with_unit(" Sustain").with_value_to_string(format_nothing()),
-            osc_3_release: FloatParam::new("Osc 3 Release", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_unit(" Release").with_value_to_string(format_nothing()),
-            osc_3_mod_amount: FloatParam::new("Osc 3 Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit(" Mod").with_value_to_string(formatters::v2s_f32_rounded(2)),
-            osc_3_retrigger: EnumParam::new("Osc 3 Retrigger", RetriggerStyle::Free),
-            osc_3_atk_curve: EnumParam::new("Osc 3 Atk Curve", Oscillator::SmoothStyle::Linear),
-            osc_3_rel_curve: EnumParam::new("Osc 3 Rel Curve", Oscillator::SmoothStyle::Linear),
+            osc_3_type: EnumParam::new("Wave", VoiceType::Sine),
+            osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
+            osc_3_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
+            osc_3_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
+            osc_3_attack: FloatParam::new("Attack", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_3_decay: FloatParam::new("Decay", 0.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_3_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0, max: 999.9 }).with_value_to_string(format_nothing()),
+            osc_3_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_3_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            osc_3_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Free),
+            osc_3_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
+            osc_3_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
 
             // Filter
             ////////////////////////////////////////////////////////////////////////////////////
-            filter_lp_amount: FloatParam::new("Low Pass", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit(" LP").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_hp_amount: FloatParam::new("High Pass", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit(" HP").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_bp_amount: FloatParam::new("Band Pass", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit(" BP").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_lp_amount: FloatParam::new("Low Pass", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_hp_amount: FloatParam::new("High Pass", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_bp_amount: FloatParam::new("Band Pass", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)),
 
-            filter_wet: FloatParam::new("Filter Wet", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("% Wet").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_resonance: FloatParam::new("Filter Q", 0.5, FloatRange::Linear { min: 0.2, max: 1.0 } ).with_unit("% Q").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_wet: FloatParam::new("Filter Wet", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_resonance: FloatParam::new("Resonance", 0.5, FloatRange::Linear { min: 0.2, max: 1.0 } ).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
             filter_res_type: EnumParam::new("Q Type", ResonanceType::Default),
-            filter_cutoff: FloatParam::new("Filter Cutoff", 2000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_value_to_string(formatters::v2s_f32_rounded(0)).with_unit("Hz"),
-            filter_form: EnumParam::new("Filter Form", FilterForm::Direct),
+            filter_cutoff: FloatParam::new("Frequency", 2000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_value_to_string(formatters::v2s_f32_rounded(0)).with_unit("Hz"),
+            filter_form: EnumParam::new("Alg Form", FilterForm::Direct),
         }
     }
 }
@@ -405,227 +405,215 @@ impl Plugin for Actuate {
                             ui.add_space(synth_bar_space);
 
                             // GUI Structure
-                                ui.vertical(|ui| {
-                                    // Spacing :)
-                                    ui.label(RichText::new("Synth")
-                                        .font(FONT)
-                                        .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
-                                        .on_hover_text("by Ardura!");
-                                    ui.separator();
-                                    const KNOB_SIZE: f32 = 30.0;
-                                    const TEXT_SIZE: f32 = 14.0;
-
-                                    ui.horizontal(|ui|{
-                                        ui.vertical(|ui|{
-                                            ui.label("Generators");
-                                            // Side knobs for types
-                                            ui.horizontal(|ui|{
-                                                let audio_module_1_knob = ui_knob::ArcKnob::for_param(
-                                                    &params._audio_module_1_type, 
-                                                    setter, 
-                                                    KNOB_SIZE)
-                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                    .set_text_size(TEXT_SIZE);
-                                                ui.add(audio_module_1_knob);
-
-                                                let audio_module_1_level_knob = ui_knob::ArcKnob::for_param(
-                                                    &params.audio_module_1_level, 
-                                                    setter, 
-                                                    KNOB_SIZE)
-                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                    .set_text_size(TEXT_SIZE);
-                                                ui.add(audio_module_1_level_knob);
-                                            });
-
-                                            ui.horizontal(|ui|{
-                                                let audio_module_2_knob = ui_knob::ArcKnob::for_param(
-                                                    &params._audio_module_2_type, 
-                                                    setter, 
-                                                    KNOB_SIZE)
-                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                    .set_text_size(TEXT_SIZE);
-                                                ui.add(audio_module_2_knob);
-
-                                                let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
-                                                    &params.audio_module_2_level, 
-                                                    setter, 
-                                                    KNOB_SIZE)
-                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                    .set_text_size(TEXT_SIZE);
-                                                ui.add(audio_module_2_level_knob);
-                                            });
-
-                                            ui.horizontal(|ui| {
-                                                let audio_module_3_knob = ui_knob::ArcKnob::for_param(
-                                                    &params._audio_module_3_type, 
-                                                    setter, 
-                                                    KNOB_SIZE)
-                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                    .set_text_size(TEXT_SIZE);
-                                                ui.add(audio_module_3_knob);
-
-                                                let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
-                                                    &params.audio_module_3_level, 
-                                                    setter, 
-                                                    KNOB_SIZE)
-                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                    .set_text_size(TEXT_SIZE);
-                                                ui.add(audio_module_3_level_knob);
-                                            });
-                                        });
-                                        ui.separator();
-                                        ui.vertical(|ui|{
-                                            ui.label("Generator Controls");
-                                            audio_module::AudioModule::draw_modules(ui, params.clone(), setter);
-                                        });
-                                        ui.separator();
-                                    });
-                                    ui.separator();
-                                    ui.label("Filters");
-                                    // Filter section
-                                    ui.vertical(|ui| {
-                                        ui.horizontal(|ui| {
-                                            let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                                &params.filter_wet, 
+                            ui.vertical(|ui| {
+                                // Spacing :)
+                                ui.label(RichText::new("Synth")
+                                    .font(FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("by Ardura!");
+                                ui.separator();
+                                const KNOB_SIZE: f32 = 36.0;
+                                const TEXT_SIZE: f32 = 13.0;
+                                ui.horizontal(|ui|{
+                                    ui.vertical(|ui|{
+                                        ui.label("Generators");
+                                        // Side knobs for types
+                                        ui.horizontal(|ui|{
+                                            let audio_module_1_knob = ui_knob::ArcKnob::for_param(
+                                                &params._audio_module_1_type, 
                                                 setter, 
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                .set_text_size(TEXT_SIZE);
-                                            ui.add(filter_wet_knob);
-    
-                                            let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
-                                                &params.filter_cutoff, 
-                                                setter, 
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
-                                            ui.add(filter_cutoff_knob);
-    
-                                            let filter_resonance_knob = ui_knob::ArcKnob::for_param(
-                                                &params.filter_resonance, 
+                                            ui.add(audio_module_1_knob);
+                                            let audio_module_1_level_knob = ui_knob::ArcKnob::for_param(
+                                                &params.audio_module_1_level, 
                                                 setter, 
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
-                                            ui.add(filter_resonance_knob);
-
-                                            let filter_res_type_knob = ui_knob::ArcKnob::for_param(
-                                                &params.filter_res_type, 
-                                                setter, 
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                .set_text_size(TEXT_SIZE);
-                                            ui.add(filter_res_type_knob);
-
-                                            let filter_form_knob = ui_knob::ArcKnob::for_param(
-                                                &params.filter_form, 
-                                                setter, 
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                .set_text_size(TEXT_SIZE);
-                                            ui.add(filter_form_knob);
-
-                                            let filter_hp_knob = ui_knob::ArcKnob::for_param(
-                                                &params.filter_hp_amount, 
-                                                setter, 
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                .set_text_size(TEXT_SIZE);
-                                            ui.add(filter_hp_knob);
-    
-                                            let filter_bp_knob = ui_knob::ArcKnob::for_param(
-                                                &params.filter_bp_amount, 
-                                                setter, 
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                .set_text_size(TEXT_SIZE);
-                                            ui.add(filter_bp_knob);
-    
-                                            let filter_lp_knob = ui_knob::ArcKnob::for_param(
-                                                &params.filter_lp_amount, 
-                                                setter, 
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                .set_text_size(TEXT_SIZE);
-                                            ui.add(filter_lp_knob);
+                                            ui.add(audio_module_1_level_knob);
                                         });
-                                        ui.separator();
+                                        ui.horizontal(|ui|{
+                                            let audio_module_2_knob = ui_knob::ArcKnob::for_param(
+                                                &params._audio_module_2_type, 
+                                                setter, 
+                                                KNOB_SIZE)
+                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_text_size(TEXT_SIZE);
+                                            ui.add(audio_module_2_knob);
+                                            let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
+                                                &params.audio_module_2_level, 
+                                                setter, 
+                                                KNOB_SIZE)
+                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_text_size(TEXT_SIZE);
+                                            ui.add(audio_module_2_level_knob);
+                                        });
                                         ui.horizontal(|ui| {
-                                            
-
-                                            ui.separator();
+                                            let audio_module_3_knob = ui_knob::ArcKnob::for_param(
+                                                &params._audio_module_3_type, 
+                                                setter, 
+                                                KNOB_SIZE)
+                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_text_size(TEXT_SIZE);
+                                            ui.add(audio_module_3_knob);
+                                            let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
+                                                &params.audio_module_3_level, 
+                                                setter, 
+                                                KNOB_SIZE)
+                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_text_size(TEXT_SIZE);
+                                            ui.add(audio_module_3_level_knob);
                                         });
                                     });
-                                    
-                                    
-                                    nih_log!("{:?}",egui_ctx.input().raw);
-                                    //ui.label(RichText::new(format!("dropped_files: {}", egui_ctx.input().raw.dropped_files.len())).font(FONT).color(FONT_COLOR));
-                                    /*
-                                    // Dropped file logic
-                                    let mut samples_var: Vec<f32>;
-                                    // Collect dropped files:
-                                    let mut temp_dropped_files = egui_ctx.input().raw.dropped_files.clone();
-                                    if !temp_dropped_files.is_empty() {
-                                        let dropped_file: Option<Arc<[u8]>> = temp_dropped_files.last().unwrap().bytes.clone();
-                                        let file_bytes: Vec<u8> = dropped_file.unwrap().to_vec();
-                                        let source_buffer = Cursor::new(file_bytes);
-                                        // Attempting to use rodio decoder to read
-                                        let decoder = rodio::Decoder::new(source_buffer).unwrap();
-                                        samples_var = decoder.map(|sample| {
-                                            let i16_sample = sample;
-                                            i16_sample as f32 / i16::MAX as f32
-                                        }).collect();
-                                        //sample_vec = samples_var;
-                                    }
-                                    // Delete our dropped file from this buffer
-                                    temp_dropped_files.clear();
-                                    */
+                                    ui.separator();
+                                    ui.vertical(|ui|{
+                                        ui.label("Generator Controls");
+                                        audio_module::AudioModule::draw_modules(ui, params.clone(), setter);
+                                    });
+                                    ui.separator();
                                 });
+                                ui.separator();
+                                ui.label("Filters");
+                                // Filter section
+                                
+                                ui.vertical(|ui| {
+                                    ui.horizontal(|ui| {
+                                        let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_wet, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_wet_knob);
 
-                                // Synth Bars on left and right
-                                ui.painter().rect_filled(
-                                    Rect::from_x_y_ranges(
-                                        RangeInclusive::new(WIDTH as f32 - synth_bar_space, WIDTH as f32), 
-                                        RangeInclusive::new(0.0, HEIGHT as f32)),
-                                    Rounding::none(),
-                                    *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap()
-                                );
+                                        let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_cutoff, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_cutoff_knob);
 
-                                // Screws for that vintage look
-                                let screw_space = 16.0;
-                                ui.painter().circle_filled(Pos2::new(screw_space,screw_space), 4.0, Color32::LIGHT_GRAY);
-                                ui.painter().circle_filled(Pos2::new(screw_space,HEIGHT as f32 - screw_space), 4.0, Color32::LIGHT_GRAY);
-                                ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,screw_space), 4.0, Color32::LIGHT_GRAY);
-                                ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,HEIGHT as f32 - screw_space), 4.0, Color32::LIGHT_GRAY);
+                                        let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_resonance, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_resonance_knob);
+
+                                        let filter_res_type_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_res_type, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_res_type_knob);
+
+                                        let filter_form_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_form, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_form_knob);
+
+                                        let filter_hp_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_hp_amount, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_hp_knob);
+
+                                        let filter_bp_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_bp_amount, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_bp_knob);
+
+                                        let filter_lp_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_lp_amount, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_lp_knob);
+                                    });
+                                });
+                                
+                                //nih_log!("{:?}",egui_ctx.input().raw);
+                                //ui.label(RichText::new(format!("dropped_files: {}", egui_ctx.input().raw.dropped_files.len())).font(FONT).color(FONT_COLOR));
+                                /*
+                                // Dropped file logic
+                                let mut samples_var: Vec<f32>;
+                                // Collect dropped files:
+                                let mut temp_dropped_files = egui_ctx.input().raw.dropped_files.clone();
+                                if !temp_dropped_files.is_empty() {
+                                    let dropped_file: Option<Arc<[u8]>> = temp_dropped_files.last().unwrap().bytes.clone();
+                                    let file_bytes: Vec<u8> = dropped_file.unwrap().to_vec();
+                                    let source_buffer = Cursor::new(file_bytes);
+                                    // Attempting to use rodio decoder to read
+                                    let decoder = rodio::Decoder::new(source_buffer).unwrap();
+                                    samples_var = decoder.map(|sample| {
+                                        let i16_sample = sample;
+                                        i16_sample as f32 / i16::MAX as f32
+                                    }).collect();
+                                    //sample_vec = samples_var;
+                                }
+                                // Delete our dropped file from this buffer
+                                temp_dropped_files.clear();
+                                */
                             });
+
+                            // Synth Bars on left and right
+                            ui.painter().rect_filled(
+                                Rect::from_x_y_ranges(
+                                    RangeInclusive::new(WIDTH as f32 - synth_bar_space, WIDTH as f32), 
+                                    RangeInclusive::new(0.0, HEIGHT as f32)),
+                                Rounding::none(),
+                                *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap()
+                            );
+
+                            // Screws for that vintage look
+                            let screw_space = 16.0;
+                            ui.painter().circle_filled(Pos2::new(screw_space,screw_space), 4.0, Color32::LIGHT_GRAY);
+                            ui.painter().circle_filled(Pos2::new(screw_space,HEIGHT as f32 - screw_space), 4.0, Color32::LIGHT_GRAY);
+                            ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,screw_space), 4.0, Color32::LIGHT_GRAY);
+                            ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,HEIGHT as f32 - screw_space), 4.0, Color32::LIGHT_GRAY);
+                        });
                     });
                 }
             )

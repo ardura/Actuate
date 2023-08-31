@@ -126,7 +126,7 @@ impl Default for AudioModule {
 impl AudioModule {
     // Draw functions for each module type. This works at CRATE level on the params to draw all 3!!!
     pub fn draw_modules(ui: &mut Ui, params: Arc<ActuateParams>, setter: &ParamSetter<'_>) {
-        const KNOB_SIZE: f32 = 22.0;
+        const KNOB_SIZE: f32 = 30.0;
         const TEXT_SIZE: f32 = 12.0;
         const SPACER: f32 = 10.0;
 

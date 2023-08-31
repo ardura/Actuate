@@ -104,7 +104,7 @@ impl Oscillator {
             self.osc_attack = match self.prev_attack_smoothing {
                 SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(new_attack)),
                 SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(new_attack)),
-                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_attack)),
+                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_attack.clamp(0.1, 999.9))),
             } 
         }
     }
@@ -123,7 +123,7 @@ impl Oscillator {
             self.osc_release = match self.prev_release_smoothing {
                 SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(new_release)),
                 SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(new_release)),
-                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_release)),
+                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_release.clamp(0.1, 999.9))),
             } 
         }
     }
