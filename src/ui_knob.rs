@@ -216,7 +216,7 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             KnobStyle::NewPresets1 => {
                 self.center_size = self.radius * 0.6;
                 self.line_width = self.radius * 0.4;
-                self.center_to_line_space = self.radius * 0.125;
+                self.center_to_line_space = self.radius * 0.0125;
                 self.padding = 2.0;
             }
         }
@@ -226,11 +226,8 @@ impl<'a, P: Param> ArcKnob<'a, P> {
 
 impl<'a, P: Param> Widget for ArcKnob<'a, P> {
     fn ui(mut self, ui: &mut Ui) -> Response {
-        // Turns into 5 on each side
-        let padding = 10.0;
-
         // Figure out the size to reserve on screen for widget
-        let desired_size = egui::vec2(padding + self.radius*2.0,padding + self.radius*2.0);
+        let desired_size = egui::vec2(self.padding + self.radius*2.0,self.padding + self.radius*2.0);
         let response = ui.allocate_response(desired_size, Sense::click_and_drag());
         let value = self.slider_region.handle_response(&ui, &response);
 
@@ -279,7 +276,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             }
 
             // Label text from response rect bound
-            let label_pos = Pos2::new(response.rect.center_bottom().x,response.rect.center_bottom().y - padding);
+            let label_pos = Pos2::new(response.rect.center_bottom().x,response.rect.center_bottom().y - self.padding);
             if self.label_text.is_empty() {
                 painter.text(label_pos, Align2::CENTER_CENTER, self.slider_region.get_string(), FontId::proportional(self.text_size), self.line_color);
                 //ui.label(self.slider_region.get_string());

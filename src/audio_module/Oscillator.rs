@@ -24,7 +24,7 @@ It leverages the smoothing functions built into the nih_plug crate for attack an
 */
 
 use std::f32::consts;
-
+use rand::Rng;
 use nih_plug::{params::enums::Enum, prelude::{Smoother, SmoothingStyle}};
 
 #[derive(Enum, PartialEq, Eq, Debug, Copy, Clone)]
@@ -47,6 +47,21 @@ pub enum OscState {
     Releasing,
 }
 
+#[derive(Enum, PartialEq, Eq, Debug, Copy, Clone)]
+pub enum SmoothStyle {
+    Linear,
+    Logarithmic,
+    Exponential,
+}
+
+#[derive(Enum, PartialEq, Eq, Debug, Copy, Clone)]
+pub enum RetriggerStyle {
+    Free,
+    Retrigger,
+    Random,
+}
+
+#[derive(Clone)]
 pub struct Oscillator {
     // Sample rate is used to calculate the frequency of the wave
     pub sample_rate: f32,
@@ -54,11 +69,16 @@ pub struct Oscillator {
     pub osc_type: VoiceType,
     // Enum above that has Osc lifetime state
     pub osc_state: OscState,
-    // Attack and release params stored here - smoothing happens in lib.rs
+    // Attack and release params stored here
     pub osc_attack: Smoother<f32>,
     pub osc_release: Smoother<f32>,
     pub prev_attack: f32,
     pub prev_release: f32,
+    // Smoothing curves for attack and release
+    pub attack_smoothing: SmoothStyle,
+    pub prev_attack_smoothing: SmoothStyle,
+    pub release_smoothing: SmoothStyle,
+    pub prev_release_smoothing: SmoothStyle,
     // Mod amount is something I added since the math stuff is fun/interesting
     pub osc_mod_amount: f32,
     // This is used to have a "free" phase based off the previous note when lib.rs has retrigger disabled
@@ -69,18 +89,42 @@ pub struct Oscillator {
 
 impl Oscillator {
     // This updates our attack and release if needed - These are called on midi events from lib.rs
-    pub fn check_update_attack(&mut self, new_attack: f32) {
+    pub fn check_update_attack(&mut self, new_attack: f32, new_smoothing: SmoothStyle) {
+        let mut update_assign: bool = false;
+        if self.prev_attack_smoothing != new_smoothing {
+            self.prev_attack_smoothing = new_smoothing;
+            update_assign = true;
+        }
         if self.prev_attack != new_attack {
             self.prev_attack = new_attack;
+            update_assign = true;
+        }
+        if update_assign {
             // Reassign in struct
-            self.osc_attack = Smoother::new(SmoothingStyle::Linear(new_attack));
+            self.osc_attack = match self.prev_attack_smoothing {
+                SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(new_attack)),
+                SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(new_attack)),
+                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_attack)),
+            } 
         }
     }
-    pub fn check_update_release(&mut self, new_release: f32) {
+    pub fn check_update_release(&mut self, new_release: f32, new_smoothing: SmoothStyle) {
+        let mut update_assign: bool = false;
+        if self.prev_release_smoothing != new_smoothing {
+            self.prev_release_smoothing = new_smoothing;
+            update_assign = true;
+        }
         if self.prev_release != new_release {
             self.prev_release = new_release;
+            update_assign = true;
+        }
+        if update_assign {
             // Reassign in struct
-            self.osc_release = Smoother::new(SmoothingStyle::Linear(new_release));
+            self.osc_release = match self.prev_release_smoothing {
+                SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(new_release)),
+                SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(new_release)),
+                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_release)),
+            } 
         }
     }
     pub fn check_update_sample_rate(&mut self, sample_rate_if_changed: f32) {
@@ -92,6 +136,13 @@ impl Oscillator {
     // Reset our wave phase - used for retrigger
     pub fn reset_phase(&mut self) {
         self.phase = 0.0;
+    }
+
+    // Random phase reset!
+    pub fn set_random_phase(&mut self) {
+        let mut rng = rand::thread_rng();
+        let m: f32 = rng.gen_range(0.0..1.0);
+        self.phase = m;
     }
 
     // Increment phase - used in non retriggered oscs

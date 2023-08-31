@@ -1,72 +1,114 @@
 use std::f32::consts::PI;
+use nih_plug::prelude::Enum;
 
-// Modified implementation from https://www.musicdsp.org/en/latest/Filters/23-state-variable.html
-// Adapted to rust and made a little more flexible by Ardura
+// Modified implementation from https://www.musicdsp.org/en/latest/Filters/23-state-variable.html and AI
+//
+// Adapted to rust by Ardura
+
+#[derive(Enum, PartialEq, Eq)]
+pub enum ResonanceType {
+    // Allegedly the "ideal" response when tying Q to angular sin response
+    Default,
+    // Allegedly a Moog Ladder Q calculation
+    Moog,
+    // Allegedly an approximation of a TB-303 LP
+    TB,
+    // Allegedly an approximation of an Arp 2600
+    Arp,
+}
+
+#[derive(Enum, PartialEq, Eq)]
+pub enum FilterForm {
+    Direct,
+    Transposed
+}
 
 pub struct StateVariableFilter {
-    // These are in Hz
     sample_rate: f32,
-    // Filter coeff 
-    filter: f32,
-    // Loop amount to rerun filter code
-    iterations: usize,
-    // These are [0..1]
-    resonance: f32,
+    frequency: f32,
+    q: f32,
+    low_output: f32,
+    band_output: f32,
+    high_output: f32,
+    res_mode: ResonanceType,
+    filter_form: FilterForm,
+    // temp var for transposed form
+    v3: f32,
+}
+
+impl Default for StateVariableFilter {
+    fn default() -> Self {
+        Self {
+           sample_rate: 44100.0,
+           q: 0.0,
+           frequency: 20000.0,
+           low_output: 0.0,
+           band_output: 0.0,
+           high_output: 0.0,
+           v3: 0.0,
+           res_mode: ResonanceType::Default,
+           filter_form: FilterForm::Direct,
+        }
+    }
 }
 
 impl StateVariableFilter {
-    pub fn update(&mut self, cutoff: f32, resonance: f32, iterations: usize, sample_rate: f32) {
+    pub fn update(&mut self, frequency: f32, q: f32, sample_rate: f32, resonance_mode: ResonanceType, filter_form: FilterForm) {
         if sample_rate != self.sample_rate {
             self.sample_rate = sample_rate;
         }
-        if resonance.clamp(0.001, 1.0) != self.resonance {
-            self.resonance = resonance.clamp(0.001, 1.0);
+        if q != self.q {
+            self.q = q;
         }
-        if iterations != self.iterations {
-            self.iterations = iterations;
+        if frequency != self.frequency {
+            self.frequency = frequency;
         }
-        self.filter = 2.0 * ((PI * cutoff)/self.sample_rate).sin();
+        if resonance_mode != self.res_mode {
+            self.res_mode = resonance_mode;
+        }
+        if filter_form != self.filter_form {
+            self.filter_form = filter_form;
+        }
     }
-    pub fn process(&mut self, lp_amount: f32, hp_amount: f32, bp_amount: f32, notch_amount: f32, input_left: f32, input_right: f32, dry_wet: f32) -> (f32,f32) {
-        if dry_wet == 0.0 {
-            return (input_left, input_right);
+
+    pub fn process(&mut self, input: f32) -> (f32, f32, f32) {
+        // Prevent large DC spikes by changing freq
+        match self.res_mode {
+            ResonanceType::Moog => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
+            ResonanceType::TB => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
+            ResonanceType::Arp => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
+            _ => {}
         }
 
-        let mut low_l: f32 = 0.0;
-        let mut high_l: f32 = 0.0;
-        let mut band_l: f32 = 0.0;
-        let mut notch_l: f32 = 0.0;
-        
-        let mut low_r: f32 = 0.0;
-        let mut high_r: f32 = 0.0;
-        let mut band_r: f32 = 0.0;
-        let mut notch_r: f32 = 0.0;
+        // Calculate our normalized freq for filtering
+        let normalized_freq = (2.0 * PI * self.frequency) / (self.sample_rate*2.0);
+        // Calculate our resonance coefficient
+        // This is here to save calls during filter sweeps even though a static filter will use more resources this way
+        let resonance = match self.res_mode {
+            ResonanceType::Default => (normalized_freq / (2.0 * self.q)).sin(),
+            ResonanceType::Moog => (2.0 * PI * normalized_freq / self.sample_rate) / (4.0 * PI * self.q - 2.0),
+            ResonanceType::TB => (PI * normalized_freq / self.sample_rate).tan() / self.q,
+            ResonanceType::Arp => (2.0 * PI * normalized_freq / self.sample_rate) / (2.0 * PI * self.q + 0.3),
+        };
 
-        let mut counter:usize = 0;
-
-        // Process left
-        while counter < self.iterations {
-            low_l = low_l + self.filter * band_l;
-            high_l = self.resonance * input_left - low_l - self.resonance * band_l;
-            band_l = self.filter * high_l + band_l;
-            notch_l = high_l + low_l;
-            counter += 1;
+        // Oversample by running multiple iterations
+        for _ in 0..4 {
+            match self.filter_form {
+                FilterForm::Direct => {
+                    self.low_output += normalized_freq * self.band_output;
+                    self.high_output = input - self.low_output - self.q * self.band_output;
+                    self.band_output += resonance * self.high_output;
+                    self.low_output += resonance * self.band_output;
+                },
+                FilterForm::Transposed => {
+                    self.low_output = input - self.high_output;
+                    self.band_output = resonance * self.low_output + self.band_output;
+                    self.v3 = resonance * self.band_output + self.v3;
+                    self.high_output = resonance * self.v3 + self.high_output;
+                }
+            }
         }
 
-        counter = 0;
-        // Process right
-        while counter < self.iterations {
-            low_r = low_r + self.filter * band_r;
-            high_r = self.resonance * input_right - low_r - self.resonance * band_r;
-            band_r = self.filter * high_r + band_r;
-            notch_r = high_r + low_r;
-            counter += 1;
-        }
-
-        // Combine signals
-        let output_l = (low_l*lp_amount + high_l*hp_amount + band_l*bp_amount + notch_l*notch_amount)*dry_wet + (1.0 - dry_wet) * input_left;
-        let output_r = (low_r*lp_amount + high_r*hp_amount + band_r*bp_amount + notch_r*notch_amount)*dry_wet + (1.0 - dry_wet) * input_right;
-
-        (output_l,output_r)
+        (self.low_output, self.band_output, self.high_output)
     }
 }
