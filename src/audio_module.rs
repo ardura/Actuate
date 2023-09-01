@@ -69,6 +69,7 @@ pub struct AudioModule {
     osc_mod_amount: f32,
     osc_retrigger: RetriggerStyle,
     osc_atk_curve: Oscillator::SmoothStyle,
+    osc_dec_curve: Oscillator::SmoothStyle,
     osc_rel_curve: Oscillator::SmoothStyle,
 
     // Current gain for envelope
@@ -98,13 +99,14 @@ impl Default for AudioModule {
             osc_retrigger: RetriggerStyle::Free,
             osc_atk_curve: Oscillator::SmoothStyle::Linear,
             osc_rel_curve: Oscillator::SmoothStyle::Linear,
+            osc_dec_curve: Oscillator::SmoothStyle::Linear,
 
             // Osc module defaults
             osc: Oscillator::Oscillator { 
                 sample_rate: 44100.0, 
                 osc_type: VoiceType::Sine, 
-                osc_attack: Smoother::new(SmoothingStyle::Linear(50.0)), 
-                osc_release: Smoother::new(SmoothingStyle::Linear(50.0)), 
+                osc_attack: Smoother::new(SmoothingStyle::Linear(0.0)), 
+                osc_release: Smoother::new(SmoothingStyle::Linear(5.0)), 
                 prev_attack: 0.0, 
                 prev_release: 0.0,
                 attack_smoothing: Oscillator::SmoothStyle::Linear,
@@ -128,11 +130,8 @@ impl AudioModule {
     pub fn draw_modules(ui: &mut Ui, params: Arc<ActuateParams>, setter: &ParamSetter<'_>) {
         const KNOB_SIZE: f32 = 30.0;
         const TEXT_SIZE: f32 = 12.0;
-        const SPACER: f32 = 10.0;
 
         // This is kind of ugly but I couldn't figure out a better architechture for egui and separating audio modules
-
-        ui.add_space(SPACER);
         
         // Spot one
         match params._audio_module_1_type.value() {
@@ -159,8 +158,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_mod_knob);
 
@@ -169,8 +169,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_octave_knob);
 
@@ -179,7 +180,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_attack_knob);
@@ -189,7 +190,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_decay_knob);
@@ -199,7 +200,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_sustain_knob);
@@ -209,7 +210,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_release_knob);
@@ -220,8 +221,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_retrigger_knob);
 
@@ -230,8 +232,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_semitones_knob);
 
@@ -240,8 +243,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_detune_knob);
 
@@ -255,10 +259,18 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_atk_curve_knob);
 
-                        // Decay knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 4.0);
+                        let osc_1_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_dec_curve, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_dec_curve_knob);
+
                         // Sustain knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 4.0);
+                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
                         
                         let osc_1_rel_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_1_rel_curve, 
@@ -277,7 +289,7 @@ impl AudioModule {
             }
         }
 
-        ui.add_space(SPACER);
+        ui.separator();
 
         // Spot two
         match params._audio_module_2_type.value() {
@@ -304,8 +316,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_mod_knob);
 
@@ -314,8 +327,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_octave_knob);
 
@@ -324,7 +338,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_attack_knob);
@@ -334,7 +348,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_decay_knob);
@@ -344,7 +358,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_sustain_knob);
@@ -354,7 +368,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_release_knob);
@@ -365,8 +379,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_retrigger_knob);
 
@@ -375,8 +390,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_semitones_knob);
 
@@ -385,8 +401,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_detune_knob);
 
@@ -400,10 +417,18 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_atk_curve_knob);
 
-                        // Decay knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 4.0);
+                        let osc_2_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_2_dec_curve, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_2_dec_curve_knob);
+
                         // Sustain knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 4.0);
+                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
                         
                         let osc_2_rel_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_2_rel_curve, 
@@ -422,7 +447,7 @@ impl AudioModule {
             }
         }
 
-        ui.add_space(SPACER);
+        ui.separator();
 
         // Spot three
         match params._audio_module_3_type.value() {
@@ -449,8 +474,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_mod_knob);
 
@@ -459,8 +485,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_octave_knob);
 
@@ -469,7 +496,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_attack_knob);
@@ -479,7 +506,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_decay_knob);
@@ -489,7 +516,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_sustain_knob);
@@ -499,7 +526,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_release_knob);
@@ -510,8 +537,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_retrigger_knob);
 
@@ -520,8 +548,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_semitones_knob);
 
@@ -530,8 +559,9 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_detune_knob);
 
@@ -545,10 +575,18 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_atk_curve_knob);
 
-                        // Decay knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 4.0);
+                        let osc_3_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_3_dec_curve, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_3_dec_curve_knob);
+
                         // Sustain knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 4.0);
+                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
                         
                         let osc_3_rel_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_rel_curve, 
@@ -584,6 +622,7 @@ impl AudioModule {
                 self.osc_mod_amount = params.osc_1_mod_amount.value();
                 self.osc_retrigger = params.osc_1_retrigger.value();
                 self.osc_atk_curve = params.osc_1_atk_curve.value();
+                self.osc_dec_curve = params.osc_1_dec_curve.value();
                 self.osc_rel_curve = params.osc_1_rel_curve.value();
             },
             2 => {
@@ -599,6 +638,7 @@ impl AudioModule {
                 self.osc_mod_amount = params.osc_2_mod_amount.value();
                 self.osc_retrigger = params.osc_2_retrigger.value();
                 self.osc_atk_curve = params.osc_2_atk_curve.value();
+                self.osc_dec_curve = params.osc_2_dec_curve.value();
                 self.osc_rel_curve = params.osc_2_rel_curve.value();
             },
             3 => {
@@ -614,6 +654,7 @@ impl AudioModule {
                 self.osc_mod_amount = params.osc_3_mod_amount.value();
                 self.osc_retrigger = params.osc_3_retrigger.value();
                 self.osc_atk_curve = params.osc_3_atk_curve.value();
+                self.osc_dec_curve = params.osc_3_dec_curve.value();
                 self.osc_rel_curve = params.osc_3_rel_curve.value();
             },
             _ => {}
@@ -733,12 +774,13 @@ impl AudioModule {
             AudioModuleType::Osc => {
                 match self.osc_type {
                     VoiceType::Sine  => self.osc.calculate_sine(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
+                    VoiceType::Tri => self.osc.calculate_tri(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
                     VoiceType::Saw   => self.osc.calculate_saw(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::RoundedSaw  => self.osc.calculate_rsaw(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::InwardSaw  => self.osc.calculate_inward_saw(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::DoubleExpSaw => self.osc.calculate_dub_exp_saw(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
+                    VoiceType::RSaw  => self.osc.calculate_rsaw(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
+                    VoiceType::InSaw  => self.osc.calculate_inward_saw(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
                     VoiceType::Ramp => self.osc.calculate_ramp(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::Wave1 => self.osc.calculate_wave_1(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
+                    VoiceType::Square => self.osc.calculate_square(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
+                    VoiceType::RSquare => self.osc.calculate_rounded_square(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
                 }
             },
             AudioModuleType::Granulizer => {

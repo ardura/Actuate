@@ -1,5 +1,5 @@
 use std::f32::consts::PI;
-use nih_plug::prelude::Enum;
+use nih_plug::{prelude::Enum, util::db_to_gain};
 
 // Modified implementation from https://www.musicdsp.org/en/latest/Filters/23-state-variable.html and AI
 //
@@ -17,12 +17,6 @@ pub enum ResonanceType {
     Arp,
 }
 
-#[derive(Enum, PartialEq, Eq)]
-pub enum FilterForm {
-    Direct,
-    Transposed
-}
-
 pub struct StateVariableFilter {
     sample_rate: f32,
     frequency: f32,
@@ -31,9 +25,6 @@ pub struct StateVariableFilter {
     band_output: f32,
     high_output: f32,
     res_mode: ResonanceType,
-    filter_form: FilterForm,
-    // temp var for transposed form
-    v3: f32,
 }
 
 impl Default for StateVariableFilter {
@@ -45,15 +36,13 @@ impl Default for StateVariableFilter {
            low_output: 0.0,
            band_output: 0.0,
            high_output: 0.0,
-           v3: 0.0,
            res_mode: ResonanceType::Default,
-           filter_form: FilterForm::Direct,
         }
     }
 }
 
 impl StateVariableFilter {
-    pub fn update(&mut self, frequency: f32, q: f32, sample_rate: f32, resonance_mode: ResonanceType, filter_form: FilterForm) {
+    pub fn update(&mut self, frequency: f32, q: f32, sample_rate: f32, resonance_mode: ResonanceType) {
         if sample_rate != self.sample_rate {
             self.sample_rate = sample_rate;
         }
@@ -66,13 +55,10 @@ impl StateVariableFilter {
         if resonance_mode != self.res_mode {
             self.res_mode = resonance_mode;
         }
-        if filter_form != self.filter_form {
-            self.filter_form = filter_form;
-        }
     }
 
     pub fn process(&mut self, input: f32) -> (f32, f32, f32) {
-        // Prevent large DC spikes by changing freq
+        // Prevent large DC spikes by changing freq range
         match self.res_mode {
             ResonanceType::Moog => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
             ResonanceType::TB => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
@@ -81,34 +67,34 @@ impl StateVariableFilter {
         }
 
         // Calculate our normalized freq for filtering
-        let normalized_freq = (2.0 * PI * self.frequency) / (self.sample_rate*2.0);
+        let normalized_freq: f32 = (2.0 * PI * self.frequency) / (self.sample_rate*2.0);
+        
+        // I made this magic number by tesing resonance sweeps and monitoring
+        // With single saw wave. Resonance would go wild otherwise and/or clip to infinity in some scenarios.
+        let mut resonance_scaler: f32 = 0.0;
+        match self.res_mode {
+            ResonanceType::Moog => { resonance_scaler = db_to_gain(-36.0); },
+            ResonanceType::TB => { resonance_scaler = db_to_gain(-18.0); },
+            ResonanceType::Arp => { resonance_scaler = db_to_gain(-19.0); },
+            _ => {}
+        }
+
         // Calculate our resonance coefficient
         // This is here to save calls during filter sweeps even though a static filter will use more resources this way
         let resonance = match self.res_mode {
             ResonanceType::Default => (normalized_freq / (2.0 * self.q)).sin(),
-            ResonanceType::Moog => (2.0 * PI * normalized_freq / self.sample_rate) / (4.0 * PI * self.q - 2.0),
-            ResonanceType::TB => (PI * normalized_freq / self.sample_rate).tan() / self.q,
-            ResonanceType::Arp => (2.0 * PI * normalized_freq / self.sample_rate) / (2.0 * PI * self.q + 0.3),
+            ResonanceType::Moog => ((2.0 * PI * normalized_freq / self.sample_rate) / (4.0 * PI * self.q - 2.0)) * resonance_scaler,
+            ResonanceType::TB => ((PI * normalized_freq / self.sample_rate).tan() / self.q) * resonance_scaler,
+            ResonanceType::Arp => ((2.0 * PI * normalized_freq / self.sample_rate) / (2.0 * PI * self.q + 0.3)) * resonance_scaler,
         };
 
         // Oversample by running multiple iterations
         for _ in 0..4 {
-            match self.filter_form {
-                FilterForm::Direct => {
-                    self.low_output += normalized_freq * self.band_output;
-                    self.high_output = input - self.low_output - self.q * self.band_output;
-                    self.band_output += resonance * self.high_output;
-                    self.low_output += resonance * self.band_output;
-                },
-                FilterForm::Transposed => {
-                    self.low_output = input - self.high_output;
-                    self.band_output = resonance * self.low_output + self.band_output;
-                    self.v3 = resonance * self.band_output + self.v3;
-                    self.high_output = resonance * self.v3 + self.high_output;
-                }
-            }
+            self.low_output += normalized_freq * self.band_output;
+            self.high_output = input - self.low_output - self.q * self.band_output;
+            self.band_output += resonance * self.high_output;
+            self.low_output += resonance * self.band_output;
         }
-
         (self.low_output, self.band_output, self.high_output)
     }
 }
