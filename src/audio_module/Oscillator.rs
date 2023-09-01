@@ -32,11 +32,11 @@ pub enum VoiceType {
     Sine,
     Tri,
     Saw,
-    RoundedSaw,
-    InwardSaw,
+    RSaw,
+    InSaw,
     Ramp,
     Square,
-    RoundedSquare,
+    RSquare,
 }
 
 #[derive(Enum, PartialEq, Eq, Debug, Copy, Clone)]
@@ -91,47 +91,43 @@ pub struct Oscillator {
 impl Oscillator {
     // This updates our attack and release if needed - These are called on midi events from lib.rs
     pub fn check_update_attack(&mut self, new_attack: f32, new_smoothing: SmoothStyle) {
-        // Restrict this update to non-notes to fix curve change panics
-        if self.osc_state == OscState::Off {
-            let mut update_assign: bool = false;
-            if self.prev_attack_smoothing != new_smoothing {
-                self.prev_attack_smoothing = new_smoothing;
-                update_assign = true;
-            }
-            if self.prev_attack != new_attack {
-                self.prev_attack = new_attack;
-                update_assign = true;
-            }
-            if update_assign {
-                // Reassign in struct
-                self.osc_attack = match self.prev_attack_smoothing {
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(new_attack)),
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(new_attack)),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_attack.clamp(0.1, 999.9))),
-                } 
-            }
+        // Restrict this update to non-note changes to fix curve change panics
+        let mut update_assign: bool = false;
+        if self.prev_attack_smoothing != new_smoothing {
+            self.prev_attack_smoothing = new_smoothing;
+            update_assign = true;
+        }
+        if self.prev_attack != new_attack {
+            self.prev_attack = new_attack;
+            update_assign = true;
+        }
+        if update_assign {
+            // Reassign in struct
+            self.osc_attack = match self.prev_attack_smoothing {
+                SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(new_attack)),
+                SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(new_attack)),
+                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_attack.clamp(0.1, 999.9))),
+            } 
         }
     }
     pub fn check_update_release(&mut self, new_release: f32, new_smoothing: SmoothStyle) {
-        // Restrict this update to non-notes to fix curve change panics
-        if self.osc_state == OscState::Off {
-            let mut update_assign: bool = false;
-            if self.prev_release_smoothing != new_smoothing {
-                self.prev_release_smoothing = new_smoothing;
-                update_assign = true;
-            }
-            if self.prev_release != new_release {
-                self.prev_release = new_release;
-                update_assign = true;
-            }
-            if update_assign {
-                // Reassign in struct
-                self.osc_release = match self.prev_release_smoothing {
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(new_release)),
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(new_release)),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_release.clamp(0.1, 999.9))),
-                } 
-            }
+        // Restrict this update to non-note changes to fix curve change panics
+        let mut update_assign: bool = false;
+        if self.prev_release_smoothing != new_smoothing {
+            self.prev_release_smoothing = new_smoothing;
+            update_assign = true;
+        }
+        if self.prev_release != new_release {
+            self.prev_release = new_release;
+            update_assign = true;
+        }
+        if update_assign {
+            // Reassign in struct
+            self.osc_release = match self.prev_release_smoothing {
+                SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(new_release)),
+                SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(new_release)),
+                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(new_release.clamp(0.1, 999.9))),
+            } 
         }
     }
     pub fn check_update_sample_rate(&mut self, sample_rate_if_changed: f32) {
