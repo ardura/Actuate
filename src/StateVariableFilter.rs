@@ -58,7 +58,7 @@ impl StateVariableFilter {
     }
 
     pub fn process(&mut self, input: f32) -> (f32, f32, f32) {
-        // Prevent large DC spikes by changing freq
+        // Prevent large DC spikes by changing freq range
         match self.res_mode {
             ResonanceType::Moog => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
             ResonanceType::TB => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
@@ -70,8 +70,14 @@ impl StateVariableFilter {
         let normalized_freq: f32 = (2.0 * PI * self.frequency) / (self.sample_rate*2.0);
         
         // I made this magic number by tesing resonance sweeps and monitoring
-        // With single saw wave. Resonance would go wild otherwise and clip to infinity in some scenarios.
-        let resonance_scaler: f32 = db_to_gain(-17.0);
+        // With single saw wave. Resonance would go wild otherwise and/or clip to infinity in some scenarios.
+        let mut resonance_scaler: f32 = 0.0;
+        match self.res_mode {
+            ResonanceType::Moog => { resonance_scaler = db_to_gain(-36.0); },
+            ResonanceType::TB => { resonance_scaler = db_to_gain(-18.0); },
+            ResonanceType::Arp => { resonance_scaler = db_to_gain(-19.0); },
+            _ => {}
+        }
 
         // Calculate our resonance coefficient
         // This is here to save calls during filter sweeps even though a static filter will use more resources this way

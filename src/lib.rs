@@ -40,7 +40,7 @@ pub struct LoadedSample(Vec<Vec<f32>>);
 const _NUM_VOICES: usize = 16;
 
 // Plugin sizing
-const WIDTH: u32 = 832;
+const WIDTH: u32 = 860;
 const HEIGHT: u32 = 632;
 
 // GUI values to refer to
@@ -56,6 +56,7 @@ pub static GUI_VALS: phf::Map<&'static str, Color32> = phf_map! {
 
 // Font
 const FONT: nih_plug_egui::egui::FontId = FontId::monospace(14.0);
+const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::monospace(11.0);
 
 pub struct Actuate {
     pub params: Arc<ActuateParams>,
@@ -406,7 +407,7 @@ impl Plugin for Actuate {
 
                         ui.horizontal(|ui| {
                             // Synth Bars on left and right
-                            let synth_bar_space = 40.0;
+                            let synth_bar_space = 32.0;
                             ui.painter().rect_filled(
                                 Rect::from_x_y_ranges(
                                     RangeInclusive::new(0.0, synth_bar_space), 
@@ -425,11 +426,14 @@ impl Plugin for Actuate {
                                     .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
                                     .on_hover_text("by Ardura!");
                                 ui.separator();
-                                const KNOB_SIZE: f32 = 36.0;
+                                const KNOB_SIZE: f32 = 32.0;
                                 const TEXT_SIZE: f32 = 13.0;
                                 ui.horizontal(|ui|{
                                     ui.vertical(|ui|{
-                                        ui.label("Generators");
+                                        ui.label(RichText::new("Generators")
+                                            .font(FONT)
+                                            .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                            .on_hover_text("These are the audio modules that create sound on midi events");
                                         // Side knobs for types
                                         ui.horizontal(|ui|{
                                             let audio_module_1_knob = ui_knob::ArcKnob::for_param(
@@ -450,6 +454,8 @@ impl Plugin for Actuate {
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_1_level_knob);
+
+                                            ui.separator();
                                         });
                                         ui.horizontal(|ui|{
                                             let audio_module_2_knob = ui_knob::ArcKnob::for_param(
@@ -470,6 +476,8 @@ impl Plugin for Actuate {
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_2_level_knob);
+
+                                            ui.separator();
                                         });
                                         ui.horizontal(|ui| {
                                             let audio_module_3_knob = ui_knob::ArcKnob::for_param(
@@ -490,16 +498,32 @@ impl Plugin for Actuate {
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_3_level_knob);
+
+                                            ui.separator();
                                         });
+
+
+                                        let master_level_knob = ui_knob::ArcKnob::for_param(
+                                            &params.master_level, 
+                                            setter, 
+                                            KNOB_SIZE + 16.0)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(master_level_knob);
+                                        // Spacing under master knob to put filters in the right spot
+                                        ui.add_space(KNOB_SIZE * 2.0 + 24.0);
                                     });
-                                    ui.separator();
                                     ui.vertical(|ui|{
-                                        ui.label("Generator Controls");
+                                        ui.label(RichText::new("Generator Controls")
+                                            .font(SMALLER_FONT)
+                                            .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                            .on_hover_text("These are the controls for the active/selected generators");
                                         audio_module::AudioModule::draw_modules(ui, params.clone(), setter);
                                     });
-                                    ui.separator();
                                 });
-                                ui.separator();
+
                                 ui.label("Filters");
                                 
                                 // Filter section
@@ -599,15 +623,6 @@ impl Plugin for Actuate {
                                 // Delete our dropped file from this buffer
                                 temp_dropped_files.clear();
                                 */
-                                let master_level_knob = ui_knob::ArcKnob::for_param(
-                                    &params.master_level, 
-                                    setter, 
-                                    KNOB_SIZE + 8.0)
-                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                    .set_line_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                    .set_text_size(TEXT_SIZE);
-                                ui.add(master_level_knob);
                             });
 
                             // Synth Bars on left and right
@@ -651,7 +666,7 @@ impl Plugin for Actuate {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         self.process_midi(context, buffer);
-
+        
         //let mut amplitude = 0.0;
 
         /*
@@ -746,12 +761,12 @@ impl Actuate {
                 self.params.filter_res_type.value(),
             );
             
-            let low_l;
-            let band_l;
-            let high_l;
-            let low_r;
-            let band_r;
-            let high_r;
+            let low_l: f32;
+            let band_l: f32;
+            let high_l: f32;
+            let low_r: f32;
+            let band_r: f32;
+            let high_r: f32;
 
             (low_l, band_l, high_l) = self.filter.process(left_output);
             (low_r, band_r, high_r) = self.filter.process(right_output);
