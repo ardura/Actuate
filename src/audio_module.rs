@@ -953,9 +953,7 @@ impl AudioModule {
                                 new_phase = rng.gen_range(0.0..1.0);
                             },
                             RetriggerStyle::Free => {
-                                // There's a bug somewhere making free be an octave up somehow??
-                                // I couldn't find why that's happening so here is the workaround
-                                retrigger_bug_offset = 12;
+                                // Do nothing
                             }
                         }
                         // Shift our note per octave
