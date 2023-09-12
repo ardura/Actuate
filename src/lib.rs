@@ -37,7 +37,7 @@ mod toggle_switch;
 pub struct LoadedSample(Vec<Vec<f32>>);
 
 // Plugin sizing
-const WIDTH: u32 = 832;
+const WIDTH: u32 = 860;
 const HEIGHT: u32 = 632;
 
 // File Open Buffer Timer
@@ -56,6 +56,7 @@ pub static GUI_VALS: phf::Map<&'static str, Color32> = phf_map! {
 
 // Font
 const FONT: nih_plug_egui::egui::FontId = FontId::monospace(14.0);
+const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::monospace(11.0);
 
 pub struct Actuate {
     pub params: Arc<ActuateParams>,
@@ -304,6 +305,7 @@ impl Default for ActuateParams {
     fn default() -> Self {
         Self {
             editor_state: EguiState::from_size(WIDTH, HEIGHT),
+
             master_level: FloatParam::new("Master", 0.4, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
             voice_limit: IntParam::new("Voice Limit", 16, IntRange::Linear { min: 1, max: 32 }),
 
@@ -311,9 +313,9 @@ impl Default for ActuateParams {
             _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off),
             _audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off),
 
-            audio_module_1_level: FloatParam::new("Level", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            audio_module_2_level: FloatParam::new("Level", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            audio_module_3_level: FloatParam::new("Level", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_1_level: FloatParam::new("Level", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_2_level: FloatParam::new("Level", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_3_level: FloatParam::new("Level", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
 
             // Oscillators
             ////////////////////////////////////////////////////////////////////////////////////
@@ -450,7 +452,7 @@ impl Plugin for Actuate {
 
                         ui.horizontal(|ui| {
                             // Synth Bars on left and right
-                            let synth_bar_space = 40.0;
+                            let synth_bar_space = 32.0;
                             ui.painter().rect_filled(
                                 Rect::from_x_y_ranges(
                                     RangeInclusive::new(0.0, synth_bar_space), 
@@ -469,11 +471,14 @@ impl Plugin for Actuate {
                                     .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
                                     .on_hover_text("by Ardura!");
                                 ui.separator();
-                                const KNOB_SIZE: f32 = 36.0;
+                                const KNOB_SIZE: f32 = 32.0;
                                 const TEXT_SIZE: f32 = 13.0;
                                 ui.horizontal(|ui|{
                                     ui.vertical(|ui|{
-                                        ui.label("Generators");
+                                        ui.label(RichText::new("Generators")
+                                            .font(FONT)
+                                            .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                            .on_hover_text("These are the audio modules that create sound on midi events");
                                         // Side knobs for types
                                         ui.horizontal(|ui|{
                                             let audio_module_1_knob = ui_knob::ArcKnob::for_param(
@@ -494,6 +499,8 @@ impl Plugin for Actuate {
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_1_level_knob);
+
+                                            ui.separator();
                                         });
                                         ui.horizontal(|ui|{
                                             let audio_module_2_knob = ui_knob::ArcKnob::for_param(
@@ -514,6 +521,8 @@ impl Plugin for Actuate {
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_2_level_knob);
+
+                                            ui.separator();
                                         });
                                         ui.horizontal(|ui| {
                                             let audio_module_3_knob = ui_knob::ArcKnob::for_param(
@@ -534,6 +543,8 @@ impl Plugin for Actuate {
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_3_level_knob);
+
+                                            ui.separator();
                                         });
 
                                         ui.horizontal(|ui|{
@@ -564,15 +575,17 @@ impl Plugin for Actuate {
                                 
                                     ui.separator();
                                     ui.vertical(|ui|{
-                                        ui.label("Generator Controls");
+                                        ui.label(RichText::new("Generator Controls")
+                                            .font(SMALLER_FONT)
+                                            .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                            .on_hover_text("These are the controls for the active/selected generators");
                                         audio_module::AudioModule::draw_modules(ui, params.clone(), setter);
                                     });
-                                    ui.separator();
                                 });
-                                ui.separator();
+
                                 ui.label("Filters");
-                                // Filter section
                                 
+                                // Filter section
                                 ui.vertical(|ui| {
                                     ui.horizontal(|ui| {
                                         let filter_wet_knob = ui_knob::ArcKnob::for_param(
@@ -743,7 +756,7 @@ impl Plugin for Actuate {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         self.process_midi(context, buffer);
-
+        
         //let mut amplitude = 0.0;
 
         /*
@@ -869,12 +882,12 @@ impl Actuate {
                self.params.filter_res_type.value(),
             );
             
-            let low_l;
-            let band_l;
-            let high_l;
-            let low_r;
-            let band_r;
-            let high_r;
+            let low_l: f32;
+            let band_l: f32;
+            let high_l: f32;
+            let low_r: f32;
+            let band_r: f32;
+            let high_r: f32;
 
             (low_l, band_l, high_l) = self.filter.process(left_output);
             (low_r, band_r, high_r) = self.filter.process(right_output);

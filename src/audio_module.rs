@@ -800,6 +800,24 @@ impl AudioModule {
             }
         }
     }
+    
+    /*
+    // Return state of type - reuses Oscillator states because it makes sense
+    pub fn get_state(&mut self) -> OscState{
+        match self.audio_module_type {
+            AudioModuleType::Osc => {
+                return self.osc.get_osc_state();
+            },
+            AudioModuleType::Granulizer => {
+                // TODO
+                return OscState::Off;
+            },
+            AudioModuleType::Off => {
+                return OscState::Off;
+            }
+        }
+    }
+    */
 
     // Index proper params from knobs
     fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) {
@@ -920,6 +938,7 @@ impl AudioModule {
                         // Osc + generic stuff
                         note_on = true;
                         let mut new_phase: f32 = 0.0;
+
                         // Reset the retrigger on Oscs
                         match self.osc_retrigger {
                             RetriggerStyle::Retrigger => {
@@ -934,7 +953,9 @@ impl AudioModule {
                                 new_phase = rng.gen_range(0.0..1.0);
                             },
                             RetriggerStyle::Free => {
-                                // Do nothing
+                                // There's a bug somewhere making free be an octave up somehow??
+                                // I couldn't find why that's happening so here is the workaround
+                                retrigger_bug_offset = 12;
                             }
                         }
                         // Shift our note per octave

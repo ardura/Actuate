@@ -66,13 +66,6 @@ pub(crate) fn scale_range(input: f32, min_output: f32, max_output: f32) -> f32 {
     scaled.clamp(min_output, max_output)
 }
 
-/*
-    I'm designing each of these waveforms to be the frequency + modifier that changes the waveform
-    This way I can simplify the amount of waveforms while creating more options!
-    I'm not sure if this is efficient or not, but it's my synth :)
-    modifier is between 0 and 1 unlss Oscillator::scale_range is used
-*/
-
 // Sine wave oscillator modded with some sort of saw wave multiplication
 pub fn calculate_sine(mod_amount: f32, phase: f32) -> f32 {
     // f(x) = sin(x * tau) {0 < x < 1}

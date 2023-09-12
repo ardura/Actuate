@@ -258,7 +258,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             if self.outline {
                 let outline_stroke = Stroke::new(1.0, self.fill_color);
                 let outline_shape = Shape::Path(PathShape {
-                    points: get_arc_points(center, self.radius + 2.0, 1.0, 0.03),
+                    points: get_arc_points(center, self.center_to_line_space + self.line_width, 1.0, 0.03),
                     closed: false,
                     fill: Color32::TRANSPARENT,
                     stroke: outline_stroke,
@@ -285,19 +285,19 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
 
             // Label text from response rect bound
             let label_y = if self.padding == 0.0 {
-                4.0
+                6.0
             } else {
                 self.padding * 2.0
             };
             let label_pos = Pos2::new(response.rect.center_bottom().x,response.rect.center_bottom().y - label_y);
             let value_pos = Pos2::new(response.rect.center().x,response.rect.center().y);
             if self.label_text.is_empty() {
-                painter.text(label_pos, Align2::CENTER_CENTER, self.slider_region.get_string(), FontId::proportional(self.text_size), self.line_color);
-                painter.text(value_pos, Align2::CENTER_CENTER, self.slider_region.param.name(), FontId::proportional(self.text_size), self.line_color);
+                painter.text(value_pos, Align2::CENTER_CENTER, self.slider_region.get_string(), FontId::proportional(self.text_size), self.line_color);
+                painter.text(label_pos, Align2::CENTER_CENTER, self.slider_region.param.name(), FontId::proportional(self.text_size), self.line_color);
             }
             else {
-                painter.text(label_pos, Align2::CENTER_CENTER, self.label_text, FontId::proportional(self.text_size), self.line_color);
-                painter.text(value_pos, Align2::CENTER_CENTER, self.slider_region.param.name(), FontId::proportional(self.text_size), self.line_color);
+                painter.text(value_pos, Align2::CENTER_CENTER, self.label_text, FontId::proportional(self.text_size), self.line_color);
+                painter.text(label_pos, Align2::CENTER_CENTER, self.slider_region.param.name(), FontId::proportional(self.text_size), self.line_color);
             }
             
         });
