@@ -21,18 +21,19 @@ This is intended to be a generic implementation that can be extended for other a
 #####################################
 */
 
-use std::sync::Arc;
+use std::{sync::Arc, collections::VecDeque, path::PathBuf};
 
-use nih_plug::{prelude::{Enum, Smoother, SmoothingStyle, ParamSetter, NoteEvent}, util};
+use nih_plug::{prelude::{Smoother, SmoothingStyle, ParamSetter, NoteEvent}, util, params::enums::Enum};
 
 // Audio module files
 pub(crate) mod Oscillator;
 use Oscillator::VoiceType;
-use nih_plug_egui::egui::{Ui};
-
-use crate::{ActuateParams, ui_knob, GUI_VALS};
-
-use self::Oscillator::RetriggerStyle;
+use nih_plug_egui::egui::Ui;
+use rand::Rng;
+use rfd::FileDialog;
+use rubato::Resampler;
+use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch};
+use self::Oscillator::{RetriggerStyle, OscState, SmoothStyle};
 
 // When you create a new audio module, you should add it here
 #[derive(Enum, PartialEq, Clone, Copy)]
@@ -43,17 +44,62 @@ pub enum AudioModuleType {
 }
 
 #[derive(Clone)]
+struct VoiceVec {
+    /// The identifier for this voice
+    voices: VecDeque<SingleVoice>
+}
+
+// This is the information used to track voices and midi inputs
+// I made single voice a struct so that we can add and remove via struct instead of running
+// into any threading issues trying to modify different vecs in the same function rather than 1 struct
+// Underscores are to get rid of the compiler warning thinking it's not used but it's stored for debugging or passed between structs
+// and still functional.
+#[derive(Clone)]
+struct SingleVoice {
+    /// The note's key/note, in `0..128`. Only used for the voice terminated event.
+    note: u8,
+    /// Velocity of our note
+    _velocity: f32,
+    /// The voice's current phase.
+    phase: f32,
+    /// The phase increment. This is based on the voice's frequency, derived from the note index.
+    phase_delta: f32,
+    /// Oscillator state for amplitude controlling
+    state: Oscillator::OscState,
+    // These are the attack and release smoothers
+    amp_current: f32,
+    osc_attack: Smoother<f32>,
+    osc_decay: Smoother<f32>,
+    osc_release: Smoother<f32>,
+    // Final info for a note to work
+    _detune: f32,
+    frequency: f32,
+    _attack_time: f32,
+    _decay_time: f32,
+    _release_time: f32,
+    _retrigger: RetriggerStyle,
+    _voice_type: Oscillator::VoiceType,
+
+    // Granulizer Pos
+    sample_pos: usize,
+}
+
 pub struct AudioModule {
     // Stored sample rate in case the audio module needs it
     sample_rate: f32,
-    // The MIDI note ID of the active note triggered by MIDI
-    midi_note_id: u8,
-    // The frequency of the active note triggered by MIDI
-    midi_note_freq: f32,
     audio_module_type: AudioModuleType,
 
-    // Audio modules should go here as their struct
-    osc: Oscillator::Oscillator,
+    ///////////////////////////////////////////////////////////
+    // Audio modules should go here as a struct
+    //
+    // Osc doesn't have one though
+    //
+    ///////////////////////////////////////////////////////////
+    
+    // Granulizer/Sampler
+    loaded_sample: Vec<Vec<f32>>,
+
+    ///////////////////////////////////////////////////////////
 
     // Stored params from main lib here on a per-module basis
 
@@ -68,12 +114,15 @@ pub struct AudioModule {
     osc_release: f32,
     osc_mod_amount: f32,
     osc_retrigger: RetriggerStyle,
-    osc_atk_curve: Oscillator::SmoothStyle,
-    osc_dec_curve: Oscillator::SmoothStyle,
-    osc_rel_curve: Oscillator::SmoothStyle,
+    osc_atk_curve: SmoothStyle,
+    osc_dec_curve: SmoothStyle,
+    osc_rel_curve: SmoothStyle,
 
-    // Current gain for envelope
-    audio_module_current_gain: Smoother<f32>
+    // Voice storage
+    playing_voices: VoiceVec,
+
+    // Tracking stopping voices too
+    is_playing: bool,
 }
 
 // When you create a new audio module you need to add its default creation here as well
@@ -82,9 +131,10 @@ impl Default for AudioModule {
         Self {
             // Audio modules will use these
             sample_rate: 44100.0,
-            midi_note_id: 0,
-            midi_note_freq: 1.0,
             audio_module_type: AudioModuleType::Osc,
+
+            // Granulizer/Sampler
+            loaded_sample: vec![vec![0.0,0.0]],
 
             // Osc module knob storage
             osc_type: VoiceType::Sine,
@@ -97,37 +147,33 @@ impl Default for AudioModule {
             osc_release: 0.07,
             osc_mod_amount: 0.0,
             osc_retrigger: RetriggerStyle::Free,
-            osc_atk_curve: Oscillator::SmoothStyle::Linear,
-            osc_rel_curve: Oscillator::SmoothStyle::Linear,
-            osc_dec_curve: Oscillator::SmoothStyle::Linear,
+            osc_atk_curve: SmoothStyle::Linear,
+            osc_rel_curve: SmoothStyle::Linear,
+            osc_dec_curve: SmoothStyle::Linear,
 
-            // Osc module defaults
-            osc: Oscillator::Oscillator { 
-                sample_rate: 44100.0, 
-                osc_type: VoiceType::Sine, 
-                osc_attack: Smoother::new(SmoothingStyle::Linear(0.0)), 
-                osc_release: Smoother::new(SmoothingStyle::Linear(5.0)), 
-                prev_attack: 0.0, 
-                prev_release: 0.0,
-                attack_smoothing: Oscillator::SmoothStyle::Linear,
-                prev_attack_smoothing: Oscillator::SmoothStyle::Linear,
-                release_smoothing: Oscillator::SmoothStyle::Linear,
-                prev_release_smoothing: Oscillator::SmoothStyle::Linear,
-                osc_mod_amount: 0.0, 
-                prev_note_phase_delta: 0.0, 
-                phase: 0.0,
-                osc_state: Oscillator::OscState::Off,
-            },
+            // Voice storage
+            playing_voices: VoiceVec { voices: VecDeque::new() },
 
-            // Current Gain for envelopes
-            audio_module_current_gain: Smoother::new(SmoothingStyle::Linear(0.0)), 
+            is_playing: false,
         }
     }
 }
 
 impl AudioModule {
     // Draw functions for each module type. This works at CRATE level on the params to draw all 3!!!
+    // Passing the producers here is not the nicest thing but we have to move things around to get past the threading stuff + egui's gui separation
     pub fn draw_modules(ui: &mut Ui, params: Arc<ActuateParams>, setter: &ParamSetter<'_>) {
+        // Resetting these from the draw thread since setter is valid here - ugly/bad practice
+        if params.load_sample_1.value() {
+            setter.set_parameter(&params.load_sample_1, false);
+        }
+        else if params.load_sample_2.value() {
+            setter.set_parameter(&params.load_sample_2, false);
+        }
+        else if params.load_sample_3.value() {
+            setter.set_parameter(&params.load_sample_3, false);
+        }
+
         const KNOB_SIZE: f32 = 30.0;
         const TEXT_SIZE: f32 = 12.0;
 
@@ -248,7 +294,131 @@ impl AudioModule {
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_detune_knob);
+                       
+                        let osc_1_atk_curve_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_atk_curve, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_atk_curve_knob);
+                        
+                        // Attack knob space
+                        //ui.add_space(KNOB_SIZE*2.0 + 16.0);
 
+                        let osc_1_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_dec_curve, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_dec_curve_knob);
+
+                        // Sustain knob space
+                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                        
+                        let osc_1_rel_curve_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_rel_curve, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_rel_curve_knob);
+                    });
+                });
+            },
+            AudioModuleType::Granulizer => {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.label("Load Sample");
+                            let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_1, setter);
+                            ui.add(switch_toggle);
+                        });
+
+                        let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_octave, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_octave_knob);
+
+                        let osc_1_attack_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_attack, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_attack_knob);
+
+                        let osc_1_decay_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_decay, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_decay_knob);
+
+                        let osc_1_sustain_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_sustain, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_sustain_knob);
+
+                        let osc_1_release_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_release, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_release_knob);
+                    });
+                    ui.horizontal(|ui| {
+                        let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_semitones, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_semitones_knob);
+
+                        let osc_1_detune_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_detune, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_detune_knob);
+
+                        // Attack knob space
+                        //ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                       
                         let osc_1_atk_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_1_atk_curve, 
                             setter, 
@@ -283,9 +453,6 @@ impl AudioModule {
                         ui.add(osc_1_rel_curve_knob);
                     });
                 });
-            },
-            AudioModuleType::Granulizer => {
-                ui.label("In development!");
             }
         }
 
@@ -407,6 +574,7 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_detune_knob);
 
+                        
                         let osc_2_atk_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_2_atk_curve, 
                             setter, 
@@ -416,6 +584,9 @@ impl AudioModule {
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_atk_curve_knob);
+                        
+                        // Attack knob space
+                        //ui.add_space(KNOB_SIZE*2.0 + 16.0);
 
                         let osc_2_dec_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_2_dec_curve, 
@@ -444,7 +615,26 @@ impl AudioModule {
             },
             AudioModuleType::Granulizer => {
                 ui.label("In development!");
-            }
+                ui.label("Load Sample");
+                let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_2, setter);
+                ui.add(switch_toggle);
+                //ui.add();
+
+                /*
+                if ui.add(Button::new("Load Sample")).clicked() {
+                    let sample_file = FileDialog::new()
+                        .add_filter("wav", &["wav"])
+                        //.set_directory("/")
+                        .pick_file();
+                    
+                    // Load our file if it exists
+                    if Option::is_some(&sample_file) {
+                        
+                        ThreadMessage::LoadNewSample(sample_file.unwrap());
+                    }
+                } 
+                */               
+            },
         }
 
         ui.separator();
@@ -574,6 +764,9 @@ impl AudioModule {
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_atk_curve_knob);
+                        
+                        // Attack knob space
+                        //ui.add_space(KNOB_SIZE*2.0 + 16.0);
 
                         let osc_3_dec_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_dec_curve, 
@@ -601,7 +794,9 @@ impl AudioModule {
                 });
             },
             AudioModuleType::Granulizer => {
-                ui.label("In development!");
+                ui.label("Load Sample");
+                let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_3, setter);
+                ui.add(switch_toggle);
             }
         }
     }
@@ -661,33 +856,82 @@ impl AudioModule {
         }
     }
 
+    // I was looking at the PolyModSynth Example and decided on this
     // Handle the audio module midi events
     // This is an INDIVIDUAL instance process unlike the GUI function
-    pub fn process_midi(&mut self, sample_id: usize, params: Arc<ActuateParams>, event_passed: Option<NoteEvent<()>>, voice_index: usize) -> f32 {
-        self.consume_params(params, voice_index);
-        // Update our envelopes if needed
-        self.osc.check_update_attack(self.osc_attack, self.osc_atk_curve);
-        self.osc.check_update_release(self.osc_release, self.osc_rel_curve);
+    // This sends back the OSC output + note on for filter to reset
+    pub fn process_midi(&mut self, sample_id: usize, params: Arc<ActuateParams>, event_passed: Option<NoteEvent<()>>, voice_index: usize, voice_max: usize, file_open: &mut bool) -> (f32, f32, bool) {
+        // If the process is in here the file dialog is not open per lib.rs process_midi function
 
-        // Outputs from the modules
-        let output_signal: f32;
+        // Get around the egui ui thread by using BoolParam changes :)
+        if params.load_sample_1.value() && voice_index == 1 && !file_open.clone() {
+            *file_open = true;
+            let sample_file = FileDialog::new()
+                        .add_filter("wav", &["wav"])
+                        //.set_directory("/")
+                        .pick_file();
+            if Option::is_some(&sample_file) {
+                self.load_new_sample(sample_file.unwrap());
+            }
+        }
+        else if params.load_sample_2.value() && voice_index == 2  && !file_open.clone() {
+            *file_open = true;
+            let sample_file = FileDialog::new()
+                .add_filter("wav", &["wav"])
+                //.set_directory("/")
+                .pick_file();
+            if Option::is_some(&sample_file) {
+                self.load_new_sample(sample_file.unwrap());
+            }
+        }
+        else if params.load_sample_3.value() && voice_index == 3  && !file_open.clone() {
+            *file_open = true;
+            let sample_file = FileDialog::new()
+                .add_filter("wav", &["wav"])
+                //.set_directory("/")
+                .pick_file();
+            if Option::is_some(&sample_file) {
+                self.load_new_sample(sample_file.unwrap());
+            }
+        }
+
+        // Loader gets changed back from gui thread and triggers this
+        if !params.load_sample_1.value() && !params.load_sample_1.value() && !params.load_sample_1.value() {
+            *file_open = false;
+        }
+
+        // This function pulls our parameters for each audio module index
+        self.consume_params(params, voice_index);
+
+        // Midi events are processed here
+        let mut note_on: bool = false;
         match event_passed {
             // The event was valid
             Some(mut event) => { 
                 event = event_passed.unwrap();
                 if event.timing() > sample_id as u32 {
-                    return 0.0;
+                    return (0.0, 0.0, false);
                 }
                 match event {
-                    // Midi Calculation Code
-                    NoteEvent::NoteOn { mut note, velocity, .. } => {
+                    ////////////////////////////////////////////////////////////
+                    // MIDI EVENT NOTE ON
+                    ////////////////////////////////////////////////////////////
+                    NoteEvent::NoteOn { mut note, velocity , ..} => {
+                        // Osc + generic stuff
+                        note_on = true;
+                        let mut new_phase: f32 = 0.0;
                         // Reset the retrigger on Oscs
                         match self.osc_retrigger {
                             RetriggerStyle::Retrigger => {
-                                self.osc.reset_phase();
+                                // Start our phase back at 0
+                                new_phase = 0.0;
                             },
                             RetriggerStyle::Random => {
-                                self.osc.set_random_phase();
+                                // Get a random phase to use
+                                // Poly solution is to pass the phase to the struct
+                                // instead of the osc alone
+                                let mut rng = rand::thread_rng();
+                                new_phase = rng.gen_range(0.0..1.0);
                             },
                             RetriggerStyle::Free => {
                                 // Do nothing
@@ -697,7 +941,7 @@ impl AudioModule {
                         match self.osc_octave {
                             -2 => { note -= 24; },
                             -1 => { note -= 12; },
-                            0 => {},
+                            0 => { note -= 0; },
                             1 => { note += 12; },
                             2 => { note += 24; },
                             _ => {}
@@ -705,93 +949,326 @@ impl AudioModule {
                         // Shift our note per semitones
                         note += self.osc_semitones as u8;
                         // Shift our note per detune
-                        self.midi_note_id = note;
                         // I'm so glad nih-plug has this helper for f32 conversions!
-                        self.midi_note_freq = util::f32_midi_note_to_freq(self.midi_note_id as f32 + self.osc_detune);
+                        let detuned_note = util::f32_midi_note_to_freq(note as f32 + self.osc_detune);
+
+                        let attack_smoother: Smoother<f32> = match self.osc_atk_curve {
+                            SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(self.osc_attack)),
+                            SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.osc_attack.clamp(0.1, 999.9))),
+                            SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(self.osc_attack)),
+                        };
+
+                        let decay_smoother: Smoother<f32> = match self.osc_dec_curve {
+                            SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(self.osc_decay)),
+                            SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.osc_decay.clamp(0.1, 999.9))),
+                            SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(self.osc_decay)),
+                        };
+
+                        let release_smoother: Smoother<f32> = match self.osc_rel_curve {
+                            SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(self.osc_release)),
+                            SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.osc_release.clamp(0.1, 999.9))),
+                            SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(self.osc_release)),
+                        };
+
+                        match attack_smoother.style {
+                            SmoothingStyle::Logarithmic(_) => { 
+                                attack_smoother.reset(0.1); 
+                                attack_smoother.set_target(self.sample_rate, velocity.clamp(1.0, 999.9));
+                            },
+                            _ => { 
+                                attack_smoother.reset(0.0); 
+                                attack_smoother.set_target(self.sample_rate, velocity);
+                            },
+                        }
+
                         // Osc Updates
-                        self.osc.reset_attack_smoother(0.0);
-                        // Reset release for logic to know note is happening
-                        self.osc.reset_release_smoother(0.0);
-                        self.osc.set_attack_target(self.sample_rate, velocity);
-                        self.audio_module_current_gain = self.osc.get_attack_smoother();
-                        self.osc.set_osc_state(Oscillator::OscState::Attacking);
+                        let new_voice: SingleVoice = SingleVoice {
+                            note: note,
+                            _velocity: velocity,
+                            phase: new_phase,
+                            phase_delta: detuned_note / self.sample_rate,
+                            state: OscState::Attacking,
+                            // These get cloned since smoother cannot be copied
+                            amp_current: 0.0,
+                            osc_attack: attack_smoother.clone(),
+                            osc_decay: decay_smoother.clone(),
+                            osc_release: release_smoother.clone(),
+                            _detune: self.osc_detune,
+                            frequency: detuned_note,
+                            _attack_time: self.osc_attack,
+                            _decay_time: self.osc_decay,
+                            _release_time: self.osc_release,
+                            _retrigger: self.osc_retrigger,
+                            _voice_type: self.osc_type,
+                            sample_pos: 0,
+                        };
+
+                        // Add our voice struct to our voice tracking deque
+                        self.playing_voices.voices.push_front(new_voice);
+
+                        // Remove the last voice when > 32
+                        if self.playing_voices.voices.len() > voice_max {
+                            self.playing_voices.voices.resize(voice_max, 
+                                // Insert a dummy "Off" entry when resizing UP
+                                 SingleVoice {
+                                    note: 0,
+                                    _velocity: 0.0,
+                                    phase: 0.0,
+                                    phase_delta: 0.0,
+                                    state: OscState::Off,
+                                    // These get cloned since smoother cannot be copied
+                                    amp_current: 0.0,
+                                    osc_attack: attack_smoother.clone(),
+                                    osc_decay: decay_smoother.clone(),
+                                    osc_release: release_smoother.clone(),
+                                    _detune: 0.0,
+                                    frequency: 0.0,
+                                    _attack_time: self.osc_attack,
+                                    _decay_time: self.osc_decay,
+                                    _release_time: self.osc_release,
+                                    _retrigger: self.osc_retrigger,
+                                    _voice_type: self.osc_type,
+                                    sample_pos: 0,
+                                });
+                        }
+
+                        // Remove any off notes
+                        for (i, voice) in self.playing_voices.voices.clone().iter().enumerate() {
+                            if voice.state == OscState::Off {
+                                self.playing_voices.voices.remove(i);
+                            }
+                        }
                     },
-                    NoteEvent::NoteOff { note, .. } if note == self.midi_note_id => {
-                        // This reset lets us fade from any max or other value to 0
-                        self.osc.reset_release_smoother(self.audio_module_current_gain.next());
-                        // Reset attack
-                        self.osc.reset_attack_smoother(0.0);
-                        self.osc.set_release_target(self.sample_rate, 0.0);
-                        self.audio_module_current_gain = self.osc.get_release_smoother();
-                        self.osc.set_osc_state(Oscillator::OscState::Releasing);
+                    ////////////////////////////////////////////////////////////
+                    // MIDI EVENT NOTE OFF
+                    ////////////////////////////////////////////////////////////
+                    NoteEvent::NoteOff { note, .. } => {
+                        // Iterate through our voice vecdeque to find the one to update
+                        for voice in self.playing_voices.voices.iter_mut() {
+                            // Get voices on our note and not already releasing
+                            // When a voice reaches 0.0 target on releasing
+
+                            let mut shifted_note: u8 = note;
+                            shifted_note = match self.osc_octave {
+                                -2 => { shifted_note - 24 },
+                                -1 => { shifted_note - 12 },
+                                0 => { shifted_note },
+                                1 => { shifted_note + 12 },
+                                2 => { shifted_note + 24 },
+                                _ => { shifted_note }
+                            };
+
+                            if voice.note == shifted_note && voice.state != OscState::Releasing {
+                                // Start our release level from our current gain on the voice
+                                voice.osc_release.reset(voice.amp_current);
+                                
+                                // Set our new release target to 0.0 so the note fades
+                                match voice.osc_release.style {
+                                    SmoothingStyle::Logarithmic(_) => { voice.osc_release.set_target(self.sample_rate, 0.1); },
+                                    _ => { voice.osc_release.set_target(self.sample_rate, 0.0); },
+                                }
+                                // Update our current amp
+                                voice.amp_current = voice.osc_release.next();
+                                // Update our voice state
+                                voice.state = OscState::Releasing;
+                            }
+                        }
                     },
+                    // Stop event - doesn't seem to work from FL Studio but left in here
+                    NoteEvent::Choke { .. } => { self.playing_voices.voices.clear() },
                     _ => (),
                 }
             },
-            // The event was invalid
+            // The event was invalid - do nothing
             None    => (),
         }
 
-        // Move our phase outside of the midi events
-        // I couldn't find much on how to model this so I based it off previous note phase
-        if self.osc_retrigger == RetriggerStyle::Free {
-            self.osc.increment_phase();
+        ////////////////////////////////////////////////////////////
+        // Update our voices before output
+        ////////////////////////////////////////////////////////////
+        for voice in self.playing_voices.voices.iter_mut() {
+            // Move our phase outside of the midi events
+            // I couldn't find much on how to model this so I based it off previous note phase
+            voice.phase += voice.phase_delta;
+            if voice.phase > 1.0 {
+                voice.phase -= 1.0;
+            }
+
+            // Move from attack to decay if needed
+            // Attack is over so use decay amount to reach sustain level - reusing current smoother
+            if voice.osc_attack.steps_left() == 0 && voice.state == OscState::Attacking {
+                voice.state = OscState::Decaying;
+                voice.amp_current = voice.osc_attack.next();
+                // Now we will use decay smoother from here
+                voice.osc_decay.reset(voice.amp_current);
+                let sustain_scaled = self.osc_sustain / 999.9;
+                voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+            }
+
+            // Move from Decaying to Sustain hold
+            if voice.osc_decay.steps_left() == 0 && voice.state == OscState::Decaying {
+                let sustain_scaled = self.osc_sustain / 999.9;
+                voice.amp_current = sustain_scaled;
+                voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                voice.state = OscState::Sustaining;
+            }
+
+            // End of release
+            if voice.state == OscState::Releasing && voice.osc_release.steps_left() == 0 {
+                voice.state = OscState::Off;
+            }
         }
 
-        // Attack is over so use decay amount to reach sustain level - reusing current smoother
-        if  self.audio_module_current_gain.steps_left() == 0 && 
-            self.osc.get_osc_state() == Oscillator::OscState::Attacking
-        {
-            self.osc.set_osc_state(Oscillator::OscState::Decaying);
-            let temp_gain = self.audio_module_current_gain.next();
-            self.audio_module_current_gain = Smoother::new(SmoothingStyle::Linear(self.osc_decay));
-            self.audio_module_current_gain.reset(temp_gain);
-            let sustain_scaled = self.osc_sustain / 999.9;
-            self.audio_module_current_gain.set_target(self.sample_rate, sustain_scaled);
-        }
-
-        // Move from Decaying to Sustain hold
-        if  self.audio_module_current_gain.steps_left() == 0 && 
-            self.osc.get_osc_state() == Oscillator::OscState::Decaying
-        {
-            let sustain_scaled = self.osc_sustain / 999.9;
-            self.audio_module_current_gain.set_target(self.sample_rate, sustain_scaled);
-            self.osc.set_osc_state(Oscillator::OscState::Sustaining);
-        }
-
-        // End of release
-        if  self.osc.get_osc_state() == Oscillator::OscState::Releasing &&
-            self.audio_module_current_gain.steps_left() == 0
-        {
-            self.osc.set_osc_state(Oscillator::OscState::Off);
-        }
-
-        // Get our current gain amount for use in match below
-        let temp_osc_1_gain_multiplier: f32 = self.audio_module_current_gain.next();
-
-        // Generate our output signal!
-        output_signal = match self.audio_module_type {
+        ////////////////////////////////////////////////////////////
+        // Create output
+        ////////////////////////////////////////////////////////////
+        let output_signal_l: f32;
+        let output_signal_r: f32;
+        (output_signal_l, output_signal_r) = match self.audio_module_type {
             AudioModuleType::Osc => {
-                match self.osc_type {
-                    VoiceType::Sine  => self.osc.calculate_sine(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::Tri => self.osc.calculate_tri(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::Saw   => self.osc.calculate_saw(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::RSaw  => self.osc.calculate_rsaw(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::InSaw  => self.osc.calculate_inward_saw(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::Ramp => self.osc.calculate_ramp(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::Square => self.osc.calculate_square(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
-                    VoiceType::RSquare => self.osc.calculate_rounded_square(self.midi_note_freq, self.osc_mod_amount) * temp_osc_1_gain_multiplier,
+                let mut summed_voices: f32 = 0.0;
+                for voice in self.playing_voices.voices.iter_mut() {
+                    // Get our current gain amount for use in match below
+                    let temp_osc_gain_multiplier: f32 = match voice.state {
+                        OscState::Attacking => { voice.osc_attack.next() },
+                        OscState::Decaying => { voice.osc_decay.next() },
+                        OscState::Sustaining => {  self.osc_sustain / 999.9 },
+                        OscState::Releasing => { voice.osc_release.next() },
+                        OscState::Off => 0.0,
+                    };
+                    voice.amp_current = temp_osc_gain_multiplier;
+                        
+                    voice.phase_delta = voice.frequency / self.sample_rate;
+                    summed_voices += match self.osc_type {
+                        VoiceType::Sine  => Oscillator::calculate_sine(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                        VoiceType::Tri => Oscillator::calculate_tri(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                        VoiceType::Saw   => Oscillator::calculate_saw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                        VoiceType::RSaw  => Oscillator::calculate_rsaw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                        VoiceType::InSaw  => Oscillator::calculate_inward_saw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                        VoiceType::Ramp => Oscillator::calculate_ramp(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                        VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                        VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                    }
                 }
+                (summed_voices, summed_voices)
             },
             AudioModuleType::Granulizer => {
-                // TODO!
-                0.0
+                let mut summed_voices_l: f32 = 0.0;
+                let mut summed_voices_r: f32 = 0.0;
+                for voice in self.playing_voices.voices.iter_mut() {
+                    // Get our current gain amount for use in match below
+                    let temp_osc_gain_multiplier: f32 = match voice.state {
+                        OscState::Attacking => { voice.osc_attack.next() },
+                        OscState::Decaying => { voice.osc_decay.next() },
+                        OscState::Sustaining => {  self.osc_sustain / 999.9 },
+                        OscState::Releasing => { voice.osc_release.next() },
+                        OscState::Off => 0.0,
+                    };
+                    voice.amp_current = temp_osc_gain_multiplier;
+                        
+                    //voice.phase_delta = voice.frequency / self.sample_rate;
+                    if voice.sample_pos < self.loaded_sample[0].len() {
+                        // If our sample is Stereo Channelled
+                        if self.loaded_sample.len() == 2 {
+                            summed_voices_l += self.loaded_sample[0][voice.sample_pos] * temp_osc_gain_multiplier;
+                            summed_voices_r += self.loaded_sample[1][voice.sample_pos] * temp_osc_gain_multiplier;
+                        } else {
+                            // If our sample is mono we'll duplicate this
+                            summed_voices_l += self.loaded_sample[0][voice.sample_pos] * temp_osc_gain_multiplier;
+                            summed_voices_r += self.loaded_sample[0][voice.sample_pos] * temp_osc_gain_multiplier;
+                        }
+                    }
+
+                    // Granulizer moves position
+                    voice.sample_pos += 1;
+                }
+                (summed_voices_l,summed_voices_r)
             },
             AudioModuleType::Off => {
                 // Do nothing, return 0.0
-                0.0
+                (0.0, 0.0)
             }
         };
-        return output_signal
+
+        // Send it back
+        (output_signal_l, output_signal_r, note_on)
+    }
+
+    pub fn set_playing(&mut self, new_bool: bool) {
+        self.is_playing = new_bool;
+    }
+
+    pub fn get_playing(&mut self) -> bool {
+        self.is_playing
+    }
+
+    pub fn clear_voices(&mut self) {
+        self.playing_voices.voices.clear();
+    }
+
+    fn load_new_sample(&mut self, path: PathBuf) {
+        let reader = hound::WavReader::open(&path);
+        if let Ok(mut reader) = reader {
+            let spec = reader.spec();
+            let inner_sample_rate = spec.sample_rate as f32;
+            let channels = spec.channels as usize;
+
+            let samples = match spec.sample_format {
+                hound::SampleFormat::Int => reader
+                    .samples::<i32>()
+                    .map(|s| (s.unwrap_or_default() as f32 * 256.0) / i32::MAX as f32)
+                    .collect::<Vec<f32>>(),
+                hound::SampleFormat::Float => reader
+                    .samples::<f32>()
+                    .map(|s| s.unwrap_or_default())
+                    .collect::<Vec<f32>>(),
+            };
+
+            // Uninterleave sample format to chunks for resampling
+            let mut new_samples = vec![Vec::with_capacity(samples.len() / channels); channels];
+
+            for sample_chunk in samples.chunks(channels) {
+                // sample_chunk is a chunk like [a, b]
+                for (i, sample) in sample_chunk.into_iter().enumerate() {
+                    new_samples[i].push(sample.clone());
+                }
+            }
+
+            self.loaded_sample = new_samples;
+            
+            // resample if needed
+            //if inner_sample_rate != self.sample_rate {
+                //samples[0] = Self::resample(samples[0], inner_sample_rate, self.sample_rate);
+            //}
+
+            //self.loaded_samples.insert(path.clone(), samples);
+        };
+    }
+
+    fn resample(samples: Vec<Vec<f32>>, sample_rate_in: f32, sample_rate_out: f32) -> Vec<Vec<f32>> {
+        let mut resampler = rubato::FftFixedIn::<f32>::new(
+            sample_rate_in as usize,
+            sample_rate_out as usize,
+            samples[0].len(),
+            8,
+            samples.len(),
+        )
+        .unwrap();
+    
+        match resampler.process(&samples, None) {
+            Ok(mut waves_out) => {
+                // get the duration of leading silence introduced by FFT
+                // https://github.com/HEnquist/rubato/blob/52cdc3eb8e2716f40bc9b444839bca067c310592/src/synchro.rs#L654
+                let silence_len = resampler.output_delay();
+    
+                for channel in waves_out.iter_mut() {
+                    channel.drain(..silence_len);
+                    channel.shrink_to_fit();
+                }
+    
+                waves_out
+            }
+            Err(_) => vec![],
+        }
     }
 }
