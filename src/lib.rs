@@ -14,7 +14,7 @@ If not, see https://www.gnu.org/licenses/.
 
 #####################################
 
-Actuate - Synthesizer + Granulizer by Ardura
+Actuate - Synthesizer + Sampler/Granulizer by Ardura
 
 #####################################
 */
@@ -47,8 +47,8 @@ const FILE_OPEN_BUFFER_MAX: u32 = 2000;
 pub static GUI_VALS: phf::Map<&'static str, Color32> = phf_map! {
     "A_KNOB_OUTSIDE_COLOR" => Color32::from_rgb(85,180,168),
     "DARK_GREY_UI_COLOR" => Color32::from_rgb(49,53,71),
+    "SYNTH_SOFT_BLUE" => Color32::from_rgb(142,166,201),
     "A_BACKGROUND_COLOR_TOP" => Color32::from_rgb(185,186,198),
-    "A_BACKGROUND_COLOR_BOTTOM" => Color32::from_rgb(60,60,68),
     "SYNTH_BARS_PURPLE" => Color32::from_rgb(45,41,99),
     "SYNTH_MIDDLE_BLUE" => Color32::from_rgb(98,145,204),
     "FONT_COLOR" => Color32::from_rgb(10,103,210),
@@ -114,7 +114,7 @@ pub struct ActuateParams {
     #[id = "Master Level"]
     pub master_level: FloatParam,
 
-    #[id = "Voice Limit"]
+    #[id = "Max Voices"]
     pub voice_limit: IntParam,
 
     // This audio module is what switches between functions for generators in the synth
@@ -257,17 +257,35 @@ pub struct ActuateParams {
     #[id = "osc_3_rel_curve"]
     pub osc_3_rel_curve: EnumParam<Oscillator::SmoothStyle>,
 
-    // Controls for when audio_module_1_type is Granulizer
+    // Controls for when audio_module_1_type is Sampler/Granulizer
     #[id = "load_sample_1"]
     pub load_sample_1: BoolParam,
 
-    // Controls for when audio_module_2_type is Granulizer
+    #[id = "loop_sample_1"]
+    pub loop_sample_1: BoolParam,
+
+    #[id = "single_cycle_1"]
+    pub single_cycle_1: BoolParam,
+
+    // Controls for when audio_module_2_type is Sampler/Granulizer
     #[id = "load_sample_2"]
     pub load_sample_2: BoolParam,
 
-    // Controls for when audio_module_3_type is Granulizer
+    #[id = "loop_sample_2"]
+    pub loop_sample_2: BoolParam,
+
+    #[id = "single_cycle_2"]
+    pub single_cycle_2: BoolParam,
+
+    // Controls for when audio_module_3_type is Sampler/Granulizer
     #[id = "load_sample_3"]
     pub load_sample_3: BoolParam,
+
+    #[id = "loop_sample_3"]
+    pub loop_sample_3: BoolParam,
+
+    #[id = "single_cycle_3"]
+    pub single_cycle_3: BoolParam,
 
     // Filter
     #[id = "filter_wet"]
@@ -307,7 +325,7 @@ impl Default for ActuateParams {
             editor_state: EguiState::from_size(WIDTH, HEIGHT),
 
             master_level: FloatParam::new("Master", 0.4, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            voice_limit: IntParam::new("Voice Limit", 16, IntRange::Linear { min: 1, max: 32 }),
+            voice_limit: IntParam::new("Max Voices", 16, IntRange::Linear { min: 1, max: 32 }),
 
             _audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc),
             _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off),
@@ -366,6 +384,12 @@ impl Default for ActuateParams {
             load_sample_1: BoolParam::new("Load Sample", false),
             load_sample_2: BoolParam::new("Load Sample", false),
             load_sample_3: BoolParam::new("Load Sample", false),
+            loop_sample_1: BoolParam::new("Loop Sample", false),
+            loop_sample_2: BoolParam::new("Loop Sample", false),
+            loop_sample_3: BoolParam::new("Loop Sample", false),
+            single_cycle_1: BoolParam::new("single cycle", false),
+            single_cycle_2: BoolParam::new("single cycle", false),
+            single_cycle_3: BoolParam::new("single cycle", false),
 
             // Filter
             ////////////////////////////////////////////////////////////////////////////////////
@@ -446,7 +470,7 @@ impl Plugin for Actuate {
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32), 
                                 RangeInclusive::new((HEIGHT as f32)*0.72, HEIGHT as f32)), 
-                            Rounding::from(16.0), *GUI_VALS.get("A_BACKGROUND_COLOR_BOTTOM").unwrap());
+                            Rounding::from(16.0), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap());
 
                         ui.set_style(style_var);
 
@@ -499,8 +523,6 @@ impl Plugin for Actuate {
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_1_level_knob);
-
-                                            ui.separator();
                                         });
                                         ui.horizontal(|ui|{
                                             let audio_module_2_knob = ui_knob::ArcKnob::for_param(
@@ -521,8 +543,6 @@ impl Plugin for Actuate {
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_2_level_knob);
-
-                                            ui.separator();
                                         });
                                         ui.horizontal(|ui| {
                                             let audio_module_3_knob = ui_knob::ArcKnob::for_param(
@@ -543,34 +563,32 @@ impl Plugin for Actuate {
                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_3_level_knob);
-
-                                            ui.separator();
                                         });
 
                                         ui.horizontal(|ui|{
                                             let master_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.master_level, 
                                                 setter, 
-                                                KNOB_SIZE + 16.0)
+                                                KNOB_SIZE + 8.0)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(master_level_knob);
         
                                             let voice_limit_knob = ui_knob::ArcKnob::for_param(
                                                 &params.voice_limit, 
                                                 setter, 
-                                                KNOB_SIZE)
+                                                KNOB_SIZE - 8.0)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(voice_limit_knob);
                                         });
     
                                         // Spacing under master knob to put filters in the right spot
-                                        ui.add_space(KNOB_SIZE * 1.8);
+                                        ui.add_space(KNOB_SIZE * 3.0 + 20.0);
                                     });
                                 
                                     ui.separator();
@@ -756,34 +774,6 @@ impl Plugin for Actuate {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         self.process_midi(context, buffer);
-        
-        //let mut amplitude = 0.0;
-
-        /*
-        for playing_sample in &mut self.playing_samples {
-            match self.loaded_samples.get(&playing_sample.handle) {
-                Some(loaded_sample) => {
-                    for channel_samples in buffer.iter_samples() {
-                        // channel_samples is [a, b, c]
-                        for (channel_index, sample) in channel_samples.into_iter().enumerate() {
-                            let s = loaded_sample
-                                .0
-                                .get(channel_index)
-                                .unwrap_or(&vec![])
-                                .get(playing_sample.position)
-                                .unwrap_or(&0.0)
-                                * playing_sample.gain;
-                            *sample += s;
-                            amplitude += s.abs();
-                        }
-                        playing_sample.position += 1;
-                    }
-                }
-                None => {}
-            }
-        }
-        */
-
         ProcessStatus::Normal
     }
 }
@@ -911,7 +901,7 @@ impl Actuate {
 
 impl ClapPlugin for Actuate {
     const CLAP_ID: &'static str = "com.ardura.actuate";
-    const CLAP_DESCRIPTION: Option<&'static str> = Some("Granulizer + Synth");
+    const CLAP_DESCRIPTION: Option<&'static str> = Some("Sampler + Synth");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
     const CLAP_FEATURES: &'static [ClapFeature] = &[

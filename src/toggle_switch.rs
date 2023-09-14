@@ -5,7 +5,7 @@
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
     Response,
-    Ui, Widget, self, Rect,
+    Ui, Widget, self, Rect, style::WidgetVisuals,
 };
 
 struct SliderRegion<'a, P: Param> {
@@ -24,32 +24,39 @@ impl<'a, P: Param> SliderRegion<'a, P> {
     // Handle the input for a given response. Returns an f32 containing the normalized value of
     // the parameter.
     fn handle_response(&self, ui: &Ui, response: &Response, rect: Rect) -> f32 {
-        let value = self.param.unmodulated_normalized_value();
+        let mut value = self.param.modulated_normalized_value();
+        let how_on;
+        let visuals: WidgetVisuals;
 
         // Check if our button is clicked
         if response.clicked() {
             if value == 0.0 {
                 self.param_setter.set_parameter_normalized(self.param, 1.0);
+                how_on = ui.ctx().animate_bool(response.id, true );
+                visuals = ui.style().interact_selectable(&response, true);
+                value = 1.0;
             }
             else {
                 self.param_setter.set_parameter_normalized(self.param, 0.0);
+                how_on = ui.ctx().animate_bool(response.id, false );
+                visuals = ui.style().interact_selectable(&response, false);
+                value = 0.0;
             }
+        } 
+        else {
+            let temp: bool = if value > 0.0 { true } else { false };
+            how_on = ui.ctx().animate_bool(response.id, temp );
+            visuals = ui.style().interact_selectable(&response, temp);
         }
 
         // DRAWING
-        let on_off = if self.param.default_normalized_value() == 1.0 { true } else { false };
-
-        let how_on = ui.ctx().animate_bool(response.id, on_off );
-        let visuals = ui.style().interact_selectable(&response, on_off);
         let rect = rect.expand(visuals.expansion);
         let radius = 0.5 * rect.height();
-        ui.painter()
-            .rect(rect, radius, visuals.bg_fill, visuals.bg_stroke);
+        ui.painter().rect(rect, radius, visuals.bg_fill, visuals.bg_stroke);
         // Paint the circle, animating it from left to right with `how_on`:
         let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
         let center = egui::pos2(circle_x, rect.center().y);
-        ui.painter()
-            .circle(center, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
+        ui.painter().circle(center, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
 
         value
     }
