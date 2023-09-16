@@ -22,15 +22,15 @@ This is intended to be a generic implementation that can be extended for other a
 */
 
 use std::{sync::Arc, collections::VecDeque, path::PathBuf};
-
 use nih_plug::{prelude::{Smoother, SmoothingStyle, ParamSetter, NoteEvent}, util, params::enums::Enum};
+use nih_plug_egui::egui::{Ui, RichText};
+use rand::Rng;
+use rfd::FileDialog;
+use pitch_shift::PitchShifter;
 // Audio module files
 pub(crate) mod Oscillator;
 use Oscillator::VoiceType;
-use nih_plug_egui::egui::Ui;
-use rand::Rng;
-use rfd::FileDialog;
-use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch};
+use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch, SMALLER_FONT, StateVariableFilter::ResonanceType};
 use self::Oscillator::{RetriggerStyle, OscState, SmoothStyle};
 
 // When you create a new audio module, you should add it here
@@ -39,6 +39,8 @@ pub enum AudioModuleType {
     Off,
     Osc,
     Sampler,
+    Granulizer,
+    Additive,
 }
 
 #[derive(Clone)]
@@ -103,6 +105,9 @@ pub struct AudioModule {
     loop_wavetable: bool,
     // Shift notes like a single cycle - aligned wth 3xosc
     single_cycle: bool,
+    // Restretch length with tracking bool
+    restretch: bool,
+    prev_restretch: bool,
 
     ///////////////////////////////////////////////////////////
 
@@ -143,6 +148,8 @@ impl Default for AudioModule {
             sample_lib: vec![vec![vec![0.0,0.0]]], //Vec<Vec<Vec<f32>>>
             loop_wavetable: false,
             single_cycle: false,
+            restretch: true,
+            prev_restretch: false,
 
             // Osc module knob storage
             osc_type: VoiceType::Sine,
@@ -176,11 +183,22 @@ impl AudioModule {
         if params.load_sample_1.value() {
             setter.set_parameter(&params.load_sample_1, false);
         }
-        else if params.load_sample_2.value() {
+        if params.load_sample_2.value() {
             setter.set_parameter(&params.load_sample_2, false);
         }
-        else if params.load_sample_3.value() {
+        if params.load_sample_3.value() {
             setter.set_parameter(&params.load_sample_3, false);
+        }
+
+        // Prevent Speaker Destruction since setter is valid here - Resonance spikes and non clipped signal are deadly
+        // I recognize this is ugly/bad practice
+        match params.filter_res_type.value() {
+            ResonanceType::Default => {}, // Do nothing
+            _ => { 
+                if params.filter_resonance.value() < 0.15 {
+                    setter.set_parameter(&params.filter_resonance, 0.15);
+                }
+            }
         }
 
         const KNOB_SIZE: f32 = 30.0;
@@ -343,127 +361,166 @@ impl AudioModule {
                 });
             },
             AudioModuleType::Sampler => {
+                const KNOB_SIZE: f32 = 25.0;
+                const TEXT_SIZE: f32 = 11.0;
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             ui.horizontal(|ui| {
-                                ui.label("Load Sample");
-                                let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_1, setter);
-                                ui.add(switch_toggle);
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Load Sample")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("The longer the sample the longer the process!");
+                                    let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_1, setter);
+                                    ui.add(switch_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Resample")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("Reload your sample after changing this! On: Resample, Off: Repitch");
+                                    let stretch_toggle = toggle_switch::ToggleSwitch::for_param(&params.restretch_1, setter);
+                                    ui.add(stretch_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Looping")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("To repeat your sample if MIDI key is held");
+                                    let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_1, setter);
+                                    ui.add(loop_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Single Cycle")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("Use this with Looping ON and Resample ON if you loaded a single cycle waveform");
+                                    let sc_toggle = toggle_switch::ToggleSwitch::for_param(&params.single_cycle_1, setter);
+                                    ui.add(sc_toggle);
+                                });
+                            });
+
+                            ui.horizontal(|ui| {
+                                let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_octave, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_octave_knob);
+
+                                let osc_1_attack_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_attack, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_attack_knob);
+
+                                let osc_1_decay_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_decay, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_decay_knob);
+
+                                let osc_1_sustain_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_sustain, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_sustain_knob);
+
+                                let osc_1_release_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_release, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_release_knob);
                             });
                             ui.horizontal(|ui| {
-                                ui.label("Loop Sample");
-                                let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_1, setter);
-                                ui.add(loop_toggle);
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Single Cycle");
-                                let sc_toggle = toggle_switch::ToggleSwitch::for_param(&params.single_cycle_1, setter);
-                                ui.add(sc_toggle);
+                                // knob space
+                                //ui.add_space(KNOB_SIZE*4.0 + 4.0);
+
+                                let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_semitones, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_semitones_knob);
+                                
+                                let osc_1_atk_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_atk_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_atk_curve_knob);
+
+                                let osc_1_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_dec_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_dec_curve_knob);
+
+                                // Sustain knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                                
+                                let osc_1_rel_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_rel_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_rel_curve_knob);
                             });
                         });
-
-                        let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_octave, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_octave_knob);
-
-                        let osc_1_attack_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_attack, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_attack_knob);
-
-                        let osc_1_decay_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_decay, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_decay_knob);
-
-                        let osc_1_sustain_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_sustain, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_sustain_knob);
-
-                        let osc_1_release_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_release, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_release_knob);
-                    });
-                    ui.horizontal(|ui| {
-                        // knob space
-                        ui.add_space(KNOB_SIZE*4.0 + 2.0);
-
-                        let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_semitones, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_semitones_knob);
-                       
-                        let osc_1_atk_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_atk_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_atk_curve_knob);
-
-                        let osc_1_dec_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_dec_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_dec_curve_knob);
-
-                        // Sustain knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
-                        
-                        let osc_1_rel_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_rel_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_rel_curve_knob);
                     });
                 });
             }
+            AudioModuleType::Granulizer => {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Coming soon")
+                    .font(SMALLER_FONT)
+                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                    .on_hover_text("owo");
+                });
+            },
+            AudioModuleType::Additive => {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Coming soon")
+                    .font(SMALLER_FONT)
+                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                    .on_hover_text("owo");
+                });
+            },
         }
 
         ui.separator();
@@ -624,127 +681,166 @@ impl AudioModule {
                 });
             },
             AudioModuleType::Sampler => {
+                const KNOB_SIZE: f32 = 25.0;
+                const TEXT_SIZE: f32 = 11.0;
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             ui.horizontal(|ui| {
-                                ui.label("Load Sample");
-                                let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_2, setter);
-                                ui.add(switch_toggle);
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Load Sample")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("The longer the sample the longer the process!");
+                                    let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_2, setter);
+                                    ui.add(switch_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Resample")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("Reload your sample after changing this! On: Resample, Off: Repitch");
+                                    let stretch_toggle = toggle_switch::ToggleSwitch::for_param(&params.restretch_2, setter);
+                                    ui.add(stretch_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Looping")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("To repeat your sample if MIDI key is held");
+                                    let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_2, setter);
+                                    ui.add(loop_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Single Cycle")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("Use this with Looping ON and Resample ON if you loaded a single cycle waveform");
+                                    let sc_toggle = toggle_switch::ToggleSwitch::for_param(&params.single_cycle_2, setter);
+                                    ui.add(sc_toggle);
+                                });
+                            });
+
+                            ui.horizontal(|ui| {
+                                let osc_2_octave_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_octave, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_octave_knob);
+
+                                let osc_2_attack_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_attack, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_attack_knob);
+
+                                let osc_2_decay_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_decay, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_decay_knob);
+
+                                let osc_2_sustain_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_sustain, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_sustain_knob);
+
+                                let osc_2_release_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_release, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_release_knob);
                             });
                             ui.horizontal(|ui| {
-                                ui.label("Loop Sample");
-                                let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_2, setter);
-                                ui.add(loop_toggle);
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Single Cycle");
-                                let sc_toggle = toggle_switch::ToggleSwitch::for_param(&params.single_cycle_2, setter);
-                                ui.add(sc_toggle);
+                                // knob space
+                                //ui.add_space(KNOB_SIZE*4.0 + 4.0);
+
+                                let osc_2_semitones_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_semitones, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_semitones_knob);
+                                
+                                let osc_2_atk_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_atk_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_atk_curve_knob);
+
+                                let osc_2_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_dec_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_dec_curve_knob);
+
+                                // Sustain knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                                
+                                let osc_2_rel_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_rel_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_rel_curve_knob);
                             });
                         });
-
-                        let osc_2_octave_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_2_octave, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_2_octave_knob);
-
-                        let osc_2_attack_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_2_attack, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_2_attack_knob);
-
-                        let osc_2_decay_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_2_decay, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_2_decay_knob);
-
-                        let osc_2_sustain_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_2_sustain, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_2_sustain_knob);
-
-                        let osc_2_release_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_2_release, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_2_release_knob);
-                    });
-                    ui.horizontal(|ui| {
-                        // knob space
-                        ui.add_space(KNOB_SIZE*4.0 + 2.0);
-
-                        let osc_2_semitones_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_2_semitones, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_2_semitones_knob);
-                       
-                        let osc_2_atk_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_2_atk_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_2_atk_curve_knob);
-
-                        let osc_2_dec_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_2_dec_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_2_dec_curve_knob);
-
-                        // Sustain knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
-                        
-                        let osc_2_rel_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_2_rel_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_2_rel_curve_knob);
                     });
                 });
             }
+            AudioModuleType::Granulizer => {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Coming soon")
+                    .font(SMALLER_FONT)
+                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                    .on_hover_text("owo");
+                });
+            },
+            AudioModuleType::Additive => {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Coming soon")
+                    .font(SMALLER_FONT)
+                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                    .on_hover_text("owo");
+                });
+            },
         }
 
         ui.separator();
@@ -904,131 +1000,171 @@ impl AudioModule {
                 });
             },
             AudioModuleType::Sampler => {
+                const KNOB_SIZE: f32 = 25.0;
+                const TEXT_SIZE: f32 = 11.0;
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             ui.horizontal(|ui| {
-                                ui.label("Load Sample");
-                                let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_3, setter);
-                                ui.add(switch_toggle);
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Load Sample")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("The longer the sample the longer the process!");
+                                    let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_3, setter);
+                                    ui.add(switch_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Resample")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("Reload your sample after changing this! On: Resample, Off: Repitch");
+                                    let stretch_toggle = toggle_switch::ToggleSwitch::for_param(&params.restretch_3, setter);
+                                    ui.add(stretch_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Looping")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("To repeat your sample if MIDI key is held");
+                                    let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_3, setter);
+                                    ui.add(loop_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Single Cycle")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("Use this with Looping ON and Resample ON if you loaded a single cycle waveform");
+                                    let sc_toggle = toggle_switch::ToggleSwitch::for_param(&params.single_cycle_3, setter);
+                                    ui.add(sc_toggle);
+                                });
+                            });
+
+                            ui.horizontal(|ui| {
+                                let osc_3_octave_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_octave, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_octave_knob);
+
+                                let osc_3_attack_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_attack, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_attack_knob);
+
+                                let osc_3_decay_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_decay, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_decay_knob);
+
+                                let osc_3_sustain_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_sustain, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_sustain_knob);
+
+                                let osc_3_release_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_release, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_release_knob);
                             });
                             ui.horizontal(|ui| {
-                                ui.label("Loop Sample");
-                                let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_3, setter);
-                                ui.add(loop_toggle);
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("Single Cycle");
-                                let sc_toggle = toggle_switch::ToggleSwitch::for_param(&params.single_cycle_3, setter);
-                                ui.add(sc_toggle);
+                                // knob space
+                                //ui.add_space(KNOB_SIZE*4.0 + 4.0);
+
+                                let osc_3_semitones_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_semitones, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_semitones_knob);
+                                
+                                let osc_3_atk_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_atk_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_atk_curve_knob);
+
+                                let osc_3_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_dec_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_dec_curve_knob);
+
+                                // Sustain knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                                
+                                let osc_3_rel_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_rel_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_rel_curve_knob);
                             });
                         });
-
-                        let osc_3_octave_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_octave, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_octave_knob);
-
-                        let osc_3_attack_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_attack, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_attack_knob);
-
-                        let osc_3_decay_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_decay, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_decay_knob);
-
-                        let osc_3_sustain_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_sustain, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_sustain_knob);
-
-                        let osc_3_release_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_release, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_release_knob);
-                    });
-                    ui.horizontal(|ui| {
-                        // knob space
-                        ui.add_space(KNOB_SIZE*4.0 + 2.0);
-
-                        let osc_3_semitones_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_semitones, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_semitones_knob);
-                       
-                        let osc_3_atk_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_atk_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_atk_curve_knob);
-
-                        let osc_3_dec_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_dec_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_dec_curve_knob);
-
-                        // Sustain knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
-                        
-                        let osc_3_rel_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_rel_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_rel_curve_knob);
                     });
                 });
             }
+            AudioModuleType::Granulizer => {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Coming soon")
+                    .font(SMALLER_FONT)
+                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                    .on_hover_text("owo");
+                });
+            },
+            AudioModuleType::Additive => {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Coming soon")
+                    .font(SMALLER_FONT)
+                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                    .on_hover_text("owo");
+                });
+            },
         }
     }
 
     // Index proper params from knobs
+    // This lets us have a copy for voices, and also track changes like restretch changing or ADR slopes
     fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) {
         match voice_index {
             1 => {
@@ -1048,6 +1184,7 @@ impl AudioModule {
                 self.osc_rel_curve = params.osc_1_rel_curve.value();
                 self.loop_wavetable = params.loop_sample_1.value();
                 self.single_cycle = params.single_cycle_1.value();
+                self.restretch = params.restretch_1.value();
             },
             2 => {
                 self.audio_module_type = params._audio_module_2_type.value();
@@ -1066,6 +1203,7 @@ impl AudioModule {
                 self.osc_rel_curve = params.osc_2_rel_curve.value();
                 self.loop_wavetable = params.loop_sample_2.value();
                 self.single_cycle = params.single_cycle_2.value();
+                self.restretch = params.restretch_2.value();
             },
             3 => {
                 self.audio_module_type = params._audio_module_3_type.value();
@@ -1084,17 +1222,18 @@ impl AudioModule {
                 self.osc_rel_curve = params.osc_3_rel_curve.value();
                 self.loop_wavetable = params.loop_sample_3.value();
                 self.single_cycle = params.single_cycle_3.value();
+                self.restretch = params.restretch_3.value();
             },
             _ => {}
         }
     }
 
     // I was looking at the PolyModSynth Example and decided on this
-    // Handle the audio module midi events
+    // Handle the audio module midi events and regular pricessing
     // This is an INDIVIDUAL instance process unlike the GUI function
     // This sends back the OSC output + note on for filter to reset
-    pub fn process_midi(&mut self, sample_id: usize, params: Arc<ActuateParams>, event_passed: Option<NoteEvent<()>>, voice_index: usize, voice_max: usize, file_open: &mut bool) -> (f32, f32, bool) {
-        // If the process is in here the file dialog is not open per lib.rs process_midi function
+    pub fn process(&mut self, sample_id: usize, params: Arc<ActuateParams>, event_passed: Option<NoteEvent<()>>, voice_index: usize, voice_max: usize, file_open: &mut bool) -> (f32, f32, bool) {
+        // If the process is in here the file dialog is not open per lib.rs
 
         // Get around the egui ui thread by using BoolParam changes :)
         if params.load_sample_1.value() && voice_index == 1 && !file_open.clone() {
@@ -1126,6 +1265,12 @@ impl AudioModule {
             if Option::is_some(&sample_file) {
                 self.load_new_sample(sample_file.unwrap());
             }
+        }
+
+        // Skip processing if our file dialog is open/running
+        if *file_open {
+            self.playing_voices.voices.clear();
+            return (0.0, 0.0, false);
         }
 
         // Loader gets changed back from gui thread and triggers this
@@ -1441,6 +1586,14 @@ impl AudioModule {
                 // Do nothing, return 0.0
                 (0.0, 0.0)
             }
+            AudioModuleType::Granulizer => {
+                // Do nothing, return 0.0
+                (0.0, 0.0)
+            },
+            AudioModuleType::Additive => {
+                // Do nothing, return 0.0
+                (0.0, 0.0)
+            },
         };
 
         // Send it back
@@ -1465,17 +1618,45 @@ impl AudioModule {
             let spec = reader.spec();
             //let inner_sample_rate = spec.sample_rate as f32;
             let channels = spec.channels as usize;
+            let samples;
 
-            let samples = match spec.sample_format {
-                hound::SampleFormat::Int => reader
-                    .samples::<i32>()
-                    .map(|s| (s.unwrap_or_default() as f32 * 256.0) / i32::MAX as f32)
-                    .collect::<Vec<f32>>(),
-                hound::SampleFormat::Float => reader
-                    .samples::<f32>()
-                    .map(|s| s.unwrap_or_default())
-                    .collect::<Vec<f32>>(),
-            };
+            if spec.bits_per_sample == 8 {
+                // Since 16 bit is loud I'm scaling this one too for safety
+                samples = match spec.sample_format {
+                    hound::SampleFormat::Int => reader
+                        .samples::<i8>()
+                        .map(|s| util::db_to_gain(-36.0) * ((s.unwrap_or_default() as f32 * 256.0) / i8::MAX as f32))
+                        .collect::<Vec<f32>>(),
+                    hound::SampleFormat::Float => reader
+                        .samples::<f32>()
+                        .map(|s| s.unwrap_or_default())
+                        .collect::<Vec<f32>>(),
+                };
+            } else if spec.bits_per_sample == 16 {
+                // I noticed 16 bit can be LOUD so I tried to scale it
+                samples = match spec.sample_format {
+                    hound::SampleFormat::Int => reader
+                        .samples::<i16>()
+                        .map(|s| util::db_to_gain(-36.0) * ((s.unwrap_or_default() as f32 * 256.0) / i16::MAX as f32))
+                        .collect::<Vec<f32>>(),
+                    hound::SampleFormat::Float => reader
+                        .samples::<f32>()
+                        .map(|s| s.unwrap_or_default())
+                        .collect::<Vec<f32>>(),
+                };
+            } else {
+                // Attempt 32 bit cast/decode if 8/16 are invalid - no scaling
+                samples = match spec.sample_format {
+                    hound::SampleFormat::Int => reader
+                        .samples::<i32>()
+                        .map(|s| (s.unwrap_or_default() as f32 * 256.0) / i32::MAX as f32)
+                        .collect::<Vec<f32>>(),
+                    hound::SampleFormat::Float => reader
+                        .samples::<f32>()
+                        .map(|s| s.unwrap_or_default())
+                        .collect::<Vec<f32>>(),
+                };
+            }
 
             // Uninterleave sample format to chunks for resampling
             let mut new_samples = vec![Vec::with_capacity(samples.len() / channels); channels];
@@ -1489,20 +1670,41 @@ impl AudioModule {
 
             self.loaded_sample = new_samples;
 
-            let middle_c:f32 = 256.0;
+            // Based off restretch vs non stretch use different algorithms
+            // To generate a sample library
+            self.regenerate_samples();
 
+        };
+    }
+
+    // This method performs the sample recalculations when restretch is toggled
+    fn regenerate_samples(&mut self) {
+        // Compare our restretch change
+        if self.restretch != self.prev_restretch {
+            self.prev_restretch = self.restretch;
+        }
+
+        self.sample_lib.clear();
+
+        if self.restretch {
+            let middle_c:f32 = 256.0;
             // Generate our sample library from our sample
             for i in 0..127 {
                 let target_pitch_factor = util::f32_midi_note_to_freq(i as f32)/middle_c;
+
                 // Calculate the number of samples in the shifted frame
                 let shifted_num_samples = (self.loaded_sample[0].len() as f32 / target_pitch_factor).round() as usize;
+
                  // Apply pitch shifting by interpolating between the original samples
                 let mut shifted_samples_l = Vec::with_capacity(shifted_num_samples);
                 let mut shifted_samples_r = Vec::with_capacity(shifted_num_samples);
 
                 for j in 0..shifted_num_samples {
-                    let original_index = (j as f32 * target_pitch_factor).floor() as usize;
-                    let fractional_part = j as f32 * target_pitch_factor - original_index as f32;
+                    let original_index: usize;
+                    let fractional_part: f32;
+
+                    original_index = (j as f32 * target_pitch_factor).floor() as usize;
+                    fractional_part = j as f32 * target_pitch_factor - original_index as f32;
                 
                     if original_index < self.loaded_sample[0].len() - 1 {
                         // Linear interpolation between adjacent samples
@@ -1518,17 +1720,19 @@ impl AudioModule {
                         else {
                             interpolated_sample_r = interpolated_sample_l;
                         }
-                       
+                    
                         shifted_samples_l.push(interpolated_sample_l);
                         shifted_samples_r.push(interpolated_sample_r);
                     } 
-                    // This is the case where linear interp cannot happen at end of samples
                     else {
-                        shifted_samples_l.push(self.loaded_sample[0][original_index]);
-                        if self.loaded_sample.len() > 1 {
-                            shifted_samples_r.push(self.loaded_sample[1][original_index]);
-                        } else {
-                            shifted_samples_r.push(self.loaded_sample[0][original_index]);
+                        // If somehow through buffer shenanigans we are past our length we shouldn't do anything here
+                        if original_index < self.loaded_sample[0].len() {
+                            shifted_samples_l.push(self.loaded_sample[0][original_index]);
+                            if self.loaded_sample.len() > 1 {
+                                shifted_samples_r.push(self.loaded_sample[1][original_index]);
+                            } else {
+                                shifted_samples_r.push(self.loaded_sample[0][original_index]);
+                            }
                         }
                     }
                 }
@@ -1538,35 +1742,31 @@ impl AudioModule {
                 NoteVector.insert(1, shifted_samples_r);
                 self.sample_lib.insert(i, NoteVector);
             }
-        };
-    }
+        }
+        // If we are just pitch shifting instead of restretching
+        else {
+            let mut shifter = PitchShifter::new(20, self.sample_rate as usize);
+            for i in 0..127 {
+                let translated_i = (i as i32 - 60_i32) as f32;
+                let mut out_buffer_left = vec![0.0; self.loaded_sample[0].len()];
+                let mut out_buffer_right = vec![0.0; self.loaded_sample[0].len()];
 
-    /*
-    fn resample(samples: Vec<Vec<f32>>, sample_rate_in: f32, sample_rate_out: f32) -> Vec<Vec<f32>> {
-        let mut resampler = rubato::FftFixedIn::<f32>::new(
-            sample_rate_in as usize,
-            sample_rate_out as usize,
-            samples[0].len(),
-            8,
-            samples.len(),
-        )
-        .unwrap();
-    
-        match resampler.process(&samples, None) {
-            Ok(mut waves_out) => {
-                // get the duration of leading silence introduced by FFT
-                // https://github.com/HEnquist/rubato/blob/52cdc3eb8e2716f40bc9b444839bca067c310592/src/synchro.rs#L654
-                let silence_len = resampler.output_delay();
-    
-                for channel in waves_out.iter_mut() {
-                    channel.drain(..silence_len);
-                    channel.shrink_to_fit();
+                let loaded_left = self.loaded_sample[0].as_slice();
+                let loaded_right;
+                if self.loaded_sample.len() > 1 {
+                    loaded_right = self.loaded_sample[1].as_slice();
+                } else {
+                    loaded_right = self.loaded_sample[0].as_slice();
                 }
-    
-                waves_out
+                
+                shifter.shift_pitch(8, translated_i, loaded_left, &mut out_buffer_left);
+                shifter.shift_pitch(8, translated_i, loaded_right, &mut out_buffer_right);
+
+                let mut NoteVector = Vec::with_capacity(2);
+                NoteVector.insert(0, out_buffer_left);
+                NoteVector.insert(1, out_buffer_right);
+                self.sample_lib.insert(i, NoteVector);
             }
-            Err(_) => vec![],
         }
     }
-    */
 }

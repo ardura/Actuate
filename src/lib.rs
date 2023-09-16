@@ -21,7 +21,7 @@ Actuate - Synthesizer + Sampler/Granulizer by Ardura
 #![allow(non_snake_case)]
 
 use StateVariableFilter::ResonanceType;
-use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Rect, Rounding, RichText, FontId, Pos2}, EguiState};
+use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Rect, Rounding, RichText, FontId, Pos2}, EguiState, widgets::{ParamSlider}};
 use std::{sync::{Arc}, ops::RangeInclusive};
 use nih_plug::{prelude::*};
 use phf::phf_map;
@@ -33,6 +33,7 @@ mod audio_module;
 mod StateVariableFilter;
 mod ui_knob;
 mod toggle_switch;
+mod BoolButton;
 
 pub struct LoadedSample(Vec<Vec<f32>>);
 
@@ -45,7 +46,7 @@ const FILE_OPEN_BUFFER_MAX: u32 = 2000;
 
 // GUI values to refer to
 pub static GUI_VALS: phf::Map<&'static str, Color32> = phf_map! {
-    "A_KNOB_OUTSIDE_COLOR" => Color32::from_rgb(85,180,168),
+    "A_KNOB_OUTSIDE_COLOR" => Color32::from_rgb(67,157,148),
     "DARK_GREY_UI_COLOR" => Color32::from_rgb(49,53,71),
     "SYNTH_SOFT_BLUE" => Color32::from_rgb(142,166,201),
     "A_BACKGROUND_COLOR_TOP" => Color32::from_rgb(185,186,198),
@@ -77,6 +78,9 @@ pub struct Actuate {
     // File loading
     file_dialog: bool,
     file_open_buffer_timer: u32,
+
+    // Preset UI // next,prev,load,save
+    buttons: Vec<bool>,
 }
 
 impl Default for Actuate {
@@ -100,6 +104,9 @@ impl Default for Actuate {
             // File Loading
             file_dialog: false,
             file_open_buffer_timer: 0,
+
+            // Preset UI // next, prev, load, save
+            buttons: vec![false, false, false, false],
         }
     }
 }
@@ -116,6 +123,9 @@ pub struct ActuateParams {
 
     #[id = "Max Voices"]
     pub voice_limit: IntParam,
+
+    #[id = "Preset"]
+    pub preset_index: IntParam,
 
     // This audio module is what switches between functions for generators in the synth
     #[id = "audio_module_1_type"]
@@ -267,6 +277,9 @@ pub struct ActuateParams {
     #[id = "single_cycle_1"]
     pub single_cycle_1: BoolParam,
 
+    #[id = "restretch_1"]
+    pub restretch_1: BoolParam,
+
     // Controls for when audio_module_2_type is Sampler/Granulizer
     #[id = "load_sample_2"]
     pub load_sample_2: BoolParam,
@@ -277,6 +290,9 @@ pub struct ActuateParams {
     #[id = "single_cycle_2"]
     pub single_cycle_2: BoolParam,
 
+    #[id = "restretch_2"]
+    pub restretch_2: BoolParam,
+
     // Controls for when audio_module_3_type is Sampler/Granulizer
     #[id = "load_sample_3"]
     pub load_sample_3: BoolParam,
@@ -286,6 +302,9 @@ pub struct ActuateParams {
 
     #[id = "single_cycle_3"]
     pub single_cycle_3: BoolParam,
+
+    #[id = "restretch_3"]
+    pub restretch_3: BoolParam,
 
     // Filter
     #[id = "filter_wet"]
@@ -317,6 +336,19 @@ pub struct ActuateParams {
 
     #[id = "filter_env_curve"]
     pub filter_env_curve: EnumParam<Oscillator::SmoothStyle>,
+
+    // UI Non-param Params
+    #[id = "load_bank"]
+    pub load_bank: BoolParam,
+
+    #[id = "save_bank"]
+    pub save_bank: BoolParam,
+
+    #[id = "next_preset"]
+    pub next_preset: BoolParam,
+
+    #[id = "prev_preset"]
+    pub prev_preset: BoolParam,
 }
 
 impl Default for ActuateParams {
@@ -324,8 +356,11 @@ impl Default for ActuateParams {
         Self {
             editor_state: EguiState::from_size(WIDTH, HEIGHT),
 
+            // Top Level objects
+            ////////////////////////////////////////////////////////////////////////////////////
             master_level: FloatParam::new("Master", 0.4, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 16, IntRange::Linear { min: 1, max: 32 }),
+            preset_index: IntParam::new("Preset", 0, IntRange::Linear { min: 0, max: 127 }),
 
             _audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc),
             _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off),
@@ -341,10 +376,10 @@ impl Default for ActuateParams {
             osc_1_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
             osc_1_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
             osc_1_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
-            osc_1_attack: FloatParam::new("Attack", 0.1, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_1_decay: FloatParam::new("Decay", 0.1, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_1_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.001, max: 999.9 }).with_value_to_string(format_nothing()),
-            osc_1_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_1_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_1_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_1_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_value_to_string(format_nothing()),
+            osc_1_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
             osc_1_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
             osc_1_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Free),
             osc_1_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
@@ -355,10 +390,10 @@ impl Default for ActuateParams {
             osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
             osc_2_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
             osc_2_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
-            osc_2_attack: FloatParam::new("Attack", 0.1, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_2_decay: FloatParam::new("Decay", 0.1, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_2_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.001, max: 999.9 }).with_value_to_string(format_nothing()),
-            osc_2_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_2_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_2_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_2_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_value_to_string(format_nothing()),
+            osc_2_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
             osc_2_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
             osc_2_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Free),
             osc_2_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
@@ -369,10 +404,10 @@ impl Default for ActuateParams {
             osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
             osc_3_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
             osc_3_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
-            osc_3_attack: FloatParam::new("Attack", 0.1, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_3_decay: FloatParam::new("Decay", 0.1, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_3_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.001, max: 999.9 }).with_value_to_string(format_nothing()),
-            osc_3_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_3_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_3_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_3_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_value_to_string(format_nothing()),
+            osc_3_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
             osc_3_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
             osc_3_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Free),
             osc_3_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
@@ -387,9 +422,12 @@ impl Default for ActuateParams {
             loop_sample_1: BoolParam::new("Loop Sample", false),
             loop_sample_2: BoolParam::new("Loop Sample", false),
             loop_sample_3: BoolParam::new("Loop Sample", false),
-            single_cycle_1: BoolParam::new("single cycle", false),
-            single_cycle_2: BoolParam::new("single cycle", false),
-            single_cycle_3: BoolParam::new("single cycle", false),
+            single_cycle_1: BoolParam::new("Single Cycle", false),
+            single_cycle_2: BoolParam::new("Single Cycle", false),
+            single_cycle_3: BoolParam::new("Single Cycle", false),
+            restretch_1: BoolParam::new("Load Stretch", true),
+            restretch_2: BoolParam::new("Load Stretch", true),
+            restretch_3: BoolParam::new("Load Stretch", true),
 
             // Filter
             ////////////////////////////////////////////////////////////////////////////////////
@@ -398,13 +436,21 @@ impl Default for ActuateParams {
             filter_bp_amount: FloatParam::new("Band Pass", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)),
 
             filter_wet: FloatParam::new("Filter Wet", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_resonance: FloatParam::new("Q", 0.5, FloatRange::Linear { min: 0.2, max: 1.0 } ).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_res_type: EnumParam::new("Q Type", ResonanceType::Default),
-            filter_cutoff: FloatParam::new("Frequency", 2000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_value_to_string(formatters::v2s_f32_rounded(0)).with_unit("Hz"),
+            //filter_resonance: FloatParam::new("Resonance", 0.5, FloatRange::Linear { min: 0.1, max: 1.0 }.with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_resonance: FloatParam::new("Resonance", 1.0, FloatRange::Reversed(&FloatRange::Linear { min: 0.1, max: 1.0 })).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_res_type: EnumParam::new("Res Type", ResonanceType::Default),
+            filter_cutoff: FloatParam::new("Frequency", 4000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_value_to_string(formatters::v2s_f32_rounded(0)).with_unit("Hz"),
 
-            filter_env_peak: FloatParam::new("Env Peak", 0.0, FloatRange::SymmetricalSkewed { min: -8000.0, max: 8000.0, factor: 0.6, center: 0.0 }).with_value_to_string(format_nothing()),
-            filter_env_decay: FloatParam::new("Env Decay", 300.0, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.2}).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            filter_env_curve: EnumParam::new("Curve",Oscillator::SmoothStyle::Linear),
+            filter_env_peak: FloatParam::new("Env Peak", 0.0, FloatRange::Linear { min: -8000.0, max: 8000.0 }).with_value_to_string(format_nothing()),
+            filter_env_decay: FloatParam::new("Env Decay", 100.0, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.2}).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            filter_env_curve: EnumParam::new("Env Curve",Oscillator::SmoothStyle::Linear),
+
+            // UI Non-Param Params
+            ////////////////////////////////////////////////////////////////////////////////////
+            load_bank: BoolParam::new("Load Bank", false),
+            save_bank: BoolParam::new("Save Bank", false),
+            next_preset: BoolParam::new("->", false),
+            prev_preset: BoolParam::new("<-", false),
         }
     }
 }
@@ -442,6 +488,16 @@ impl Plugin for Actuate {
             move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
+                        // Reset our buttons
+                        if params.prev_preset.value() || params.next_preset.value(){
+                            setter.set_parameter(&params.prev_preset, false);
+                            setter.set_parameter(&params.next_preset, false);
+                        }
+                        if params.load_bank.value() || params.save_bank.value(){
+                            setter.set_parameter(&params.load_bank, false);
+                            setter.set_parameter(&params.save_bank, false);
+                        }
+
                         // Change colors - there's probably a better way to do this
                         let mut style_var = ui.style_mut().clone();
 
@@ -490,7 +546,7 @@ impl Plugin for Actuate {
                             // GUI Structure
                             ui.vertical(|ui| {
                                 // Spacing :)
-                                ui.label(RichText::new("Synth")
+                                ui.label(RichText::new("Actuate")
                                     .font(FONT)
                                     .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
                                     .on_hover_text("by Ardura!");
@@ -588,7 +644,7 @@ impl Plugin for Actuate {
                                         });
     
                                         // Spacing under master knob to put filters in the right spot
-                                        ui.add_space(KNOB_SIZE * 3.0 + 20.0);
+                                        ui.add_space(KNOB_SIZE * 3.0 + 24.0);
                                     });
                                 
                                     ui.separator();
@@ -604,8 +660,9 @@ impl Plugin for Actuate {
                                 ui.label("Filters");
                                 
                                 // Filter section
-                                ui.vertical(|ui| {
-                                    ui.horizontal(|ui| {
+                                
+                                ui.horizontal(|ui| {
+                                    ui.vertical(|ui|{
                                         let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                             &params.filter_wet, 
                                             setter, 
@@ -616,6 +673,17 @@ impl Plugin for Actuate {
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_wet_knob);
 
+                                        let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_resonance, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_resonance_knob);
+                                    });
+                                    ui.vertical(|ui|{
                                         let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                             &params.filter_cutoff, 
                                             setter, 
@@ -626,16 +694,6 @@ impl Plugin for Actuate {
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_cutoff_knob);
 
-                                        let filter_resonance_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_resonance, 
-                                            setter, 
-                                            KNOB_SIZE)
-                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                            .set_text_size(TEXT_SIZE);
-                                        ui.add(filter_resonance_knob);
-
                                         let filter_res_type_knob = ui_knob::ArcKnob::for_param(
                                             &params.filter_res_type, 
                                             setter, 
@@ -645,7 +703,8 @@ impl Plugin for Actuate {
                                             .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_res_type_knob);
-
+                                    });
+                                    ui.vertical(|ui|{
                                         let filter_hp_knob = ui_knob::ArcKnob::for_param(
                                             &params.filter_hp_amount, 
                                             setter, 
@@ -655,28 +714,6 @@ impl Plugin for Actuate {
                                             .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_hp_knob);
-
-                                        let filter_bp_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_bp_amount, 
-                                            setter, 
-                                            KNOB_SIZE)
-                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                            .set_text_size(TEXT_SIZE);
-                                        ui.add(filter_bp_knob);
-
-                                        let filter_lp_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_lp_amount, 
-                                            setter, 
-                                            KNOB_SIZE)
-                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                            .set_text_size(TEXT_SIZE);
-                                        ui.add(filter_lp_knob);
-                                    });
-                                    ui.horizontal(|ui| {
                                         let filter_env_peak = ui_knob::ArcKnob::for_param(
                                             &params.filter_env_peak, 
                                             setter, 
@@ -686,7 +723,17 @@ impl Plugin for Actuate {
                                             .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_env_peak);
-
+                                    });
+                                    ui.vertical(|ui| {
+                                        let filter_bp_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_bp_amount, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_bp_knob);
                                         let filter_env_decay_knob = ui_knob::ArcKnob::for_param(
                                             &params.filter_env_decay, 
                                             setter, 
@@ -696,7 +743,17 @@ impl Plugin for Actuate {
                                             .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_env_decay_knob);
-
+                                    });
+                                    ui.vertical(|ui| {
+                                        let filter_lp_knob = ui_knob::ArcKnob::for_param(
+                                            &params.filter_lp_amount, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(filter_lp_knob);
                                         let filter_env_curve_knob = ui_knob::ArcKnob::for_param(
                                             &params.filter_env_curve, 
                                             setter, 
@@ -706,6 +763,34 @@ impl Plugin for Actuate {
                                             .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_env_curve_knob);
+                                    });
+                                    // PRESETS!
+                                    ui.vertical(|ui|{
+                                        ui.horizontal(|ui|{
+                                            // Left side buttons
+                                            ui.vertical(|ui|{
+                                                let prev_preset_button = BoolButton::BoolButton::for_param(&params.prev_preset, setter, 3.0, 2.0, FONT);
+                                                ui.add(prev_preset_button);
+                                            });
+                                            // Preset Display
+                                            ui.vertical(|ui|{
+                                                ui.label(RichText::new("Preset")
+                                                    .background_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                    .color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap()));
+                                                ui.add(ParamSlider::for_param(&params.preset_index, setter));
+                                                ui.horizontal(|ui|{
+                                                    let load_bank_button = BoolButton::BoolButton::for_param(&params.load_bank, setter, 3.0, 2.0, SMALLER_FONT);
+                                                    ui.add(load_bank_button);
+                                                    let save_bank_button = BoolButton::BoolButton::for_param(&params.save_bank, setter, 3.0, 2.0, SMALLER_FONT);
+                                                    ui.add(save_bank_button);
+                                                });
+                                            });
+                                            // Right side Buttons
+                                            ui.vertical(|ui|{
+                                                let next_preset_button = BoolButton::BoolButton::for_param(&params.next_preset, setter, 3.0, 2.0, FONT);
+                                                ui.add(next_preset_button);
+                                            });
+                                        });
                                     });
                                 });
                                 
@@ -790,6 +875,13 @@ impl Actuate {
                     self.file_dialog = false;
                 }
             }
+            // Reset buttons if they get pressed
+            for button in self.buttons.as_mut_slice() {
+                *button = false;
+            }
+
+            // Processing
+            /////////////////////////////////////////////////////////////////////////
 
             // Reset our output buffer signal
             *channel_samples.get_mut(0).unwrap() = 0.0;
@@ -831,13 +923,13 @@ impl Actuate {
 
             // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog {
-                (wave1_l, wave1_r, reset_filter_controller1) = self.audio_module_1.process_midi(sample_id, self.params.clone(), midi_event.clone(), 1, sent_voice_max, &mut self.file_dialog);
+                (wave1_l, wave1_r, reset_filter_controller1) = self.audio_module_1.process(sample_id, self.params.clone(), midi_event.clone(), 1, sent_voice_max, &mut self.file_dialog);
             }
             if !self.file_dialog {
-                (wave2_l, wave2_r, reset_filter_controller2) = self.audio_module_2.process_midi(sample_id, self.params.clone(), midi_event.clone(), 2, sent_voice_max, &mut self.file_dialog);
+                (wave2_l, wave2_r, reset_filter_controller2) = self.audio_module_2.process(sample_id, self.params.clone(), midi_event.clone(), 2, sent_voice_max, &mut self.file_dialog);
             }
             if !self.file_dialog {
-                (wave3_l, wave3_r, reset_filter_controller3) = self.audio_module_3.process_midi(sample_id, self.params.clone(), midi_event.clone(), 3, sent_voice_max, &mut self.file_dialog);
+                (wave3_l, wave3_r, reset_filter_controller3) = self.audio_module_3.process(sample_id, self.params.clone(), midi_event.clone(), 3, sent_voice_max, &mut self.file_dialog);
             }
 
             wave1_l *= self.params.audio_module_1_level.value();
@@ -897,6 +989,17 @@ impl Actuate {
             *channel_samples.get_mut(1).unwrap() = right_output * self.params.master_level.value();
         }
     }
+
+    // Load presets
+    fn load_preset_bank(&mut self) {
+
+    }
+
+    // Save our presets
+    fn save_preset_bank(&mut self) {
+
+    }
+
 }
 
 impl ClapPlugin for Actuate {

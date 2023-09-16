@@ -1,19 +1,18 @@
 use std::f32::consts::PI;
-use nih_plug::{prelude::Enum, util::db_to_gain};
+use nih_plug::prelude::Enum;
 
-// Modified implementation from https://www.musicdsp.org/en/latest/Filters/23-state-variable.html and AI
-//
+// Modified implementation from https://www.musicdsp.org/en/latest/Filters/23-state-variable.html and A
 // Adapted to rust by Ardura
 
 #[derive(Enum, PartialEq, Eq)]
 pub enum ResonanceType {
     // Allegedly the "ideal" response when tying Q to angular sin response
     Default,
-    // Allegedly a Moog Ladder Q calculation
+    // Allegedly a Moog Ladder Q approximation further modified
     Moog,
-    // Allegedly an approximation of a TB-303 LP
+    // Allegedly an approximation of a TB-303 LP further modified
     TB,
-    // Allegedly an approximation of an Arp 2600
+    // Allegedly an approximation of an Arp 2600 further modified
     Arp,
 }
 
@@ -55,6 +54,10 @@ impl StateVariableFilter {
         if resonance_mode != self.res_mode {
             self.res_mode = resonance_mode;
         }
+        // Prevent speaker/ear destruction
+        if self.q < 0.15  && self.res_mode != ResonanceType::Default{
+            self.q = 0.15;
+        }
     }
 
     pub fn process(&mut self, input: f32) -> (f32, f32, f32) {
@@ -67,25 +70,21 @@ impl StateVariableFilter {
         }
 
         // Calculate our normalized freq for filtering
-        let normalized_freq: f32 = (2.0 * PI * self.frequency) / (self.sample_rate*2.0);
+        let normalized_freq: f32 = match self.res_mode {
+            ResonanceType::Default => (2.0 * PI * self.frequency) / (self.sample_rate*4.0),
+            ResonanceType::Moog => (2.0 * PI * self.frequency) / (self.sample_rate*0.5),
+            ResonanceType::TB => (2.0 * PI * self.frequency) / (self.sample_rate*0.5),
+            ResonanceType::Arp => (2.0 * PI * self.frequency) / (self.sample_rate*0.5),
+        };
         
-        // I made this magic number by tesing resonance sweeps and monitoring
-        // With single saw wave. Resonance would go wild otherwise and/or clip to infinity in some scenarios.
-        let mut resonance_scaler: f32 = 0.0;
-        match self.res_mode {
-            ResonanceType::Moog => { resonance_scaler = db_to_gain(-36.0); },
-            ResonanceType::TB => { resonance_scaler = db_to_gain(-18.0); },
-            ResonanceType::Arp => { resonance_scaler = db_to_gain(-19.0); },
-            _ => {}
-        }
-
         // Calculate our resonance coefficient
         // This is here to save calls during filter sweeps even though a static filter will use more resources this way
         let resonance = match self.res_mode {
             ResonanceType::Default => (normalized_freq / (2.0 * self.q)).sin(),
-            ResonanceType::Moog => ((2.0 * PI * normalized_freq / self.sample_rate) / (4.0 * PI * self.q - 2.0)) * resonance_scaler,
-            ResonanceType::TB => ((PI * normalized_freq / self.sample_rate).tan() / self.q) * resonance_scaler,
-            ResonanceType::Arp => ((2.0 * PI * normalized_freq / self.sample_rate) / (2.0 * PI * self.q + 0.3)) * resonance_scaler,
+            // These are all approximations I found then modified - I'm not claiming any accuracy - more like inspiration
+            ResonanceType::Moog => (16.0 * PI * self.q - 2.0) * (2.0 * PI * normalized_freq / self.sample_rate),
+            ResonanceType::TB => (8.0 * PI * self.q) * (PI * normalized_freq / self.sample_rate).tan(),
+            ResonanceType::Arp => (2.0 * PI * self.q + 0.3) * (2.0 * PI * normalized_freq / self.sample_rate),
         };
 
         // Oversample by running multiple iterations
