@@ -21,11 +21,11 @@ This is intended to be a building block used by other files in the Actuate synth
 
 #####################################
 */
-
+use serde::{Deserialize, Serialize};
 use std::f32::consts::{self, PI, FRAC_2_PI};
 use nih_plug::{params::enums::Enum};
 
-#[derive(Enum, PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Enum, PartialEq, Eq, Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum VoiceType {
     Sine,
     Tri,
@@ -46,14 +46,14 @@ pub enum OscState {
     Releasing,
 }
 
-#[derive(Enum, PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Enum, PartialEq, Eq, Debug, Copy, Clone, Deserialize, Serialize)]
 pub enum SmoothStyle {
     Linear,
     Logarithmic,
     Exponential,
 }
 
-#[derive(Enum, PartialEq, Eq, Debug, Copy, Clone)]
+#[derive(Enum, PartialEq, Eq, Debug, Copy, Clone, Deserialize, Serialize)]
 pub enum RetriggerStyle {
     Free,
     Retrigger,

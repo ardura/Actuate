@@ -21,10 +21,12 @@ Actuate - Synthesizer + Sampler/Granulizer by Ardura
 #![allow(non_snake_case)]
 
 use StateVariableFilter::ResonanceType;
-use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Rect, Rounding, RichText, FontId, Pos2}, EguiState, widgets::{ParamSlider}};
-use std::{sync::{Arc}, ops::RangeInclusive};
+use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Rect, Rounding, RichText, FontId, Pos2}, EguiState};
+use rfd::FileDialog;
+use std::{sync::{Arc}, ops::RangeInclusive, fs::{File}, io::Write};
 use nih_plug::{prelude::*};
 use phf::phf_map;
+use serde::{Deserialize, Serialize};
 
 // My Files
 use audio_module::{AudioModuleType, AudioModule, Oscillator::{self, RetriggerStyle, SmoothStyle}};
@@ -59,6 +61,99 @@ pub static GUI_VALS: phf::Map<&'static str, Color32> = phf_map! {
 const FONT: nih_plug_egui::egui::FontId = FontId::monospace(14.0);
 const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::monospace(11.0);
 
+#[derive(Serialize, Deserialize, Clone)]
+struct ActuatePreset {
+    // Modules 1
+    ///////////////////////////////////////////////////////////
+    mod1_audio_module_type: AudioModuleType,    
+    // Granulizer/Sampler
+    mod1_loaded_sample: Vec<Vec<f32>>,
+    mod1_sample_lib: Vec<Vec<Vec<f32>>>,
+    mod1_loop_wavetable: bool,
+    mod1_single_cycle: bool,
+    mod1_restretch: bool,
+    mod1_prev_restretch: bool,
+
+    // Osc module knob storage
+    mod1_osc_type: VoiceType,
+    mod1_osc_octave: i32,
+    mod1_osc_semitones: i32,
+    mod1_osc_detune: f32,
+    mod1_osc_attack: f32,
+    mod1_osc_decay: f32,
+    mod1_osc_sustain: f32,
+    mod1_osc_release: f32,
+    mod1_osc_mod_amount: f32,
+    mod1_osc_retrigger: RetriggerStyle,
+    mod1_osc_atk_curve: SmoothStyle,
+    mod1_osc_dec_curve: SmoothStyle,
+    mod1_osc_rel_curve: SmoothStyle,
+
+    // Modules 2
+    ///////////////////////////////////////////////////////////
+    mod2_audio_module_type: AudioModuleType,    
+    // Granulizer/Sampler
+    mod2_loaded_sample: Vec<Vec<f32>>,
+    mod2_sample_lib: Vec<Vec<Vec<f32>>>,
+    mod2_loop_wavetable: bool,
+    mod2_single_cycle: bool,
+    mod2_restretch: bool,
+    mod2_prev_restretch: bool,
+
+    // Osc module knob storage
+    mod2_osc_type: VoiceType,
+    mod2_osc_octave: i32,
+    mod2_osc_semitones: i32,
+    mod2_osc_detune: f32,
+    mod2_osc_attack: f32,
+    mod2_osc_decay: f32,
+    mod2_osc_sustain: f32,
+    mod2_osc_release: f32,
+    mod2_osc_mod_amount: f32,
+    mod2_osc_retrigger: RetriggerStyle,
+    mod2_osc_atk_curve: SmoothStyle,
+    mod2_osc_dec_curve: SmoothStyle,
+    mod2_osc_rel_curve: SmoothStyle,
+
+    // Modules 3
+    ///////////////////////////////////////////////////////////
+    mod3_audio_module_type: AudioModuleType,    
+    // Granulizer/Sampler
+    mod3_loaded_sample: Vec<Vec<f32>>,
+    mod3_sample_lib: Vec<Vec<Vec<f32>>>,
+    mod3_loop_wavetable: bool,
+    mod3_single_cycle: bool,
+    mod3_restretch: bool,
+    mod3_prev_restretch: bool,
+
+    // Osc module knob storage
+    mod3_osc_type: VoiceType,
+    mod3_osc_octave: i32,
+    mod3_osc_semitones: i32,
+    mod3_osc_detune: f32,
+    mod3_osc_attack: f32,
+    mod3_osc_decay: f32,
+    mod3_osc_sustain: f32,
+    mod3_osc_release: f32,
+    mod3_osc_mod_amount: f32,
+    mod3_osc_retrigger: RetriggerStyle,
+    mod3_osc_atk_curve: SmoothStyle,
+    mod3_osc_dec_curve: SmoothStyle,
+    mod3_osc_rel_curve: SmoothStyle,
+
+    filter_wet: f32,
+    filter_cutoff: f32,
+    filter_resonance: f32,
+    filter_res_type: ResonanceType,
+    filter_lp_amount: f32,
+    filter_hp_amount: f32,
+    filter_bp_amount: f32,
+    filter_env_peak: f32,
+    filter_env_decay: f32,
+    filter_env_curve: Oscillator::SmoothStyle,
+}
+
+#[derive(Clone)]
 pub struct Actuate {
     pub params: Arc<ActuateParams>,
     pub sample_rate: f32,
@@ -79,8 +174,11 @@ pub struct Actuate {
     file_dialog: bool,
     file_open_buffer_timer: u32,
 
-    // Preset UI // next,prev,load,save
-    buttons: Vec<bool>,
+    // Preset UI // next,prev,load,save,update
+
+    // Preset Lib Default
+    preset_lib_name: String,
+    preset_lib: Vec<ActuatePreset>,
 }
 
 impl Default for Actuate {
@@ -105,8 +203,85 @@ impl Default for Actuate {
             file_dialog: false,
             file_open_buffer_timer: 0,
 
-            // Preset UI // next, prev, load, save
-            buttons: vec![false, false, false, false],
+            // Preset UI // next, prev, load, save, update
+            //buttons: vec![false, false, false, false, false],
+
+            // Preset Library DEFAULT
+            preset_lib_name: String::from("Default"),
+            preset_lib: vec![ActuatePreset { 
+                mod1_audio_module_type: AudioModuleType::Osc, 
+                mod1_loaded_sample: vec![vec![0.0,0.0]], 
+                mod1_sample_lib: vec![vec![vec![0.0,0.0]]], 
+                mod1_loop_wavetable: false, 
+                mod1_single_cycle: false, 
+                mod1_restretch: true, 
+                mod1_prev_restretch: false, 
+                mod1_osc_type: VoiceType::Sine, 
+                mod1_osc_octave: 0, 
+                mod1_osc_semitones: 0, 
+                mod1_osc_detune: 0.0, 
+                mod1_osc_attack: 0.0001, 
+                mod1_osc_decay: 0.0001, 
+                mod1_osc_sustain: 1.0, 
+                mod1_osc_release: 5.0, 
+                mod1_osc_mod_amount: 0.0, 
+                mod1_osc_retrigger: RetriggerStyle::Retrigger, 
+                mod1_osc_atk_curve: SmoothStyle::Linear, 
+                mod1_osc_dec_curve: SmoothStyle::Linear, 
+                mod1_osc_rel_curve: SmoothStyle::Linear, 
+
+                mod2_audio_module_type: AudioModuleType::Off, 
+                mod2_loaded_sample: vec![vec![0.0,0.0]], 
+                mod2_sample_lib: vec![vec![vec![0.0,0.0]]], 
+                mod2_loop_wavetable: false, 
+                mod2_single_cycle: false, 
+                mod2_restretch: true, 
+                mod2_prev_restretch: false, 
+                mod2_osc_type: VoiceType::Sine, 
+                mod2_osc_octave: 0, 
+                mod2_osc_semitones: 0, 
+                mod2_osc_detune: 0.0, 
+                mod2_osc_attack: 0.0001, 
+                mod2_osc_decay: 0.0001, 
+                mod2_osc_sustain: 1.0, 
+                mod2_osc_release: 5.0, 
+                mod2_osc_mod_amount: 0.0, 
+                mod2_osc_retrigger: RetriggerStyle::Retrigger, 
+                mod2_osc_atk_curve: SmoothStyle::Linear, 
+                mod2_osc_dec_curve: SmoothStyle::Linear, 
+                mod2_osc_rel_curve: SmoothStyle::Linear, 
+
+                mod3_audio_module_type: AudioModuleType::Off, 
+                mod3_loaded_sample: vec![vec![0.0,0.0]], 
+                mod3_sample_lib: vec![vec![vec![0.0,0.0]]], 
+                mod3_loop_wavetable: false, 
+                mod3_single_cycle: false, 
+                mod3_restretch: true, 
+                mod3_prev_restretch: false, 
+                mod3_osc_type: VoiceType::Sine, 
+                mod3_osc_octave: 0, 
+                mod3_osc_semitones: 0, 
+                mod3_osc_detune: 0.0, 
+                mod3_osc_attack: 0.0001, 
+                mod3_osc_decay: 0.0001, 
+                mod3_osc_sustain: 1.0, 
+                mod3_osc_release: 5.0, 
+                mod3_osc_mod_amount: 0.0, 
+                mod3_osc_retrigger: RetriggerStyle::Retrigger, 
+                mod3_osc_atk_curve: SmoothStyle::Linear, 
+                mod3_osc_dec_curve: SmoothStyle::Linear, 
+                mod3_osc_rel_curve: SmoothStyle::Linear, 
+
+                filter_wet: 1.0, 
+                filter_cutoff: 4000.0, 
+                filter_resonance: 1.0, 
+                filter_res_type: ResonanceType::Default, 
+                filter_lp_amount: 1.0, 
+                filter_hp_amount: 0.0, 
+                filter_bp_amount: 0.0, 
+                filter_env_peak: 0.0, 
+                filter_env_decay: 100.0, 
+                filter_env_curve: SmoothStyle::Linear }; 32],
         }
     }
 }
@@ -349,6 +524,9 @@ pub struct ActuateParams {
 
     #[id = "prev_preset"]
     pub prev_preset: BoolParam,
+
+    #[id = "update_current_preset"]
+    pub update_current_preset: BoolParam,
 }
 
 impl Default for ActuateParams {
@@ -360,7 +538,7 @@ impl Default for ActuateParams {
             ////////////////////////////////////////////////////////////////////////////////////
             master_level: FloatParam::new("Master", 0.4, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 16, IntRange::Linear { min: 1, max: 32 }),
-            preset_index: IntParam::new("Preset", 0, IntRange::Linear { min: 0, max: 127 }),
+            preset_index: IntParam::new("Preset", 0, IntRange::Linear { min: 0, max: 31 }),
 
             _audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc),
             _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off),
@@ -381,7 +559,7 @@ impl Default for ActuateParams {
             osc_1_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_value_to_string(format_nothing()),
             osc_1_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
             osc_1_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            osc_1_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Free),
+            osc_1_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger),
             osc_1_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_1_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
             osc_1_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
@@ -395,7 +573,7 @@ impl Default for ActuateParams {
             osc_2_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_value_to_string(format_nothing()),
             osc_2_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
             osc_2_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            osc_2_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Free),
+            osc_2_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger),
             osc_2_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_2_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
             osc_2_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
@@ -409,7 +587,7 @@ impl Default for ActuateParams {
             osc_3_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_value_to_string(format_nothing()),
             osc_3_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
             osc_3_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            osc_3_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Free),
+            osc_3_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger),
             osc_3_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_3_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
             osc_3_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
@@ -451,6 +629,7 @@ impl Default for ActuateParams {
             save_bank: BoolParam::new("Save Bank", false),
             next_preset: BoolParam::new("->", false),
             prev_preset: BoolParam::new("<-", false),
+            update_current_preset: BoolParam::new("Update Current Preset", false),
         }
     }
 }
@@ -488,14 +667,21 @@ impl Plugin for Actuate {
             move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
-                        // Reset our buttons
-                        if params.prev_preset.value() || params.next_preset.value(){
+                        // Reset our buttons - bad practice most likely
+                        if params.prev_preset.value() || params.next_preset.value() {
+                            if params.next_preset.value() && params.preset_index.value() < 31{
+                                setter.set_parameter(&params.preset_index, params.preset_index.value() + 1);
+                            }
+                            if params.prev_preset.value() && params.preset_index.value() > 0 {
+                                setter.set_parameter(&params.preset_index, params.preset_index.value() - 1);
+                            }
                             setter.set_parameter(&params.prev_preset, false);
                             setter.set_parameter(&params.next_preset, false);
                         }
-                        if params.load_bank.value() || params.save_bank.value(){
+                        if params.load_bank.value() || params.save_bank.value() || params.update_current_preset.value() {
                             setter.set_parameter(&params.load_bank, false);
                             setter.set_parameter(&params.save_bank, false);
+                            setter.set_parameter(&params.update_current_preset, false);
                         }
 
                         // Change colors - there's probably a better way to do this
@@ -764,32 +950,38 @@ impl Plugin for Actuate {
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_env_curve_knob);
                                     });
-                                    // PRESETS!
+                                    ui.painter().rect_filled(
+                                        Rect::from_x_y_ranges(
+                                            RangeInclusive::new((WIDTH as f32)*0.46, (WIDTH as f32) - (synth_bar_space + 4.0)), 
+                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)), 
+                                        Rounding::from(16.0),
+                                        *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap()
+                                    );
+                                    // Preset Display
                                     ui.vertical(|ui|{
+
                                         ui.horizontal(|ui|{
-                                            // Left side buttons
-                                            ui.vertical(|ui|{
-                                                let prev_preset_button = BoolButton::BoolButton::for_param(&params.prev_preset, setter, 3.0, 2.0, FONT);
-                                                ui.add(prev_preset_button);
-                                            });
-                                            // Preset Display
-                                            ui.vertical(|ui|{
-                                                ui.label(RichText::new("Preset")
-                                                    .background_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                    .color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap()));
-                                                ui.add(ParamSlider::for_param(&params.preset_index, setter));
-                                                ui.horizontal(|ui|{
-                                                    let load_bank_button = BoolButton::BoolButton::for_param(&params.load_bank, setter, 3.0, 2.0, SMALLER_FONT);
-                                                    ui.add(load_bank_button);
-                                                    let save_bank_button = BoolButton::BoolButton::for_param(&params.save_bank, setter, 3.0, 2.0, SMALLER_FONT);
-                                                    ui.add(save_bank_button);
-                                                });
-                                            });
-                                            // Right side Buttons
-                                            ui.vertical(|ui|{
-                                                let next_preset_button = BoolButton::BoolButton::for_param(&params.next_preset, setter, 3.0, 2.0, FONT);
-                                                ui.add(next_preset_button);
-                                            });
+                                            ui.label(RichText::new("Preset")
+                                                .background_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                .color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .size(16.0));
+                                            ui.label(RichText::new(&params.preset_index.to_string())
+                                                .background_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                .color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .size(16.0));
+                                        });
+                                        //ui.add(ParamSlider::for_param(&params.preset_index, setter));
+                                        ui.horizontal(|ui|{
+                                            let prev_preset_button = BoolButton::BoolButton::for_param(&params.prev_preset, setter, 3.0, 2.0, FONT);
+                                            ui.add(prev_preset_button);
+                                            let load_bank_button = BoolButton::BoolButton::for_param(&params.load_bank, setter, 3.5, 2.0, SMALLER_FONT);
+                                            ui.add(load_bank_button);
+                                            let update_current_preset = BoolButton::BoolButton::for_param(&params.update_current_preset, setter, 8.0, 2.0, SMALLER_FONT);
+                                            ui.add(update_current_preset);
+                                            let save_bank_button = BoolButton::BoolButton::for_param(&params.save_bank, setter, 3.5, 2.0, SMALLER_FONT);
+                                            ui.add(save_bank_button);
+                                            let next_preset_button = BoolButton::BoolButton::for_param(&params.next_preset, setter, 3.0, 2.0, FONT);
+                                            ui.add(next_preset_button);
                                         });
                                     });
                                 });
@@ -875,9 +1067,26 @@ impl Actuate {
                     self.file_dialog = false;
                 }
             }
-            // Reset buttons if they get pressed
-            for button in self.buttons.as_mut_slice() {
-                *button = false;
+            
+            // Preset UI // next, prev, load, save
+            if self.params.next_preset.value() {
+                // Next Preset -> Load Preset
+            }
+            if self.params.prev_preset.value() {
+                // Prev preset -> Load Preset
+            }
+            if self.params.load_bank.value() && !self.file_dialog {
+                self.file_dialog = true;
+                self.file_open_buffer_timer = 0;
+                self.load_preset_bank();
+            }
+            if self.params.save_bank.value() && !self.file_dialog {
+                self.file_dialog = true;
+                self.file_open_buffer_timer = 0;
+                self.save_preset_bank();
+            }
+            if self.params.update_current_preset.value() {
+                self.update_current_preset();
             }
 
             // Processing
@@ -992,14 +1201,127 @@ impl Actuate {
 
     // Load presets
     fn load_preset_bank(&mut self) {
-
+        let loading_bank = FileDialog::new()
+            .add_filter("txt", &["txt"])
+            .pick_file();
+        if Option::is_some(&loading_bank) {
+            self.preset_lib_name = loading_bank.unwrap().to_str().unwrap_or("Invalid Path").to_string();
+            let contents = std::fs::read_to_string(&self.preset_lib_name);
+            let file_string_data = &contents.unwrap().as_str().to_string();
+            let unserialize: Vec<ActuatePreset> = serde_json::from_slice(file_string_data.as_bytes()).unwrap();
+            self.preset_lib = unserialize.clone();
+        }
     }
 
     // Save our presets
     fn save_preset_bank(&mut self) {
-
+        self.update_current_preset();
+        let saving_bank = FileDialog::new()
+            .add_filter("txt", &["txt"])
+            .set_file_name(&self.preset_lib_name)
+            .save_file();
+        if Option::is_some(&saving_bank) {
+            let location = saving_bank.unwrap().clone();
+            let file = File::create(location);
+            let serialized = serde_json::to_string(&self.preset_lib);
+            let _ = file.unwrap().write(serialized.unwrap().as_str().as_bytes());
+        }
     }
 
+    // Update our current preset
+    fn update_current_preset(&mut self) {
+        self.preset_lib[self.params.preset_index.value() as usize] = ActuatePreset {
+            // Modules 1
+            ///////////////////////////////////////////////////////////
+            mod1_audio_module_type: self.params._audio_module_1_type.value(),
+            // Granulizer/Sampler
+            mod1_loaded_sample: self.audio_module_1.loaded_sample.clone(),
+            mod1_sample_lib: self.audio_module_1.sample_lib.clone(),
+            mod1_loop_wavetable: self.audio_module_1.loop_wavetable,
+            mod1_single_cycle: self.audio_module_1.single_cycle,
+            mod1_restretch: self.audio_module_1.restretch,
+            mod1_prev_restretch: self.audio_module_1.prev_restretch,
+
+            // Osc module knob storage
+            mod1_osc_type: self.audio_module_1.osc_type,
+            mod1_osc_octave: self.audio_module_1.osc_octave,
+            mod1_osc_semitones: self.audio_module_1.osc_semitones,
+            mod1_osc_detune: self.audio_module_1.osc_detune,
+            mod1_osc_attack: self.audio_module_1.osc_attack,
+            mod1_osc_decay: self.audio_module_1.osc_decay,
+            mod1_osc_sustain: self.audio_module_1.osc_sustain,
+            mod1_osc_release: self.audio_module_1.osc_release,
+            mod1_osc_mod_amount: self.audio_module_1.osc_mod_amount,
+            mod1_osc_retrigger: self.audio_module_1.osc_retrigger,
+            mod1_osc_atk_curve: self.audio_module_1.osc_atk_curve,
+            mod1_osc_dec_curve: self.audio_module_1.osc_dec_curve,
+            mod1_osc_rel_curve: self.audio_module_1.osc_rel_curve,
+
+            // Modules 2
+            ///////////////////////////////////////////////////////////
+            mod2_audio_module_type: self.params._audio_module_2_type.value(),    
+            // Granulizer/Sampler
+            mod2_loaded_sample: self.audio_module_2.loaded_sample.clone(),
+            mod2_sample_lib: self.audio_module_2.sample_lib.clone(),
+            mod2_loop_wavetable: self.audio_module_2.loop_wavetable,
+            mod2_single_cycle: self.audio_module_2.single_cycle,
+            mod2_restretch: self.audio_module_2.restretch,
+            mod2_prev_restretch: self.audio_module_2.prev_restretch,
+
+            // Osc module knob storage
+            mod2_osc_type: self.audio_module_2.osc_type,
+            mod2_osc_octave: self.audio_module_2.osc_octave,
+            mod2_osc_semitones: self.audio_module_2.osc_semitones,
+            mod2_osc_detune: self.audio_module_2.osc_detune,
+            mod2_osc_attack: self.audio_module_2.osc_attack,
+            mod2_osc_decay: self.audio_module_2.osc_decay,
+            mod2_osc_sustain: self.audio_module_2.osc_sustain,
+            mod2_osc_release: self.audio_module_2.osc_release,
+            mod2_osc_mod_amount: self.audio_module_2.osc_mod_amount,
+            mod2_osc_retrigger: self.audio_module_2.osc_retrigger,
+            mod2_osc_atk_curve: self.audio_module_2.osc_atk_curve,
+            mod2_osc_dec_curve: self.audio_module_2.osc_dec_curve,
+            mod2_osc_rel_curve: self.audio_module_2.osc_rel_curve,
+
+            // Modules 2
+            ///////////////////////////////////////////////////////////
+            mod3_audio_module_type: self.params._audio_module_3_type.value(),    
+            // Granulizer/Sampler
+            mod3_loaded_sample: self.audio_module_3.loaded_sample.clone(),
+            mod3_sample_lib: self.audio_module_3.sample_lib.clone(),
+            mod3_loop_wavetable: self.audio_module_3.loop_wavetable,
+            mod3_single_cycle: self.audio_module_3.single_cycle,
+            mod3_restretch: self.audio_module_3.restretch,
+            mod3_prev_restretch: self.audio_module_3.prev_restretch,
+
+            // Osc module knob storage
+            mod3_osc_type: self.audio_module_3.osc_type,
+            mod3_osc_octave: self.audio_module_3.osc_octave,
+            mod3_osc_semitones: self.audio_module_3.osc_semitones,
+            mod3_osc_detune: self.audio_module_3.osc_detune,
+            mod3_osc_attack: self.audio_module_3.osc_attack,
+            mod3_osc_decay: self.audio_module_3.osc_decay,
+            mod3_osc_sustain: self.audio_module_3.osc_sustain,
+            mod3_osc_release: self.audio_module_3.osc_release,
+            mod3_osc_mod_amount: self.audio_module_3.osc_mod_amount,
+            mod3_osc_retrigger: self.audio_module_3.osc_retrigger,
+            mod3_osc_atk_curve: self.audio_module_3.osc_atk_curve,
+            mod3_osc_dec_curve: self.audio_module_3.osc_dec_curve,
+            mod3_osc_rel_curve: self.audio_module_3.osc_rel_curve,
+
+            // Filter storage - gotten from params
+            filter_wet: self.params.filter_wet.value(),
+            filter_cutoff: self.params.filter_cutoff.value(),
+            filter_resonance: self.params.filter_resonance.value(),
+            filter_res_type: self.params.filter_res_type.value(),
+            filter_lp_amount: self.params.filter_lp_amount.value(),
+            filter_hp_amount: self.params.filter_hp_amount.value(),
+            filter_bp_amount: self.params.filter_bp_amount.value(),
+            filter_env_peak: self.params.filter_env_peak.value(),
+            filter_env_decay: self.params.filter_env_decay.value(),
+            filter_env_curve: self.params.filter_env_curve.value(),
+        }
+    }
 }
 
 impl ClapPlugin for Actuate {

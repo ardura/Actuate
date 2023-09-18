@@ -27,6 +27,8 @@ use nih_plug_egui::egui::{Ui, RichText};
 use rand::Rng;
 use rfd::FileDialog;
 use pitch_shift::PitchShifter;
+use serde::{Deserialize, Serialize};
+
 // Audio module files
 pub(crate) mod Oscillator;
 use Oscillator::VoiceType;
@@ -34,7 +36,7 @@ use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch, SMALLER_FONT, State
 use self::Oscillator::{RetriggerStyle, OscState, SmoothStyle};
 
 // When you create a new audio module, you should add it here
-#[derive(Enum, PartialEq, Clone, Copy)]
+#[derive(Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum AudioModuleType {
     Off,
     Osc,
@@ -85,6 +87,7 @@ struct SingleVoice {
     loop_it: bool,
 }
 
+#[derive(Clone)]
 pub struct AudioModule {
     // Stored sample rate in case the audio module needs it
     sample_rate: f32,
@@ -98,35 +101,35 @@ pub struct AudioModule {
     ///////////////////////////////////////////////////////////
     
     // Granulizer/Sampler
-    loaded_sample: Vec<Vec<f32>>,
+    pub loaded_sample: Vec<Vec<f32>>,
     // Hold calculated notes
-    sample_lib: Vec<Vec<Vec<f32>>>,
+    pub sample_lib: Vec<Vec<Vec<f32>>>,
     // Treat this like a wavetable synth would
-    loop_wavetable: bool,
+    pub loop_wavetable: bool,
     // Shift notes like a single cycle - aligned wth 3xosc
-    single_cycle: bool,
+    pub single_cycle: bool,
     // Restretch length with tracking bool
-    restretch: bool,
-    prev_restretch: bool,
+    pub restretch: bool,
+    pub prev_restretch: bool,
 
     ///////////////////////////////////////////////////////////
 
     // Stored params from main lib here on a per-module basis
 
     // Osc module knob storage
-    osc_type: VoiceType,
-    osc_octave: i32,
-    osc_semitones: i32,
-    osc_detune: f32,
-    osc_attack: f32,
-    osc_decay: f32,
-    osc_sustain: f32,
-    osc_release: f32,
-    osc_mod_amount: f32,
-    osc_retrigger: RetriggerStyle,
-    osc_atk_curve: SmoothStyle,
-    osc_dec_curve: SmoothStyle,
-    osc_rel_curve: SmoothStyle,
+    pub osc_type: VoiceType,
+    pub osc_octave: i32,
+    pub osc_semitones: i32,
+    pub osc_detune: f32,
+    pub osc_attack: f32,
+    pub osc_decay: f32,
+    pub osc_sustain: f32,
+    pub osc_release: f32,
+    pub osc_mod_amount: f32,
+    pub osc_retrigger: RetriggerStyle,
+    pub osc_atk_curve: SmoothStyle,
+    pub osc_dec_curve: SmoothStyle,
+    pub osc_rel_curve: SmoothStyle,
 
     // Voice storage
     playing_voices: VoiceVec,
@@ -156,7 +159,7 @@ impl Default for AudioModule {
             osc_octave: 0,
             osc_semitones: 0,
             osc_detune: 0.0,
-            osc_attack: 0.01,
+            osc_attack: 0.0001,
             osc_decay: 0.0,
             osc_sustain: 1.0,
             osc_release: 0.07,

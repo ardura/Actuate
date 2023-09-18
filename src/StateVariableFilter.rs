@@ -1,10 +1,11 @@
 use std::f32::consts::PI;
 use nih_plug::prelude::Enum;
+use serde::{Deserialize, Serialize};
 
 // Modified implementation from https://www.musicdsp.org/en/latest/Filters/23-state-variable.html and A
 // Adapted to rust by Ardura
 
-#[derive(Enum, PartialEq, Eq)]
+#[derive(Enum, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum ResonanceType {
     // Allegedly the "ideal" response when tying Q to angular sin response
     Default,
@@ -16,6 +17,7 @@ pub enum ResonanceType {
     Arp,
 }
 
+#[derive(Clone)]
 pub struct StateVariableFilter {
     sample_rate: f32,
     frequency: f32,
