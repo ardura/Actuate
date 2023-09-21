@@ -23,7 +23,8 @@ Actuate - Synthesizer + Sampler/Granulizer by Ardura
 use StateVariableFilter::ResonanceType;
 use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Rect, Rounding, RichText, FontId, Pos2}, EguiState};
 use rfd::FileDialog;
-use std::{sync::{Arc}, ops::RangeInclusive, fs::{File}, io::Write};
+
+use std::{sync::{Arc, Mutex}, ops::RangeInclusive, fs::{File}, io::Write};
 use nih_plug::{prelude::*};
 use phf::phf_map;
 use serde::{Deserialize, Serialize};
@@ -40,8 +41,10 @@ mod BoolButton;
 pub struct LoadedSample(Vec<Vec<f32>>);
 
 // Plugin sizing
-const WIDTH: u32 = 860;
+const WIDTH: u32 = 920;
 const HEIGHT: u32 = 632;
+
+const PRESET_BANK_SIZE: usize = 32;
 
 // File Open Buffer Timer
 const FILE_OPEN_BUFFER_MAX: u32 = 2000;
@@ -88,6 +91,9 @@ struct ActuatePreset {
     mod1_osc_atk_curve: SmoothStyle,
     mod1_osc_dec_curve: SmoothStyle,
     mod1_osc_rel_curve: SmoothStyle,
+    mod1_osc_unison: i32,
+    mod1_osc_unison_detune: f32,
+    mod1_osc_stereo: f32,
 
     // Modules 2
     ///////////////////////////////////////////////////////////
@@ -114,6 +120,9 @@ struct ActuatePreset {
     mod2_osc_atk_curve: SmoothStyle,
     mod2_osc_dec_curve: SmoothStyle,
     mod2_osc_rel_curve: SmoothStyle,
+    mod2_osc_unison: i32,
+    mod2_osc_unison_detune: f32,
+    mod2_osc_stereo: f32,
 
     // Modules 3
     ///////////////////////////////////////////////////////////
@@ -140,6 +149,9 @@ struct ActuatePreset {
     mod3_osc_atk_curve: SmoothStyle,
     mod3_osc_dec_curve: SmoothStyle,
     mod3_osc_rel_curve: SmoothStyle,
+    mod3_osc_unison: i32,
+    mod3_osc_unison_detune: f32,
+    mod3_osc_stereo: f32,
 
     filter_wet: f32,
     filter_cutoff: f32,
@@ -178,7 +190,7 @@ pub struct Actuate {
 
     // Preset Lib Default
     preset_lib_name: String,
-    preset_lib: Vec<ActuatePreset>,
+    preset_lib: Arc<Mutex<Vec<ActuatePreset>>>
 }
 
 impl Default for Actuate {
@@ -208,7 +220,7 @@ impl Default for Actuate {
 
             // Preset Library DEFAULT
             preset_lib_name: String::from("Default"),
-            preset_lib: vec![ActuatePreset { 
+            preset_lib: Arc::new(Mutex::new(vec![ActuatePreset { 
                 mod1_audio_module_type: AudioModuleType::Osc, 
                 mod1_loaded_sample: vec![vec![0.0,0.0]], 
                 mod1_sample_lib: vec![vec![vec![0.0,0.0]]], 
@@ -222,13 +234,16 @@ impl Default for Actuate {
                 mod1_osc_detune: 0.0, 
                 mod1_osc_attack: 0.0001, 
                 mod1_osc_decay: 0.0001, 
-                mod1_osc_sustain: 1.0, 
+                mod1_osc_sustain: 999.9, 
                 mod1_osc_release: 5.0, 
                 mod1_osc_mod_amount: 0.0, 
                 mod1_osc_retrigger: RetriggerStyle::Retrigger, 
                 mod1_osc_atk_curve: SmoothStyle::Linear, 
                 mod1_osc_dec_curve: SmoothStyle::Linear, 
                 mod1_osc_rel_curve: SmoothStyle::Linear, 
+                mod1_osc_unison: 1,
+                mod1_osc_unison_detune: 0.0,
+                mod1_osc_stereo: 0.0,
 
                 mod2_audio_module_type: AudioModuleType::Off, 
                 mod2_loaded_sample: vec![vec![0.0,0.0]], 
@@ -243,13 +258,16 @@ impl Default for Actuate {
                 mod2_osc_detune: 0.0, 
                 mod2_osc_attack: 0.0001, 
                 mod2_osc_decay: 0.0001, 
-                mod2_osc_sustain: 1.0, 
+                mod2_osc_sustain: 999.9, 
                 mod2_osc_release: 5.0, 
                 mod2_osc_mod_amount: 0.0, 
                 mod2_osc_retrigger: RetriggerStyle::Retrigger, 
                 mod2_osc_atk_curve: SmoothStyle::Linear, 
                 mod2_osc_dec_curve: SmoothStyle::Linear, 
                 mod2_osc_rel_curve: SmoothStyle::Linear, 
+                mod2_osc_unison: 1,
+                mod2_osc_unison_detune: 0.0,
+                mod2_osc_stereo: 0.0,
 
                 mod3_audio_module_type: AudioModuleType::Off, 
                 mod3_loaded_sample: vec![vec![0.0,0.0]], 
@@ -264,13 +282,16 @@ impl Default for Actuate {
                 mod3_osc_detune: 0.0, 
                 mod3_osc_attack: 0.0001, 
                 mod3_osc_decay: 0.0001, 
-                mod3_osc_sustain: 1.0, 
+                mod3_osc_sustain: 999.9, 
                 mod3_osc_release: 5.0, 
                 mod3_osc_mod_amount: 0.0, 
                 mod3_osc_retrigger: RetriggerStyle::Retrigger, 
                 mod3_osc_atk_curve: SmoothStyle::Linear, 
                 mod3_osc_dec_curve: SmoothStyle::Linear, 
                 mod3_osc_rel_curve: SmoothStyle::Linear, 
+                mod3_osc_unison: 1,
+                mod3_osc_unison_detune: 0.0,
+                mod3_osc_stereo: 0.0,
 
                 filter_wet: 1.0, 
                 filter_cutoff: 4000.0, 
@@ -281,7 +302,7 @@ impl Default for Actuate {
                 filter_bp_amount: 0.0, 
                 filter_env_peak: 0.0, 
                 filter_env_decay: 100.0, 
-                filter_env_curve: SmoothStyle::Linear }; 32],
+                filter_env_curve: SmoothStyle::Linear }; PRESET_BANK_SIZE])),
         }
     }
 }
@@ -301,6 +322,9 @@ pub struct ActuateParams {
 
     #[id = "Preset"]
     pub preset_index: IntParam,
+
+    #[id = "prev_preset_index"]
+    pub prev_preset_index: IntParam,
 
     // This audio module is what switches between functions for generators in the synth
     #[id = "audio_module_1_type"]
@@ -362,6 +386,15 @@ pub struct ActuateParams {
     #[id = "osc_1_rel_curve"]
     pub osc_1_rel_curve: EnumParam<Oscillator::SmoothStyle>,
 
+    #[id = "osc_1_unison"]
+    pub osc_1_unison: IntParam,
+
+    #[id = "osc_1_unison_detune"]
+    pub osc_1_unison_detune: FloatParam,
+
+    #[id = "osc_1_stereo"]
+    pub osc_1_stereo: FloatParam,
+
     // Controls for when audio_module_2_type is Osc
     #[id = "osc_2_type"]
     pub osc_2_type: EnumParam<VoiceType>,
@@ -402,6 +435,15 @@ pub struct ActuateParams {
     #[id = "osc_2_rel_curve"]
     pub osc_2_rel_curve: EnumParam<Oscillator::SmoothStyle>,
 
+    #[id = "osc_2_unison"]
+    pub osc_2_unison: IntParam,
+
+    #[id = "osc_2_unison_detune"]
+    pub osc_2_unison_detune: FloatParam,
+
+    #[id = "osc_2_stereo"]
+    pub osc_2_stereo: FloatParam,
+
     // Controls for when audio_module_3_type is Osc
     #[id = "osc_3_type"]
     pub osc_3_type: EnumParam<VoiceType>,
@@ -441,6 +483,15 @@ pub struct ActuateParams {
 
     #[id = "osc_3_rel_curve"]
     pub osc_3_rel_curve: EnumParam<Oscillator::SmoothStyle>,
+
+    #[id = "osc_3_unison"]
+    pub osc_3_unison: IntParam,
+
+    #[id = "osc_3_unison_detune"]
+    pub osc_3_unison_detune: FloatParam,
+
+    #[id = "osc_3_stereo"]
+    pub osc_3_stereo: FloatParam,
 
     // Controls for when audio_module_1_type is Sampler/Granulizer
     #[id = "load_sample_1"]
@@ -538,15 +589,16 @@ impl Default for ActuateParams {
             ////////////////////////////////////////////////////////////////////////////////////
             master_level: FloatParam::new("Master", 0.4, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 16, IntRange::Linear { min: 1, max: 32 }),
-            preset_index: IntParam::new("Preset", 0, IntRange::Linear { min: 0, max: 31 }),
+            preset_index: IntParam::new("Preset", 0, IntRange::Linear { min: 0, max: (PRESET_BANK_SIZE - 1) as i32 }),
+            prev_preset_index: IntParam::new("prev_preset_index", -1, IntRange::Linear { min: -1, max: (PRESET_BANK_SIZE - 1) as i32}),
 
             _audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc),
             _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off),
             _audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off),
 
-            audio_module_1_level: FloatParam::new("Level", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            audio_module_2_level: FloatParam::new("Level", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            audio_module_3_level: FloatParam::new("Level", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_1_level: FloatParam::new("Level", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_2_level: FloatParam::new("Level", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_3_level: FloatParam::new("Level", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
 
             // Oscillators
             ////////////////////////////////////////////////////////////////////////////////////
@@ -563,6 +615,9 @@ impl Default for ActuateParams {
             osc_1_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_1_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
             osc_1_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
+            osc_1_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
+            osc_1_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
+            osc_1_stereo: FloatParam::new("Stereo", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
 
             osc_2_type: EnumParam::new("Wave", VoiceType::Sine),
             osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
@@ -577,6 +632,9 @@ impl Default for ActuateParams {
             osc_2_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_2_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
             osc_2_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
+            osc_2_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
+            osc_2_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
+            osc_2_stereo: FloatParam::new("Stereo", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
 
             osc_3_type: EnumParam::new("Wave", VoiceType::Sine),
             osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
@@ -591,6 +649,9 @@ impl Default for ActuateParams {
             osc_3_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_3_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
             osc_3_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
+            osc_3_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
+            osc_3_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
+            osc_3_stereo: FloatParam::new("Stereo", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
 
             // Granulizer/Sampler
             ////////////////////////////////////////////////////////////////////////////////////
@@ -659,7 +720,9 @@ impl Plugin for Actuate {
 
     // This draws our GUI with egui library
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        let params = self.params.clone();
+        let params: Arc<ActuateParams> = self.params.clone();
+        let arc_preset = Arc::clone(&self.preset_lib);
+        // Do our GUI stuff
         create_egui_editor(
             self.params.editor_state.clone(),
             (),
@@ -667,21 +730,116 @@ impl Plugin for Actuate {
             move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
+                        let loaded_preset = &arc_preset.lock().unwrap()[params.preset_index.value() as usize];
                         // Reset our buttons - bad practice most likely
                         if params.prev_preset.value() || params.next_preset.value() {
                             if params.next_preset.value() && params.preset_index.value() < 31{
                                 setter.set_parameter(&params.preset_index, params.preset_index.value() + 1);
+                                //loaded_preset = preset_lib[params.preset_index.value() as usize];
                             }
                             if params.prev_preset.value() && params.preset_index.value() > 0 {
                                 setter.set_parameter(&params.preset_index, params.preset_index.value() - 1);
+                                //loaded_preset = preset_lib[params.preset_index.value() as usize];
                             }
                             setter.set_parameter(&params.prev_preset, false);
                             setter.set_parameter(&params.next_preset, false);
                         }
+                        let mut new_loading_preset_bank = false;
                         if params.load_bank.value() || params.save_bank.value() || params.update_current_preset.value() {
+                            if params.load_bank.value() {
+                                // Update to false preset value for next
+                                new_loading_preset_bank = true;
+                            }
                             setter.set_parameter(&params.load_bank, false);
                             setter.set_parameter(&params.save_bank, false);
                             setter.set_parameter(&params.update_current_preset, false);
+                        }
+                        // Try to load preset into our params if possible
+                        if params.prev_preset_index.value() != params.preset_index.value() {
+                            let serialized = serde_json::to_string(loaded_preset);
+                            nih_log!("--------------------------------------");
+                            nih_log!("Loaded preset: {}",serialized.unwrap_or_default());
+
+                            setter.set_parameter(&params._audio_module_1_type, loaded_preset.mod1_audio_module_type);
+                            setter.set_parameter(&params.loop_sample_1, loaded_preset.mod1_loop_wavetable);
+                            setter.set_parameter(&params.single_cycle_1, loaded_preset.mod1_single_cycle);
+                            setter.set_parameter(&params.restretch_1, loaded_preset.mod1_restretch);
+                            setter.set_parameter(&params.osc_1_type, loaded_preset.mod1_osc_type);
+                            setter.set_parameter(&params.osc_1_octave, loaded_preset.mod1_osc_octave);
+                            setter.set_parameter(&params.osc_1_semitones, loaded_preset.mod1_osc_semitones);
+                            setter.set_parameter(&params.osc_1_detune, loaded_preset.mod1_osc_detune);
+                            setter.set_parameter(&params.osc_1_attack, loaded_preset.mod1_osc_attack);
+                            setter.set_parameter(&params.osc_1_decay, loaded_preset.mod1_osc_decay);
+                            setter.set_parameter(&params.osc_1_sustain, loaded_preset.mod1_osc_sustain);
+                            setter.set_parameter(&params.osc_1_release, loaded_preset.mod1_osc_release);
+                            setter.set_parameter(&params.osc_1_mod_amount, loaded_preset.mod1_osc_mod_amount);
+                            setter.set_parameter(&params.osc_1_retrigger, loaded_preset.mod1_osc_retrigger);
+                            setter.set_parameter(&params.osc_1_atk_curve, loaded_preset.mod1_osc_atk_curve);
+                            setter.set_parameter(&params.osc_1_dec_curve, loaded_preset.mod1_osc_dec_curve);
+                            setter.set_parameter(&params.osc_1_rel_curve, loaded_preset.mod1_osc_rel_curve);
+                            setter.set_parameter(&params.osc_1_unison, loaded_preset.mod1_osc_unison);
+                            setter.set_parameter(&params.osc_1_unison_detune, loaded_preset.mod1_osc_unison_detune);
+                            setter.set_parameter(&params.osc_1_stereo, loaded_preset.mod1_osc_stereo);
+                            // loaded sample, sample_lib, and prev restretch are controlled differently
+
+                            setter.set_parameter(&params._audio_module_2_type, loaded_preset.mod2_audio_module_type);
+                            setter.set_parameter(&params.loop_sample_2, loaded_preset.mod2_loop_wavetable);
+                            setter.set_parameter(&params.single_cycle_2, loaded_preset.mod2_single_cycle);
+                            setter.set_parameter(&params.restretch_2, loaded_preset.mod2_restretch);
+                            setter.set_parameter(&params.osc_2_type, loaded_preset.mod2_osc_type);
+                            setter.set_parameter(&params.osc_2_octave, loaded_preset.mod2_osc_octave);
+                            setter.set_parameter(&params.osc_2_semitones, loaded_preset.mod2_osc_semitones);
+                            setter.set_parameter(&params.osc_2_detune, loaded_preset.mod2_osc_detune);
+                            setter.set_parameter(&params.osc_2_attack, loaded_preset.mod2_osc_attack);
+                            setter.set_parameter(&params.osc_2_decay, loaded_preset.mod2_osc_decay);
+                            setter.set_parameter(&params.osc_2_sustain, loaded_preset.mod2_osc_sustain);
+                            setter.set_parameter(&params.osc_2_release, loaded_preset.mod2_osc_release);
+                            setter.set_parameter(&params.osc_2_mod_amount, loaded_preset.mod2_osc_mod_amount);
+                            setter.set_parameter(&params.osc_2_retrigger, loaded_preset.mod2_osc_retrigger);
+                            setter.set_parameter(&params.osc_2_atk_curve, loaded_preset.mod2_osc_atk_curve);
+                            setter.set_parameter(&params.osc_2_dec_curve, loaded_preset.mod2_osc_dec_curve);
+                            setter.set_parameter(&params.osc_2_rel_curve, loaded_preset.mod2_osc_rel_curve);
+                            setter.set_parameter(&params.osc_2_unison, loaded_preset.mod2_osc_unison);
+                            setter.set_parameter(&params.osc_2_unison_detune, loaded_preset.mod2_osc_unison_detune);
+                            setter.set_parameter(&params.osc_2_stereo, loaded_preset.mod2_osc_stereo);
+
+                            setter.set_parameter(&params._audio_module_3_type, loaded_preset.mod3_audio_module_type);
+                            setter.set_parameter(&params.loop_sample_3, loaded_preset.mod3_loop_wavetable);
+                            setter.set_parameter(&params.single_cycle_3, loaded_preset.mod3_single_cycle);
+                            setter.set_parameter(&params.restretch_3, loaded_preset.mod3_restretch);
+                            setter.set_parameter(&params.osc_3_type, loaded_preset.mod3_osc_type);
+                            setter.set_parameter(&params.osc_3_octave, loaded_preset.mod3_osc_octave);
+                            setter.set_parameter(&params.osc_3_semitones, loaded_preset.mod3_osc_semitones);
+                            setter.set_parameter(&params.osc_3_detune, loaded_preset.mod3_osc_detune);
+                            setter.set_parameter(&params.osc_3_attack, loaded_preset.mod3_osc_attack);
+                            setter.set_parameter(&params.osc_3_decay, loaded_preset.mod3_osc_decay);
+                            setter.set_parameter(&params.osc_3_sustain, loaded_preset.mod3_osc_sustain);
+                            setter.set_parameter(&params.osc_3_release, loaded_preset.mod3_osc_release);
+                            setter.set_parameter(&params.osc_3_mod_amount, loaded_preset.mod3_osc_mod_amount);
+                            setter.set_parameter(&params.osc_3_retrigger, loaded_preset.mod3_osc_retrigger);
+                            setter.set_parameter(&params.osc_3_atk_curve, loaded_preset.mod3_osc_atk_curve);
+                            setter.set_parameter(&params.osc_3_dec_curve, loaded_preset.mod3_osc_dec_curve);
+                            setter.set_parameter(&params.osc_3_rel_curve, loaded_preset.mod3_osc_rel_curve);
+                            setter.set_parameter(&params.osc_3_unison, loaded_preset.mod3_osc_unison);
+                            setter.set_parameter(&params.osc_3_unison_detune, loaded_preset.mod3_osc_unison_detune);
+                            setter.set_parameter(&params.osc_3_stereo, loaded_preset.mod3_osc_stereo);
+
+                            setter.set_parameter(&params.filter_wet, loaded_preset.filter_wet);
+                            setter.set_parameter(&params.filter_cutoff, loaded_preset.filter_cutoff);
+                            setter.set_parameter(&params.filter_resonance, loaded_preset.filter_resonance);
+                            setter.set_parameter(&params.filter_res_type, loaded_preset.filter_res_type.clone());
+                            setter.set_parameter(&params.filter_lp_amount, loaded_preset.filter_lp_amount);
+                            setter.set_parameter(&params.filter_hp_amount, loaded_preset.filter_hp_amount);
+                            setter.set_parameter(&params.filter_bp_amount, loaded_preset.filter_bp_amount);
+                            setter.set_parameter(&params.filter_env_peak, loaded_preset.filter_env_peak);
+                            setter.set_parameter(&params.filter_env_decay, loaded_preset.filter_env_decay);
+                            setter.set_parameter(&params.filter_env_curve, loaded_preset.filter_env_curve);
+
+                            setter.set_parameter(&params.prev_preset_index, params.preset_index.value());
+                        }
+                        // Set this to reload preset after other thread loads in our bank file - the above if statement will be true and reload preset
+                        if new_loading_preset_bank {
+                            setter.set_parameter(&params.prev_preset_index, -1);
                         }
 
                         // Change colors - there's probably a better way to do this
@@ -807,30 +965,28 @@ impl Plugin for Actuate {
                                             ui.add(audio_module_3_level_knob);
                                         });
 
-                                        ui.horizontal(|ui|{
-                                            let master_level_knob = ui_knob::ArcKnob::for_param(
-                                                &params.master_level, 
-                                                setter, 
-                                                KNOB_SIZE + 8.0)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                .set_text_size(TEXT_SIZE);
-                                            ui.add(master_level_knob);
+                                        let master_level_knob = ui_knob::ArcKnob::for_param(
+                                            &params.master_level, 
+                                            setter, 
+                                            KNOB_SIZE + 12.0)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(master_level_knob);
         
-                                            let voice_limit_knob = ui_knob::ArcKnob::for_param(
-                                                &params.voice_limit, 
-                                                setter, 
-                                                KNOB_SIZE - 8.0)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                .set_text_size(TEXT_SIZE);
-                                            ui.add(voice_limit_knob);
-                                        });
+                                        let voice_limit_knob = ui_knob::ArcKnob::for_param(
+                                            &params.voice_limit, 
+                                            setter, 
+                                            KNOB_SIZE)
+                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                            .set_text_size(TEXT_SIZE);
+                                        ui.add(voice_limit_knob);
     
                                         // Spacing under master knob to put filters in the right spot
-                                        ui.add_space(KNOB_SIZE * 3.0 + 24.0);
+                                        ui.add_space(KNOB_SIZE + 12.0);
                                     });
                                 
                                     ui.separator();
@@ -950,6 +1106,10 @@ impl Plugin for Actuate {
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_env_curve_knob);
                                     });
+                                    
+                                    // Move Presets over!
+                                    ui.add_space(46.0);
+
                                     ui.painter().rect_filled(
                                         Rect::from_x_y_ranges(
                                             RangeInclusive::new((WIDTH as f32)*0.46, (WIDTH as f32) - (synth_bar_space + 4.0)), 
@@ -1067,13 +1227,24 @@ impl Actuate {
                     self.file_dialog = false;
                 }
             }
-            
             // Preset UI // next, prev, load, save
-            if self.params.next_preset.value() {
-                // Next Preset -> Load Preset
-            }
-            if self.params.prev_preset.value() {
-                // Prev preset -> Load Preset
+            // Load the non-gui related preset stuff!
+            if (self.params.prev_preset_index.value() != self.params.preset_index.value()) && !self.file_dialog {
+                self.file_dialog = true;
+                self.file_open_buffer_timer = 0;
+
+                // This is like this because the reference goes away after each unwrap...
+                self.audio_module_1.loaded_sample = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod1_loaded_sample.clone();
+                self.audio_module_1.sample_lib = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod1_sample_lib.clone();
+                self.audio_module_1.prev_restretch = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod1_prev_restretch.clone();
+            
+                self.audio_module_2.loaded_sample = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod2_loaded_sample.clone();
+                self.audio_module_2.sample_lib = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod2_sample_lib.clone();
+                self.audio_module_2.prev_restretch = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod2_prev_restretch.clone();
+            
+                self.audio_module_3.loaded_sample = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod3_loaded_sample.clone();
+                self.audio_module_3.sample_lib = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod3_sample_lib.clone();
+                self.audio_module_3.prev_restretch = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod3_prev_restretch.clone();
             }
             if self.params.load_bank.value() && !self.file_dialog {
                 self.file_dialog = true;
@@ -1085,8 +1256,10 @@ impl Actuate {
                 self.file_open_buffer_timer = 0;
                 self.save_preset_bank();
             }
-            if self.params.update_current_preset.value() {
-                self.update_current_preset();
+            if self.params.update_current_preset.value() && !self.file_dialog {
+                self.file_dialog = true;
+                self.file_open_buffer_timer = 0;
+                let _updated_preset = self.update_current_preset();
             }
 
             // Processing
@@ -1131,67 +1304,68 @@ impl Actuate {
             let mut reset_filter_controller3: bool = false;
 
             // Since File Dialog can be set by any of these we need to check each time
-            if !self.file_dialog {
+            if !self.file_dialog && self.params._audio_module_1_type.value() != AudioModuleType::Off {
                 (wave1_l, wave1_r, reset_filter_controller1) = self.audio_module_1.process(sample_id, self.params.clone(), midi_event.clone(), 1, sent_voice_max, &mut self.file_dialog);
+                wave1_l *= self.params.audio_module_1_level.value();
+                wave1_r *= self.params.audio_module_1_level.value();
             }
-            if !self.file_dialog {
+            if !self.file_dialog && self.params._audio_module_2_type.value() != AudioModuleType::Off {
                 (wave2_l, wave2_r, reset_filter_controller2) = self.audio_module_2.process(sample_id, self.params.clone(), midi_event.clone(), 2, sent_voice_max, &mut self.file_dialog);
+                wave2_l *= self.params.audio_module_2_level.value();
+                wave2_r *= self.params.audio_module_2_level.value();
             }
-            if !self.file_dialog {
+            if !self.file_dialog && self.params._audio_module_3_type.value() != AudioModuleType::Off {
                 (wave3_l, wave3_r, reset_filter_controller3) = self.audio_module_3.process(sample_id, self.params.clone(), midi_event.clone(), 3, sent_voice_max, &mut self.file_dialog);
+                wave3_l *= self.params.audio_module_3_level.value();
+                wave3_r *= self.params.audio_module_3_level.value();
             }
-
-            wave1_l *= self.params.audio_module_1_level.value();
-            wave2_l *= self.params.audio_module_2_level.value();
-            wave3_l *= self.params.audio_module_3_level.value();
-            wave1_r *= self.params.audio_module_1_level.value();
-            wave2_r *= self.params.audio_module_2_level.value();
-            wave3_r *= self.params.audio_module_3_level.value();
 
             let mut left_output: f32 = wave1_l + wave2_l + wave3_l;
             let mut right_output: f32 = wave1_r + wave2_r + wave3_r;
 
-            // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
-            if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
-                self.filter_mod_smoother = match self.params.filter_env_curve.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(self.params.filter_env_decay.value())),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.params.filter_env_decay.value())),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(self.params.filter_env_decay.value())),
-                };
-                // This makes our filter actuate point
-                self.filter_mod_smoother.reset((self.params.filter_cutoff.value() + self.params.filter_env_peak.value()).clamp(20.0, 16000.0));
-                
-                // Set up the smoother for our filter movement
-                self.filter_mod_smoother.set_target(self.sample_rate, self.params.filter_cutoff.value());
+            if self.params.filter_wet.value() > 0.0 {
+                // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
+                if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
+                    self.filter_mod_smoother = match self.params.filter_env_curve.value() {
+                        SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(self.params.filter_env_decay.value())),
+                        SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.params.filter_env_decay.value())),
+                        SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(self.params.filter_env_decay.value())),
+                    };
+                    // This makes our filter actuate point
+                    self.filter_mod_smoother.reset((self.params.filter_cutoff.value() + self.params.filter_env_peak.value()).clamp(20.0, 16000.0));
+
+                    // Set up the smoother for our filter movement
+                    self.filter_mod_smoother.set_target(self.sample_rate, self.params.filter_cutoff.value());
+                }
+
+                // Filtering before output
+                self.filter.update(
+                   self.filter_mod_smoother.next(),
+                   self.params.filter_resonance.value(),
+                   self.sample_rate,
+                   self.params.filter_res_type.value(),
+                );
+
+                let low_l: f32;
+                let band_l: f32;
+                let high_l: f32;
+                let low_r: f32;
+                let band_r: f32;
+                let high_r: f32;
+
+                (low_l, band_l, high_l) = self.filter.process(left_output);
+                (low_r, band_r, high_r) = self.filter.process(right_output);
+
+                left_output = (low_l*self.params.filter_lp_amount.value() 
+                            + band_l*self.params.filter_bp_amount.value()
+                            + high_l*self.params.filter_hp_amount.value())*self.params.filter_wet.value()
+                            + left_output*(1.0-self.params.filter_wet.value());
+
+                right_output = (low_r*self.params.filter_lp_amount.value() 
+                            + band_r*self.params.filter_bp_amount.value()
+                            + high_r*self.params.filter_hp_amount.value())*self.params.filter_wet.value()
+                            + right_output*(1.0-self.params.filter_wet.value());
             }
-
-            // Filtering before output
-            self.filter.update(
-               self.filter_mod_smoother.next(),
-               self.params.filter_resonance.value(),
-               self.sample_rate,
-               self.params.filter_res_type.value(),
-            );
-            
-            let low_l: f32;
-            let band_l: f32;
-            let high_l: f32;
-            let low_r: f32;
-            let band_r: f32;
-            let high_r: f32;
-
-            (low_l, band_l, high_l) = self.filter.process(left_output);
-            (low_r, band_r, high_r) = self.filter.process(right_output);
-
-            left_output = (low_l*self.params.filter_lp_amount.value() 
-                        + band_l*self.params.filter_bp_amount.value()
-                        + high_l*self.params.filter_hp_amount.value())*self.params.filter_wet.value()
-                        + left_output*(1.0-self.params.filter_wet.value());
-
-            right_output = (low_r*self.params.filter_lp_amount.value() 
-                        + band_r*self.params.filter_bp_amount.value()
-                        + high_r*self.params.filter_hp_amount.value())*self.params.filter_wet.value()
-                        + right_output*(1.0-self.params.filter_wet.value());
 
             // Reassign our output signal
             *channel_samples.get_mut(0).unwrap() = left_output * self.params.master_level.value();
@@ -1208,14 +1382,26 @@ impl Actuate {
             self.preset_lib_name = loading_bank.unwrap().to_str().unwrap_or("Invalid Path").to_string();
             let contents = std::fs::read_to_string(&self.preset_lib_name);
             let file_string_data = &contents.unwrap().as_str().to_string();
-            let unserialize: Vec<ActuatePreset> = serde_json::from_slice(file_string_data.as_bytes()).unwrap();
-            self.preset_lib = unserialize.clone();
+            nih_log!("Loaded: {}", file_string_data);
+            let unserialized: Vec<ActuatePreset> = serde_json::from_slice(file_string_data.as_bytes()).unwrap();
+
+            let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
+            let mut locked_lib = arc_lib.lock().unwrap();
+            for (item_index,item) in unserialized.iter().enumerate() {
+                // If our item exists then update it
+                if let Some(existing_item) = locked_lib.get_mut(item_index) {
+                    *existing_item = item.clone();
+                } else {
+                    // item_index is out of bounds in locked_lib
+                    // These get dropped as the preset size should be same all around
+                }
+            }
         }
     }
 
     // Save our presets
     fn save_preset_bank(&mut self) {
-        self.update_current_preset();
+        let _updated_preset = self.update_current_preset();
         let saving_bank = FileDialog::new()
             .add_filter("txt", &["txt"])
             .set_file_name(&self.preset_lib_name)
@@ -1223,14 +1409,19 @@ impl Actuate {
         if Option::is_some(&saving_bank) {
             let location = saving_bank.unwrap().clone();
             let file = File::create(location);
-            let serialized = serde_json::to_string(&self.preset_lib);
-            let _ = file.unwrap().write(serialized.unwrap().as_str().as_bytes());
+            let preset_store = Arc::clone(&self.preset_lib);
+            let preset_lock = preset_store.lock().unwrap();
+            let serialized = serde_json::to_string::<Vec<ActuatePreset>>(preset_lock.as_ref());
+            let writing_str = serialized.unwrap();
+            nih_log!("Saving: {}", writing_str);
+            let _ = file.unwrap().write(writing_str.as_str().as_bytes());
         }
     }
 
     // Update our current preset
     fn update_current_preset(&mut self) {
-        self.preset_lib[self.params.preset_index.value() as usize] = ActuatePreset {
+        let arc_lib = Arc::clone(&self.preset_lib);
+        arc_lib.lock().unwrap()[self.params.preset_index.value() as usize] = ActuatePreset {
             // Modules 1
             ///////////////////////////////////////////////////////////
             mod1_audio_module_type: self.params._audio_module_1_type.value(),
@@ -1256,6 +1447,9 @@ impl Actuate {
             mod1_osc_atk_curve: self.audio_module_1.osc_atk_curve,
             mod1_osc_dec_curve: self.audio_module_1.osc_dec_curve,
             mod1_osc_rel_curve: self.audio_module_1.osc_rel_curve,
+            mod1_osc_unison: self.audio_module_1.osc_unison,
+            mod1_osc_unison_detune: self.audio_module_1.osc_unison_detune,
+            mod1_osc_stereo: self.audio_module_1.osc_stereo,
 
             // Modules 2
             ///////////////////////////////////////////////////////////
@@ -1282,6 +1476,9 @@ impl Actuate {
             mod2_osc_atk_curve: self.audio_module_2.osc_atk_curve,
             mod2_osc_dec_curve: self.audio_module_2.osc_dec_curve,
             mod2_osc_rel_curve: self.audio_module_2.osc_rel_curve,
+            mod2_osc_unison: self.audio_module_2.osc_unison,
+            mod2_osc_unison_detune: self.audio_module_2.osc_unison_detune,
+            mod2_osc_stereo: self.audio_module_2.osc_stereo,
 
             // Modules 2
             ///////////////////////////////////////////////////////////
@@ -1308,6 +1505,9 @@ impl Actuate {
             mod3_osc_atk_curve: self.audio_module_3.osc_atk_curve,
             mod3_osc_dec_curve: self.audio_module_3.osc_dec_curve,
             mod3_osc_rel_curve: self.audio_module_3.osc_rel_curve,
+            mod3_osc_unison: self.audio_module_3.osc_unison,
+            mod3_osc_unison_detune: self.audio_module_3.osc_unison_detune,
+            mod3_osc_stereo: self.audio_module_3.osc_stereo,
 
             // Filter storage - gotten from params
             filter_wet: self.params.filter_wet.value(),
@@ -1320,7 +1520,7 @@ impl Actuate {
             filter_env_peak: self.params.filter_env_peak.value(),
             filter_env_decay: self.params.filter_env_decay.value(),
             filter_env_curve: self.params.filter_env_curve.value(),
-        }
+        };
     }
 }
 

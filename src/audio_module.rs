@@ -75,12 +75,16 @@ struct SingleVoice {
     osc_release: Smoother<f32>,
     // Final info for a note to work
     _detune: f32,
+    _unison_detune_value: f32,
     frequency: f32,
     _attack_time: f32,
     _decay_time: f32,
     _release_time: f32,
     _retrigger: RetriggerStyle,
     _voice_type: Oscillator::VoiceType,
+
+    // This is only used for unison detunes
+    _angle: f32,
 
     // Sampler/Granulizer Pos
     sample_pos: usize,
@@ -130,9 +134,13 @@ pub struct AudioModule {
     pub osc_atk_curve: SmoothStyle,
     pub osc_dec_curve: SmoothStyle,
     pub osc_rel_curve: SmoothStyle,
+    pub osc_unison: i32,
+    pub osc_unison_detune: f32,
+    pub osc_stereo: f32,
 
     // Voice storage
     playing_voices: VoiceVec,
+    unison_voices: VoiceVec,
 
     // Tracking stopping voices too
     is_playing: bool,
@@ -160,17 +168,21 @@ impl Default for AudioModule {
             osc_semitones: 0,
             osc_detune: 0.0,
             osc_attack: 0.0001,
-            osc_decay: 0.0,
-            osc_sustain: 1.0,
+            osc_decay: 0.0001,
+            osc_sustain: 999.9,
             osc_release: 0.07,
             osc_mod_amount: 0.0,
             osc_retrigger: RetriggerStyle::Free,
             osc_atk_curve: SmoothStyle::Linear,
             osc_rel_curve: SmoothStyle::Linear,
             osc_dec_curve: SmoothStyle::Linear,
+            osc_unison: 1,
+            osc_unison_detune: 0.0,
+            osc_stereo: 0.0,
 
             // Voice storage
             playing_voices: VoiceVec { voices: VecDeque::new() },
+            unison_voices: VoiceVec { voices: VecDeque::new() },
 
             // Tracking stopping voices
             is_playing: false,
@@ -251,6 +263,28 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_octave_knob);
 
+                        let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_unison, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_unison_knob);
+
+                        let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_unison_detune, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_unison_detune_knob);
+
                         let osc_1_attack_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_1_attack, 
                             setter, 
@@ -324,6 +358,20 @@ impl AudioModule {
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_detune_knob);
+
+                        // Space
+                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
+
+                        let osc_1_stereo_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_1_stereo, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_stereo_knob);
                        
                         let osc_1_atk_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_1_atk_curve, 
@@ -570,6 +618,28 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_octave_knob);
 
+                        let osc_2_unison_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_2_unison, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_2_unison_knob);
+
+                        let osc_2_unison_detune_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_2_unison_detune, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_2_unison_detune_knob);
+
                         let osc_2_attack_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_2_attack, 
                             setter, 
@@ -644,6 +714,19 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_detune_knob);
 
+                        // Space
+                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
+
+                        let osc_2_stereo_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_2_stereo, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_2_stereo_knob);
                         
                         let osc_2_atk_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_2_atk_curve, 
@@ -890,6 +973,28 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_octave_knob);
 
+                        let osc_3_unison_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_3_unison, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_3_unison_knob);
+
+                        let osc_3_unison_detune_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_3_unison_detune, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_3_unison_detune_knob);
+
                         let osc_3_attack_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_attack, 
                             setter, 
@@ -963,6 +1068,20 @@ impl AudioModule {
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_detune_knob);
+
+                        // Space
+                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
+
+                        let osc_3_stereo_knob = ui_knob::ArcKnob::for_param(
+                            &params.osc_3_stereo, 
+                            setter, 
+                            KNOB_SIZE)
+                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE);
+                        ui.add(osc_3_stereo_knob);
 
                         let osc_3_atk_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_atk_curve, 
@@ -1185,6 +1304,9 @@ impl AudioModule {
                 self.osc_atk_curve = params.osc_1_atk_curve.value();
                 self.osc_dec_curve = params.osc_1_dec_curve.value();
                 self.osc_rel_curve = params.osc_1_rel_curve.value();
+                self.osc_unison = params.osc_1_unison.value();
+                self.osc_unison_detune = params.osc_1_unison_detune.value();
+                self.osc_stereo = params.osc_1_stereo.value();
                 self.loop_wavetable = params.loop_sample_1.value();
                 self.single_cycle = params.single_cycle_1.value();
                 self.restretch = params.restretch_1.value();
@@ -1204,6 +1326,9 @@ impl AudioModule {
                 self.osc_atk_curve = params.osc_2_atk_curve.value();
                 self.osc_dec_curve = params.osc_2_dec_curve.value();
                 self.osc_rel_curve = params.osc_2_rel_curve.value();
+                self.osc_unison = params.osc_2_unison.value();
+                self.osc_unison_detune = params.osc_2_unison_detune.value();
+                self.osc_stereo = params.osc_2_stereo.value();
                 self.loop_wavetable = params.loop_sample_2.value();
                 self.single_cycle = params.single_cycle_2.value();
                 self.restretch = params.restretch_2.value();
@@ -1223,6 +1348,9 @@ impl AudioModule {
                 self.osc_atk_curve = params.osc_3_atk_curve.value();
                 self.osc_dec_curve = params.osc_3_dec_curve.value();
                 self.osc_rel_curve = params.osc_3_rel_curve.value();
+                self.osc_unison = params.osc_3_unison.value();
+                self.osc_unison_detune = params.osc_3_unison_detune.value();
+                self.osc_stereo = params.osc_3_stereo.value();
                 self.loop_wavetable = params.loop_sample_3.value();
                 self.single_cycle = params.single_cycle_3.value();
                 self.restretch = params.restretch_3.value();
@@ -1273,6 +1401,7 @@ impl AudioModule {
         // Skip processing if our file dialog is open/running
         if *file_open {
             self.playing_voices.voices.clear();
+            self.unison_voices.voices.clear();
             return (0.0, 0.0, false);
         }
 
@@ -1309,11 +1438,21 @@ impl AudioModule {
                                 new_phase = 0.0;
                             },
                             RetriggerStyle::Random => {
-                                // Get a random phase to use
-                                // Poly solution is to pass the phase to the struct
-                                // instead of the osc alone
-                                let mut rng = rand::thread_rng();
-                                new_phase = rng.gen_range(0.0..1.0);
+                                match self.audio_module_type {
+                                    AudioModuleType::Osc => {
+                                        // Get a random phase to use
+                                        // Poly solution is to pass the phase to the struct
+                                        // instead of the osc alone
+                                        let mut rng = rand::thread_rng();
+                                        new_phase = rng.gen_range(0.0..1.0);
+                                    },
+                                    AudioModuleType::Sampler => {
+                                        let mut rng = rand::thread_rng();
+                                        new_phase = rng.gen_range(0.0..self.loaded_sample[0].len() as f32);
+                                    },
+                                    _ => {},
+                                }
+                                
                             },
                             RetriggerStyle::Free => {
                                 // Do nothing
@@ -1337,30 +1476,47 @@ impl AudioModule {
                         note += self.osc_semitones as u8;
                         // Shift our note per detune
                         // I'm so glad nih-plug has this helper for f32 conversions!
-                        let detuned_note = util::f32_midi_note_to_freq(note as f32 + self.osc_detune);
+                        let detuned_note: f32 = util::f32_midi_note_to_freq(note as f32 + self.osc_detune);
+
+                        // Create an array of unison notes based off the param for how many unison voices we need
+                        let mut unison_notes: Vec<f32> = vec![0.0; self.osc_unison as usize];
+                        // If we have any unison voices
+                        if self.osc_unison > 1 {
+                            // Calculate the detune step amount per amount of voices
+                            let detune_step = self.osc_unison_detune/self.osc_unison as f32;
+                            for unison_voice in 0..(self.osc_unison as usize - 1) {
+                                // Create the detuned notes around the base note
+                                if unison_voice % 2 == 1 {
+                                    unison_notes[unison_voice] = util::f32_midi_note_to_freq(note as f32 + self.osc_detune + detune_step*(unison_voice+1) as f32);
+                                }
+                                else {
+                                    unison_notes[unison_voice] = util::f32_midi_note_to_freq(note as f32 + self.osc_detune - detune_step*(unison_voice+1) as f32);
+                                }
+                            }
+                        }
 
                         let attack_smoother: Smoother<f32> = match self.osc_atk_curve {
                             SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(self.osc_attack)),
-                            SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.osc_attack.clamp(0.1, 999.9))),
+                            SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.osc_attack.clamp(0.0001, 999.9))),
                             SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(self.osc_attack)),
                         };
 
                         let decay_smoother: Smoother<f32> = match self.osc_dec_curve {
                             SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(self.osc_decay)),
-                            SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.osc_decay.clamp(0.1, 999.9))),
+                            SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.osc_decay.clamp(0.0001, 999.9))),
                             SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(self.osc_decay)),
                         };
 
                         let release_smoother: Smoother<f32> = match self.osc_rel_curve {
                             SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(self.osc_release)),
-                            SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.osc_release.clamp(0.1, 999.9))),
+                            SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.osc_release.clamp(0.0001, 999.9))),
                             SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(self.osc_release)),
                         };
 
                         match attack_smoother.style {
                             SmoothingStyle::Logarithmic(_) => { 
-                                attack_smoother.reset(0.1); 
-                                attack_smoother.set_target(self.sample_rate, velocity.clamp(1.0, 999.9));
+                                attack_smoother.reset(0.0001); 
+                                attack_smoother.set_target(self.sample_rate, velocity.clamp(0.0001, 999.9));
                             },
                             _ => { 
                                 attack_smoother.reset(0.0); 
@@ -1381,20 +1537,64 @@ impl AudioModule {
                             osc_decay: decay_smoother.clone(),
                             osc_release: release_smoother.clone(),
                             _detune: self.osc_detune,
+                            _unison_detune_value: self.osc_unison_detune,
                             frequency: detuned_note,
                             _attack_time: self.osc_attack,
                             _decay_time: self.osc_decay,
                             _release_time: self.osc_release,
                             _retrigger: self.osc_retrigger,
                             _voice_type: self.osc_type,
+                            _angle: 0.0,
                             sample_pos: 0,
                             loop_it: self.loop_wavetable,
                         };
 
                         // Add our voice struct to our voice tracking deque
                         self.playing_voices.voices.push_front(new_voice);
+                        // Add unison voices to our voice tracking deque
+                        if self.osc_unison > 1 {
+                            let unison_even_voices;
+                            let angle_per_voice = if self.osc_unison % 2 == 0 {
+                                    unison_even_voices = self.osc_unison;
+                                    180.0 / self.osc_unison as f32
+                                } else {
+                                    unison_even_voices = self.osc_unison - 1;
+                                    // Unison is odd so make it even
+                                    180.0 / (self.osc_unison - 1) as f32
+                                };
+                            let mut unison_angles = vec![0.0; unison_even_voices as usize];
+                            for i in 0..unison_even_voices {
+                                unison_angles[i as usize] = (i as f32 * angle_per_voice) - (90.0);
+                            }
+                            for unison_voice in 0..(self.osc_unison as usize - 1) {
+                                let new_unison_voice: SingleVoice = SingleVoice {
+                                    note: note,
+                                    _velocity: velocity,
+                                    phase: new_phase,
+                                    phase_delta: detuned_note / self.sample_rate,
+                                    state: OscState::Attacking,
+                                    // These get cloned since smoother cannot be copied
+                                    amp_current: 0.0,
+                                    osc_attack: attack_smoother.clone(),
+                                    osc_decay: decay_smoother.clone(),
+                                    osc_release: release_smoother.clone(),
+                                    _detune: self.osc_detune,
+                                    _unison_detune_value: self.osc_unison_detune,
+                                    frequency: unison_notes[unison_voice],
+                                    _attack_time: self.osc_attack,
+                                    _decay_time: self.osc_decay,
+                                    _release_time: self.osc_release,
+                                    _retrigger: self.osc_retrigger,
+                                    _voice_type: self.osc_type,
+                                    _angle: unison_angles[unison_voice],
+                                    sample_pos: 0,
+                                    loop_it: self.loop_wavetable,
+                                };
+                                self.unison_voices.voices.push_front(new_unison_voice);
+                            }
+                        }
 
-                        // Remove the last voice when > 32
+                        // Remove the last voice when > voice_max
                         if self.playing_voices.voices.len() > voice_max {
                             self.playing_voices.voices.resize(voice_max, 
                                 // Insert a dummy "Off" entry when resizing UP
@@ -1410,12 +1610,40 @@ impl AudioModule {
                                     osc_decay: decay_smoother.clone(),
                                     osc_release: release_smoother.clone(),
                                     _detune: 0.0,
+                                    _unison_detune_value: 0.0,
                                     frequency: 0.0,
                                     _attack_time: self.osc_attack,
                                     _decay_time: self.osc_decay,
                                     _release_time: self.osc_release,
                                     _retrigger: self.osc_retrigger,
                                     _voice_type: self.osc_type,
+                                    _angle: 0.0,
+                                    sample_pos: 0,
+                                    loop_it: self.loop_wavetable,
+                                });
+
+                            self.unison_voices.voices.resize(voice_max * (self.osc_unison + 1) as usize, 
+                                // Insert a dummy "Off" entry when resizing UP
+                                SingleVoice {
+                                    note: 0,
+                                    _velocity: 0.0,
+                                    phase: 0.0,
+                                    phase_delta: 0.0,
+                                    state: OscState::Off,
+                                    // These get cloned since smoother cannot be copied
+                                    amp_current: 0.0,
+                                    osc_attack: attack_smoother.clone(),
+                                    osc_decay: decay_smoother.clone(),
+                                    osc_release: release_smoother.clone(),
+                                    _detune: 0.0,
+                                    _unison_detune_value: 0.0,
+                                    frequency: 0.0,
+                                    _attack_time: self.osc_attack,
+                                    _decay_time: self.osc_decay,
+                                    _release_time: self.osc_release,
+                                    _retrigger: self.osc_retrigger,
+                                    _voice_type: self.osc_type,
+                                    _angle: 0.0,
                                     sample_pos: 0,
                                     loop_it: self.loop_wavetable,
                                 });
@@ -1425,6 +1653,11 @@ impl AudioModule {
                         for (i, voice) in self.playing_voices.voices.clone().iter().enumerate() {
                             if voice.state == OscState::Off {
                                 self.playing_voices.voices.remove(i);
+                            }
+                        }
+                        for (i, voice) in self.unison_voices.voices.clone().iter().enumerate() {
+                            if voice.state == OscState::Off {
+                                self.unison_voices.voices.remove(i);
                             }
                         }
                     },
@@ -1460,18 +1693,39 @@ impl AudioModule {
                                 
                                 // Set our new release target to 0.0 so the note fades
                                 match voice.osc_release.style {
-                                    SmoothingStyle::Logarithmic(_) => { voice.osc_release.set_target(self.sample_rate, 0.1); },
+                                    SmoothingStyle::Logarithmic(_) => { voice.osc_release.set_target(self.sample_rate, 0.001); },
                                     _ => { voice.osc_release.set_target(self.sample_rate, 0.0); },
                                 }
                                 // Update our current amp
                                 voice.amp_current = voice.osc_release.next();
                                 // Update our voice state
                                 voice.state = OscState::Releasing;
+
+                                // Update the matching unison voices
+                                for unison_voice in self.unison_voices.voices.iter_mut() {
+                                    if unison_voice.note == voice.note && unison_voice.state != OscState::Releasing {
+                                        // Start our release level from our current gain on the voice
+                                        unison_voice.osc_release.reset(voice.amp_current);
+
+                                        // Set our new release target to 0.0 so the note fades
+                                        match unison_voice.osc_release.style {
+                                            SmoothingStyle::Logarithmic(_) => { unison_voice.osc_release.set_target(self.sample_rate, 0.001); },
+                                            _ => { unison_voice.osc_release.set_target(self.sample_rate, 0.0); },
+                                        }
+                                        // Update our current amp
+                                        unison_voice.amp_current = unison_voice.osc_release.next();
+                                        // Update our voice state
+                                        unison_voice.state = OscState::Releasing;
+                                    }
+                                }
                             }
                         }
                     },
                     // Stop event - doesn't seem to work from FL Studio but left in here
-                    NoteEvent::Choke { .. } => { self.playing_voices.voices.clear() },
+                    NoteEvent::Choke { .. } => { 
+                        self.playing_voices.voices.clear();
+                        self.unison_voices.voices.clear();
+                    },
                     _ => (),
                 }
             },
@@ -1513,6 +1767,44 @@ impl AudioModule {
             if voice.state == OscState::Releasing && voice.osc_release.steps_left() == 0 {
                 voice.state = OscState::Off;
             }
+
+            // Update our matching unison voices
+            if self.osc_unison > 1 {
+                for unison_voice in self.unison_voices.voices.iter_mut() {
+                    if unison_voice.note == voice.note {
+                        // Move our phase outside of the midi events
+                        // I couldn't find much on how to model this so I based it off previous note phase
+                        unison_voice.phase += unison_voice.phase_delta;
+                        if unison_voice.phase > 1.0 {
+                            unison_voice.phase -= 1.0;
+                        }
+
+                        // Move from attack to decay if needed
+                        // Attack is over so use decay amount to reach sustain level - reusing current smoother
+                        if unison_voice.osc_attack.steps_left() == 0 && unison_voice.state == OscState::Attacking {
+                            unison_voice.state = OscState::Decaying;
+                            unison_voice.amp_current = unison_voice.osc_attack.next();
+                            // Now we will use decay smoother from here
+                            unison_voice.osc_decay.reset(unison_voice.amp_current);
+                            let sustain_scaled = self.osc_sustain / 999.9;
+                            unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                        }
+
+                        // Move from Decaying to Sustain hold
+                        if unison_voice.osc_decay.steps_left() == 0 && unison_voice.state == OscState::Decaying {
+                            let sustain_scaled = self.osc_sustain / 999.9;
+                            unison_voice.amp_current = sustain_scaled;
+                            unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                            unison_voice.state = OscState::Sustaining;
+                        }
+                    
+                        // End of release
+                        if unison_voice.state == OscState::Releasing && unison_voice.osc_release.steps_left() == 0 {
+                            unison_voice.state = OscState::Off;
+                        }
+                    }
+                }
+            }
         }
 
         ////////////////////////////////////////////////////////////
@@ -1522,7 +1814,11 @@ impl AudioModule {
         let output_signal_r: f32;
         (output_signal_l, output_signal_r) = match self.audio_module_type {
             AudioModuleType::Osc => {
-                let mut summed_voices: f32 = 0.0;
+                let mut summed_voices_l: f32 = 0.0;
+                let mut summed_voices_r: f32 = 0.0;
+                let mut stereo_voices_l: f32 = 0.0;
+                let mut stereo_voices_r: f32 = 0.0;
+                let mut center_voices: f32 = 0.0;
                 for voice in self.playing_voices.voices.iter_mut() {
                     // Get our current gain amount for use in match below
                     let temp_osc_gain_multiplier: f32 = match voice.state {
@@ -1535,7 +1831,7 @@ impl AudioModule {
                     voice.amp_current = temp_osc_gain_multiplier;
                         
                     voice.phase_delta = voice.frequency / self.sample_rate;
-                    summed_voices += match self.osc_type {
+                    center_voices += match self.osc_type {
                         VoiceType::Sine  => Oscillator::calculate_sine(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
                         VoiceType::Tri => Oscillator::calculate_tri(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
                         VoiceType::Saw   => Oscillator::calculate_saw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
@@ -1544,9 +1840,60 @@ impl AudioModule {
                         VoiceType::Ramp => Oscillator::calculate_ramp(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
                         VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
                         VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                    };
+                }
+                // Stereo applies to unison voices
+                for unison_voice in self.unison_voices.voices.iter_mut() {
+                    // Get our current gain amount for use in match below
+                    let temp_osc_gain_multiplier: f32 = match unison_voice.state {
+                        OscState::Attacking => { unison_voice.osc_attack.next() },
+                        OscState::Decaying => { unison_voice.osc_decay.next() },
+                        OscState::Sustaining => {  self.osc_sustain / 999.9 },
+                        OscState::Releasing => { unison_voice.osc_release.next() },
+                        OscState::Off => 0.0,
+                    };
+                    unison_voice.amp_current = temp_osc_gain_multiplier;
+                    
+                    unison_voice.phase_delta = unison_voice.frequency / self.sample_rate;
+
+                    if self.osc_unison > 1 {
+                        let temp_unison_voice = match self.osc_type {
+                            VoiceType::Sine  => Oscillator::calculate_sine(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Tri => Oscillator::calculate_tri(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Saw   => Oscillator::calculate_saw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::RSaw  => Oscillator::calculate_rsaw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::InSaw  => Oscillator::calculate_inward_saw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Ramp => Oscillator::calculate_ramp(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                        };
+                        // Create our stereo pan for unison!
+                        let right_amp: f32 = unison_voice._angle.sin();
+                        let left_amp: f32 = unison_voice._angle.cos();
+                        stereo_voices_l += left_amp * temp_unison_voice;
+                        stereo_voices_r += right_amp * temp_unison_voice;
+                /*
+
+left multiplies by Bamp
+right multiplies by Aamp
+
+    Aamp = sin(angle)
+    Bamp = cos(angle)
+
+    Aamp = (sqrt(2)/2) * cos(angle) + sin(angle)
+    Bamp = (sqrt(2)/2) * cos(angle) - sin(angle)
+                 */
+                        
                     }
                 }
-                (summed_voices, summed_voices)
+                // Sum our voices for output
+                summed_voices_l += center_voices;
+                summed_voices_r += center_voices;
+                summed_voices_l += stereo_voices_l;
+                summed_voices_r += stereo_voices_r;
+
+                // Return output
+                (summed_voices_l, summed_voices_r)
             },
             AudioModuleType::Sampler => {
                 let mut summed_voices_l: f32 = 0.0;
@@ -1613,6 +1960,7 @@ impl AudioModule {
 
     pub fn clear_voices(&mut self) {
         self.playing_voices.voices.clear();
+        self.unison_voices.voices.clear();
     }
 
     fn load_new_sample(&mut self, path: PathBuf) {
