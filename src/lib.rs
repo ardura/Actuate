@@ -190,7 +190,10 @@ pub struct Actuate {
 
     // Preset Lib Default
     preset_lib_name: String,
-    preset_lib: Arc<Mutex<Vec<ActuatePreset>>>
+    preset_lib: Arc<Mutex<Vec<ActuatePreset>>>,
+
+    // Used for DC Offset calculations
+    dc_filter: StateVariableFilter::StateVariableFilter,
 }
 
 impl Default for Actuate {
@@ -303,6 +306,8 @@ impl Default for Actuate {
                 filter_env_peak: 0.0, 
                 filter_env_decay: 100.0, 
                 filter_env_curve: SmoothStyle::Linear }; PRESET_BANK_SIZE])),
+
+            dc_filter: StateVariableFilter::StateVariableFilter::default(),
         }
     }
 }
@@ -587,8 +592,8 @@ impl Default for ActuateParams {
 
             // Top Level objects
             ////////////////////////////////////////////////////////////////////////////////////
-            master_level: FloatParam::new("Master", 0.4, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            voice_limit: IntParam::new("Max Voices", 16, IntRange::Linear { min: 1, max: 32 }),
+            master_level: FloatParam::new("Master", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            voice_limit: IntParam::new("Max Voices", 64, IntRange::Linear { min: 1, max: 512 }),
             preset_index: IntParam::new("Preset", 0, IntRange::Linear { min: 0, max: (PRESET_BANK_SIZE - 1) as i32 }),
             prev_preset_index: IntParam::new("prev_preset_index", -1, IntRange::Linear { min: -1, max: (PRESET_BANK_SIZE - 1) as i32}),
 
@@ -596,62 +601,62 @@ impl Default for ActuateParams {
             _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off),
             _audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off),
 
-            audio_module_1_level: FloatParam::new("Level", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            audio_module_2_level: FloatParam::new("Level", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            audio_module_3_level: FloatParam::new("Level", 0.35, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_1_level: FloatParam::new("Level", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_2_level: FloatParam::new("Level", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_3_level: FloatParam::new("Level", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
 
             // Oscillators
             ////////////////////////////////////////////////////////////////////////////////////
             osc_1_type: EnumParam::new("Wave", VoiceType::Sine),
             osc_1_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
             osc_1_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
-            osc_1_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
-            osc_1_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_1_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_1_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_value_to_string(format_nothing()),
-            osc_1_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_1_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
+            osc_1_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
+            osc_1_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
+            osc_1_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
+            osc_1_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
             osc_1_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
             osc_1_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger),
             osc_1_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_1_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
             osc_1_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
             osc_1_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
-            osc_1_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
-            osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 10.0 }),
+            osc_1_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
+            osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }),
 
             osc_2_type: EnumParam::new("Wave", VoiceType::Sine),
             osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
             osc_2_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
-            osc_2_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
-            osc_2_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_2_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_2_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_value_to_string(format_nothing()),
-            osc_2_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_2_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
+            osc_2_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
+            osc_2_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
+            osc_2_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
+            osc_2_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
             osc_2_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
             osc_2_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger),
             osc_2_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_2_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
             osc_2_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
             osc_2_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
-            osc_2_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
-            osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 10.0 }),
+            osc_2_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
+            osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }),
 
             osc_3_type: EnumParam::new("Wave", VoiceType::Sine),
             osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
             osc_3_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }),
-            osc_3_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }),
-            osc_3_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_3_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
-            osc_3_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_value_to_string(format_nothing()),
-            osc_3_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_value_to_string(format_nothing()),
+            osc_3_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
+            osc_3_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
+            osc_3_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
+            osc_3_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
+            osc_3_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
             osc_3_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
             osc_3_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger),
             osc_3_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_3_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
             osc_3_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
             osc_3_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
-            osc_3_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
-            osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 10.0 }),
+            osc_3_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
+            osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }),
 
             // Granulizer/Sampler
             ////////////////////////////////////////////////////////////////////////////////////
@@ -676,11 +681,11 @@ impl Default for ActuateParams {
 
             filter_wet: FloatParam::new("Filter Wet", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
             //filter_resonance: FloatParam::new("Resonance", 0.5, FloatRange::Linear { min: 0.1, max: 1.0 }.with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_resonance: FloatParam::new("Resonance", 1.0, FloatRange::Reversed(&FloatRange::Linear { min: 0.1, max: 1.0 })).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_resonance: FloatParam::new("Resonance", 1.0, FloatRange::Linear { min: 0.1, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
             filter_res_type: EnumParam::new("Res Type", ResonanceType::Default),
-            filter_cutoff: FloatParam::new("Frequency", 4000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_value_to_string(formatters::v2s_f32_rounded(0)).with_unit("Hz"),
+            filter_cutoff: FloatParam::new("Frequency", 4000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_step_size(1.0).with_value_to_string(formatters::v2s_f32_rounded(0)).with_unit("Hz"),
 
-            filter_env_peak: FloatParam::new("Env Peak", 0.0, FloatRange::Linear { min: -8000.0, max: 8000.0 }).with_value_to_string(format_nothing()),
+            filter_env_peak: FloatParam::new("Env Peak", 0.0, FloatRange::SymmetricalSkewed { min: -8000.0, max: 8000.0, factor: 50.0, center: 0.0 }).with_step_size(1.0).with_value_to_string(format_nothing()),
             filter_env_decay: FloatParam::new("Env Decay", 100.0, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.2}).with_value_to_string(formatters::v2s_f32_rounded(2)),
             filter_env_curve: EnumParam::new("Env Curve",Oscillator::SmoothStyle::Linear),
 
@@ -1366,6 +1371,11 @@ impl Actuate {
                             + high_r*self.params.filter_hp_amount.value())*self.params.filter_wet.value()
                             + right_output*(1.0-self.params.filter_wet.value());
             }
+
+            // Remove DC Offsets with our SVF
+            self.dc_filter.update(20.0, 0.8, self.sample_rate, ResonanceType::Default);
+            (_, _, left_output) = self.dc_filter.process(left_output);
+            (_, _, right_output) = self.dc_filter.process(right_output);
 
             // Reassign our output signal
             *channel_samples.get_mut(0).unwrap() = left_output * self.params.master_level.value();

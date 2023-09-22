@@ -21,7 +21,7 @@ This is intended to be a generic implementation that can be extended for other a
 #####################################
 */
 
-use std::{sync::Arc, collections::VecDeque, path::PathBuf, f32::consts::{SQRT_2, PI}};
+use std::{sync::Arc, collections::VecDeque, path::PathBuf, f32::consts::{SQRT_2}};
 use nih_plug::{prelude::{Smoother, SmoothingStyle, ParamSetter, NoteEvent}, util, params::enums::Enum};
 use nih_plug_egui::egui::{Ui, RichText};
 use rand::Rng;
@@ -178,7 +178,7 @@ impl Default for AudioModule {
             osc_dec_curve: SmoothStyle::Linear,
             osc_unison: 1,
             osc_unison_detune: 0.0,
-            osc_stereo: 0.0,
+            osc_stereo: 1.0,
 
             // Voice storage
             playing_voices: VoiceVec { voices: VecDeque::new() },
@@ -1476,7 +1476,8 @@ impl AudioModule {
                         note += self.osc_semitones as u8;
                         // Shift our note per detune
                         // I'm so glad nih-plug has this helper for f32 conversions!
-                        let detuned_note: f32 = util::f32_midi_note_to_freq(note as f32 + self.osc_detune);
+                        let base_note = note as f32 + self.osc_detune;
+                        let detuned_note: f32 = util::f32_midi_note_to_freq(base_note);
 
                         // Create an array of unison notes based off the param for how many unison voices we need
                         let mut unison_notes: Vec<f32> = vec![0.0; self.osc_unison as usize];
@@ -1487,10 +1488,10 @@ impl AudioModule {
                             for unison_voice in 0..(self.osc_unison as usize - 1) {
                                 // Create the detuned notes around the base note
                                 if unison_voice % 2 == 1 {
-                                    unison_notes[unison_voice] = util::f32_midi_note_to_freq(note as f32 + self.osc_detune + detune_step*(unison_voice+1) as f32);
+                                    unison_notes[unison_voice] = util::f32_midi_note_to_freq(base_note + detune_step*(unison_voice+1) as f32);
                                 }
                                 else {
-                                    unison_notes[unison_voice] = util::f32_midi_note_to_freq(note as f32 + self.osc_detune - detune_step*(unison_voice+1) as f32);
+                                    unison_notes[unison_voice] = util::f32_midi_note_to_freq(base_note - detune_step*(unison_voice) as f32);
                                 }
                             }
                         }
@@ -1551,29 +1552,22 @@ impl AudioModule {
 
                         // Add our voice struct to our voice tracking deque
                         self.playing_voices.voices.push_front(new_voice);
+
                         // Add unison voices to our voice tracking deque
                         if self.osc_unison > 1 {
-                            let unison_even_voices;
-                            let angle_per_voice = if self.osc_unison % 2 == 0 {
-                                    unison_even_voices = self.osc_unison;
-                                    160.0 / self.osc_unison as f32
-                                } else {
-                                    unison_even_voices = self.osc_unison - 1;
-                                    // Unison is odd so make it even
-                                    160.0 / (self.osc_unison - 1) as f32
-                                };
+                            let unison_even_voices = if self.osc_unison % 2 == 0 { self.osc_unison } else { self.osc_unison - 1 };
                             let mut unison_angles = vec![0.0; unison_even_voices as usize];
-                            let sign_toggle = true;
                             for i in 1..(unison_even_voices+1) {
-                                let sign: f32 = if sign_toggle { 1.0 } else { -1.0 };
-                                unison_angles[(i - 1) as usize] = (i as f32 * angle_per_voice) * sign;
+                                let voice_angle = AudioModule::calculate_panning(i - 1, self.osc_unison);
+                                unison_angles[(i - 1) as usize] = voice_angle;
                             }
+                            
                             for unison_voice in 0..(self.osc_unison as usize - 1) {
                                 let new_unison_voice: SingleVoice = SingleVoice {
                                     note: note,
                                     _velocity: velocity,
                                     phase: new_phase,
-                                    phase_delta: detuned_note / self.sample_rate,
+                                    phase_delta: unison_notes[unison_voice] / self.sample_rate,
                                     state: OscState::Attacking,
                                     // These get cloned since smoother cannot be copied
                                     amp_current: 0.0,
@@ -1583,6 +1577,7 @@ impl AudioModule {
                                     _detune: self.osc_detune,
                                     _unison_detune_value: self.osc_unison_detune,
                                     frequency: unison_notes[unison_voice],
+                                    //frequency: detuned_note,
                                     _attack_time: self.osc_attack,
                                     _decay_time: self.osc_decay,
                                     _release_time: self.osc_release,
@@ -1592,6 +1587,7 @@ impl AudioModule {
                                     sample_pos: 0,
                                     loop_it: self.loop_wavetable,
                                 };
+                                
                                 self.unison_voices.voices.push_front(new_unison_voice);
                             }
                         }
@@ -1624,7 +1620,8 @@ impl AudioModule {
                                     loop_it: self.loop_wavetable,
                                 });
 
-                            self.unison_voices.voices.resize(voice_max * (self.osc_unison + 1) as usize, 
+                            if self.osc_unison > 1 {
+                                self.unison_voices.voices.resize(voice_max as usize, 
                                 // Insert a dummy "Off" entry when resizing UP
                                 SingleVoice {
                                     note: 0,
@@ -1649,6 +1646,7 @@ impl AudioModule {
                                     sample_pos: 0,
                                     loop_it: self.loop_wavetable,
                                 });
+                            }
                         }
 
                         // Remove any off notes
@@ -1657,8 +1655,8 @@ impl AudioModule {
                                 self.playing_voices.voices.remove(i);
                             }
                         }
-                        for (i, voice) in self.unison_voices.voices.clone().iter().enumerate() {
-                            if voice.state == OscState::Off {
+                        for (i, unison_voice) in self.unison_voices.voices.clone().iter().enumerate() {
+                            if unison_voice.state == OscState::Off {
                                 self.unison_voices.voices.remove(i);
                             }
                         }
@@ -1667,59 +1665,60 @@ impl AudioModule {
                     // MIDI EVENT NOTE OFF
                     ////////////////////////////////////////////////////////////
                     NoteEvent::NoteOff { note, .. } => {
+                        // Get voices on our note and not already releasing
+                        // When a voice reaches 0.0 target on releasing
+
+                        let mut shifted_note: u8 = note;
+
+                        // Sampler when single cycle needs this!!!
+                        if self.single_cycle {
+                            // 31 comes from comparing with 3xOsc position in MIDI notes
+                            shifted_note += 31;
+                        }
+
+                        shifted_note = match self.osc_octave {
+                            -2 => { shifted_note - 24 },
+                            -1 => { shifted_note - 12 },
+                            0 => { shifted_note },
+                            1 => { shifted_note + 12 },
+                            2 => { shifted_note + 24 },
+                            _ => { shifted_note }
+                        };
+
+                        // Update the matching unison voices
+                        for unison_voice in self.unison_voices.voices.iter_mut() {
+                            if unison_voice.note == shifted_note && unison_voice.state != OscState::Releasing {
+                                // Start our release level from our current gain on the voice
+                                unison_voice.osc_release.reset(unison_voice.amp_current);
+                                                        // Set our new release target to 0.0 so the note fades
+                                match unison_voice.osc_release.style {
+                                    SmoothingStyle::Logarithmic(_) => { unison_voice.osc_release.set_target(self.sample_rate, 0.0001); },
+                                    _ => { unison_voice.osc_release.set_target(self.sample_rate, 0.0); },
+                                }
+                                // Update our current amp
+                                unison_voice.amp_current = unison_voice.osc_release.next();
+                                // Update our voice state
+                                unison_voice.state = OscState::Releasing;
+                            }
+                        }
+
                         // Iterate through our voice vecdeque to find the one to update
                         for voice in self.playing_voices.voices.iter_mut() {
-                            // Get voices on our note and not already releasing
-                            // When a voice reaches 0.0 target on releasing
-
-                            let mut shifted_note: u8 = note;
-
-                            // Sampler when single cycle needs this!!!
-                            if self.single_cycle {
-                                // 31 comes from comparing with 3xOsc position in MIDI notes
-                                shifted_note += 31;
-                            }
-
-                            shifted_note = match self.osc_octave {
-                                -2 => { shifted_note - 24 },
-                                -1 => { shifted_note - 12 },
-                                0 => { shifted_note },
-                                1 => { shifted_note + 12 },
-                                2 => { shifted_note + 24 },
-                                _ => { shifted_note }
-                            };
-
+                            // Update current voices to releasing state if they're valid
                             if voice.note == shifted_note && voice.state != OscState::Releasing {
                                 // Start our release level from our current gain on the voice
                                 voice.osc_release.reset(voice.amp_current);
                                 
                                 // Set our new release target to 0.0 so the note fades
                                 match voice.osc_release.style {
-                                    SmoothingStyle::Logarithmic(_) => { voice.osc_release.set_target(self.sample_rate, 0.001); },
+                                    SmoothingStyle::Logarithmic(_) => { voice.osc_release.set_target(self.sample_rate, 0.0001); },
                                     _ => { voice.osc_release.set_target(self.sample_rate, 0.0); },
                                 }
                                 // Update our current amp
                                 voice.amp_current = voice.osc_release.next();
-                                // Update our voice state
+
+                                // Update our base voice state to releasing
                                 voice.state = OscState::Releasing;
-
-                                // Update the matching unison voices
-                                for unison_voice in self.unison_voices.voices.iter_mut() {
-                                    if unison_voice.note == voice.note && unison_voice.state != OscState::Releasing {
-                                        // Start our release level from our current gain on the voice
-                                        unison_voice.osc_release.reset(voice.amp_current);
-
-                                        // Set our new release target to 0.0 so the note fades
-                                        match unison_voice.osc_release.style {
-                                            SmoothingStyle::Logarithmic(_) => { unison_voice.osc_release.set_target(self.sample_rate, 0.001); },
-                                            _ => { unison_voice.osc_release.set_target(self.sample_rate, 0.0); },
-                                        }
-                                        // Update our current amp
-                                        unison_voice.amp_current = unison_voice.osc_release.next();
-                                        // Update our voice state
-                                        unison_voice.state = OscState::Releasing;
-                                    }
-                                }
                             }
                         }
                     },
@@ -1769,43 +1768,36 @@ impl AudioModule {
             if voice.state == OscState::Releasing && voice.osc_release.steps_left() == 0 {
                 voice.state = OscState::Off;
             }
+        }
 
-            // Update our matching unison voices
-            if self.osc_unison > 1 {
-                for unison_voice in self.unison_voices.voices.iter_mut() {
-                    if unison_voice.note == voice.note {
-                        // Move our phase outside of the midi events
-                        // I couldn't find much on how to model this so I based it off previous note phase
-                        unison_voice.phase += unison_voice.phase_delta;
-                        if unison_voice.phase > 1.0 {
-                            unison_voice.phase -= 1.0;
-                        }
-
-                        // Move from attack to decay if needed
-                        // Attack is over so use decay amount to reach sustain level - reusing current smoother
-                        if unison_voice.osc_attack.steps_left() == 0 && unison_voice.state == OscState::Attacking {
-                            unison_voice.state = OscState::Decaying;
-                            unison_voice.amp_current = unison_voice.osc_attack.next();
-                            // Now we will use decay smoother from here
-                            unison_voice.osc_decay.reset(unison_voice.amp_current);
-                            let sustain_scaled = self.osc_sustain / 999.9;
-                            unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
-                        }
-
-                        // Move from Decaying to Sustain hold
-                        if unison_voice.osc_decay.steps_left() == 0 && unison_voice.state == OscState::Decaying {
-                            let sustain_scaled = self.osc_sustain / 999.9;
-                            unison_voice.amp_current = sustain_scaled;
-                            unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
-                            unison_voice.state = OscState::Sustaining;
-                        }
-                    
-                        // End of release
-                        if unison_voice.state == OscState::Releasing && unison_voice.osc_release.steps_left() == 0 {
-                            unison_voice.state = OscState::Off;
-                        }
-                    }
-                }
+        // Update our matching unison voices
+        for unison_voice in self.unison_voices.voices.iter_mut() {
+            // Move our phase outside of the midi events
+            // I couldn't find much on how to model this so I based it off previous note phase
+            unison_voice.phase += unison_voice.phase_delta;
+            if unison_voice.phase > 1.0 {
+                unison_voice.phase -= 1.0;
+            }
+            // Move from attack to decay if needed
+            // Attack is over so use decay amount to reach sustain level - reusing current smoother
+            if unison_voice.osc_attack.steps_left() == 0 && unison_voice.state == OscState::Attacking {
+                unison_voice.state = OscState::Decaying;
+                unison_voice.amp_current = unison_voice.osc_attack.next();
+                // Now we will use decay smoother from here
+                unison_voice.osc_decay.reset(unison_voice.amp_current);
+                let sustain_scaled = self.osc_sustain / 999.9;
+                unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+            }
+            // Move from Decaying to Sustain hold
+            if unison_voice.osc_decay.steps_left() == 0 && unison_voice.state == OscState::Decaying {
+                unison_voice.state = OscState::Sustaining;
+                let sustain_scaled = self.osc_sustain / 999.9;
+                unison_voice.amp_current = sustain_scaled;
+                unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+            }
+            // End of release
+            if unison_voice.state == OscState::Releasing && unison_voice.osc_release.steps_left() == 0 {
+                unison_voice.state = OscState::Off;
             }
         }
 
@@ -1869,29 +1861,18 @@ impl AudioModule {
                             VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
                             VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
                         };
-                        /*
-                                    let pan = self.params.pan.smoothed.next();
-            let mix = self.params.mix.smoothed.next() / 2.;
 
-            let x = std::f32::consts::PI * (pan + 1.) / 4.;
+                        // Create our stereo pan for unison
 
-            unsafe {
-                let left = channel_samples.get_unchecked_mut(0).clone();
-                let right = channel_samples.get_unchecked_mut(1).clone();
-                *channel_samples.get_unchecked_mut(0) =
-                    x.cos() * std::f32::consts::SQRT_2 * ((1. - mix) * left + mix * right);
-                *channel_samples.get_unchecked_mut(1) =
-                    x.sin() * std::f32::consts::SQRT_2 * ((1. - mix) * right + mix * left);
-            } */
-                        // Create our stereo pan for unison!
-                        //let right_amp: f32 = unison_voice._angle.sin();
-                        //let left_amp: f32 = unison_voice._angle.cos();
+                        // Our angle comes back as radians
                         let pan = unison_voice._angle;
-                        let x = PI * pan / 180.0;
-                        //let right_amp: f32 = x.sin() * SQRT_2 * temp_unison_voice;
-                        //let left_amp: f32 = x.cos() * SQRT_2 * temp_unison_voice;
-                        let right_amp: f32 = (SQRT_2 / 2.0 ) * (x.cos() - x.sin()) * temp_unison_voice;
-                        let left_amp: f32 = (SQRT_2 / 2.0 ) * (x.cos() + x.sin()) * temp_unison_voice;
+
+                        // Calculate the amplitudes for the panned voice using vector operations
+                        let scale = SQRT_2 / 2.0;
+                        let left_amp = scale * (pan.cos() + pan.sin()) * temp_unison_voice;
+                        let right_amp = scale * (pan.cos() - pan.sin()) * temp_unison_voice;
+
+                        // Add the voice to the sum of stereo voices
                         stereo_voices_l += left_amp;
                         stereo_voices_r += right_amp;
                     }
@@ -1904,17 +1885,6 @@ impl AudioModule {
 
                 
                 // Stereo Spreading code
-                /*
-                // calculate scale coefficient
-coef_S = width*0.5;
-
-// then do this per sample
-m = (in_left  + in_right)*0.5;
-s = (in_right - in_left )*coef_S;
-
-out_left  = m - s;
-out_right = m + s;
- */
                 let width_coeff = self.osc_stereo*0.5;
                 let mid = (summed_voices_l + summed_voices_r)*0.5;
                 let stereo = (summed_voices_r - summed_voices_l)*width_coeff;
@@ -2148,5 +2118,22 @@ out_right = m + s;
                 self.sample_lib.insert(i, NoteVector);
             }
         }
+    }
+
+    fn calculate_panning(voice_index: i32, num_voices: i32) -> f32 {
+        // Calculate the pan angle for the given voice index and total number of voices.
+        // This uses equal-power panning.
+    
+        // Ensure the voice index is within bounds.
+        let voice_index = voice_index.min(num_voices - 1);
+    
+        // Calculate the pan angle in radians.
+        let angle = ((voice_index as f32) / (num_voices as f32 - 1.0) - 0.5) * std::f32::consts::PI;
+    
+        // We don't neeed degrees for our calculations
+        // let degrees = angle * (180.0 / std::f32::consts::PI);
+    
+        // Return the pan angle in degrees.
+        angle
     }
 }
