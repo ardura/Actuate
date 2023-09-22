@@ -617,7 +617,7 @@ impl Default for ActuateParams {
             osc_1_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
             osc_1_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
             osc_1_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
-            osc_1_stereo: FloatParam::new("Stereo", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
+            osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 10.0 }),
 
             osc_2_type: EnumParam::new("Wave", VoiceType::Sine),
             osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
@@ -634,7 +634,7 @@ impl Default for ActuateParams {
             osc_2_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
             osc_2_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
             osc_2_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
-            osc_2_stereo: FloatParam::new("Stereo", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
+            osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 10.0 }),
 
             osc_3_type: EnumParam::new("Wave", VoiceType::Sine),
             osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
@@ -651,7 +651,7 @@ impl Default for ActuateParams {
             osc_3_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear),
             osc_3_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
             osc_3_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
-            osc_3_stereo: FloatParam::new("Stereo", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }),
+            osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 10.0 }),
 
             // Granulizer/Sampler
             ////////////////////////////////////////////////////////////////////////////////////

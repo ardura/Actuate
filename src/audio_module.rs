@@ -21,7 +21,7 @@ This is intended to be a generic implementation that can be extended for other a
 #####################################
 */
 
-use std::{sync::Arc, collections::VecDeque, path::PathBuf};
+use std::{sync::Arc, collections::VecDeque, path::PathBuf, f32::consts::{SQRT_2, PI}};
 use nih_plug::{prelude::{Smoother, SmoothingStyle, ParamSetter, NoteEvent}, util, params::enums::Enum};
 use nih_plug_egui::egui::{Ui, RichText};
 use rand::Rng;
@@ -1556,15 +1556,17 @@ impl AudioModule {
                             let unison_even_voices;
                             let angle_per_voice = if self.osc_unison % 2 == 0 {
                                     unison_even_voices = self.osc_unison;
-                                    180.0 / self.osc_unison as f32
+                                    160.0 / self.osc_unison as f32
                                 } else {
                                     unison_even_voices = self.osc_unison - 1;
                                     // Unison is odd so make it even
-                                    180.0 / (self.osc_unison - 1) as f32
+                                    160.0 / (self.osc_unison - 1) as f32
                                 };
                             let mut unison_angles = vec![0.0; unison_even_voices as usize];
-                            for i in 0..unison_even_voices {
-                                unison_angles[i as usize] = (i as f32 * angle_per_voice) - (90.0);
+                            let sign_toggle = true;
+                            for i in 1..(unison_even_voices+1) {
+                                let sign: f32 = if sign_toggle { 1.0 } else { -1.0 };
+                                unison_angles[(i - 1) as usize] = (i as f32 * angle_per_voice) * sign;
                             }
                             for unison_voice in 0..(self.osc_unison as usize - 1) {
                                 let new_unison_voice: SingleVoice = SingleVoice {
@@ -1867,23 +1869,31 @@ impl AudioModule {
                             VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
                             VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
                         };
+                        /*
+                                    let pan = self.params.pan.smoothed.next();
+            let mix = self.params.mix.smoothed.next() / 2.;
+
+            let x = std::f32::consts::PI * (pan + 1.) / 4.;
+
+            unsafe {
+                let left = channel_samples.get_unchecked_mut(0).clone();
+                let right = channel_samples.get_unchecked_mut(1).clone();
+                *channel_samples.get_unchecked_mut(0) =
+                    x.cos() * std::f32::consts::SQRT_2 * ((1. - mix) * left + mix * right);
+                *channel_samples.get_unchecked_mut(1) =
+                    x.sin() * std::f32::consts::SQRT_2 * ((1. - mix) * right + mix * left);
+            } */
                         // Create our stereo pan for unison!
-                        let right_amp: f32 = unison_voice._angle.sin();
-                        let left_amp: f32 = unison_voice._angle.cos();
-                        stereo_voices_l += left_amp * temp_unison_voice;
-                        stereo_voices_r += right_amp * temp_unison_voice;
-                /*
-
-left multiplies by Bamp
-right multiplies by Aamp
-
-    Aamp = sin(angle)
-    Bamp = cos(angle)
-
-    Aamp = (sqrt(2)/2) * cos(angle) + sin(angle)
-    Bamp = (sqrt(2)/2) * cos(angle) - sin(angle)
-                 */
-                        
+                        //let right_amp: f32 = unison_voice._angle.sin();
+                        //let left_amp: f32 = unison_voice._angle.cos();
+                        let pan = unison_voice._angle;
+                        let x = PI * pan / 180.0;
+                        //let right_amp: f32 = x.sin() * SQRT_2 * temp_unison_voice;
+                        //let left_amp: f32 = x.cos() * SQRT_2 * temp_unison_voice;
+                        let right_amp: f32 = (SQRT_2 / 2.0 ) * (x.cos() - x.sin()) * temp_unison_voice;
+                        let left_amp: f32 = (SQRT_2 / 2.0 ) * (x.cos() + x.sin()) * temp_unison_voice;
+                        stereo_voices_l += left_amp;
+                        stereo_voices_r += right_amp;
                     }
                 }
                 // Sum our voices for output
@@ -1891,6 +1901,25 @@ right multiplies by Aamp
                 summed_voices_r += center_voices;
                 summed_voices_l += stereo_voices_l;
                 summed_voices_r += stereo_voices_r;
+
+                
+                // Stereo Spreading code
+                /*
+                // calculate scale coefficient
+coef_S = width*0.5;
+
+// then do this per sample
+m = (in_left  + in_right)*0.5;
+s = (in_right - in_left )*coef_S;
+
+out_left  = m - s;
+out_right = m + s;
+ */
+                let width_coeff = self.osc_stereo*0.5;
+                let mid = (summed_voices_l + summed_voices_r)*0.5;
+                let stereo = (summed_voices_r - summed_voices_l)*width_coeff;
+                summed_voices_l = mid - stereo;
+                summed_voices_r = mid + stereo;
 
                 // Return output
                 (summed_voices_l, summed_voices_r)
