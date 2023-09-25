@@ -89,6 +89,10 @@ struct SingleVoice {
     // Sampler/Granulizer Pos
     sample_pos: usize,
     loop_it: bool,
+    granular_hold: i32,
+    granular_gap: i32,
+    granular_hold_end: usize,
+    next_grain_pos: usize,
 }
 
 #[derive(Clone)]
@@ -115,6 +119,12 @@ pub struct AudioModule {
     // Restretch length with tracking bool
     pub restretch: bool,
     pub prev_restretch: bool,
+
+    // Granulizer other options
+    start_position: f32,
+    end_position: f32,
+    grain_hold: i32,
+    grain_gap: i32,
 
     ///////////////////////////////////////////////////////////
 
@@ -161,6 +171,10 @@ impl Default for AudioModule {
             single_cycle: false,
             restretch: true,
             prev_restretch: false,
+            start_position: 0.0,
+            end_position: 100.0,
+            grain_hold: 200,
+            grain_gap: 200,
 
             // Osc module knob storage
             osc_type: VoiceType::Sine,
@@ -464,6 +478,17 @@ impl AudioModule {
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(osc_1_octave_knob);
 
+                                let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_retrigger, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_retrigger_knob);
+
                                 let osc_1_attack_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_1_attack, 
                                     setter, 
@@ -518,6 +543,9 @@ impl AudioModule {
                                     .use_outline(true)
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(osc_1_semitones_knob);
+
+                                // Retrigger knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
                                 
                                 let osc_1_atk_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_1_atk_curve, 
@@ -551,19 +579,219 @@ impl AudioModule {
                                     .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(osc_1_rel_curve_knob);
+
+                                let start_position_1_knob = ui_knob::ArcKnob::for_param(
+                                    &params.start_position_1, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(start_position_1_knob);
+
+                                let end_position_1_knob = ui_knob::ArcKnob::for_param(
+                                    &params.end_position_1, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(end_position_1_knob);
                             });
                         });
                     });
                 });
             }
             AudioModuleType::Granulizer => {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Coming soon")
-                    .font(SMALLER_FONT)
-                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
-                    .on_hover_text("owo");
+                const KNOB_SIZE: f32 = 25.0;
+                const TEXT_SIZE: f32 = 11.0;
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Load Sample")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("The longer the sample the longer the process!");
+                                    let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_1, setter);
+                                    ui.add(switch_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Looping")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("To repeat your sample if MIDI key is held");
+                                    let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_1, setter);
+                                    ui.add(loop_toggle);
+                                });
+                                ui.add_space(20.0);
+                                ui.label(RichText::new("Note: ADSR is PER GRAIN")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("ADSR is PER GRAIN");
+                            });
+
+                            ui.horizontal(|ui| {
+                                let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_octave, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_octave_knob);
+
+                                let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_retrigger, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_retrigger_knob);
+
+                                let osc_1_attack_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_attack, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_attack_knob);
+
+                                let osc_1_decay_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_decay, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_decay_knob);
+
+                                let osc_1_sustain_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_sustain, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_sustain_knob);
+
+                                let osc_1_release_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_release, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_release_knob);
+
+                                let grain_hold_1_knob = ui_knob::ArcKnob::for_param(
+                                    &params.grain_hold_1, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(grain_hold_1_knob);
+
+                                let grain_gap_1_knob = ui_knob::ArcKnob::for_param(
+                                    &params.grain_gap_1, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(grain_gap_1_knob);
+                            });
+                            ui.horizontal(|ui| {
+                                // knob space
+                                //ui.add_space(KNOB_SIZE*4.0 + 4.0);
+
+                                let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_semitones, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_semitones_knob);
+
+                                // Retrigger knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                                
+                                let osc_1_atk_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_atk_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_atk_curve_knob);
+
+                                let osc_1_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_dec_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_dec_curve_knob);
+
+                                // Sustain knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                                
+                                let osc_1_rel_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_1_rel_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_1_rel_curve_knob);
+
+                                let start_position_1_knob = ui_knob::ArcKnob::for_param(
+                                    &params.start_position_1, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(start_position_1_knob);
+
+                                let end_position_1_knob = ui_knob::ArcKnob::for_param(
+                                    &params.end_position_1, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(end_position_1_knob);
+                            });
+                        });
+                    });
                 });
-            },
+            }
             AudioModuleType::Additive => {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Coming soon")
@@ -819,6 +1047,17 @@ impl AudioModule {
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(osc_2_octave_knob);
 
+                                let osc_2_retrigger_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_retrigger, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_retrigger_knob);
+
                                 let osc_2_attack_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_2_attack, 
                                     setter, 
@@ -873,6 +1112,9 @@ impl AudioModule {
                                     .use_outline(true)
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(osc_2_semitones_knob);
+
+                                // Retrigger knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 26.0);
                                 
                                 let osc_2_atk_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_2_atk_curve, 
@@ -895,7 +1137,7 @@ impl AudioModule {
                                 ui.add(osc_2_dec_curve_knob);
 
                                 // Sustain knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 26.0);
                                 
                                 let osc_2_rel_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_2_rel_curve, 
@@ -906,19 +1148,219 @@ impl AudioModule {
                                     .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(osc_2_rel_curve_knob);
+
+                                let start_position_2_knob = ui_knob::ArcKnob::for_param(
+                                    &params.start_position_2, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(start_position_2_knob);
+
+                                let end_position_2_knob = ui_knob::ArcKnob::for_param(
+                                    &params.end_position_2, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(end_position_2_knob);
                             });
                         });
                     });
                 });
             }
             AudioModuleType::Granulizer => {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Coming soon")
-                    .font(SMALLER_FONT)
-                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
-                    .on_hover_text("owo");
+                const KNOB_SIZE: f32 = 25.0;
+                const TEXT_SIZE: f32 = 11.0;
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Load Sample")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("The longer the sample the longer the process!");
+                                    let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_2, setter);
+                                    ui.add(switch_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Looping")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("To repeat your sample if MIDI key is held");
+                                    let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_2, setter);
+                                    ui.add(loop_toggle);
+                                });
+                                ui.add_space(20.0);
+                                ui.label(RichText::new("Note: ADSR is PER GRAIN")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("ADSR is PER GRAIN");
+                            });
+
+                            ui.horizontal(|ui| {
+                                let osc_2_octave_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_octave, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_octave_knob);
+
+                                let osc_2_retrigger_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_retrigger, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_retrigger_knob);
+
+                                let osc_2_attack_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_attack, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_attack_knob);
+
+                                let osc_2_decay_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_decay, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_decay_knob);
+
+                                let osc_2_sustain_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_sustain, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_sustain_knob);
+
+                                let osc_2_release_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_release, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_release_knob);
+
+                                let grain_hold_2_knob = ui_knob::ArcKnob::for_param(
+                                    &params.grain_hold_2, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(grain_hold_2_knob);
+
+                                let grain_gap_2_knob = ui_knob::ArcKnob::for_param(
+                                    &params.grain_gap_2, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(grain_gap_2_knob);
+                            });
+                            ui.horizontal(|ui| {
+                                // knob space
+                                //ui.add_space(KNOB_SIZE*4.0 + 4.0);
+
+                                let osc_2_semitones_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_semitones, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_semitones_knob);
+
+                                // Retrigger knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 26.0);
+                                
+                                let osc_2_atk_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_atk_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_atk_curve_knob);
+
+                                let osc_2_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_dec_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_dec_curve_knob);
+
+                                // Sustain knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 26.0);
+                                
+                                let osc_2_rel_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_2_rel_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_2_rel_curve_knob);
+
+                                let start_position_2_knob = ui_knob::ArcKnob::for_param(
+                                    &params.start_position_2, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(start_position_2_knob);
+
+                                let end_position_2_knob = ui_knob::ArcKnob::for_param(
+                                    &params.end_position_2, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(end_position_2_knob);
+                            });
+                        });
+                    });
                 });
-            },
+            }
             AudioModuleType::Additive => {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Coming soon")
@@ -1070,7 +1512,7 @@ impl AudioModule {
                         ui.add(osc_3_detune_knob);
 
                         // Space
-                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                        ui.add_space(KNOB_SIZE*2.0 + 36.0);
 
                         let osc_3_stereo_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_stereo, 
@@ -1094,7 +1536,7 @@ impl AudioModule {
                         ui.add(osc_3_atk_curve_knob);
                         
                         // Attack knob space
-                        //ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                        //ui.add_space(KNOB_SIZE*2.0 + 36.0);
 
                         let osc_3_dec_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_dec_curve, 
@@ -1107,7 +1549,7 @@ impl AudioModule {
                         ui.add(osc_3_dec_curve_knob);
 
                         // Sustain knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                        ui.add_space(KNOB_SIZE*2.0 + 36.0);
                         
                         let osc_3_rel_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_rel_curve, 
@@ -1174,6 +1616,17 @@ impl AudioModule {
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(osc_3_octave_knob);
 
+                                let osc_3_retrigger_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_retrigger, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_retrigger_knob);
+
                                 let osc_3_attack_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_3_attack, 
                                     setter, 
@@ -1228,6 +1681,9 @@ impl AudioModule {
                                     .use_outline(true)
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(osc_3_semitones_knob);
+
+                                // Retrigger knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 36.0);
                                 
                                 let osc_3_atk_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_3_atk_curve, 
@@ -1250,7 +1706,7 @@ impl AudioModule {
                                 ui.add(osc_3_dec_curve_knob);
 
                                 // Sustain knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 36.0);
                                 
                                 let osc_3_rel_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_3_rel_curve, 
@@ -1261,19 +1717,219 @@ impl AudioModule {
                                     .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(osc_3_rel_curve_knob);
+
+                                let start_position_3_knob = ui_knob::ArcKnob::for_param(
+                                    &params.start_position_3, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(start_position_3_knob);
+
+                                let end_position_3_knob = ui_knob::ArcKnob::for_param(
+                                    &params.end_position_3, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(end_position_3_knob);
                             });
                         });
                     });
                 });
             }
             AudioModuleType::Granulizer => {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Coming soon")
-                    .font(SMALLER_FONT)
-                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
-                    .on_hover_text("owo");
+                const KNOB_SIZE: f32 = 25.0;
+                const TEXT_SIZE: f32 = 11.0;
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Load Sample")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("The longer the sample the longer the process!");
+                                    let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_3, setter);
+                                    ui.add(switch_toggle);
+                                });
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Looping")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("To repeat your sample if MIDI key is held");
+                                    let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_3, setter);
+                                    ui.add(loop_toggle);
+                                });
+                                ui.add_space(20.0);
+                                ui.label(RichText::new("Note: ADSR is PER GRAIN")
+                                    .font(SMALLER_FONT)
+                                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                    .on_hover_text("ADSR is PER GRAIN");
+                            });
+
+                            ui.horizontal(|ui| {
+                                let osc_3_octave_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_octave, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_octave_knob);
+
+                                let osc_3_retrigger_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_retrigger, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_retrigger_knob);
+
+                                let osc_3_attack_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_attack, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_attack_knob);
+
+                                let osc_3_decay_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_decay, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_decay_knob);
+
+                                let osc_3_sustain_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_sustain, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_sustain_knob);
+
+                                let osc_3_release_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_release, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_release_knob);
+
+                                let grain_hold_3_knob = ui_knob::ArcKnob::for_param(
+                                    &params.grain_hold_3, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(grain_hold_3_knob);
+
+                                let grain_gap_3_knob = ui_knob::ArcKnob::for_param(
+                                    &params.grain_gap_3, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(grain_gap_3_knob);
+                            });
+                            ui.horizontal(|ui| {
+                                // knob space
+                                //ui.add_space(KNOB_SIZE*4.0 + 4.0);
+
+                                let osc_3_semitones_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_semitones, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .use_outline(true)
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_semitones_knob);
+
+                                // Retrigger knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 36.0);
+                                
+                                let osc_3_atk_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_atk_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_atk_curve_knob);
+
+                                let osc_3_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_dec_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_dec_curve_knob);
+
+                                // Sustain knob space
+                                ui.add_space(KNOB_SIZE*2.0 + 36.0);
+                                
+                                let osc_3_rel_curve_knob = ui_knob::ArcKnob::for_param(
+                                    &params.osc_3_rel_curve, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(osc_3_rel_curve_knob);
+
+                                let start_position_3_knob = ui_knob::ArcKnob::for_param(
+                                    &params.start_position_3, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(start_position_3_knob);
+
+                                let end_position_3_knob = ui_knob::ArcKnob::for_param(
+                                    &params.end_position_3, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(end_position_3_knob);
+                            });
+                        });
+                    });
                 });
-            },
+            }
             AudioModuleType::Additive => {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Coming soon")
@@ -1310,6 +1966,10 @@ impl AudioModule {
                 self.loop_wavetable = params.loop_sample_1.value();
                 self.single_cycle = params.single_cycle_1.value();
                 self.restretch = params.restretch_1.value();
+                self.start_position = params.start_position_1.value();
+                self.end_position = params.end_position_1.value();
+                self.grain_hold = params.grain_hold_1.value();
+                self.grain_gap = params.grain_gap_1.value();
             },
             2 => {
                 self.audio_module_type = params._audio_module_2_type.value();
@@ -1332,6 +1992,10 @@ impl AudioModule {
                 self.loop_wavetable = params.loop_sample_2.value();
                 self.single_cycle = params.single_cycle_2.value();
                 self.restretch = params.restretch_2.value();
+                self.start_position = params.start_position_2.value();
+                self.end_position = params.end_position_2.value();
+                self.grain_hold = params.grain_hold_2.value();
+                self.grain_gap = params.grain_gap_2.value();
             },
             3 => {
                 self.audio_module_type = params._audio_module_3_type.value();
@@ -1354,6 +2018,10 @@ impl AudioModule {
                 self.loop_wavetable = params.loop_sample_3.value();
                 self.single_cycle = params.single_cycle_3.value();
                 self.restretch = params.restretch_3.value();
+                self.start_position = params.start_position_3.value();
+                self.end_position = params.end_position_3.value();
+                self.grain_hold = params.grain_hold_3.value();
+                self.grain_gap = params.grain_gap_3.value();
             },
             _ => {}
         }
@@ -1450,12 +2118,22 @@ impl AudioModule {
                                         let mut rng = rand::thread_rng();
                                         new_phase = rng.gen_range(0.0..self.loaded_sample[0].len() as f32);
                                     },
+                                    AudioModuleType::Granulizer => {
+                                        let mut rng = rand::thread_rng();
+                                        new_phase = rng.gen_range(0.0..self.loaded_sample[0].len() as f32);
+                                    },
                                     _ => {},
                                 }
                                 
                             },
                             RetriggerStyle::Free => {
-                                // Do nothing
+                                // Do nothing for osc
+                                match self.audio_module_type {
+                                    AudioModuleType::Sampler | AudioModuleType::Granulizer=> {
+                                        new_phase = 0.0;
+                                    },
+                                    _ => {},
+                                }
                             }
                         }
                         // Sampler when single cycle needs this!!!
@@ -1525,6 +2203,19 @@ impl AudioModule {
                             },
                         }
 
+                        // Create our granulizer/sampler starting position from our knob scale
+                        let scaled_sample_pos = if self.start_position > 0.0 && self.osc_retrigger != RetriggerStyle::Random {
+                            (self.loaded_sample[0].len() as f32 * self.start_position).floor() as usize
+                        }
+                        // Retrigger and use 0
+                        else if self.osc_retrigger != RetriggerStyle::Random {
+                            0_usize
+                        } 
+                        // Retrigger with random
+                        else {
+                            new_phase.floor() as usize
+                        };
+
                         // Osc Updates
                         let new_voice: SingleVoice = SingleVoice {
                             note: note,
@@ -1546,15 +2237,19 @@ impl AudioModule {
                             _retrigger: self.osc_retrigger,
                             _voice_type: self.osc_type,
                             _angle: 0.0,
-                            sample_pos: 0,
+                            sample_pos: scaled_sample_pos,
                             loop_it: self.loop_wavetable,
+                            granular_gap: self.grain_gap,
+                            granular_hold: self.grain_hold,
+                            granular_hold_end: scaled_sample_pos + self.grain_hold as usize,
+                            next_grain_pos: scaled_sample_pos + self.grain_hold as usize + self.grain_gap as usize,
                         };
 
                         // Add our voice struct to our voice tracking deque
                         self.playing_voices.voices.push_front(new_voice);
 
                         // Add unison voices to our voice tracking deque
-                        if self.osc_unison > 1 {
+                        if self.osc_unison > 1 && self.audio_module_type == AudioModuleType::Osc {
                             let unison_even_voices = if self.osc_unison % 2 == 0 { self.osc_unison } else { self.osc_unison - 1 };
                             let mut unison_angles = vec![0.0; unison_even_voices as usize];
                             for i in 1..(unison_even_voices+1) {
@@ -1586,6 +2281,10 @@ impl AudioModule {
                                     _angle: unison_angles[unison_voice],
                                     sample_pos: 0,
                                     loop_it: self.loop_wavetable,
+                                    granular_gap: 200,
+                                    granular_hold: 200,
+                                    granular_hold_end: 200,
+                                    next_grain_pos: 400,
                                 };
                                 
                                 self.unison_voices.voices.push_front(new_unison_voice);
@@ -1618,9 +2317,13 @@ impl AudioModule {
                                     _angle: 0.0,
                                     sample_pos: 0,
                                     loop_it: self.loop_wavetable,
+                                    granular_gap: 200,
+                                    granular_hold: 200,
+                                    granular_hold_end: 200,
+                                    next_grain_pos: 400,
                                 });
 
-                            if self.osc_unison > 1 {
+                            if self.osc_unison > 1 && self.audio_module_type == AudioModuleType::Osc {
                                 self.unison_voices.voices.resize(voice_max as usize, 
                                 // Insert a dummy "Off" entry when resizing UP
                                 SingleVoice {
@@ -1645,6 +2348,10 @@ impl AudioModule {
                                     _angle: 0.0,
                                     sample_pos: 0,
                                     loop_it: self.loop_wavetable,
+                                    granular_gap: 200,
+                                    granular_hold: 200,
+                                    granular_hold_end: 200,
+                                    next_grain_pos: 400,
                                 });
                             }
                         }
@@ -1655,9 +2362,11 @@ impl AudioModule {
                                 self.playing_voices.voices.remove(i);
                             }
                         }
-                        for (i, unison_voice) in self.unison_voices.voices.clone().iter().enumerate() {
-                            if unison_voice.state == OscState::Off {
-                                self.unison_voices.voices.remove(i);
+                        if self.audio_module_type == AudioModuleType::Osc {
+                            for (i, unison_voice) in self.unison_voices.voices.clone().iter().enumerate() {
+                                if unison_voice.state == OscState::Off {
+                                    self.unison_voices.voices.remove(i);
+                                }
                             }
                         }
                     },
@@ -1685,20 +2394,22 @@ impl AudioModule {
                             _ => { shifted_note }
                         };
 
-                        // Update the matching unison voices
-                        for unison_voice in self.unison_voices.voices.iter_mut() {
-                            if unison_voice.note == shifted_note && unison_voice.state != OscState::Releasing {
-                                // Start our release level from our current gain on the voice
-                                unison_voice.osc_release.reset(unison_voice.amp_current);
-                                                        // Set our new release target to 0.0 so the note fades
-                                match unison_voice.osc_release.style {
-                                    SmoothingStyle::Logarithmic(_) => { unison_voice.osc_release.set_target(self.sample_rate, 0.0001); },
-                                    _ => { unison_voice.osc_release.set_target(self.sample_rate, 0.0); },
+                        if self.audio_module_type == AudioModuleType::Osc {
+                            // Update the matching unison voices
+                            for unison_voice in self.unison_voices.voices.iter_mut() {
+                                if unison_voice.note == shifted_note && unison_voice.state != OscState::Releasing {
+                                    // Start our release level from our current gain on the voice
+                                    unison_voice.osc_release.reset(unison_voice.amp_current);
+                                                            // Set our new release target to 0.0 so the note fades
+                                    match unison_voice.osc_release.style {
+                                        SmoothingStyle::Logarithmic(_) => { unison_voice.osc_release.set_target(self.sample_rate, 0.0001); },
+                                        _ => { unison_voice.osc_release.set_target(self.sample_rate, 0.0); },
+                                    }
+                                    // Update our current amp
+                                    unison_voice.amp_current = unison_voice.osc_release.next();
+                                    // Update our voice state
+                                    unison_voice.state = OscState::Releasing;
                                 }
-                                // Update our current amp
-                                unison_voice.amp_current = unison_voice.osc_release.next();
-                                // Update our voice state
-                                unison_voice.state = OscState::Releasing;
                             }
                         }
 
@@ -1923,10 +2634,12 @@ impl AudioModule {
                         }
                     }
 
-                    // Sampler/Granulizer moves position
+                    let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32 * self.start_position).floor() as usize;
+                    let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32 * self.end_position).floor() as usize;
+                    // Sampler moves position
                     voice.sample_pos += 1;
-                    if voice.loop_it && voice.sample_pos > self.sample_lib[usize_note][0].len(){
-                        voice.sample_pos = 0;
+                    if voice.loop_it && (voice.sample_pos > self.sample_lib[usize_note][0].len() || voice.sample_pos > scaled_end_position) {
+                        voice.sample_pos = scaled_start_position;
                     }
                 }
                 (summed_voices_l,summed_voices_r)
@@ -1936,8 +2649,47 @@ impl AudioModule {
                 (0.0, 0.0)
             }
             AudioModuleType::Granulizer => {
-                // Do nothing, return 0.0
-                (0.0, 0.0)
+                let mut summed_voices_l: f32 = 0.0;
+                let mut summed_voices_r: f32 = 0.0;
+                for voice in self.playing_voices.voices.iter_mut() {
+                    // Get our current gain amount for use in match below
+                    let temp_osc_gain_multiplier: f32 = match voice.state {
+                        OscState::Attacking => { voice.osc_attack.next() },
+                        OscState::Decaying => { voice.osc_decay.next() },
+                        OscState::Sustaining => {  self.osc_sustain / 999.9 },
+                        OscState::Releasing => { voice.osc_release.next() },
+                        OscState::Off => 0.0,
+                    };
+                    voice.amp_current = temp_osc_gain_multiplier;
+
+                    let usize_note = voice.note as usize;
+
+                    // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
+                    // If our note is valid 0-127
+                    if usize_note < self.sample_lib.len() {
+                        // If our sample position is valid for our note
+                        if voice.sample_pos < self.sample_lib[usize_note][0].len() {
+                            // Get our channels of sample vectors
+                            let NoteVector = &self.sample_lib[usize_note];
+                            // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
+                            summed_voices_l += NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier;
+                            summed_voices_r += NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier;
+                        }
+                    }
+                    let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32 * self.start_position).floor() as usize;
+                    let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32 * self.end_position).floor() as usize;
+                    // Sampler/Granulizer moves position
+                    voice.sample_pos += 1;
+                    if voice.sample_pos > voice.granular_hold_end {
+                        voice.sample_pos = voice.next_grain_pos;
+                        voice.granular_hold_end = voice.sample_pos + voice.granular_hold as usize;
+                        voice.next_grain_pos = voice.sample_pos + voice.granular_hold as usize + voice.granular_gap as usize;
+                    }
+                    if voice.loop_it && (voice.sample_pos > self.sample_lib[usize_note][0].len() || voice.sample_pos > scaled_end_position) {
+                        voice.sample_pos = scaled_start_position;
+                    }
+                }
+                (summed_voices_l,summed_voices_r)
             },
             AudioModuleType::Additive => {
                 // Do nothing, return 0.0
@@ -2029,9 +2781,15 @@ impl AudioModule {
 
     // This method performs the sample recalculations when restretch is toggled
     fn regenerate_samples(&mut self) {
-        // Compare our restretch change
-        if self.restretch != self.prev_restretch {
-            self.prev_restretch = self.restretch;
+        if self.audio_module_type == AudioModuleType::Sampler {
+            // Compare our restretch change
+            if self.restretch != self.prev_restretch {
+                self.prev_restretch = self.restretch;
+            }
+        }
+        else if self.audio_module_type == AudioModuleType::Granulizer {
+            self.restretch = false;
+            self.prev_restretch = false;
         }
 
         self.sample_lib.clear();

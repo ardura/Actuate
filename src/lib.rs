@@ -511,6 +511,18 @@ pub struct ActuateParams {
     #[id = "restretch_1"]
     pub restretch_1: BoolParam,
 
+    #[id = "grain_hold_1"]
+    grain_hold_1: IntParam,
+
+    #[id = "grain_gap_1"]
+    grain_gap_1: IntParam,
+
+    #[id = "start_position_1"]
+    start_position_1: FloatParam,
+
+    #[id = "end_position_1"]
+    end_position_1: FloatParam,
+
     // Controls for when audio_module_2_type is Sampler/Granulizer
     #[id = "load_sample_2"]
     pub load_sample_2: BoolParam,
@@ -524,6 +536,18 @@ pub struct ActuateParams {
     #[id = "restretch_2"]
     pub restretch_2: BoolParam,
 
+    #[id = "grain_hold_2"]
+    grain_hold_2: IntParam,
+
+    #[id = "grain_gap_2"]
+    grain_gap_2: IntParam,
+
+    #[id = "start_position_2"]
+    start_position_2: FloatParam,
+
+    #[id = "end_position_2"]
+    end_position_2: FloatParam,
+
     // Controls for when audio_module_3_type is Sampler/Granulizer
     #[id = "load_sample_3"]
     pub load_sample_3: BoolParam,
@@ -536,6 +560,18 @@ pub struct ActuateParams {
 
     #[id = "restretch_3"]
     pub restretch_3: BoolParam,
+
+    #[id = "grain_hold_3"]
+    grain_hold_3: IntParam,
+
+    #[id = "grain_gap_3"]
+    grain_gap_3: IntParam,
+
+    #[id = "start_position_3"]
+    start_position_3: FloatParam,
+
+    #[id = "end_position_3"]
+    end_position_3: FloatParam,
 
     // Filter
     #[id = "filter_wet"]
@@ -663,15 +699,32 @@ impl Default for ActuateParams {
             load_sample_1: BoolParam::new("Load Sample", false),
             load_sample_2: BoolParam::new("Load Sample", false),
             load_sample_3: BoolParam::new("Load Sample", false),
+            // To loop the sampler/granulizer
             loop_sample_1: BoolParam::new("Loop Sample", false),
             loop_sample_2: BoolParam::new("Loop Sample", false),
             loop_sample_3: BoolParam::new("Loop Sample", false),
+            // Sampler only - toggle single cycle mode
             single_cycle_1: BoolParam::new("Single Cycle", false),
             single_cycle_2: BoolParam::new("Single Cycle", false),
             single_cycle_3: BoolParam::new("Single Cycle", false),
+            // Always true for granulizer/ can be off for sampler
             restretch_1: BoolParam::new("Load Stretch", true),
             restretch_2: BoolParam::new("Load Stretch", true),
             restretch_3: BoolParam::new("Load Stretch", true),
+            // This is from 0 to 2000 samples
+            grain_hold_1: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 }),
+            grain_hold_2: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 }),
+            grain_hold_3: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 }),
+            grain_gap_1: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 }),
+            grain_gap_2: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 }),
+            grain_gap_3: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 }),
+            // This is going to be in % since sample can be any size
+            start_position_1: FloatParam::new("Start Pos", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            start_position_2: FloatParam::new("Start Pos", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            start_position_3: FloatParam::new("Start Pos", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            end_position_1: FloatParam::new("End Pos", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            end_position_2: FloatParam::new("End Pos", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            end_position_3: FloatParam::new("End Pos", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
 
             // Filter
             ////////////////////////////////////////////////////////////////////////////////////
@@ -680,12 +733,11 @@ impl Default for ActuateParams {
             filter_bp_amount: FloatParam::new("Band Pass", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)),
 
             filter_wet: FloatParam::new("Filter Wet", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            //filter_resonance: FloatParam::new("Resonance", 0.5, FloatRange::Linear { min: 0.1, max: 1.0 }.with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_resonance: FloatParam::new("Resonance", 1.0, FloatRange::Linear { min: 0.1, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_res_type: EnumParam::new("Res Type", ResonanceType::Default),
-            filter_cutoff: FloatParam::new("Frequency", 4000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_step_size(1.0).with_value_to_string(formatters::v2s_f32_rounded(0)).with_unit("Hz"),
+            filter_resonance: FloatParam::new("Bandwidth", 1.0, FloatRange::Linear { min: 0.1, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_res_type: EnumParam::new("Filter Type", ResonanceType::Default),
+            filter_cutoff: FloatParam::new("Frequency", 4000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_step_size(1.0),//.with_value_to_string(formatters::v2s_f32_rounded(0)).with_unit("Hz"),
 
-            filter_env_peak: FloatParam::new("Env Peak", 0.0, FloatRange::SymmetricalSkewed { min: -8000.0, max: 8000.0, factor: 50.0, center: 0.0 }).with_step_size(1.0).with_value_to_string(format_nothing()),
+            filter_env_peak: FloatParam::new("Env Peak", 0.0, FloatRange::SymmetricalSkewed { min: -8000.0, max: 8000.0, factor: 0.1, center: 0.0 }).with_step_size(1.0).with_value_to_string(format_nothing()),
             filter_env_decay: FloatParam::new("Env Decay", 100.0, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.2}).with_value_to_string(formatters::v2s_f32_rounded(2)),
             filter_env_curve: EnumParam::new("Env Curve",Oscillator::SmoothStyle::Linear),
 
