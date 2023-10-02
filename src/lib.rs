@@ -24,10 +24,14 @@ use StateVariableFilter::ResonanceType;
 use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Rect, Rounding, RichText, FontId, Pos2}, EguiState};
 use rfd::FileDialog;
 
-use std::{sync::{Arc, Mutex}, ops::RangeInclusive, fs::{File}, io::Write};
+use std::{sync::{Arc, Mutex}, ops::RangeInclusive, fs::{File}, io::{Write}};
 use nih_plug::{prelude::*};
 use phf::phf_map;
 use serde::{Deserialize, Serialize};
+use std::io::Read;
+use flate2::Compression;
+use flate2::write::GzEncoder;
+use flate2::read::GzDecoder;
 
 // My Files
 use audio_module::{AudioModuleType, AudioModule, Oscillator::{self, RetriggerStyle, SmoothStyle}};
@@ -69,6 +73,7 @@ struct ActuatePreset {
     // Modules 1
     ///////////////////////////////////////////////////////////
     mod1_audio_module_type: AudioModuleType,    
+    mod1_audio_module_level: f32,
     // Granulizer/Sampler
     mod1_loaded_sample: Vec<Vec<f32>>,
     mod1_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -76,6 +81,11 @@ struct ActuatePreset {
     mod1_single_cycle: bool,
     mod1_restretch: bool,
     mod1_prev_restretch: bool,
+    mod1_grain_hold: i32,
+    mod1_grain_gap: i32,
+    mod1_start_position: f32,
+    mod1_end_position: f32,
+    mod1_grain_crossfade: i32,
 
     // Osc module knob storage
     mod1_osc_type: VoiceType,
@@ -98,6 +108,7 @@ struct ActuatePreset {
     // Modules 2
     ///////////////////////////////////////////////////////////
     mod2_audio_module_type: AudioModuleType,    
+    mod2_audio_module_level: f32,
     // Granulizer/Sampler
     mod2_loaded_sample: Vec<Vec<f32>>,
     mod2_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -105,6 +116,11 @@ struct ActuatePreset {
     mod2_single_cycle: bool,
     mod2_restretch: bool,
     mod2_prev_restretch: bool,
+    mod2_grain_hold: i32,
+    mod2_grain_gap: i32,
+    mod2_start_position: f32,
+    mod2_end_position: f32,
+    mod2_grain_crossfade: i32,
 
     // Osc module knob storage
     mod2_osc_type: VoiceType,
@@ -126,7 +142,8 @@ struct ActuatePreset {
 
     // Modules 3
     ///////////////////////////////////////////////////////////
-    mod3_audio_module_type: AudioModuleType,    
+    mod3_audio_module_type: AudioModuleType,   
+    mod3_audio_module_level: f32, 
     // Granulizer/Sampler
     mod3_loaded_sample: Vec<Vec<f32>>,
     mod3_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -134,6 +151,11 @@ struct ActuatePreset {
     mod3_single_cycle: bool,
     mod3_restretch: bool,
     mod3_prev_restretch: bool,
+    mod3_grain_hold: i32,
+    mod3_grain_gap: i32,
+    mod3_start_position: f32,
+    mod3_end_position: f32,
+    mod3_grain_crossfade: i32,
 
     // Osc module knob storage
     mod3_osc_type: VoiceType,
@@ -173,27 +195,31 @@ pub struct Actuate {
     // Modules
     audio_module_1: AudioModule,
     _audio_module_1_type: AudioModuleType,
+    prev_module_1: AudioModuleType,
     audio_module_2: AudioModule,
     _audio_module_2_type: AudioModuleType,
+    prev_module_2: AudioModuleType,
     audio_module_3: AudioModule,
     _audio_module_3_type: AudioModuleType,
+    prev_module_3: AudioModuleType,
 
     // Filter
-    filter: StateVariableFilter::StateVariableFilter,
+    filter_l: StateVariableFilter::StateVariableFilter,
+    filter_r: StateVariableFilter::StateVariableFilter,
     filter_mod_smoother: Smoother<f32>,
 
     // File loading
     file_dialog: bool,
     file_open_buffer_timer: u32,
 
-    // Preset UI // next,prev,load,save,update
-
     // Preset Lib Default
     preset_lib_name: String,
     preset_lib: Arc<Mutex<Vec<ActuatePreset>>>,
+    retrigger_preset_load: Arc<Mutex<bool>>,
 
     // Used for DC Offset calculations
-    dc_filter: StateVariableFilter::StateVariableFilter,
+    dc_filter_l: StateVariableFilter::StateVariableFilter,
+    dc_filter_r: StateVariableFilter::StateVariableFilter,
 }
 
 impl Default for Actuate {
@@ -205,13 +231,17 @@ impl Default for Actuate {
             // Module 1
             audio_module_1: AudioModule::default(),
             _audio_module_1_type: AudioModuleType::Osc,
+            prev_module_1: AudioModuleType::Osc,
             audio_module_2: AudioModule::default(),
             _audio_module_2_type: AudioModuleType::Off,
+            prev_module_2: AudioModuleType::Off,
             audio_module_3: AudioModule::default(),
             _audio_module_3_type: AudioModuleType::Off,
+            prev_module_3: AudioModuleType::Off,
 
             // Filter
-            filter: StateVariableFilter::StateVariableFilter::default(),
+            filter_l: StateVariableFilter::StateVariableFilter::default(),
+            filter_r: StateVariableFilter::StateVariableFilter::default(),
             filter_mod_smoother: Smoother::new(SmoothingStyle::Linear(300.0)),
 
             // File Loading
@@ -225,12 +255,18 @@ impl Default for Actuate {
             preset_lib_name: String::from("Default"),
             preset_lib: Arc::new(Mutex::new(vec![ActuatePreset { 
                 mod1_audio_module_type: AudioModuleType::Osc, 
+                mod1_audio_module_level: 1.0,
                 mod1_loaded_sample: vec![vec![0.0,0.0]], 
                 mod1_sample_lib: vec![vec![vec![0.0,0.0]]], 
                 mod1_loop_wavetable: false, 
                 mod1_single_cycle: false, 
                 mod1_restretch: true, 
                 mod1_prev_restretch: false, 
+                mod1_grain_hold: 200,
+                mod1_grain_gap: 200,
+                mod1_start_position: 0.0,
+                mod1_end_position: 1.0,
+                mod1_grain_crossfade: 50,
                 mod1_osc_type: VoiceType::Sine, 
                 mod1_osc_octave: 0, 
                 mod1_osc_semitones: 0, 
@@ -249,12 +285,18 @@ impl Default for Actuate {
                 mod1_osc_stereo: 0.0,
 
                 mod2_audio_module_type: AudioModuleType::Off, 
+                mod2_audio_module_level: 1.0,
                 mod2_loaded_sample: vec![vec![0.0,0.0]], 
                 mod2_sample_lib: vec![vec![vec![0.0,0.0]]], 
                 mod2_loop_wavetable: false, 
                 mod2_single_cycle: false, 
                 mod2_restretch: true, 
                 mod2_prev_restretch: false, 
+                mod2_grain_hold: 200,
+                mod2_grain_gap: 200,
+                mod2_start_position: 0.0,
+                mod2_end_position: 1.0,
+                mod2_grain_crossfade: 50,
                 mod2_osc_type: VoiceType::Sine, 
                 mod2_osc_octave: 0, 
                 mod2_osc_semitones: 0, 
@@ -273,12 +315,18 @@ impl Default for Actuate {
                 mod2_osc_stereo: 0.0,
 
                 mod3_audio_module_type: AudioModuleType::Off, 
+                mod3_audio_module_level: 1.0,
                 mod3_loaded_sample: vec![vec![0.0,0.0]], 
                 mod3_sample_lib: vec![vec![vec![0.0,0.0]]], 
                 mod3_loop_wavetable: false, 
                 mod3_single_cycle: false, 
                 mod3_restretch: true, 
                 mod3_prev_restretch: false, 
+                mod3_grain_hold: 200,
+                mod3_grain_gap: 200,
+                mod3_start_position: 0.0,
+                mod3_end_position: 1.0,
+                mod3_grain_crossfade: 50,
                 mod3_osc_type: VoiceType::Sine, 
                 mod3_osc_octave: 0, 
                 mod3_osc_semitones: 0, 
@@ -306,8 +354,10 @@ impl Default for Actuate {
                 filter_env_peak: 0.0, 
                 filter_env_decay: 100.0, 
                 filter_env_curve: SmoothStyle::Linear }; PRESET_BANK_SIZE])),
+            retrigger_preset_load: Arc::new(Mutex::new(false)),
 
-            dc_filter: StateVariableFilter::StateVariableFilter::default(),
+            dc_filter_l: StateVariableFilter::StateVariableFilter::default(),
+            dc_filter_r: StateVariableFilter::StateVariableFilter::default(),
         }
     }
 }
@@ -523,6 +573,9 @@ pub struct ActuateParams {
     #[id = "end_position_1"]
     end_position_1: FloatParam,
 
+    #[id = "grain_crossfade_1"]
+    grain_crossfade_1: IntParam,
+
     // Controls for when audio_module_2_type is Sampler/Granulizer
     #[id = "load_sample_2"]
     pub load_sample_2: BoolParam,
@@ -548,6 +601,9 @@ pub struct ActuateParams {
     #[id = "end_position_2"]
     end_position_2: FloatParam,
 
+    #[id = "grain_crossfade_2"]
+    grain_crossfade_2: IntParam,
+
     // Controls for when audio_module_3_type is Sampler/Granulizer
     #[id = "load_sample_3"]
     pub load_sample_3: BoolParam,
@@ -572,6 +628,9 @@ pub struct ActuateParams {
 
     #[id = "end_position_3"]
     end_position_3: FloatParam,
+
+    #[id = "grain_crossfade_3"]
+    grain_crossfade_3: IntParam,
 
     // Filter
     #[id = "filter_wet"]
@@ -725,6 +784,10 @@ impl Default for ActuateParams {
             end_position_1: FloatParam::new("End Pos", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
             end_position_2: FloatParam::new("End Pos", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
             end_position_3: FloatParam::new("End Pos", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            // Grain Crossfade
+            grain_crossfade_1: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 }),
+            grain_crossfade_2: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 }),
+            grain_crossfade_3: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 }),
 
             // Filter
             ////////////////////////////////////////////////////////////////////////////////////
@@ -737,7 +800,7 @@ impl Default for ActuateParams {
             filter_res_type: EnumParam::new("Filter Type", ResonanceType::Default),
             filter_cutoff: FloatParam::new("Frequency", 4000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_step_size(1.0),//.with_value_to_string(formatters::v2s_f32_rounded(0)).with_unit("Hz"),
 
-            filter_env_peak: FloatParam::new("Env Peak", 0.0, FloatRange::SymmetricalSkewed { min: -8000.0, max: 8000.0, factor: 0.1, center: 0.0 }).with_step_size(1.0).with_value_to_string(format_nothing()),
+            filter_env_peak: FloatParam::new("Env Peak", 0.0, FloatRange::Linear { min: -4000.0, max: 4000.0}).with_step_size(1.0).with_value_to_string(format_nothing()),
             filter_env_decay: FloatParam::new("Env Decay", 100.0, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.2}).with_value_to_string(formatters::v2s_f32_rounded(2)),
             filter_env_curve: EnumParam::new("Env Curve",Oscillator::SmoothStyle::Linear),
 
@@ -779,6 +842,7 @@ impl Plugin for Actuate {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = self.params.clone();
         let arc_preset = Arc::clone(&self.preset_lib);
+        let retrigger_preset_load = Arc::clone(&self.retrigger_preset_load);
         // Do our GUI stuff
         create_egui_editor(
             self.params.editor_state.clone(),
@@ -788,6 +852,7 @@ impl Plugin for Actuate {
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
                         let loaded_preset = &arc_preset.lock().unwrap()[params.preset_index.value() as usize];
+                        let retrigger_preset_load_arc = &retrigger_preset_load.lock().unwrap();
                         // Reset our buttons - bad practice most likely
                         if params.prev_preset.value() || params.next_preset.value() {
                             if params.next_preset.value() && params.preset_index.value() < 31{
@@ -812,12 +877,9 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.update_current_preset, false);
                         }
                         // Try to load preset into our params if possible
-                        if params.prev_preset_index.value() != params.preset_index.value() {
-                            let serialized = serde_json::to_string(loaded_preset);
-                            nih_log!("--------------------------------------");
-                            nih_log!("Loaded preset: {}",serialized.unwrap_or_default());
-
+                        if params.prev_preset_index.value() != params.preset_index.value() || **retrigger_preset_load_arc {
                             setter.set_parameter(&params._audio_module_1_type, loaded_preset.mod1_audio_module_type);
+                            setter.set_parameter(&params.audio_module_1_level, loaded_preset.mod1_audio_module_level);
                             setter.set_parameter(&params.loop_sample_1, loaded_preset.mod1_loop_wavetable);
                             setter.set_parameter(&params.single_cycle_1, loaded_preset.mod1_single_cycle);
                             setter.set_parameter(&params.restretch_1, loaded_preset.mod1_restretch);
@@ -837,9 +899,15 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.osc_1_unison, loaded_preset.mod1_osc_unison);
                             setter.set_parameter(&params.osc_1_unison_detune, loaded_preset.mod1_osc_unison_detune);
                             setter.set_parameter(&params.osc_1_stereo, loaded_preset.mod1_osc_stereo);
+                            setter.set_parameter(&params.grain_gap_1, loaded_preset.mod1_grain_gap);
+                            setter.set_parameter(&params.grain_hold_1, loaded_preset.mod1_grain_hold);
+                            setter.set_parameter(&params.grain_crossfade_1, loaded_preset.mod1_grain_crossfade);
+                            setter.set_parameter(&params.start_position_1, loaded_preset.mod1_start_position);
+                            setter.set_parameter(&params.end_position_1, loaded_preset.mod1_end_position);
                             // loaded sample, sample_lib, and prev restretch are controlled differently
 
                             setter.set_parameter(&params._audio_module_2_type, loaded_preset.mod2_audio_module_type);
+                            setter.set_parameter(&params.audio_module_2_level, loaded_preset.mod2_audio_module_level);
                             setter.set_parameter(&params.loop_sample_2, loaded_preset.mod2_loop_wavetable);
                             setter.set_parameter(&params.single_cycle_2, loaded_preset.mod2_single_cycle);
                             setter.set_parameter(&params.restretch_2, loaded_preset.mod2_restretch);
@@ -859,8 +927,14 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.osc_2_unison, loaded_preset.mod2_osc_unison);
                             setter.set_parameter(&params.osc_2_unison_detune, loaded_preset.mod2_osc_unison_detune);
                             setter.set_parameter(&params.osc_2_stereo, loaded_preset.mod2_osc_stereo);
+                            setter.set_parameter(&params.grain_gap_2, loaded_preset.mod2_grain_gap);
+                            setter.set_parameter(&params.grain_hold_2, loaded_preset.mod2_grain_hold);
+                            setter.set_parameter(&params.grain_crossfade_2, loaded_preset.mod2_grain_crossfade);
+                            setter.set_parameter(&params.start_position_2, loaded_preset.mod2_start_position);
+                            setter.set_parameter(&params.end_position_2, loaded_preset.mod2_end_position);
 
                             setter.set_parameter(&params._audio_module_3_type, loaded_preset.mod3_audio_module_type);
+                            setter.set_parameter(&params.audio_module_3_level, loaded_preset.mod3_audio_module_level);
                             setter.set_parameter(&params.loop_sample_3, loaded_preset.mod3_loop_wavetable);
                             setter.set_parameter(&params.single_cycle_3, loaded_preset.mod3_single_cycle);
                             setter.set_parameter(&params.restretch_3, loaded_preset.mod3_restretch);
@@ -880,6 +954,11 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.osc_3_unison, loaded_preset.mod3_osc_unison);
                             setter.set_parameter(&params.osc_3_unison_detune, loaded_preset.mod3_osc_unison_detune);
                             setter.set_parameter(&params.osc_3_stereo, loaded_preset.mod3_osc_stereo);
+                            setter.set_parameter(&params.grain_gap_3, loaded_preset.mod3_grain_gap);
+                            setter.set_parameter(&params.grain_hold_3, loaded_preset.mod3_grain_hold);
+                            setter.set_parameter(&params.grain_crossfade_3, loaded_preset.mod3_grain_crossfade);
+                            setter.set_parameter(&params.start_position_3, loaded_preset.mod3_start_position);
+                            setter.set_parameter(&params.end_position_3, loaded_preset.mod3_end_position);
 
                             setter.set_parameter(&params.filter_wet, loaded_preset.filter_wet);
                             setter.set_parameter(&params.filter_cutoff, loaded_preset.filter_cutoff);
@@ -895,7 +974,7 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.prev_preset_index, params.preset_index.value());
                         }
                         // Set this to reload preset after other thread loads in our bank file - the above if statement will be true and reload preset
-                        if new_loading_preset_bank {
+                        if new_loading_preset_bank || **retrigger_preset_load_arc{
                             setter.set_parameter(&params.prev_preset_index, -1);
                         }
 
@@ -1203,7 +1282,6 @@ impl Plugin for Actuate {
                                     });
                                 });
                                 
-                                //nih_log!("{:?}",egui_ctx.input().raw);
                                 //ui.label(RichText::new(format!("dropped_files: {}", egui_ctx.input().raw.dropped_files.len())).font(FONT).color(FONT_COLOR));
                                 /*
                                 // Dropped file logic
@@ -1254,8 +1332,6 @@ impl Plugin for Actuate {
         buffer_config: &BufferConfig,
         _context: &mut impl InitContext<Self>,
     ) -> bool {
-        nih_log!("changed sample rate to {}", buffer_config.sample_rate);
-
         self.sample_rate = buffer_config.sample_rate;
 
         return true;
@@ -1267,6 +1343,19 @@ impl Plugin for Actuate {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        // Clear any voices on change of module type (especially during play)
+        if self._audio_module_1_type != self.prev_module_1 {
+            self.audio_module_1.clear_voices();
+            self.prev_module_1 = self._audio_module_1_type;
+        }
+        if self._audio_module_2_type != self.prev_module_2 {
+            self.audio_module_2.clear_voices();
+            self.prev_module_2 = self._audio_module_2_type;
+        }
+        if self._audio_module_3_type != self.prev_module_3 {
+            self.audio_module_3.clear_voices();
+            self.prev_module_3 = self._audio_module_3_type;
+        }
         self.process_midi(context, buffer);
         ProcessStatus::Normal
     }
@@ -1286,7 +1375,7 @@ impl Actuate {
             }
             // Preset UI // next, prev, load, save
             // Load the non-gui related preset stuff!
-            if (self.params.prev_preset_index.value() != self.params.preset_index.value()) && !self.file_dialog {
+            if (self.params.prev_preset_index.value() != self.params.preset_index.value() || *self.retrigger_preset_load.clone().lock().unwrap()) && !self.file_dialog {
                 self.file_dialog = true;
                 self.file_open_buffer_timer = 0;
 
@@ -1302,11 +1391,38 @@ impl Actuate {
                 self.audio_module_3.loaded_sample = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod3_loaded_sample.clone();
                 self.audio_module_3.sample_lib = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod3_sample_lib.clone();
                 self.audio_module_3.prev_restretch = Arc::clone(&self.preset_lib).lock().unwrap()[self.params.preset_index.value() as usize].mod3_prev_restretch.clone();
+
+                // Note audio module type from the module is used here instead of from the main self type
+                // This is because preset loading has changed it here first!
+                if self.audio_module_1.audio_module_type == AudioModuleType::Granulizer 
+                || self.audio_module_1.audio_module_type == AudioModuleType::Sampler {
+                    if self.audio_module_1.sample_lib.len() <= 1 {
+                        self.audio_module_1.regenerate_samples();
+                    }
+                }
+                if self.audio_module_2.audio_module_type == AudioModuleType::Granulizer 
+                || self.audio_module_2.audio_module_type == AudioModuleType::Sampler {
+                    if self.audio_module_2.sample_lib.len() <= 1 {
+                        self.audio_module_2.regenerate_samples();
+                    }
+                }
+                if self.audio_module_3.audio_module_type == AudioModuleType::Granulizer 
+                || self.audio_module_3.audio_module_type == AudioModuleType::Sampler {
+                    if self.audio_module_3.sample_lib.len() <= 1 {
+                        self.audio_module_3.regenerate_samples();
+                    }
+                }
+                // Reset this if we've regenerated
+                if *self.retrigger_preset_load.clone().lock().unwrap() {
+                    *self.retrigger_preset_load.clone().lock().unwrap() = false
+                }
             }
             if self.params.load_bank.value() && !self.file_dialog {
                 self.file_dialog = true;
                 self.file_open_buffer_timer = 0;
                 self.load_preset_bank();
+                // Update to change preset loading arc for next time a thread goes into gui side and here
+                *self.retrigger_preset_load.clone().lock().unwrap() = true;
             }
             if self.params.save_bank.value() && !self.file_dialog {
                 self.file_dialog = true;
@@ -1380,7 +1496,7 @@ impl Actuate {
             let mut left_output: f32 = wave1_l + wave2_l + wave3_l;
             let mut right_output: f32 = wave1_r + wave2_r + wave3_r;
 
-            if self.params.filter_wet.value() > 0.0 {
+            if self.params.filter_wet.value() > 0.0  && !self.file_dialog{
                 // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
                 if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
                     self.filter_mod_smoother = match self.params.filter_env_curve.value() {
@@ -1395,13 +1511,22 @@ impl Actuate {
                     self.filter_mod_smoother.set_target(self.sample_rate, self.params.filter_cutoff.value());
                 }
 
+                // use proper variable now that there are two filters
+                let next_filter_step = self.filter_mod_smoother.next();
+
                 // Filtering before output
-                self.filter.update(
-                   self.filter_mod_smoother.next(),
+                self.filter_l.update(
+                    next_filter_step,
                    self.params.filter_resonance.value(),
                    self.sample_rate,
                    self.params.filter_res_type.value(),
                 );
+                self.filter_r.update(
+                    next_filter_step,
+                    self.params.filter_resonance.value(),
+                    self.sample_rate,
+                    self.params.filter_res_type.value(),
+                 );
 
                 let low_l: f32;
                 let band_l: f32;
@@ -1410,8 +1535,8 @@ impl Actuate {
                 let band_r: f32;
                 let high_r: f32;
 
-                (low_l, band_l, high_l) = self.filter.process(left_output);
-                (low_r, band_r, high_r) = self.filter.process(right_output);
+                (low_l, band_l, high_l) = self.filter_l.process(left_output);
+                (low_r, band_r, high_r) = self.filter_r.process(right_output);
 
                 left_output = (low_l*self.params.filter_lp_amount.value() 
                             + band_l*self.params.filter_bp_amount.value()
@@ -1424,10 +1549,13 @@ impl Actuate {
                             + right_output*(1.0-self.params.filter_wet.value());
             }
 
-            // Remove DC Offsets with our SVF
-            self.dc_filter.update(20.0, 0.8, self.sample_rate, ResonanceType::Default);
-            (_, _, left_output) = self.dc_filter.process(left_output);
-            (_, _, right_output) = self.dc_filter.process(right_output);
+            if !self.file_dialog {
+                // Remove DC Offsets with our SVF
+                self.dc_filter_l.update(20.0, 0.8, self.sample_rate, ResonanceType::Default);
+                self.dc_filter_r.update(20.0, 0.8, self.sample_rate, ResonanceType::Default);
+                (_, _, left_output) = self.dc_filter_l.process(left_output);
+                (_, _, right_output) = self.dc_filter_r.process(right_output);
+            }
 
             // Reassign our output signal
             *channel_samples.get_mut(0).unwrap() = left_output * self.params.master_level.value();
@@ -1438,46 +1566,221 @@ impl Actuate {
     // Load presets
     fn load_preset_bank(&mut self) {
         let loading_bank = FileDialog::new()
-            .add_filter("txt", &["txt"])
+            .add_filter("bin", &["bin"]) // Use the same filter as in save_preset_bank
             .pick_file();
-        if Option::is_some(&loading_bank) {
-            self.preset_lib_name = loading_bank.unwrap().to_str().unwrap_or("Invalid Path").to_string();
-            let contents = std::fs::read_to_string(&self.preset_lib_name);
-            let file_string_data = &contents.unwrap().as_str().to_string();
-            nih_log!("Loaded: {}", file_string_data);
-            let unserialized: Vec<ActuatePreset> = serde_json::from_slice(file_string_data.as_bytes()).unwrap();
-
+        
+        if let Some(loading_bank) = loading_bank {
+            self.preset_lib_name = loading_bank.to_str().unwrap_or("Invalid Path").to_string();
+            
+            // Read the compressed data from the file
+            let mut compressed_data = Vec::new();
+            if let Err(err) = std::fs::File::open(&self.preset_lib_name)
+                .and_then(|mut file| file.read_to_end(&mut compressed_data))
+            {
+                eprintln!("Error reading compressed data from file: {}", err);
+                return;
+            }
+    
+            // Decompress the data
+            let decompressed_data = Self::decompress_bytes(&compressed_data);
+            if let Err(err) = decompressed_data {
+                eprintln!("Error decompressing data: {}", err);
+                return;
+            }
+            
+            // Deserialize the MessagePack data
+            let file_string_data = decompressed_data.unwrap();
+            
+            // Deserialize into ActuatePreset - return default empty lib if error
+            let unserialized: Vec<ActuatePreset> = rmp_serde::from_slice(&file_string_data).unwrap_or(
+                vec![ActuatePreset { 
+                    mod1_audio_module_type: AudioModuleType::Osc, 
+                    mod1_audio_module_level: 1.0,
+                    mod1_loaded_sample: vec![vec![0.0,0.0]], 
+                    mod1_sample_lib: vec![vec![vec![0.0,0.0]]], 
+                    mod1_loop_wavetable: false, 
+                    mod1_single_cycle: false, 
+                    mod1_restretch: true, 
+                    mod1_prev_restretch: false, 
+                    mod1_grain_hold: 200,
+                    mod1_grain_gap: 200,
+                    mod1_start_position: 0.0,
+                    mod1_end_position: 1.0,
+                    mod1_grain_crossfade: 50,
+                    mod1_osc_type: VoiceType::Sine, 
+                    mod1_osc_octave: 0, 
+                    mod1_osc_semitones: 0, 
+                    mod1_osc_detune: 0.0, 
+                    mod1_osc_attack: 0.0001, 
+                    mod1_osc_decay: 0.0001, 
+                    mod1_osc_sustain: 999.9, 
+                    mod1_osc_release: 5.0, 
+                    mod1_osc_mod_amount: 0.0, 
+                    mod1_osc_retrigger: RetriggerStyle::Retrigger, 
+                    mod1_osc_atk_curve: SmoothStyle::Linear, 
+                    mod1_osc_dec_curve: SmoothStyle::Linear, 
+                    mod1_osc_rel_curve: SmoothStyle::Linear, 
+                    mod1_osc_unison: 1,
+                    mod1_osc_unison_detune: 0.0,
+                    mod1_osc_stereo: 0.0,
+    
+                    mod2_audio_module_type: AudioModuleType::Off, 
+                    mod2_audio_module_level: 1.0,
+                    mod2_loaded_sample: vec![vec![0.0,0.0]], 
+                    mod2_sample_lib: vec![vec![vec![0.0,0.0]]], 
+                    mod2_loop_wavetable: false, 
+                    mod2_single_cycle: false, 
+                    mod2_restretch: true, 
+                    mod2_prev_restretch: false, 
+                    mod2_grain_hold: 200,
+                    mod2_grain_gap: 200,
+                    mod2_start_position: 0.0,
+                    mod2_end_position: 1.0,
+                    mod2_grain_crossfade: 50,
+                    mod2_osc_type: VoiceType::Sine, 
+                    mod2_osc_octave: 0, 
+                    mod2_osc_semitones: 0, 
+                    mod2_osc_detune: 0.0, 
+                    mod2_osc_attack: 0.0001, 
+                    mod2_osc_decay: 0.0001, 
+                    mod2_osc_sustain: 999.9, 
+                    mod2_osc_release: 5.0, 
+                    mod2_osc_mod_amount: 0.0, 
+                    mod2_osc_retrigger: RetriggerStyle::Retrigger, 
+                    mod2_osc_atk_curve: SmoothStyle::Linear, 
+                    mod2_osc_dec_curve: SmoothStyle::Linear, 
+                    mod2_osc_rel_curve: SmoothStyle::Linear, 
+                    mod2_osc_unison: 1,
+                    mod2_osc_unison_detune: 0.0,
+                    mod2_osc_stereo: 0.0,
+    
+                    mod3_audio_module_type: AudioModuleType::Off, 
+                    mod3_audio_module_level: 1.0,
+                    mod3_loaded_sample: vec![vec![0.0,0.0]], 
+                    mod3_sample_lib: vec![vec![vec![0.0,0.0]]], 
+                    mod3_loop_wavetable: false, 
+                    mod3_single_cycle: false, 
+                    mod3_restretch: true, 
+                    mod3_prev_restretch: false, 
+                    mod3_grain_hold: 200,
+                    mod3_grain_gap: 200,
+                    mod3_start_position: 0.0,
+                    mod3_end_position: 1.0,
+                    mod3_grain_crossfade: 50,
+                    mod3_osc_type: VoiceType::Sine, 
+                    mod3_osc_octave: 0, 
+                    mod3_osc_semitones: 0, 
+                    mod3_osc_detune: 0.0, 
+                    mod3_osc_attack: 0.0001, 
+                    mod3_osc_decay: 0.0001, 
+                    mod3_osc_sustain: 999.9, 
+                    mod3_osc_release: 5.0, 
+                    mod3_osc_mod_amount: 0.0, 
+                    mod3_osc_retrigger: RetriggerStyle::Retrigger, 
+                    mod3_osc_atk_curve: SmoothStyle::Linear, 
+                    mod3_osc_dec_curve: SmoothStyle::Linear, 
+                    mod3_osc_rel_curve: SmoothStyle::Linear, 
+                    mod3_osc_unison: 1,
+                    mod3_osc_unison_detune: 0.0,
+                    mod3_osc_stereo: 0.0,
+    
+                    filter_wet: 1.0, 
+                    filter_cutoff: 4000.0, 
+                    filter_resonance: 1.0, 
+                    filter_res_type: ResonanceType::Default, 
+                    filter_lp_amount: 1.0, 
+                    filter_hp_amount: 0.0, 
+                    filter_bp_amount: 0.0, 
+                    filter_env_peak: 0.0, 
+                    filter_env_decay: 100.0, 
+                    filter_env_curve: SmoothStyle::Linear }; PRESET_BANK_SIZE]
+            );
+            
             let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
             let mut locked_lib = arc_lib.lock().unwrap();
-            for (item_index,item) in unserialized.iter().enumerate() {
+            
+            for (item_index, item) in unserialized.iter().enumerate() {
                 // If our item exists then update it
                 if let Some(existing_item) = locked_lib.get_mut(item_index) {
                     *existing_item = item.clone();
                 } else {
                     // item_index is out of bounds in locked_lib
-                    // These get dropped as the preset size should be same all around
+                    // These get dropped as the preset size should be the same all around
                 }
+            }
+
+            if self._audio_module_1_type == AudioModuleType::Granulizer 
+            || self._audio_module_1_type == AudioModuleType::Sampler {
+                self.audio_module_1.regenerate_samples();
+            }
+            if self._audio_module_2_type == AudioModuleType::Granulizer 
+            || self._audio_module_2_type == AudioModuleType::Sampler {
+                self.audio_module_2.regenerate_samples();
+            }
+            if self._audio_module_3_type == AudioModuleType::Granulizer 
+            || self._audio_module_3_type == AudioModuleType::Sampler {
+                self.audio_module_3.regenerate_samples();
             }
         }
     }
 
-    // Save our presets
     fn save_preset_bank(&mut self) {
         let _updated_preset = self.update_current_preset();
         let saving_bank = FileDialog::new()
-            .add_filter("txt", &["txt"])
+            .add_filter("bin", &["bin"]) // Use a binary format for audio data
             .set_file_name(&self.preset_lib_name)
             .save_file();
-        if Option::is_some(&saving_bank) {
-            let location = saving_bank.unwrap().clone();
-            let file = File::create(location);
-            let preset_store = Arc::clone(&self.preset_lib);
-            let preset_lock = preset_store.lock().unwrap();
-            let serialized = serde_json::to_string::<Vec<ActuatePreset>>(preset_lock.as_ref());
-            let writing_str = serialized.unwrap();
-            nih_log!("Saving: {}", writing_str);
-            let _ = file.unwrap().write(writing_str.as_str().as_bytes());
+    
+        if let Some(location) = saving_bank {
+            // Create our new save file
+            let file = File::create(location.clone());
+    
+            if let Ok(_file) = file {
+                // Serialize our data to a binary format (MessagePack)
+                let preset_store = Arc::clone(&self.preset_lib);
+                let mut preset_lock = preset_store.lock().unwrap();
+                
+                // Clear out our generated notes and only keep the samples themselves
+                for preset in preset_lock.iter_mut() {
+                    preset.mod1_sample_lib.clear();
+                    preset.mod2_sample_lib.clear();
+                    preset.mod3_sample_lib.clear();
+                }
+    
+                // Serialize to MessagePack bytes
+                let serialized_data = rmp_serde::to_vec::<&Vec<ActuatePreset>>(&preset_lock.as_ref());
+    
+                if let Err(err) = serialized_data {
+                    eprintln!("Error serializing data: {}", err);
+                    return;
+                }
+    
+                // Compress the serialized data using different GzEncoder
+                let compressed_data = Self::compress_bytes(&serialized_data.unwrap());
+    
+                // Now you can write the compressed data to the file
+                if let Err(err) = std::fs::write(&location, &compressed_data) {
+                    eprintln!("Error writing compressed data to file: {}", err);
+                    return;
+                }
+            } else {
+                eprintln!("Error creating file at location: {:?}", location);
+            }
         }
+    }
+    
+    // Functions to compress bytes and decompress using gz
+    fn compress_bytes(data: &[u8]) -> Vec<u8> {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
+        encoder.write_all(data).unwrap();
+        encoder.finish().unwrap()
+    }
+    
+    fn decompress_bytes(compressed_data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
+        let mut decoder = GzDecoder::new(compressed_data);
+        let mut decompressed_data = Vec::new();
+        decoder.read_to_end(&mut decompressed_data)?;
+        Ok(decompressed_data)
     }
 
     // Update our current preset
@@ -1487,6 +1790,7 @@ impl Actuate {
             // Modules 1
             ///////////////////////////////////////////////////////////
             mod1_audio_module_type: self.params._audio_module_1_type.value(),
+            mod1_audio_module_level: self.params.audio_module_1_level.value(),
             // Granulizer/Sampler
             mod1_loaded_sample: self.audio_module_1.loaded_sample.clone(),
             mod1_sample_lib: self.audio_module_1.sample_lib.clone(),
@@ -1494,6 +1798,11 @@ impl Actuate {
             mod1_single_cycle: self.audio_module_1.single_cycle,
             mod1_restretch: self.audio_module_1.restretch,
             mod1_prev_restretch: self.audio_module_1.prev_restretch,
+            mod1_start_position: self.audio_module_1.start_position,
+            mod1_end_position: self.audio_module_1._end_position,
+            mod1_grain_crossfade: self.audio_module_1.grain_crossfade,
+            mod1_grain_gap: self.audio_module_1.grain_gap,
+            mod1_grain_hold: self.audio_module_1.grain_hold,
 
             // Osc module knob storage
             mod1_osc_type: self.audio_module_1.osc_type,
@@ -1516,6 +1825,7 @@ impl Actuate {
             // Modules 2
             ///////////////////////////////////////////////////////////
             mod2_audio_module_type: self.params._audio_module_2_type.value(),    
+            mod2_audio_module_level: self.params.audio_module_2_level.value(),
             // Granulizer/Sampler
             mod2_loaded_sample: self.audio_module_2.loaded_sample.clone(),
             mod2_sample_lib: self.audio_module_2.sample_lib.clone(),
@@ -1523,6 +1833,11 @@ impl Actuate {
             mod2_single_cycle: self.audio_module_2.single_cycle,
             mod2_restretch: self.audio_module_2.restretch,
             mod2_prev_restretch: self.audio_module_2.prev_restretch,
+            mod2_start_position: self.audio_module_2.start_position,
+            mod2_end_position: self.audio_module_2._end_position,
+            mod2_grain_crossfade: self.audio_module_2.grain_crossfade,
+            mod2_grain_gap: self.audio_module_2.grain_gap,
+            mod2_grain_hold: self.audio_module_2.grain_hold,
 
             // Osc module knob storage
             mod2_osc_type: self.audio_module_2.osc_type,
@@ -1542,9 +1857,10 @@ impl Actuate {
             mod2_osc_unison_detune: self.audio_module_2.osc_unison_detune,
             mod2_osc_stereo: self.audio_module_2.osc_stereo,
 
-            // Modules 2
+            // Modules 3
             ///////////////////////////////////////////////////////////
             mod3_audio_module_type: self.params._audio_module_3_type.value(),    
+            mod3_audio_module_level: self.params.audio_module_3_level.value(),
             // Granulizer/Sampler
             mod3_loaded_sample: self.audio_module_3.loaded_sample.clone(),
             mod3_sample_lib: self.audio_module_3.sample_lib.clone(),
@@ -1552,6 +1868,11 @@ impl Actuate {
             mod3_single_cycle: self.audio_module_3.single_cycle,
             mod3_restretch: self.audio_module_3.restretch,
             mod3_prev_restretch: self.audio_module_3.prev_restretch,
+            mod3_start_position: self.audio_module_3.start_position,
+            mod3_end_position: self.audio_module_3._end_position,
+            mod3_grain_crossfade: self.audio_module_3.grain_crossfade,
+            mod3_grain_gap: self.audio_module_3.grain_gap,
+            mod3_grain_hold: self.audio_module_3.grain_hold,
 
             // Osc module knob storage
             mod3_osc_type: self.audio_module_3.osc_type,

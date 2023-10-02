@@ -52,13 +52,11 @@ impl<'a, P: Param> SliderRegion<'a, P> {
 
         // DRAWING
         let rect = rect.expand(visuals.expansion);
-        ui.painter().rect(rect, 0.5, visuals.bg_fill, visuals.bg_stroke);
+        ui.painter().rect(rect, 0.5, visuals.bg_fill.linear_multiply(0.8), visuals.bg_stroke);
         // Paint the circle, animating it from left to right with `how_on`:
-        ui.painter().rect_stroke(rect, 0.5, Stroke::new(1.0, visuals.bg_stroke.color.linear_multiply((how_on + 0.2).clamp(0.2,1.0))));
-        //let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
+        ui.painter().rect_stroke(rect, 0.5, Stroke::new(1.0, visuals.bg_stroke.color.linear_multiply((how_on + 0.2).clamp(0.2,1.2))));
         let center = egui::pos2(rect.center().x, rect.center().y);
         ui.painter().text(center, Align2::CENTER_CENTER, self.param.name(), self.font.clone(), visuals.text_color());
-        //ui.painter().circle(center, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
 
         value
     }

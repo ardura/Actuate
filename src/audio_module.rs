@@ -89,17 +89,32 @@ struct SingleVoice {
     // Sampler/Granulizer Pos
     sample_pos: usize,
     loop_it: bool,
-    granular_hold: i32,
-    granular_gap: i32,
+    grain_start_pos: usize,
+    _granular_hold: i32,
+    _granular_gap: i32,
     granular_hold_end: usize,
     next_grain_pos: usize,
+    _end_position: usize,
+    _granular_crossfade: i32,
+    grain_attack: Smoother<f32>,
+    grain_release: Smoother<f32>,
+    grain_state: GrainState,
+}
+
+#[derive(Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
+enum GrainState {
+    Attacking,
+    Releasing,
 }
 
 #[derive(Clone)]
 pub struct AudioModule {
     // Stored sample rate in case the audio module needs it
     sample_rate: f32,
-    audio_module_type: AudioModuleType,
+    pub audio_module_type: AudioModuleType,
+
+    // This flipflops stereo with 2 voices to make it make some sense to our ears
+    two_voice_stereo_flipper: bool,
 
     ///////////////////////////////////////////////////////////
     // Audio modules should go here as a struct
@@ -121,10 +136,11 @@ pub struct AudioModule {
     pub prev_restretch: bool,
 
     // Granulizer other options
-    start_position: f32,
-    end_position: f32,
-    grain_hold: i32,
-    grain_gap: i32,
+    pub start_position: f32,
+    pub _end_position: f32,
+    pub grain_hold: i32,
+    pub grain_gap: i32,
+    pub grain_crossfade: i32,
 
     ///////////////////////////////////////////////////////////
 
@@ -163,6 +179,7 @@ impl Default for AudioModule {
             // Audio modules will use these
             sample_rate: 44100.0,
             audio_module_type: AudioModuleType::Osc,
+            two_voice_stereo_flipper: true,
 
             // Granulizer/Sampler
             loaded_sample: vec![vec![0.0,0.0]],
@@ -172,9 +189,10 @@ impl Default for AudioModule {
             restretch: true,
             prev_restretch: false,
             start_position: 0.0,
-            end_position: 100.0,
+            _end_position: 1.0,
             grain_hold: 200,
             grain_gap: 200,
+            grain_crossfade: 50,
 
             // Osc module knob storage
             osc_type: VoiceType::Sine,
@@ -230,18 +248,22 @@ impl AudioModule {
             }
         }
 
-        const KNOB_SIZE: f32 = 30.0;
-        const TEXT_SIZE: f32 = 12.0;
+        
 
         // This is kind of ugly but I couldn't figure out a better architechture for egui and separating audio modules
         
-        // Spot one
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Spot One (1)
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         match params._audio_module_1_type.value() {
             AudioModuleType::Off => {
                 // Blank space
                 ui.label("Disabled");
             },
             AudioModuleType::Osc => {
+                const KNOB_SIZE: f32 = 30.0;
+                const TEXT_SIZE: f32 = 12.0;
                 // Oscillator
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
@@ -607,6 +629,10 @@ impl AudioModule {
             AudioModuleType::Granulizer => {
                 const KNOB_SIZE: f32 = 25.0;
                 const TEXT_SIZE: f32 = 11.0;
+                // This fixes the granulizer release being longer than a grain itself
+                if params.grain_hold_1.value() < params.grain_crossfade_1.value() {
+                    setter.set_parameter(&params.grain_crossfade_1, params.grain_hold_1.value());
+                }
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
@@ -628,10 +654,10 @@ impl AudioModule {
                                     ui.add(loop_toggle);
                                 });
                                 ui.add_space(20.0);
-                                ui.label(RichText::new("Note: ADSR is PER GRAIN")
+                                ui.label(RichText::new("Note: ADSR is per note, Shape is AR per grain")
                                     .font(SMALLER_FONT)
                                     .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
-                                    .on_hover_text("ADSR is PER GRAIN");
+                                    .on_hover_text("ADSR is per note, Shape is AR per grain");
                             });
 
                             ui.horizontal(|ui| {
@@ -716,6 +742,16 @@ impl AudioModule {
                                     .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(grain_gap_1_knob);
+
+                                let grain_crossfade_1_knob = ui_knob::ArcKnob::for_param(
+                                    &params.grain_crossfade_1, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(grain_crossfade_1_knob);
                             });
                             ui.horizontal(|ui| {
                                 // knob space
@@ -804,13 +840,28 @@ impl AudioModule {
 
         ui.separator();
 
-        // Spot two
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Spot Two (2)
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         match params._audio_module_2_type.value() {
             AudioModuleType::Off => {
                 // Blank space
                 ui.label("Disabled");
             },
             AudioModuleType::Osc => {
+                const KNOB_SIZE: f32 = 30.0;
+                const TEXT_SIZE: f32 = 12.0;
                 // Oscillator
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
@@ -829,7 +880,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("SYNTH_SOFT_BLUE").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
@@ -840,7 +891,7 @@ impl AudioModule {
                             setter, 
                             KNOB_SIZE)
                             .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("SYNTH_SOFT_BLUE").unwrap())
+                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
@@ -955,7 +1006,7 @@ impl AudioModule {
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_2_stereo_knob);
-                        
+                       
                         let osc_2_atk_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_2_atk_curve, 
                             setter, 
@@ -1114,7 +1165,7 @@ impl AudioModule {
                                 ui.add(osc_2_semitones_knob);
 
                                 // Retrigger knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 26.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
                                 
                                 let osc_2_atk_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_2_atk_curve, 
@@ -1137,7 +1188,7 @@ impl AudioModule {
                                 ui.add(osc_2_dec_curve_knob);
 
                                 // Sustain knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 26.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
                                 
                                 let osc_2_rel_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_2_rel_curve, 
@@ -1176,6 +1227,10 @@ impl AudioModule {
             AudioModuleType::Granulizer => {
                 const KNOB_SIZE: f32 = 25.0;
                 const TEXT_SIZE: f32 = 11.0;
+                // This fixes the granulizer release being longer than a grain itself
+                if params.grain_hold_2.value() < params.grain_crossfade_2.value() {
+                    setter.set_parameter(&params.grain_crossfade_2, params.grain_hold_2.value());
+                }
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
@@ -1197,10 +1252,10 @@ impl AudioModule {
                                     ui.add(loop_toggle);
                                 });
                                 ui.add_space(20.0);
-                                ui.label(RichText::new("Note: ADSR is PER GRAIN")
+                                ui.label(RichText::new("Note: ADSR is per note, Shape is AR per grain")
                                     .font(SMALLER_FONT)
                                     .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
-                                    .on_hover_text("ADSR is PER GRAIN");
+                                    .on_hover_text("ADSR is per note, Shape is AR per grain");
                             });
 
                             ui.horizontal(|ui| {
@@ -1285,6 +1340,16 @@ impl AudioModule {
                                     .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(grain_gap_2_knob);
+
+                                let grain_crossfade_2_knob = ui_knob::ArcKnob::for_param(
+                                    &params.grain_crossfade_2, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(grain_crossfade_2_knob);
                             });
                             ui.horizontal(|ui| {
                                 // knob space
@@ -1302,7 +1367,7 @@ impl AudioModule {
                                 ui.add(osc_2_semitones_knob);
 
                                 // Retrigger knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 26.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
                                 
                                 let osc_2_atk_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_2_atk_curve, 
@@ -1325,7 +1390,7 @@ impl AudioModule {
                                 ui.add(osc_2_dec_curve_knob);
 
                                 // Sustain knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 26.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
                                 
                                 let osc_2_rel_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_2_rel_curve, 
@@ -1373,13 +1438,27 @@ impl AudioModule {
 
         ui.separator();
 
-        // Spot three
+
+
+
+
+
+
+
+
+
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        // Spot Thre (3)
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         match params._audio_module_3_type.value() {
             AudioModuleType::Off => {
                 // Blank space
                 ui.label("Disabled");
             },
             AudioModuleType::Osc => {
+                const KNOB_SIZE: f32 = 30.0;
+                const TEXT_SIZE: f32 = 12.0;
                 // Oscillator
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
@@ -1512,7 +1591,7 @@ impl AudioModule {
                         ui.add(osc_3_detune_knob);
 
                         // Space
-                        ui.add_space(KNOB_SIZE*2.0 + 36.0);
+                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
 
                         let osc_3_stereo_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_stereo, 
@@ -1524,7 +1603,7 @@ impl AudioModule {
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_3_stereo_knob);
-
+                       
                         let osc_3_atk_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_atk_curve, 
                             setter, 
@@ -1536,7 +1615,7 @@ impl AudioModule {
                         ui.add(osc_3_atk_curve_knob);
                         
                         // Attack knob space
-                        //ui.add_space(KNOB_SIZE*2.0 + 36.0);
+                        //ui.add_space(KNOB_SIZE*2.0 + 16.0);
 
                         let osc_3_dec_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_dec_curve, 
@@ -1549,7 +1628,7 @@ impl AudioModule {
                         ui.add(osc_3_dec_curve_knob);
 
                         // Sustain knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 36.0);
+                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
                         
                         let osc_3_rel_curve_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_3_rel_curve, 
@@ -1683,7 +1762,7 @@ impl AudioModule {
                                 ui.add(osc_3_semitones_knob);
 
                                 // Retrigger knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 36.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
                                 
                                 let osc_3_atk_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_3_atk_curve, 
@@ -1706,7 +1785,7 @@ impl AudioModule {
                                 ui.add(osc_3_dec_curve_knob);
 
                                 // Sustain knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 36.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
                                 
                                 let osc_3_rel_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_3_rel_curve, 
@@ -1745,6 +1824,10 @@ impl AudioModule {
             AudioModuleType::Granulizer => {
                 const KNOB_SIZE: f32 = 25.0;
                 const TEXT_SIZE: f32 = 11.0;
+                // This fixes the granulizer release being longer than a grain itself
+                if params.grain_hold_3.value() < params.grain_crossfade_3.value() {
+                    setter.set_parameter(&params.grain_crossfade_3, params.grain_hold_3.value());
+                }
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
@@ -1766,10 +1849,10 @@ impl AudioModule {
                                     ui.add(loop_toggle);
                                 });
                                 ui.add_space(20.0);
-                                ui.label(RichText::new("Note: ADSR is PER GRAIN")
+                                ui.label(RichText::new("Note: ADSR is per note, Shape is AR per grain")
                                     .font(SMALLER_FONT)
                                     .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
-                                    .on_hover_text("ADSR is PER GRAIN");
+                                    .on_hover_text("ADSR is per note, Shape is AR per grain");
                             });
 
                             ui.horizontal(|ui| {
@@ -1854,6 +1937,16 @@ impl AudioModule {
                                     .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                     .set_text_size(TEXT_SIZE);
                                 ui.add(grain_gap_3_knob);
+
+                                let grain_crossfade_3_knob = ui_knob::ArcKnob::for_param(
+                                    &params.grain_crossfade_3, 
+                                    setter, 
+                                    KNOB_SIZE)
+                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                    .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                    .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                    .set_text_size(TEXT_SIZE);
+                                ui.add(grain_crossfade_3_knob);
                             });
                             ui.horizontal(|ui| {
                                 // knob space
@@ -1871,7 +1964,7 @@ impl AudioModule {
                                 ui.add(osc_3_semitones_knob);
 
                                 // Retrigger knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 36.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
                                 
                                 let osc_3_atk_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_3_atk_curve, 
@@ -1894,7 +1987,7 @@ impl AudioModule {
                                 ui.add(osc_3_dec_curve_knob);
 
                                 // Sustain knob space
-                                ui.add_space(KNOB_SIZE*2.0 + 36.0);
+                                ui.add_space(KNOB_SIZE*2.0 + 16.0);
                                 
                                 let osc_3_rel_curve_knob = ui_knob::ArcKnob::for_param(
                                     &params.osc_3_rel_curve, 
@@ -1939,6 +2032,7 @@ impl AudioModule {
                 });
             },
         }
+
     }
 
     // Index proper params from knobs
@@ -1967,9 +2061,10 @@ impl AudioModule {
                 self.single_cycle = params.single_cycle_1.value();
                 self.restretch = params.restretch_1.value();
                 self.start_position = params.start_position_1.value();
-                self.end_position = params.end_position_1.value();
+                self._end_position = params.end_position_1.value();
                 self.grain_hold = params.grain_hold_1.value();
                 self.grain_gap = params.grain_gap_1.value();
+                self.grain_crossfade = params.grain_crossfade_1.value();
             },
             2 => {
                 self.audio_module_type = params._audio_module_2_type.value();
@@ -1993,9 +2088,10 @@ impl AudioModule {
                 self.single_cycle = params.single_cycle_2.value();
                 self.restretch = params.restretch_2.value();
                 self.start_position = params.start_position_2.value();
-                self.end_position = params.end_position_2.value();
+                self._end_position = params.end_position_2.value();
                 self.grain_hold = params.grain_hold_2.value();
                 self.grain_gap = params.grain_gap_2.value();
+                self.grain_crossfade = params.grain_crossfade_2.value();
             },
             3 => {
                 self.audio_module_type = params._audio_module_3_type.value();
@@ -2019,9 +2115,10 @@ impl AudioModule {
                 self.single_cycle = params.single_cycle_3.value();
                 self.restretch = params.restretch_3.value();
                 self.start_position = params.start_position_3.value();
-                self.end_position = params.end_position_3.value();
+                self._end_position = params.end_position_3.value();
                 self.grain_hold = params.grain_hold_3.value();
                 self.grain_gap = params.grain_gap_3.value();
+                self.grain_crossfade = params.grain_crossfade_3.value();
             },
             _ => {}
         }
@@ -2034,8 +2131,9 @@ impl AudioModule {
     pub fn process(&mut self, sample_id: usize, params: Arc<ActuateParams>, event_passed: Option<NoteEvent<()>>, voice_index: usize, voice_max: usize, file_open: &mut bool) -> (f32, f32, bool) {
         // If the process is in here the file dialog is not open per lib.rs
 
+        let temp_file_open = file_open.clone();
         // Get around the egui ui thread by using BoolParam changes :)
-        if params.load_sample_1.value() && voice_index == 1 && !file_open.clone() {
+        if params.load_sample_1.value() && voice_index == 1 && !temp_file_open {
             *file_open = true;
             let sample_file = FileDialog::new()
                         .add_filter("wav", &["wav"])
@@ -2045,7 +2143,7 @@ impl AudioModule {
                 self.load_new_sample(sample_file.unwrap());
             }
         }
-        else if params.load_sample_2.value() && voice_index == 2  && !file_open.clone() {
+        else if params.load_sample_2.value() && voice_index == 2  && !temp_file_open {
             *file_open = true;
             let sample_file = FileDialog::new()
                 .add_filter("wav", &["wav"])
@@ -2055,7 +2153,7 @@ impl AudioModule {
                 self.load_new_sample(sample_file.unwrap());
             }
         }
-        else if params.load_sample_3.value() && voice_index == 3  && !file_open.clone() {
+        else if params.load_sample_3.value() && voice_index == 3  && !temp_file_open {
             *file_open = true;
             let sample_file = FileDialog::new()
                 .add_filter("wav", &["wav"])
@@ -2099,43 +2197,6 @@ impl AudioModule {
                         note_on = true;
                         let mut new_phase: f32 = 0.0;
 
-                        // Reset the retrigger on Oscs
-                        match self.osc_retrigger {
-                            RetriggerStyle::Retrigger => {
-                                // Start our phase back at 0
-                                new_phase = 0.0;
-                            },
-                            RetriggerStyle::Random => {
-                                match self.audio_module_type {
-                                    AudioModuleType::Osc => {
-                                        // Get a random phase to use
-                                        // Poly solution is to pass the phase to the struct
-                                        // instead of the osc alone
-                                        let mut rng = rand::thread_rng();
-                                        new_phase = rng.gen_range(0.0..1.0);
-                                    },
-                                    AudioModuleType::Sampler => {
-                                        let mut rng = rand::thread_rng();
-                                        new_phase = rng.gen_range(0.0..self.loaded_sample[0].len() as f32);
-                                    },
-                                    AudioModuleType::Granulizer => {
-                                        let mut rng = rand::thread_rng();
-                                        new_phase = rng.gen_range(0.0..self.loaded_sample[0].len() as f32);
-                                    },
-                                    _ => {},
-                                }
-                                
-                            },
-                            RetriggerStyle::Free => {
-                                // Do nothing for osc
-                                match self.audio_module_type {
-                                    AudioModuleType::Sampler | AudioModuleType::Granulizer=> {
-                                        new_phase = 0.0;
-                                    },
-                                    _ => {},
-                                }
-                            }
-                        }
                         // Sampler when single cycle needs this!!!
                         if self.single_cycle {
                             // 31 comes from comparing with 3xOsc position in MIDI notes
@@ -2156,6 +2217,44 @@ impl AudioModule {
                         // I'm so glad nih-plug has this helper for f32 conversions!
                         let base_note = note as f32 + self.osc_detune;
                         let detuned_note: f32 = util::f32_midi_note_to_freq(base_note);
+
+                        // Reset the retrigger on Oscs
+                        match self.osc_retrigger {
+                            RetriggerStyle::Retrigger => {
+                                // Start our phase back at 0
+                                new_phase = 0.0;
+                            },
+                            RetriggerStyle::Random => {
+                                match self.audio_module_type {
+                                    AudioModuleType::Osc => {
+                                        // Get a random phase to use
+                                        // Poly solution is to pass the phase to the struct
+                                        // instead of the osc alone
+                                        let mut rng = rand::thread_rng();
+                                        new_phase = rng.gen_range(0.0..1.0);
+                                    },
+                                    AudioModuleType::Sampler => {
+                                        let mut rng = rand::thread_rng();
+                                        new_phase = rng.gen_range(0.0..self.sample_lib[note as usize][0].len() as f32);
+                                    },
+                                    AudioModuleType::Granulizer => {
+                                        let mut rng = rand::thread_rng();
+                                        new_phase = rng.gen_range(0.0..self.sample_lib[note as usize][0].len() as f32);
+                                    },
+                                    _ => {},
+                                }
+                                
+                            },
+                            RetriggerStyle::Free => {
+                                // Do nothing for osc
+                                match self.audio_module_type {
+                                    AudioModuleType::Sampler | AudioModuleType::Granulizer=> {
+                                        new_phase = 0.0;
+                                    },
+                                    _ => {},
+                                }
+                            }
+                        }
 
                         // Create an array of unison notes based off the param for how many unison voices we need
                         let mut unison_notes: Vec<f32> = vec![0.0; self.osc_unison as usize];
@@ -2203,18 +2302,44 @@ impl AudioModule {
                             },
                         }
 
-                        // Create our granulizer/sampler starting position from our knob scale
-                        let scaled_sample_pos = if self.start_position > 0.0 && self.osc_retrigger != RetriggerStyle::Random {
-                            (self.loaded_sample[0].len() as f32 * self.start_position).floor() as usize
+                        let scaled_sample_pos;
+                        let scaled_end_pos;
+                        match self.audio_module_type {
+                            AudioModuleType::Sampler | AudioModuleType::Granulizer => {
+                                // If our loaded sample variable or generated sample library has any content
+                                if self.loaded_sample[0].len() > 1 && self.sample_lib[0][0].len() > 1 && self.sample_lib.len() > 1 {
+                                    // Create our granulizer/sampler starting position from our knob scale
+                                    scaled_sample_pos = if self.start_position > 0.0 && self.osc_retrigger != RetriggerStyle::Random {
+                                        (self.sample_lib[note as usize][0].len() as f32 * self.start_position).floor() as usize
+                                    }
+                                    // Retrigger and use 0
+                                    else if self.osc_retrigger != RetriggerStyle::Random {
+                                        0_usize
+                                    } 
+                                    // Retrigger with random
+                                    else {
+                                        new_phase.floor() as usize
+                                    };
+                                
+                                    scaled_end_pos = if self._end_position < 1.0 {
+                                        (self.sample_lib[note as usize][0].len() as f32 * self._end_position).ceil() as usize
+                                    }
+                                    // use end positions
+                                    else {
+                                        self.sample_lib[note as usize][0].len()
+                                    };
+                                }
+                                else {
+                                    // Nothing is in our sample library, skip attempting audio output
+                                    return (0.0,0.0,false);
+                                }
+                            }
+                            _ => {
+                                // These fields aren't used by Osc, Off, Or Additive
+                                scaled_sample_pos = 0;
+                                scaled_end_pos = 0;
+                            }
                         }
-                        // Retrigger and use 0
-                        else if self.osc_retrigger != RetriggerStyle::Random {
-                            0_usize
-                        } 
-                        // Retrigger with random
-                        else {
-                            new_phase.floor() as usize
-                        };
 
                         // Osc Updates
                         let new_voice: SingleVoice = SingleVoice {
@@ -2239,10 +2364,16 @@ impl AudioModule {
                             _angle: 0.0,
                             sample_pos: scaled_sample_pos,
                             loop_it: self.loop_wavetable,
-                            granular_gap: self.grain_gap,
-                            granular_hold: self.grain_hold,
+                            grain_start_pos: scaled_sample_pos,
+                            _granular_gap: self.grain_gap,
+                            _granular_hold: self.grain_hold,
                             granular_hold_end: scaled_sample_pos + self.grain_hold as usize,
                             next_grain_pos: scaled_sample_pos + self.grain_hold as usize + self.grain_gap as usize,
+                            _end_position: scaled_end_pos,
+                            _granular_crossfade: self.grain_crossfade,
+                            grain_attack: Smoother::new(SmoothingStyle::Linear(self.grain_crossfade as f32)),
+                            grain_release: Smoother::new(SmoothingStyle::Linear(self.grain_crossfade as f32)),
+                            grain_state: GrainState::Attacking,
                         };
 
                         // Add our voice struct to our voice tracking deque
@@ -2253,7 +2384,7 @@ impl AudioModule {
                             let unison_even_voices = if self.osc_unison % 2 == 0 { self.osc_unison } else { self.osc_unison - 1 };
                             let mut unison_angles = vec![0.0; unison_even_voices as usize];
                             for i in 1..(unison_even_voices+1) {
-                                let voice_angle = AudioModule::calculate_panning(i - 1, self.osc_unison);
+                                let voice_angle = self.calculate_panning(i - 1, self.osc_unison);
                                 unison_angles[(i - 1) as usize] = voice_angle;
                             }
                             
@@ -2280,11 +2411,17 @@ impl AudioModule {
                                     _voice_type: self.osc_type,
                                     _angle: unison_angles[unison_voice],
                                     sample_pos: 0,
+                                    grain_start_pos: 0,
                                     loop_it: self.loop_wavetable,
-                                    granular_gap: 200,
-                                    granular_hold: 200,
+                                    _granular_gap: 200,
+                                    _granular_hold: 200,
                                     granular_hold_end: 200,
                                     next_grain_pos: 400,
+                                    _end_position: scaled_end_pos,
+                                    _granular_crossfade: 50,
+                                    grain_attack: Smoother::new(SmoothingStyle::Linear(5.0)),
+                                    grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
+                                    grain_state: GrainState::Attacking,
                                 };
                                 
                                 self.unison_voices.voices.push_front(new_unison_voice);
@@ -2317,10 +2454,16 @@ impl AudioModule {
                                     _angle: 0.0,
                                     sample_pos: 0,
                                     loop_it: self.loop_wavetable,
-                                    granular_gap: 200,
-                                    granular_hold: 200,
+                                    grain_start_pos: 0,
+                                    _granular_gap: 200,
+                                    _granular_hold: 200,
                                     granular_hold_end: 200,
                                     next_grain_pos: 400,
+                                    _end_position: scaled_end_pos,
+                                    _granular_crossfade: 50,
+                                    grain_attack: Smoother::new(SmoothingStyle::Linear(5.0)),
+                                    grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
+                                    grain_state: GrainState::Attacking,
                                 });
 
                             if self.osc_unison > 1 && self.audio_module_type == AudioModuleType::Osc {
@@ -2329,7 +2472,7 @@ impl AudioModule {
                                 SingleVoice {
                                     note: 0,
                                     _velocity: 0.0,
-                                    phase: 0.0,
+                                    phase: new_phase,
                                     phase_delta: 0.0,
                                     state: OscState::Off,
                                     // These get cloned since smoother cannot be copied
@@ -2347,11 +2490,17 @@ impl AudioModule {
                                     _voice_type: self.osc_type,
                                     _angle: 0.0,
                                     sample_pos: 0,
+                                    grain_start_pos: 0,
                                     loop_it: self.loop_wavetable,
-                                    granular_gap: 200,
-                                    granular_hold: 200,
+                                    _granular_gap: 200,
+                                    _granular_hold: 200,
                                     granular_hold_end: 200,
                                     next_grain_pos: 400,
+                                    _end_position: scaled_end_pos,
+                                    _granular_crossfade: 50,
+                                    grain_attack: Smoother::new(SmoothingStyle::Linear(5.0)),
+                                    grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
+                                    grain_state: GrainState::Attacking,
                                 });
                             }
                         }
@@ -2359,6 +2508,9 @@ impl AudioModule {
                         // Remove any off notes
                         for (i, voice) in self.playing_voices.voices.clone().iter().enumerate() {
                             if voice.state == OscState::Off {
+                                self.playing_voices.voices.remove(i);
+                            }
+                            else if voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0 {
                                 self.playing_voices.voices.remove(i);
                             }
                         }
@@ -2445,71 +2597,229 @@ impl AudioModule {
             None    => (),
         }
 
+        // This is a dummy entry
+        let mut next_grain: SingleVoice = SingleVoice {
+            note: 0,
+            _velocity: 0.0,
+            phase: 0.0,
+            phase_delta: 0.0,
+            state: OscState::Off,
+            // These get cloned since smoother cannot be copied
+            amp_current: 0.0,
+            osc_attack: Smoother::new(SmoothingStyle::None),
+            osc_decay: Smoother::new(SmoothingStyle::None),
+            osc_release: Smoother::new(SmoothingStyle::None),
+            _detune: 0.0,
+            _unison_detune_value: 0.0,
+            frequency: 0.0,
+            _attack_time: self.osc_attack,
+            _decay_time: self.osc_decay,
+            _release_time: self.osc_release,
+            _retrigger: self.osc_retrigger,
+            _voice_type: self.osc_type,
+            _angle: 0.0,
+            sample_pos: 0,
+            loop_it: self.loop_wavetable,
+            grain_start_pos: 0,
+            _granular_gap: 200,
+            _granular_hold: 200,
+            granular_hold_end: 200,
+            next_grain_pos: 400,
+            _end_position: 800,
+            _granular_crossfade: 50,
+            grain_attack: Smoother::new(SmoothingStyle::Linear(5.0)),
+            grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
+            grain_state: GrainState::Attacking,
+        };
+        let mut new_grain: bool = false;
+
+        // Second check for off notes before output to cut down on interating...with iterating
+        for (i, voice) in self.playing_voices.voices.clone().iter().enumerate() {
+            if voice.state == OscState::Off {
+                self.playing_voices.voices.remove(i);
+            }
+            else if voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0 {
+                self.playing_voices.voices.remove(i);
+            }
+        }
+        if self.audio_module_type == AudioModuleType::Osc {
+            for (i, unison_voice) in self.unison_voices.voices.clone().iter().enumerate() {
+                if unison_voice.state == OscState::Off {
+                    self.unison_voices.voices.remove(i);
+                }
+            }
+        }
+
         ////////////////////////////////////////////////////////////
         // Update our voices before output
         ////////////////////////////////////////////////////////////
         for voice in self.playing_voices.voices.iter_mut() {
-            // Move our phase outside of the midi events
-            // I couldn't find much on how to model this so I based it off previous note phase
-            voice.phase += voice.phase_delta;
-            if voice.phase > 1.0 {
-                voice.phase -= 1.0;
-            }
+            if self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler {
+                // Move our phase outside of the midi events
+                // I couldn't find much on how to model this so I based it off previous note phase
+                voice.phase += voice.phase_delta;
+                if voice.phase > 1.0 {
+                    voice.phase -= 1.0;
+                }
 
-            // Move from attack to decay if needed
-            // Attack is over so use decay amount to reach sustain level - reusing current smoother
-            if voice.osc_attack.steps_left() == 0 && voice.state == OscState::Attacking {
-                voice.state = OscState::Decaying;
-                voice.amp_current = voice.osc_attack.next();
-                // Now we will use decay smoother from here
-                voice.osc_decay.reset(voice.amp_current);
-                let sustain_scaled = self.osc_sustain / 999.9;
-                voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
-            }
+                // Move from attack to decay if needed
+                // Attack is over so use decay amount to reach sustain level - reusing current smoother
+                if voice.osc_attack.steps_left() == 0 && voice.state == OscState::Attacking {
+                    voice.state = OscState::Decaying;
+                    voice.amp_current = voice.osc_attack.next();
+                    // Now we will use decay smoother from here
+                    voice.osc_decay.reset(voice.amp_current);
+                    let sustain_scaled = self.osc_sustain / 999.9;
+                    voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                }
 
-            // Move from Decaying to Sustain hold
-            if voice.osc_decay.steps_left() == 0 && voice.state == OscState::Decaying {
-                let sustain_scaled = self.osc_sustain / 999.9;
-                voice.amp_current = sustain_scaled;
-                voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
-                voice.state = OscState::Sustaining;
-            }
+                // Move from Decaying to Sustain hold
+                if voice.osc_decay.steps_left() == 0 && voice.state == OscState::Decaying {
+                    let sustain_scaled = self.osc_sustain / 999.9;
+                    voice.amp_current = sustain_scaled;
+                    voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                    voice.state = OscState::Sustaining;
+                }
 
-            // End of release
-            if voice.state == OscState::Releasing && voice.osc_release.steps_left() == 0 {
-                voice.state = OscState::Off;
+                // End of release
+                if voice.state == OscState::Releasing && voice.osc_release.steps_left() == 0 {
+                    voice.state = OscState::Off;
+                }
+            }
+            else if self.audio_module_type == AudioModuleType::Granulizer {
+                // Move from attack to decay if needed
+                // Attack is over so use decay amount to reach sustain level - reusing current smoother
+                if voice.osc_attack.steps_left() == 0 && voice.state == OscState::Attacking {
+                    voice.state = OscState::Decaying;
+                    voice.amp_current = voice.osc_attack.next();
+                    // Now we will use decay smoother from here
+                    voice.osc_decay.reset(voice.amp_current);
+                    let sustain_scaled = self.osc_sustain / 999.9;
+                    voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                }
+
+                // Move from Decaying to Sustain hold
+                if voice.osc_decay.steps_left() == 0 && voice.state == OscState::Decaying {
+                    let sustain_scaled = self.osc_sustain / 999.9;
+                    voice.amp_current = sustain_scaled;
+                    voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                    voice.state = OscState::Sustaining;
+                }
+
+                let scaled_start_position = (self.loaded_sample[0].len() as f32 * self.start_position).floor() as usize;
+                let scaled_end_position = (self.loaded_sample[0].len() as f32 * self._end_position).floor() as usize;
+
+                // If our end grain marker goes outside of our sample length it should wrap around if looping
+                if voice.granular_hold_end > self.loaded_sample[0].len() || voice.granular_hold_end > voice._end_position {
+                    if voice.loop_it {
+                        voice.granular_hold_end = voice.granular_hold_end - self.loaded_sample[0].len() + scaled_start_position;
+                    }
+                    else {
+                        voice.granular_hold_end = scaled_end_position;
+                    }
+                }
+                // If our next grain goes outside of our sample length it should also wrap on loop
+                if voice.next_grain_pos > self.loaded_sample[0].len() || voice.next_grain_pos > voice._end_position {
+                    if voice.loop_it {
+                        voice.next_grain_pos -= self.loaded_sample[0].len() - scaled_start_position;
+                    }
+                    else {
+                        voice.next_grain_pos = scaled_end_position;
+                    }
+                }
+                // If we are in the start grain crossfade
+                if voice.sample_pos == voice.grain_start_pos {
+                    voice.grain_state = GrainState::Attacking;
+                    voice.grain_attack.reset(0.0);
+                    voice.grain_attack.set_target(self.sample_rate, 1.0);
+                }
+                // If we are in the end grain crossfade
+                else if voice.sample_pos > voice.granular_hold_end && voice.grain_state == GrainState::Attacking {
+                    voice.grain_state = GrainState::Releasing;
+                    voice.grain_release.reset(1.0);
+                    voice.grain_release.set_target(self.sample_rate, 0.0);
+                    // If we are at the end of our grain and need to create a new one
+                    new_grain = true;
+                    let new_end = voice.next_grain_pos + self.grain_hold as usize;
+                    next_grain = SingleVoice {
+                        note: voice.note,
+                        _velocity: voice._velocity,
+                        phase: voice.phase,
+                        phase_delta: voice.phase_delta,
+                        state: voice.state,
+                        // These get cloned since smoother cannot be copied
+                        amp_current: voice.amp_current,
+                        osc_attack: voice.osc_attack.clone(),
+                        osc_decay: voice.osc_decay.clone(),
+                        osc_release: voice.osc_release.clone(),
+                        _detune: voice._detune,
+                        _unison_detune_value: voice._unison_detune_value,
+                        frequency: voice.frequency,
+                        _attack_time: voice._attack_time,
+                        _decay_time: voice._decay_time,
+                        _release_time: voice._release_time,
+                        _retrigger: voice._retrigger,
+                        _voice_type: voice._voice_type,
+                        _angle: voice._angle,
+                        sample_pos: voice.next_grain_pos,
+                        loop_it: voice.loop_it,
+                        grain_start_pos: voice.next_grain_pos,
+                        _granular_gap: self.grain_gap,
+                        _granular_hold: self.grain_hold,
+                        granular_hold_end: new_end,
+                        next_grain_pos: new_end + self.grain_gap as usize,
+                        _end_position: voice._end_position,
+                        _granular_crossfade: self.grain_crossfade,
+                        grain_attack: Smoother::new(SmoothingStyle::Linear(self.grain_crossfade as f32)),
+                        grain_release: Smoother::new(SmoothingStyle::Linear(self.grain_crossfade as f32)),
+                        grain_state: GrainState::Attacking,
+                    };
+                }
+
+                // End of release
+                if (voice.state == OscState::Releasing && voice.osc_release.steps_left() == 0) || 
+                   (voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0) {
+                    voice.state = OscState::Off;
+                }
             }
         }
 
-        // Update our matching unison voices
-        for unison_voice in self.unison_voices.voices.iter_mut() {
-            // Move our phase outside of the midi events
-            // I couldn't find much on how to model this so I based it off previous note phase
-            unison_voice.phase += unison_voice.phase_delta;
-            if unison_voice.phase > 1.0 {
-                unison_voice.phase -= 1.0;
+        if self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler {
+            // Update our matching unison voices
+            for unison_voice in self.unison_voices.voices.iter_mut() {
+                // Move our phase outside of the midi events
+                // I couldn't find much on how to model this so I based it off previous note phase
+                unison_voice.phase += unison_voice.phase_delta;
+                if unison_voice.phase > 1.0 {
+                    unison_voice.phase -= 1.0;
+                }
+                // Move from attack to decay if needed
+                // Attack is over so use decay amount to reach sustain level - reusing current smoother
+                if unison_voice.osc_attack.steps_left() == 0 && unison_voice.state == OscState::Attacking {
+                    unison_voice.state = OscState::Decaying;
+                    unison_voice.amp_current = unison_voice.osc_attack.next();
+                    // Now we will use decay smoother from here
+                    unison_voice.osc_decay.reset(unison_voice.amp_current);
+                    let sustain_scaled = self.osc_sustain / 999.9;
+                    unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                }
+                // Move from Decaying to Sustain hold
+                if unison_voice.osc_decay.steps_left() == 0 && unison_voice.state == OscState::Decaying {
+                    unison_voice.state = OscState::Sustaining;
+                    let sustain_scaled = self.osc_sustain / 999.9;
+                    unison_voice.amp_current = sustain_scaled;
+                    unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                }
+                // End of release
+                if unison_voice.state == OscState::Releasing && unison_voice.osc_release.steps_left() == 0 {
+                    unison_voice.state = OscState::Off;
+                }
             }
-            // Move from attack to decay if needed
-            // Attack is over so use decay amount to reach sustain level - reusing current smoother
-            if unison_voice.osc_attack.steps_left() == 0 && unison_voice.state == OscState::Attacking {
-                unison_voice.state = OscState::Decaying;
-                unison_voice.amp_current = unison_voice.osc_attack.next();
-                // Now we will use decay smoother from here
-                unison_voice.osc_decay.reset(unison_voice.amp_current);
-                let sustain_scaled = self.osc_sustain / 999.9;
-                unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
-            }
-            // Move from Decaying to Sustain hold
-            if unison_voice.osc_decay.steps_left() == 0 && unison_voice.state == OscState::Decaying {
-                unison_voice.state = OscState::Sustaining;
-                let sustain_scaled = self.osc_sustain / 999.9;
-                unison_voice.amp_current = sustain_scaled;
-                unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
-            }
-            // End of release
-            if unison_voice.state == OscState::Releasing && unison_voice.osc_release.steps_left() == 0 {
-                unison_voice.state = OscState::Off;
-            }
+        }
+
+        // Add our new grain to our voices
+        if new_grain {
+            self.playing_voices.voices.push_front(next_grain);
         }
 
         ////////////////////////////////////////////////////////////
@@ -2621,25 +2931,32 @@ impl AudioModule {
 
                     let usize_note = voice.note as usize;
 
-                    // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
-                    // If our note is valid 0-127
-                    if usize_note < self.sample_lib.len() {
-                        // If our sample position is valid for our note
-                        if voice.sample_pos < self.sample_lib[usize_note][0].len() {
-                            // Get our channels of sample vectors
-                            let NoteVector = &self.sample_lib[usize_note];
-                            // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
-                            summed_voices_l += NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier;
-                            summed_voices_r += NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier;
+                    // If we even have valid samples loaded
+                    if self.sample_lib[0][0].len() > 1 && self.loaded_sample[0].len() > 1  && self.sample_lib.len() > 1 {
+                        // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
+                        // If our note is valid 0-127
+                        if usize_note < self.sample_lib.len() {
+                            // If our sample position is valid for our note
+                            if voice.sample_pos < self.sample_lib[usize_note][0].len() {
+                                // Get our channels of sample vectors
+                                let NoteVector = &self.sample_lib[usize_note];
+                                // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
+                                summed_voices_l += NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier;
+                                summed_voices_r += NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier;
+                            }
                         }
-                    }
 
-                    let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32 * self.start_position).floor() as usize;
-                    let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32 * self.end_position).floor() as usize;
-                    // Sampler moves position
-                    voice.sample_pos += 1;
-                    if voice.loop_it && (voice.sample_pos > self.sample_lib[usize_note][0].len() || voice.sample_pos > scaled_end_position) {
-                        voice.sample_pos = scaled_start_position;
+                        let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32 * self.start_position).floor() as usize;
+                        let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32 * self._end_position).floor() as usize;
+                        // Sampler moves position
+                        voice.sample_pos += 1;
+                        if voice.loop_it && (voice.sample_pos > self.sample_lib[usize_note][0].len() || voice.sample_pos > scaled_end_position) {
+                            voice.sample_pos = scaled_start_position;
+                        }
+                        else if voice.sample_pos > scaled_end_position {
+                            voice.sample_pos = self.sample_lib[usize_note][0].len();
+                            voice.state = OscState::Off;
+                        }
                     }
                 }
                 (summed_voices_l,summed_voices_r)
@@ -2664,29 +2981,47 @@ impl AudioModule {
 
                     let usize_note = voice.note as usize;
 
-                    // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
-                    // If our note is valid 0-127
-                    if usize_note < self.sample_lib.len() {
-                        // If our sample position is valid for our note
-                        if voice.sample_pos < self.sample_lib[usize_note][0].len() {
-                            // Get our channels of sample vectors
-                            let NoteVector = &self.sample_lib[usize_note];
-                            // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
-                            summed_voices_l += NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier;
-                            summed_voices_r += NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier;
+                    // If we even have valid samples loaded
+                    if self.sample_lib[0][0].len() > 1 && self.loaded_sample[0].len() > 1 && self.sample_lib.len() > 1 {
+                        // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
+                        // If our note is valid 0-127
+                        if usize_note < self.sample_lib.len() {
+                            // If our sample position is valid for our note
+                            if voice.sample_pos < self.sample_lib[usize_note][0].len() {
+                                // Get our channels of sample vectors
+                                let NoteVector = &self.sample_lib[usize_note];
+                                // If we are in crossfade or in middle of grain after atttack ends
+                                if voice.grain_state == GrainState::Attacking {
+                                    // Add our current grain
+                                    if voice.grain_attack.steps_left() != 0 {
+                                        // This format is: Output = CurrentSample * Voice ADSR * GrainRelease
+                                        summed_voices_l += NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier * voice.grain_attack.next();
+                                        summed_voices_r += NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier * voice.grain_attack.next();
+                                    }
+                                    else {
+                                        // This format is: Output = CurrentSample * Voice ADSR * GrainRelease
+                                        summed_voices_l += NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier;
+                                        summed_voices_r += NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier;
+                                    }
+                                }
+                                // If we are in crossfade
+                                else if voice.grain_state == GrainState::Releasing {
+                                    summed_voices_l += NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier * voice.grain_release.next();
+                                    summed_voices_r += NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier * voice.grain_release.next();
+                                }
+                            }
                         }
-                    }
-                    let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32 * self.start_position).floor() as usize;
-                    let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32 * self.end_position).floor() as usize;
-                    // Sampler/Granulizer moves position
-                    voice.sample_pos += 1;
-                    if voice.sample_pos > voice.granular_hold_end {
-                        voice.sample_pos = voice.next_grain_pos;
-                        voice.granular_hold_end = voice.sample_pos + voice.granular_hold as usize;
-                        voice.next_grain_pos = voice.sample_pos + voice.granular_hold as usize + voice.granular_gap as usize;
-                    }
-                    if voice.loop_it && (voice.sample_pos > self.sample_lib[usize_note][0].len() || voice.sample_pos > scaled_end_position) {
-                        voice.sample_pos = scaled_start_position;
+                        let scaled_start_position = (self.loaded_sample[0].len() as f32 * self.start_position).floor() as usize;
+                        let scaled_end_position = (self.loaded_sample[0].len() as f32 * self._end_position).floor() as usize;
+                        // Granulizer moves position
+                        voice.sample_pos += 1;
+                        if voice.loop_it && (voice.sample_pos > self.loaded_sample[0].len() || voice.sample_pos > scaled_end_position) {
+                            voice.sample_pos = scaled_start_position;
+                        }
+                        else if voice.sample_pos > scaled_end_position {
+                            voice.sample_pos = self.sample_lib[usize_note][0].len();
+                            voice.state = OscState::Off;
+                        }
                     }
                 }
                 (summed_voices_l,summed_voices_r)
@@ -2780,19 +3115,24 @@ impl AudioModule {
     }
 
     // This method performs the sample recalculations when restretch is toggled
-    fn regenerate_samples(&mut self) {
-        if self.audio_module_type == AudioModuleType::Sampler {
-            // Compare our restretch change
-            if self.restretch != self.prev_restretch {
-                self.prev_restretch = self.restretch;
+    pub fn regenerate_samples(&mut self) {
+        if !self.sample_lib.is_empty() {
+            if self.audio_module_type == AudioModuleType::Sampler {
+                // Compare our restretch change
+                if self.restretch != self.prev_restretch {
+                    self.prev_restretch = self.restretch;
+                }
             }
-        }
-        else if self.audio_module_type == AudioModuleType::Granulizer {
-            self.restretch = false;
-            self.prev_restretch = false;
-        }
+            else if self.audio_module_type == AudioModuleType::Granulizer {
+                self.restretch = true;
+                self.prev_restretch = false;
+            }
+            else {
+                return;
+            }
 
-        self.sample_lib.clear();
+            self.sample_lib.clear();
+        }
 
         if self.restretch {
             let middle_c:f32 = 256.0;
@@ -2867,8 +3207,8 @@ impl AudioModule {
                     loaded_right = self.loaded_sample[0].as_slice();
                 }
                 
-                shifter.shift_pitch(8, translated_i, loaded_left, &mut out_buffer_left);
-                shifter.shift_pitch(8, translated_i, loaded_right, &mut out_buffer_right);
+                shifter.shift_pitch(1, translated_i, loaded_left, &mut out_buffer_left);
+                shifter.shift_pitch(1, translated_i, loaded_right, &mut out_buffer_right);
 
                 let mut NoteVector = Vec::with_capacity(2);
                 NoteVector.insert(0, out_buffer_left);
@@ -2878,20 +3218,64 @@ impl AudioModule {
         }
     }
 
-    fn calculate_panning(voice_index: i32, num_voices: i32) -> f32 {
-        // Calculate the pan angle for the given voice index and total number of voices.
-        // This uses equal-power panning.
-    
+    fn calculate_panning(&mut self, voice_index: i32, num_voices: i32) -> f32 {
         // Ensure the voice index is within bounds.
         let voice_index = voice_index.min(num_voices - 1);
     
-        // Calculate the pan angle in radians.
-        let angle = ((voice_index as f32) / (num_voices as f32 - 1.0) - 0.5) * std::f32::consts::PI;
+        let sign = if self.two_voice_stereo_flipper {                 
+            1.0 
+        } else { 
+            -1.0 
+        };
+
+        // Handle the special case for 2 voices.
+        if num_voices == 2 {
+            // multiplied by sign of stereo flipper to avoid pan
+            return if voice_index == 0 {
+                -0.25 * std::f32::consts::PI * sign // First voice panned left                
+            } else {
+                if self.two_voice_stereo_flipper {
+                    self.two_voice_stereo_flipper = false;
+                } else {
+                    self.two_voice_stereo_flipper = true;
+                }
+                0.25 * std::f32::consts::PI * sign // Second voice panned right
+            };
+        }
     
-        // We don't neeed degrees for our calculations
-        // let degrees = angle * (180.0 / std::f32::consts::PI);
+        // Handle the special case for 3 voices.
+        if num_voices == 3 {
+            return match voice_index {
+                0 => {
+                    if self.two_voice_stereo_flipper {
+                        self.two_voice_stereo_flipper = false;
+                    } else {
+                        self.two_voice_stereo_flipper = true;
+                    }
+                    -0.25 * std::f32::consts::PI * sign}, // First voice panned left
+                1 => 0.0,                           // Second voice panned center
+                2 => 0.25 * std::f32::consts::PI * sign,  // Third voice panned right
+                _ => 0.0,                           // Handle other cases gracefully
+            };
+        }
     
-        // Return the pan angle in degrees.
-        angle
+        // Calculate the pan angle for voices with index 0 and 1.
+        let base_angle = ((voice_index / 2) as f32) / ((num_voices / 2) as f32 - 1.0) - 0.5;
+    
+        // Determine the final angle based on even or odd index.
+        let angle = if voice_index % 2 == 0 {
+            -base_angle
+        } else {
+            base_angle
+        };
+        if voice_index == 0 {
+            if self.two_voice_stereo_flipper {
+                self.two_voice_stereo_flipper = false;
+            } else {
+                self.two_voice_stereo_flipper = true;
+            }
+        }
+    
+        angle * std::f32::consts::PI * sign // Use full scale for other cases
     }
 }

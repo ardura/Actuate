@@ -69,24 +69,32 @@ pub(crate) fn scale_range(input: f32, min_output: f32, max_output: f32) -> f32 {
 // Sine wave oscillator modded with some sort of saw wave multiplication
 pub fn calculate_sine(mod_amount: f32, phase: f32) -> f32 {
     // f(x) = sin(x * tau) {0 < x < 1}
-    let mut sine: f32 = 0.0;
     let scaled_phase = scale_range(phase, -1.0, 1.0);
-    if mod_amount <= 0.33 {
-        sine = (phase * consts::TAU).sin();
-    } else if mod_amount > 0.33 && mod_amount < 0.67 {
-        // X^2 Approximation
-        if scaled_phase < 0.0 {
-            sine = ((2.0 * scaled_phase + 1.0).powi(2) - 1.0) * 0.99;
+    let tau = consts::TAU;
+    let sine: f32;
+
+    match mod_amount {
+        mod_amount if mod_amount <= 0.33 => {
+            sine = (phase * tau).sin();
         }
-        else {
-            sine = (-(2.0 * scaled_phase - 1.0).powi(2) + 1.0) * 0.99;
+        mod_amount if mod_amount < 0.67 => {
+            // X^2 Approximation
+            let x = 2.0 * scaled_phase;
+            sine = if x < 0.0 {
+                ((x + 1.0).powi(2) - 1.0) * 0.99
+            } else {
+                (-(x - 1.0).powi(2) + 1.0) * 0.99
+            };
         }
-    } else if mod_amount >= 0.67 {
-        // Allegedy other efficient approximation
-        sine = ((24.5 * scaled_phase) / consts::TAU) - (((24.5 * scaled_phase) * scaled_phase.abs()) / consts::TAU);
+        _ => {
+            // Allegedly other efficient approximation
+            sine = (24.5 * scaled_phase / tau) - (24.5 * scaled_phase * scaled_phase.abs() / tau);
+        }
     }
+
     sine
 }
+    
 
 // Rounded Saw Wave with rounding amount
 pub fn calculate_rsaw(rounding: f32, phase: f32) -> f32 {
@@ -97,28 +105,39 @@ pub fn calculate_rsaw(rounding: f32, phase: f32) -> f32 {
     scaled_phase * (1.0 - scaled_phase.powi(2 * rounding_amount))
 }
 
+
 // Saw Wave with half rectification in modifier
 pub fn calculate_saw(mod_to_bool: f32, phase: f32) -> f32 {
-    let half: bool = if mod_to_bool < 0.5 { false } else { true };
-    let scaled_phase = if half { phase } else { 
-        scale_range(phase, -1.0, 1.0) };
+    let half = mod_to_bool >= 0.5;
+    let scaled_phase = if half {
+        phase
+    } else {
+        scale_range(phase, -1.0, 1.0)
+    };
+    
     // f(x) = x mod period
     scaled_phase % consts::TAU
 }
 
+
 // Ramp Wave with half rectification in modifier
 pub fn calculate_ramp(mod_to_bool: f32, phase: f32) -> f32 {
-    let half: bool = if mod_to_bool < 0.5 { false } else { true };
-    let scaled_phase = if half { phase } else { 
-        scale_range(phase, -1.0, 1.0) };
-    // f(x) = x mod period
-    -1.0 * (scaled_phase % consts::TAU)
+    let half = mod_to_bool >= 0.5;
+    let scaled_phase = if half {
+        phase
+    } else {
+        scale_range(phase, -1.0, 1.0)
+    };
+
+    // f(x) = -x mod period
+    -scaled_phase % consts::TAU
 }
 
 // Inward Curved Saw Wave
 pub fn calculate_inward_saw(curve_amount: f32, phase: f32) -> f32 {
-    // This makes more sense to the user even though it's a little weird to modify it like this
     let mut calc_curve_amount: i32 = scale_range(curve_amount, 1.0, 4.99).floor() as i32;
+    
+    // Direct mappings of curve_amount
     match calc_curve_amount {
         1 => calc_curve_amount = 2,
         2 => calc_curve_amount = 10,
@@ -127,24 +146,26 @@ pub fn calculate_inward_saw(curve_amount: f32, phase: f32) -> f32 {
         // Unreachable
         _ => calc_curve_amount = 1,
     }
-    let scaled_phase: f32 = scale_range(phase, -1.0, 1.0);
-    // f(x) = (x + 1)^6 {-1 <= x <= 0}
-    // f(x) = -(x-1)^6 {0 <= x <= 1}
-    if scaled_phase <= 0.0 {
+
+    let scaled_phase = scale_range(phase, -1.0, 1.0);
+
+    // Calculate the inward curved saw wave directly
+    let result = if scaled_phase <= 0.0 {
         (scaled_phase + 1.0).powi(calc_curve_amount)
     } else {
         -(scaled_phase - 1.0).powi(calc_curve_amount)
-    }
+    };
+
+    result
 }
 
 pub fn calculate_square(mod_amount: f32, phase: f32) -> f32 {
     let mod_scaled: f32 = scale_range(1.0 - mod_amount, 0.0625, 0.5);
-    let square: f32 = 1.0;
     // Hard cut function scaling to a pulse with mod
     if phase >= mod_scaled {
-        square * -1.0
+        -1.0
     } else {
-        square
+        1.0
     }
 }
 
