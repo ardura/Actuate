@@ -41,6 +41,7 @@ mod StateVariableFilter;
 mod ui_knob;
 mod toggle_switch;
 mod BoolButton;
+mod CustomVerticalSlider;
 
 pub struct LoadedSample(Vec<Vec<f32>>);
 
@@ -105,6 +106,12 @@ struct ActuatePreset {
     mod1_osc_unison_detune: f32,
     mod1_osc_stereo: f32,
 
+    // Additive
+    mod1_partial0: f32,
+    mod1_partial0_phase: f32,
+    mod1_partial1: f32,
+    mod1_partial1_phase: f32,
+
     // Modules 2
     ///////////////////////////////////////////////////////////
     mod2_audio_module_type: AudioModuleType,    
@@ -139,6 +146,12 @@ struct ActuatePreset {
     mod2_osc_unison: i32,
     mod2_osc_unison_detune: f32,
     mod2_osc_stereo: f32,
+
+    // Additive
+    mod2_partial0: f32,
+    mod2_partial0_phase: f32,
+    mod2_partial1: f32,
+    mod2_partial1_phase: f32,
 
     // Modules 3
     ///////////////////////////////////////////////////////////
@@ -175,6 +188,13 @@ struct ActuatePreset {
     mod3_osc_unison_detune: f32,
     mod3_osc_stereo: f32,
 
+    // Additive
+    mod3_partial0: f32,
+    mod3_partial0_phase: f32,
+    mod3_partial1: f32,
+    mod3_partial1_phase: f32,
+
+    // Filter options
     filter_wet: f32,
     filter_cutoff: f32,
     filter_resonance: f32,
@@ -283,6 +303,10 @@ impl Default for Actuate {
                 mod1_osc_unison: 1,
                 mod1_osc_unison_detune: 0.0,
                 mod1_osc_stereo: 0.0,
+                mod1_partial0: 1.0,
+                mod1_partial0_phase: 0.0,
+                mod1_partial1: 0.0,
+                mod1_partial1_phase: 0.0,
 
                 mod2_audio_module_type: AudioModuleType::Off, 
                 mod2_audio_module_level: 1.0,
@@ -313,6 +337,10 @@ impl Default for Actuate {
                 mod2_osc_unison: 1,
                 mod2_osc_unison_detune: 0.0,
                 mod2_osc_stereo: 0.0,
+                mod2_partial0: 1.0,
+                mod2_partial0_phase: 0.0,
+                mod2_partial1: 0.0,
+                mod2_partial1_phase: 0.0,
 
                 mod3_audio_module_type: AudioModuleType::Off, 
                 mod3_audio_module_level: 1.0,
@@ -343,6 +371,10 @@ impl Default for Actuate {
                 mod3_osc_unison: 1,
                 mod3_osc_unison_detune: 0.0,
                 mod3_osc_stereo: 0.0,
+                mod3_partial0: 1.0,
+                mod3_partial0_phase: 0.0,
+                mod3_partial1: 0.0,
+                mod3_partial1_phase: 0.0,
 
                 filter_wet: 1.0, 
                 filter_cutoff: 4000.0, 
@@ -365,319 +397,142 @@ impl Default for Actuate {
 /// Plugin parameters struct
 #[derive(Params)]
 pub struct ActuateParams {
-    #[persist = "editor-state"]
-    editor_state: Arc<EguiState>,
+    #[persist = "editor-state"]     editor_state: Arc<EguiState>,
 
     // Synth-level settings
-    #[id = "Master Level"]
-    pub master_level: FloatParam,
-
-    #[id = "Max Voices"]
-    pub voice_limit: IntParam,
-
-    #[id = "Preset"]
-    pub preset_index: IntParam,
-
-    #[id = "prev_preset_index"]
-    pub prev_preset_index: IntParam,
+    #[id = "Master Level"]          pub master_level: FloatParam,
+    #[id = "Max Voices"]            pub voice_limit: IntParam,
+    #[id = "Preset"]                pub preset_index: IntParam,
+    #[id = "prev_preset_index"]     pub prev_preset_index: IntParam,
 
     // This audio module is what switches between functions for generators in the synth
-    #[id = "audio_module_1_type"]
-    pub _audio_module_1_type: EnumParam<AudioModuleType>,
-
-    #[id = "audio_module_2_type"]
-    pub _audio_module_2_type: EnumParam<AudioModuleType>,
-
-    #[id = "audio_module_3_type"]
-    pub _audio_module_3_type: EnumParam<AudioModuleType>,
+    #[id = "audio_module_1_type"]   pub _audio_module_1_type: EnumParam<AudioModuleType>,
+    #[id = "audio_module_2_type"]   pub _audio_module_2_type: EnumParam<AudioModuleType>,
+    #[id = "audio_module_3_type"]   pub _audio_module_3_type: EnumParam<AudioModuleType>,
 
     // Audio Module Gains
-    #[id = "audio_module_1_level"]
-    pub audio_module_1_level: FloatParam,
-
-    #[id = "audio_module_2_level"]
-    pub audio_module_2_level: FloatParam,
-    
-    #[id = "audio_module_3_level"]
-    pub audio_module_3_level: FloatParam,
+    #[id = "audio_module_1_level"]  pub audio_module_1_level: FloatParam,
+    #[id = "audio_module_2_level"]  pub audio_module_2_level: FloatParam,
+    #[id = "audio_module_3_level"]  pub audio_module_3_level: FloatParam,
 
     // Controls for when audio_module_1_type is Osc
-    #[id = "osc_1_type"]
-    pub osc_1_type: EnumParam<VoiceType>,
-
-    #[id = "osc_1_octave"]
-    pub osc_1_octave: IntParam,
-
-    #[id = "osc_1_semitones"]
-    pub osc_1_semitones: IntParam,
-
-    #[id = "osc_1_detune"]
-    pub osc_1_detune: FloatParam,
-
-    #[id = "osc_1_mod_amount"]
-    pub osc_1_mod_amount: FloatParam,
-
-    #[id = "osc_1_attack"]
-    pub osc_1_attack: FloatParam,
-
-    #[id = "osc_1_decay"]
-    pub osc_1_decay: FloatParam,
-
-    #[id = "osc_1_sustain"]
-    pub osc_1_sustain: FloatParam,
-
-    #[id = "osc_1_release"]
-    pub osc_1_release: FloatParam,
-
-    #[id = "osc_1_retrigger"]
-    pub osc_1_retrigger: EnumParam<RetriggerStyle>,
-
-    #[id = "osc_1_atk_curve"]
-    pub osc_1_atk_curve: EnumParam<Oscillator::SmoothStyle>,
-
-    #[id = "osc_1_dec_curve"]
-    pub osc_1_dec_curve: EnumParam<Oscillator::SmoothStyle>,
-
-    #[id = "osc_1_rel_curve"]
-    pub osc_1_rel_curve: EnumParam<Oscillator::SmoothStyle>,
-
-    #[id = "osc_1_unison"]
-    pub osc_1_unison: IntParam,
-
-    #[id = "osc_1_unison_detune"]
-    pub osc_1_unison_detune: FloatParam,
-
-    #[id = "osc_1_stereo"]
-    pub osc_1_stereo: FloatParam,
+    #[id = "osc_1_type"]            pub osc_1_type: EnumParam<VoiceType>,
+    #[id = "osc_1_octave"]          pub osc_1_octave: IntParam,
+    #[id = "osc_1_semitones"]       pub osc_1_semitones: IntParam,
+    #[id = "osc_1_detune"]          pub osc_1_detune: FloatParam,
+    #[id = "osc_1_mod_amount"]      pub osc_1_mod_amount: FloatParam,
+    #[id = "osc_1_attack"]          pub osc_1_attack: FloatParam,
+    #[id = "osc_1_decay"]           pub osc_1_decay: FloatParam,
+    #[id = "osc_1_sustain"]         pub osc_1_sustain: FloatParam,
+    #[id = "osc_1_release"]         pub osc_1_release: FloatParam,
+    #[id = "osc_1_retrigger"]       pub osc_1_retrigger: EnumParam<RetriggerStyle>,
+    #[id = "osc_1_atk_curve"]       pub osc_1_atk_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_1_dec_curve"]       pub osc_1_dec_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_1_rel_curve"]       pub osc_1_rel_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_1_unison"]          pub osc_1_unison: IntParam,
+    #[id = "osc_1_unison_detune"]   pub osc_1_unison_detune: FloatParam,
+    #[id = "osc_1_stereo"]          pub osc_1_stereo: FloatParam,
+    #[id = "add_1_partial0"]        pub add_1_partial0: FloatParam,
+    #[id = "add_1_partial0_phase"]  pub add_1_partial0_phase: FloatParam,
+    #[id = "add_1_partial1"]        pub add_1_partial1: FloatParam,
+    #[id = "add_1_partial1_phase"]  pub add_1_partial1_phase: FloatParam,
 
     // Controls for when audio_module_2_type is Osc
-    #[id = "osc_2_type"]
-    pub osc_2_type: EnumParam<VoiceType>,
-
-    #[id = "osc_2_octave"]
-    pub osc_2_octave: IntParam,
-
-    #[id = "osc_2_semitones"]
-    pub osc_2_semitones: IntParam,
-
-    #[id = "osc_2_detune"]
-    pub osc_2_detune: FloatParam,
-
-    #[id = "osc_2_mod_amount"]
-    pub osc_2_mod_amount: FloatParam,
-
-    #[id = "osc_2_attack"]
-    pub osc_2_attack: FloatParam,
-
-    #[id = "osc_2_decay"]
-    pub osc_2_decay: FloatParam,
-
-    #[id = "osc_2_sustain"]
-    pub osc_2_sustain: FloatParam,
-
-    #[id = "osc_2_release"]
-    pub osc_2_release: FloatParam,
-
-    #[id = "osc_2_retrigger"]
-    pub osc_2_retrigger: EnumParam<RetriggerStyle>,
-
-    #[id = "osc_2_atk_curve"]
-    pub osc_2_atk_curve: EnumParam<Oscillator::SmoothStyle>,
-
-    #[id = "osc_2_dec_curve"]
-    pub osc_2_dec_curve: EnumParam<Oscillator::SmoothStyle>,
-
-    #[id = "osc_2_rel_curve"]
-    pub osc_2_rel_curve: EnumParam<Oscillator::SmoothStyle>,
-
-    #[id = "osc_2_unison"]
-    pub osc_2_unison: IntParam,
-
-    #[id = "osc_2_unison_detune"]
-    pub osc_2_unison_detune: FloatParam,
-
-    #[id = "osc_2_stereo"]
-    pub osc_2_stereo: FloatParam,
+    #[id = "osc_2_type"]            pub osc_2_type: EnumParam<VoiceType>,
+    #[id = "osc_2_octave"]          pub osc_2_octave: IntParam,
+    #[id = "osc_2_semitones"]       pub osc_2_semitones: IntParam,
+    #[id = "osc_2_detune"]          pub osc_2_detune: FloatParam,
+    #[id = "osc_2_mod_amount"]      pub osc_2_mod_amount: FloatParam,
+    #[id = "osc_2_attack"]          pub osc_2_attack: FloatParam,
+    #[id = "osc_2_decay"]           pub osc_2_decay: FloatParam,
+    #[id = "osc_2_sustain"]         pub osc_2_sustain: FloatParam,
+    #[id = "osc_2_release"]         pub osc_2_release: FloatParam,
+    #[id = "osc_2_retrigger"]       pub osc_2_retrigger: EnumParam<RetriggerStyle>,
+    #[id = "osc_2_atk_curve"]       pub osc_2_atk_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_2_dec_curve"]       pub osc_2_dec_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_2_rel_curve"]       pub osc_2_rel_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_2_unison"]          pub osc_2_unison: IntParam,
+    #[id = "osc_2_unison_detune"]   pub osc_2_unison_detune: FloatParam,
+    #[id = "osc_2_stereo"]          pub osc_2_stereo: FloatParam,
+    #[id = "add_2_partial0"]        pub add_2_partial0: FloatParam,
+    #[id = "add_2_partial0_phase"]  pub add_2_partial0_phase: FloatParam,
+    #[id = "add_2_partial1"]        pub add_2_partial1: FloatParam,
+    #[id = "add_2_partial1_phase"]  pub add_2_partial1_phase: FloatParam,
 
     // Controls for when audio_module_3_type is Osc
-    #[id = "osc_3_type"]
-    pub osc_3_type: EnumParam<VoiceType>,
+    #[id = "osc_3_type"]            pub osc_3_type: EnumParam<VoiceType>,
+    #[id = "osc_3_octave"]          pub osc_3_octave: IntParam,
+    #[id = "osc_3_semitones"]       pub osc_3_semitones: IntParam,
+    #[id = "osc_3_detune"]          pub osc_3_detune: FloatParam,
+    #[id = "osc_3_mod_amount"]      pub osc_3_mod_amount: FloatParam,
+    #[id = "osc_3_attack"]          pub osc_3_attack: FloatParam,
+    #[id = "osc_3_decay"]           pub osc_3_decay: FloatParam,
+    #[id = "osc_3_sustain"]         pub osc_3_sustain: FloatParam,
+    #[id = "osc_3_release"]         pub osc_3_release: FloatParam,
+    #[id = "osc_3_retrigger"]       pub osc_3_retrigger: EnumParam<RetriggerStyle>,
+    #[id = "osc_3_atk_curve"]       pub osc_3_atk_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_3_dec_curve"]       pub osc_3_dec_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_3_rel_curve"]       pub osc_3_rel_curve: EnumParam<Oscillator::SmoothStyle>,
 
-    #[id = "osc_3_octave"]
-    pub osc_3_octave: IntParam,
-
-    #[id = "osc_3_semitones"]
-    pub osc_3_semitones: IntParam,
-
-    #[id = "osc_3_detune"]
-    pub osc_3_detune: FloatParam,
-
-    #[id = "osc_3_mod_amount"]
-    pub osc_3_mod_amount: FloatParam,
-
-    #[id = "osc_3_attack"]
-    pub osc_3_attack: FloatParam,
-
-    #[id = "osc_3_decay"]
-    pub osc_3_decay: FloatParam,
-
-    #[id = "osc_3_sustain"]
-    pub osc_3_sustain: FloatParam,
-
-    #[id = "osc_3_release"]
-    pub osc_3_release: FloatParam,
-
-    #[id = "osc_3_retrigger"]
-    pub osc_3_retrigger: EnumParam<RetriggerStyle>,
-
-    #[id = "osc_3_atk_curve"]
-    pub osc_3_atk_curve: EnumParam<Oscillator::SmoothStyle>,
-
-    #[id = "osc_3_dec_curve"]
-    pub osc_3_dec_curve: EnumParam<Oscillator::SmoothStyle>,
-
-    #[id = "osc_3_rel_curve"]
-    pub osc_3_rel_curve: EnumParam<Oscillator::SmoothStyle>,
-
-    #[id = "osc_3_unison"]
-    pub osc_3_unison: IntParam,
-
-    #[id = "osc_3_unison_detune"]
-    pub osc_3_unison_detune: FloatParam,
-
-    #[id = "osc_3_stereo"]
-    pub osc_3_stereo: FloatParam,
+    #[id = "osc_3_unison"]          pub osc_3_unison: IntParam,
+    #[id = "osc_3_unison_detune"]   pub osc_3_unison_detune: FloatParam,
+    #[id = "osc_3_stereo"]          pub osc_3_stereo: FloatParam,
+    #[id = "add_3_partial0"]        pub add_3_partial0: FloatParam,
+    #[id = "add_3_partial0_phase"]  pub add_3_partial0_phase: FloatParam,
+    #[id = "add_3_partial1"]        pub add_3_partial1: FloatParam,
+    #[id = "add_3_partial1_phase"]  pub add_3_partial1_phase: FloatParam,
 
     // Controls for when audio_module_1_type is Sampler/Granulizer
-    #[id = "load_sample_1"]
-    pub load_sample_1: BoolParam,
-
-    #[id = "loop_sample_1"]
-    pub loop_sample_1: BoolParam,
-
-    #[id = "single_cycle_1"]
-    pub single_cycle_1: BoolParam,
-
-    #[id = "restretch_1"]
-    pub restretch_1: BoolParam,
-
-    #[id = "grain_hold_1"]
-    grain_hold_1: IntParam,
-
-    #[id = "grain_gap_1"]
-    grain_gap_1: IntParam,
-
-    #[id = "start_position_1"]
-    start_position_1: FloatParam,
-
-    #[id = "end_position_1"]
-    end_position_1: FloatParam,
-
-    #[id = "grain_crossfade_1"]
-    grain_crossfade_1: IntParam,
+    #[id = "load_sample_1"]         pub load_sample_1: BoolParam,
+    #[id = "loop_sample_1"]         pub loop_sample_1: BoolParam,
+    #[id = "single_cycle_1"]        pub single_cycle_1: BoolParam,
+    #[id = "restretch_1"]           pub restretch_1: BoolParam,
+    #[id = "grain_hold_1"]          grain_hold_1: IntParam,
+    #[id = "grain_gap_1"]           grain_gap_1: IntParam,
+    #[id = "start_position_1"]      start_position_1: FloatParam,
+    #[id = "end_position_1"]        end_position_1: FloatParam,
+    #[id = "grain_crossfade_1"]     grain_crossfade_1: IntParam,
 
     // Controls for when audio_module_2_type is Sampler/Granulizer
-    #[id = "load_sample_2"]
-    pub load_sample_2: BoolParam,
-
-    #[id = "loop_sample_2"]
-    pub loop_sample_2: BoolParam,
-
-    #[id = "single_cycle_2"]
-    pub single_cycle_2: BoolParam,
-
-    #[id = "restretch_2"]
-    pub restretch_2: BoolParam,
-
-    #[id = "grain_hold_2"]
-    grain_hold_2: IntParam,
-
-    #[id = "grain_gap_2"]
-    grain_gap_2: IntParam,
-
-    #[id = "start_position_2"]
-    start_position_2: FloatParam,
-
-    #[id = "end_position_2"]
-    end_position_2: FloatParam,
-
-    #[id = "grain_crossfade_2"]
-    grain_crossfade_2: IntParam,
+    #[id = "load_sample_2"]         pub load_sample_2: BoolParam,
+    #[id = "loop_sample_2"]         pub loop_sample_2: BoolParam,
+    #[id = "single_cycle_2"]        pub single_cycle_2: BoolParam,
+    #[id = "restretch_2"]           pub restretch_2: BoolParam,
+    #[id = "grain_hold_2"]          grain_hold_2: IntParam,
+    #[id = "grain_gap_2"]           grain_gap_2: IntParam,
+    #[id = "start_position_2"]      start_position_2: FloatParam,
+    #[id = "end_position_2"]        end_position_2: FloatParam,
+    #[id = "grain_crossfade_2"]     grain_crossfade_2: IntParam,
 
     // Controls for when audio_module_3_type is Sampler/Granulizer
-    #[id = "load_sample_3"]
-    pub load_sample_3: BoolParam,
-
-    #[id = "loop_sample_3"]
-    pub loop_sample_3: BoolParam,
-
-    #[id = "single_cycle_3"]
-    pub single_cycle_3: BoolParam,
-
-    #[id = "restretch_3"]
-    pub restretch_3: BoolParam,
-
-    #[id = "grain_hold_3"]
-    grain_hold_3: IntParam,
-
-    #[id = "grain_gap_3"]
-    grain_gap_3: IntParam,
-
-    #[id = "start_position_3"]
-    start_position_3: FloatParam,
-
-    #[id = "end_position_3"]
-    end_position_3: FloatParam,
-
-    #[id = "grain_crossfade_3"]
-    grain_crossfade_3: IntParam,
+    #[id = "load_sample_3"]         pub load_sample_3: BoolParam,
+    #[id = "loop_sample_3"]         pub loop_sample_3: BoolParam,
+    #[id = "single_cycle_3"]        pub single_cycle_3: BoolParam,
+    #[id = "restretch_3"]           pub restretch_3: BoolParam,
+    #[id = "grain_hold_3"]          grain_hold_3: IntParam,
+    #[id = "grain_gap_3"]           grain_gap_3: IntParam,
+    #[id = "start_position_3"]      start_position_3: FloatParam,
+    #[id = "end_position_3"]        end_position_3: FloatParam,
+    #[id = "grain_crossfade_3"]     grain_crossfade_3: IntParam,
 
     // Filter
-    #[id = "filter_wet"]
-    pub filter_wet: FloatParam,
-
-    #[id = "filter_cutoff"]
-    pub filter_cutoff: FloatParam,
-
-    #[id = "filter_resonance"]
-    pub filter_resonance: FloatParam,
-
-    #[id = "filter_res_type"]
-    pub filter_res_type: EnumParam<ResonanceType>,
-
-    #[id = "filter_lp_amount"]
-    pub filter_lp_amount: FloatParam,
-
-    #[id = "filter_hp_amount"]
-    pub filter_hp_amount: FloatParam,
-
-    #[id = "filter_bp_amount"]
-    pub filter_bp_amount: FloatParam,
-
-    #[id = "filter_env_peak"]
-    pub filter_env_peak: FloatParam,
-
-    #[id = "filter_env_decay"]
-    pub filter_env_decay: FloatParam,
-
-    #[id = "filter_env_curve"]
-    pub filter_env_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "filter_wet"]            pub filter_wet: FloatParam,
+    #[id = "filter_cutoff"]         pub filter_cutoff: FloatParam,
+    #[id = "filter_resonance"]      pub filter_resonance: FloatParam,
+    #[id = "filter_res_type"]       pub filter_res_type: EnumParam<ResonanceType>,
+    #[id = "filter_lp_amount"]      pub filter_lp_amount: FloatParam,
+    #[id = "filter_hp_amount"]      pub filter_hp_amount: FloatParam,
+    #[id = "filter_bp_amount"]      pub filter_bp_amount: FloatParam,
+    #[id = "filter_env_peak"]       pub filter_env_peak: FloatParam,
+    #[id = "filter_env_decay"]      pub filter_env_decay: FloatParam,
+    #[id = "filter_env_curve"]      pub filter_env_curve: EnumParam<Oscillator::SmoothStyle>,
 
     // UI Non-param Params
-    #[id = "load_bank"]
-    pub load_bank: BoolParam,
-
-    #[id = "save_bank"]
-    pub save_bank: BoolParam,
-
-    #[id = "next_preset"]
-    pub next_preset: BoolParam,
-
-    #[id = "prev_preset"]
-    pub prev_preset: BoolParam,
-
-    #[id = "update_current_preset"]
-    pub update_current_preset: BoolParam,
+    #[id = "load_bank"]             pub load_bank: BoolParam,
+    #[id = "save_bank"]             pub save_bank: BoolParam,
+    #[id = "next_preset"]           pub next_preset: BoolParam,
+    #[id = "prev_preset"]           pub prev_preset: BoolParam,
+    #[id = "update_current_preset"] pub update_current_preset: BoolParam,
 }
 
 impl Default for ActuateParams {
@@ -718,6 +573,10 @@ impl Default for ActuateParams {
             osc_1_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
             osc_1_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
             osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }),
+            add_1_partial0: FloatParam::new("Partial 0", 1.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial0_phase: FloatParam::new("Partial 0 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial1: FloatParam::new("Partial 1", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial1_phase: FloatParam::new("Partial 1 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
 
             osc_2_type: EnumParam::new("Wave", VoiceType::Sine),
             osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
@@ -735,6 +594,10 @@ impl Default for ActuateParams {
             osc_2_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
             osc_2_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
             osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }),
+            add_2_partial0: FloatParam::new("Partial 0", 1.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_2_partial0_phase: FloatParam::new("Partial 0 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_2_partial1: FloatParam::new("Partial 1", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_2_partial1_phase: FloatParam::new("Partial 1 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
 
             osc_3_type: EnumParam::new("Wave", VoiceType::Sine),
             osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }),
@@ -752,6 +615,10 @@ impl Default for ActuateParams {
             osc_3_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
             osc_3_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
             osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }),
+            add_3_partial0: FloatParam::new("Partial 0", 1.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_3_partial0_phase: FloatParam::new("Partial 0 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_3_partial1: FloatParam::new("Partial 1", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_3_partial1_phase: FloatParam::new("Partial 1 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
 
             // Granulizer/Sampler
             ////////////////////////////////////////////////////////////////////////////////////
@@ -1623,6 +1490,10 @@ impl Actuate {
                     mod1_osc_unison: 1,
                     mod1_osc_unison_detune: 0.0,
                     mod1_osc_stereo: 0.0,
+                    mod1_partial0: 1.0,
+                    mod1_partial0_phase: 0.0,
+                    mod1_partial1: 0.0,
+                    mod1_partial1_phase: 0.0,
     
                     mod2_audio_module_type: AudioModuleType::Off, 
                     mod2_audio_module_level: 1.0,
@@ -1653,6 +1524,10 @@ impl Actuate {
                     mod2_osc_unison: 1,
                     mod2_osc_unison_detune: 0.0,
                     mod2_osc_stereo: 0.0,
+                    mod2_partial0: 1.0,
+                    mod2_partial0_phase: 0.0,
+                    mod2_partial1: 0.0,
+                    mod2_partial1_phase: 0.0,
     
                     mod3_audio_module_type: AudioModuleType::Off, 
                     mod3_audio_module_level: 1.0,
@@ -1683,6 +1558,10 @@ impl Actuate {
                     mod3_osc_unison: 1,
                     mod3_osc_unison_detune: 0.0,
                     mod3_osc_stereo: 0.0,
+                    mod3_partial0: 1.0,
+                    mod3_partial0_phase: 0.0,
+                    mod3_partial1: 0.0,
+                    mod3_partial1_phase: 0.0,
     
                     filter_wet: 1.0, 
                     filter_cutoff: 4000.0, 
@@ -1822,6 +1701,11 @@ impl Actuate {
             mod1_osc_unison_detune: self.audio_module_1.osc_unison_detune,
             mod1_osc_stereo: self.audio_module_1.osc_stereo,
 
+            mod1_partial0: self.audio_module_1.add_partial0,
+            mod1_partial0_phase: self.audio_module_1.add_partial0_phase,
+            mod1_partial1: self.audio_module_1.add_partial1,
+            mod1_partial1_phase: self.audio_module_1.add_partial1_phase,
+
             // Modules 2
             ///////////////////////////////////////////////////////////
             mod2_audio_module_type: self.params._audio_module_2_type.value(),    
@@ -1857,6 +1741,11 @@ impl Actuate {
             mod2_osc_unison_detune: self.audio_module_2.osc_unison_detune,
             mod2_osc_stereo: self.audio_module_2.osc_stereo,
 
+            mod2_partial0: self.audio_module_2.add_partial0,
+            mod2_partial0_phase: self.audio_module_2.add_partial0_phase,
+            mod2_partial1: self.audio_module_2.add_partial1,
+            mod2_partial1_phase: self.audio_module_2.add_partial1_phase,
+
             // Modules 3
             ///////////////////////////////////////////////////////////
             mod3_audio_module_type: self.params._audio_module_3_type.value(),    
@@ -1891,6 +1780,11 @@ impl Actuate {
             mod3_osc_unison: self.audio_module_3.osc_unison,
             mod3_osc_unison_detune: self.audio_module_3.osc_unison_detune,
             mod3_osc_stereo: self.audio_module_3.osc_stereo,
+
+            mod3_partial0: self.audio_module_3.add_partial0,
+            mod3_partial0_phase: self.audio_module_3.add_partial0_phase,
+            mod3_partial1: self.audio_module_3.add_partial1,
+            mod3_partial1_phase: self.audio_module_3.add_partial1_phase,
 
             // Filter storage - gotten from params
             filter_wet: self.params.filter_wet.value(),

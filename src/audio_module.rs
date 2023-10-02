@@ -32,7 +32,8 @@ use serde::{Deserialize, Serialize};
 // Audio module files
 pub(crate) mod Oscillator;
 use Oscillator::VoiceType;
-use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch, SMALLER_FONT, StateVariableFilter::ResonanceType};
+use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch, SMALLER_FONT, StateVariableFilter::ResonanceType, CustomVerticalSlider::{self}};
+use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
 use self::Oscillator::{RetriggerStyle, OscState, SmoothStyle};
 
 // When you create a new audio module, you should add it here
@@ -164,6 +165,12 @@ pub struct AudioModule {
     pub osc_unison_detune: f32,
     pub osc_stereo: f32,
 
+    // Additive variables
+    pub add_partial0: f32,
+    pub add_partial0_phase: f32,
+    pub add_partial1: f32,
+    pub add_partial1_phase: f32,
+
     // Voice storage
     playing_voices: VoiceVec,
     unison_voices: VoiceVec,
@@ -211,6 +218,12 @@ impl Default for AudioModule {
             osc_unison: 1,
             osc_unison_detune: 0.0,
             osc_stereo: 1.0,
+
+            // Additive variables
+            add_partial0: 1.0,
+            add_partial0_phase: 0.0,
+            add_partial1: 0.0,
+            add_partial1_phase: 0.0,
 
             // Voice storage
             playing_voices: VoiceVec { voices: VecDeque::new() },
@@ -830,10 +843,15 @@ impl AudioModule {
             }
             AudioModuleType::Additive => {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("Coming soon")
-                    .font(SMALLER_FONT)
-                    .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
-                    .on_hover_text("owo");
+                    // Partials
+                    ui.vertical(|ui|{
+                        ui.add(VerticalParamSlider::for_param(&params.add_1_partial0, setter).with_height(100.0).without_value().set_reversed(true));
+                        ui.add(VerticalParamSlider::for_param(&params.add_1_partial0_phase, setter).with_height(100.0).without_value());
+                    });
+                    ui.vertical(|ui|{
+                        ui.add(VerticalParamSlider::for_param(&params.add_1_partial1, setter).with_height(100.0).without_value().set_reversed(true));
+                        ui.add(VerticalParamSlider::for_param(&params.add_1_partial1_phase, setter).with_height(100.0).without_value());
+                    });
                 });
             },
         }
@@ -2224,7 +2242,7 @@ impl AudioModule {
                                 // Start our phase back at 0
                                 new_phase = 0.0;
                             },
-                            RetriggerStyle::Random => {
+                            RetriggerStyle::Random | RetriggerStyle::UniRandom=> {
                                 match self.audio_module_type {
                                     AudioModuleType::Osc => {
                                         // Get a random phase to use
@@ -2389,10 +2407,20 @@ impl AudioModule {
                             }
                             
                             for unison_voice in 0..(self.osc_unison as usize - 1) {
+                                let uni_phase = match self.osc_retrigger {
+                                    RetriggerStyle::UniRandom => {
+                                        let mut rng = rand::thread_rng();
+                                        rng.gen_range(0.0..1.0)
+                                    },
+                                    _ => {
+                                        new_phase
+                                    }
+                                };
+
                                 let new_unison_voice: SingleVoice = SingleVoice {
                                     note: note,
                                     _velocity: velocity,
-                                    phase: new_phase,
+                                    phase: uni_phase,
                                     phase_delta: unison_notes[unison_voice] / self.sample_rate,
                                     state: OscState::Attacking,
                                     // These get cloned since smoother cannot be copied
