@@ -23,7 +23,7 @@ This is intended to be a generic implementation that can be extended for other a
 
 use std::{sync::Arc, collections::VecDeque, path::PathBuf, f32::consts::{SQRT_2}};
 use nih_plug::{prelude::{Smoother, SmoothingStyle, ParamSetter, NoteEvent}, util, params::enums::Enum};
-use nih_plug_egui::egui::{Ui, RichText};
+use nih_plug_egui::{egui::{Ui, RichText, self}};
 use rand::Rng;
 use rfd::FileDialog;
 use pitch_shift::PitchShifter;
@@ -32,8 +32,9 @@ use serde::{Deserialize, Serialize};
 // Audio module files
 pub(crate) mod Oscillator;
 use Oscillator::VoiceType;
-use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch, SMALLER_FONT, StateVariableFilter::ResonanceType, CustomVerticalSlider::{self}};
+use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch, SMALLER_FONT, StateVariableFilter::ResonanceType, CustomVerticalSlider, CustomParamSlider};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
+use CustomParamSlider::ParamSlider as HorizontalParamSlider;
 use self::Oscillator::{RetriggerStyle, OscState, SmoothStyle};
 
 // When you create a new audio module, you should add it here
@@ -170,6 +171,8 @@ pub struct AudioModule {
     pub add_partial0_phase: f32,
     pub add_partial1: f32,
     pub add_partial1_phase: f32,
+    pub add_partial2: f32,
+    pub add_partial2_phase: f32,
 
     // Voice storage
     playing_voices: VoiceVec,
@@ -224,6 +227,8 @@ impl Default for AudioModule {
             add_partial0_phase: 0.0,
             add_partial1: 0.0,
             add_partial1_phase: 0.0,
+            add_partial2: 0.0,
+            add_partial2_phase: 0.0,
 
             // Voice storage
             playing_voices: VoiceVec { voices: VecDeque::new() },
@@ -261,7 +266,9 @@ impl AudioModule {
             }
         }
 
-        
+        const VERT_BAR_HEIGHT: f32 = 106.0;
+        const HCURVE_WIDTH: f32 = 120.0;
+        const HCURVE_BWIDTH: f32 = 40.0;
 
         // This is kind of ugly but I couldn't figure out a better architechture for egui and separating audio modules
         
@@ -280,136 +287,100 @@ impl AudioModule {
                 // Oscillator
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
-                        let osc_1_type_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_type, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_type_knob);
+                        ui.vertical(|ui| {
+                            let osc_1_type_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_type, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_type_knob);
 
-                        let osc_1_mod_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_mod_amount, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_mod_knob);
+                            let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_retrigger, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_retrigger_knob);
+                        });
+                        
+                        ui.vertical(|ui| {
+                            let osc_1_mod_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_mod_amount, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_mod_knob);
 
-                        let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_octave, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_octave_knob);
+                            let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_semitones, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_semitones_knob);
+                        });
 
-                        let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_unison, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_unison_knob);
+                        ui.vertical(|ui| {
+                            let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_octave, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_octave_knob);
 
-                        let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_unison_detune, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_unison_detune_knob);
+                            let osc_1_detune_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_detune, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_detune_knob);
+                        });
 
-                        let osc_1_attack_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_attack, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_attack_knob);
-
-                        let osc_1_decay_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_decay, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_decay_knob);
-
-                        let osc_1_sustain_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_sustain, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_sustain_knob);
-
-                        let osc_1_release_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_release, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_release_knob);
-                    });
-                    ui.horizontal(|ui| {
-                        let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_retrigger, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_retrigger_knob);
-
-                        let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_semitones, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_semitones_knob);
-
-                        let osc_1_detune_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_detune, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_detune_knob);
-
-                        // Space
-                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                        ui.vertical(|ui| {
+                            let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_unison, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_unison_knob);
+    
+                            let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_unison_detune, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_unison_detune_knob);
+                        });
 
                         let osc_1_stereo_knob = ui_knob::ArcKnob::for_param(
                             &params.osc_1_stereo, 
@@ -421,42 +392,18 @@ impl AudioModule {
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                         ui.add(osc_1_stereo_knob);
-                       
-                        let osc_1_atk_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_atk_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_atk_curve_knob);
                         
-                        // Attack knob space
-                        //ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                        // ADSR
+                        ui.add(VerticalParamSlider::for_param(&params.osc_1_attack, setter).with_height(VERT_BAR_HEIGHT).set_reversed(true));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_1_decay, setter).with_height(VERT_BAR_HEIGHT).set_reversed(true));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_1_sustain, setter).with_height(VERT_BAR_HEIGHT).set_reversed(true));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_1_release, setter).with_height(VERT_BAR_HEIGHT).set_reversed(true));
 
-                        let osc_1_dec_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_dec_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_dec_curve_knob);
-
-                        // Sustain knob space
-                        ui.add_space(KNOB_SIZE*2.0 + 16.0);
-                        
-                        let osc_1_rel_curve_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_1_rel_curve, 
-                            setter, 
-                            KNOB_SIZE)
-                            .preset_style(ui_knob::KnobStyle::NewPresets1)
-                            .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                            .set_text_size(TEXT_SIZE);
-                        ui.add(osc_1_rel_curve_knob);
+                        ui.vertical(|ui| {
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
+                        });
                     });
                 });
             },
@@ -842,16 +789,204 @@ impl AudioModule {
                 });
             }
             AudioModuleType::Additive => {
-                ui.horizontal(|ui| {
-                    // Partials
-                    ui.vertical(|ui|{
-                        ui.add(VerticalParamSlider::for_param(&params.add_1_partial0, setter).with_height(100.0).without_value().set_reversed(true));
-                        ui.add(VerticalParamSlider::for_param(&params.add_1_partial0_phase, setter).with_height(100.0).without_value());
+                const KNOB_SIZE: f32 = 30.0;
+                const TEXT_SIZE: f32 = 12.0;
+                // Additive Controls
+                egui::ScrollArea::both().max_height(120.0).max_width(700.0).show(ui, |ui| {
+                    //ui.style_mut().wrap = Some(false);
+                    // Oscillator Options
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_octave, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_octave_knob);
+                            let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_unison, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_unison_knob);
+                            let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_unison_detune, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_unison_detune_knob);
+                            let osc_1_attack_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_attack, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_attack_knob);
+                            let osc_1_decay_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_decay, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_decay_knob);
+                            let osc_1_sustain_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_sustain, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_sustain_knob);
+                            let osc_1_release_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_release, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_release_knob);
+                        });
+                        ui.horizontal(|ui| {
+                            let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_retrigger, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_retrigger_knob);
+                            let osc_1_detune_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_detune, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_detune_knob);
+                            let osc_1_stereo_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_stereo, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .use_outline(true)
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_stereo_knob);
+                            
+                            let osc_1_atk_curve_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_atk_curve, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_atk_curve_knob);
+                            
+                            // Attack knob space
+                            //ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                            let osc_1_dec_curve_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_dec_curve, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_dec_curve_knob);
+                            // Sustain knob space
+                            ui.add_space(KNOB_SIZE*2.0 + 16.0);
+                            
+                            let osc_1_rel_curve_knob = ui_knob::ArcKnob::for_param(
+                                &params.osc_1_rel_curve, 
+                                setter, 
+                                KNOB_SIZE)
+                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
+                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                .set_text_size(TEXT_SIZE);
+                            ui.add(osc_1_rel_curve_knob);
+                        });
                     });
+                    ui.add_space(16.0);
                     ui.vertical(|ui|{
-                        ui.add(VerticalParamSlider::for_param(&params.add_1_partial1, setter).with_height(100.0).without_value().set_reversed(true));
-                        ui.add(VerticalParamSlider::for_param(&params.add_1_partial1_phase, setter).with_height(100.0).without_value());
-                    });
+                        ui.label("Top row is sine partials, bottom row is phase of above partial");
+                        let partial_height: f32 = 60.0;
+                        // Partials section
+                        ui.horizontal_top(|ui| {
+                            // Partials in line
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial0, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial1, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial2, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial3, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial4, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial5, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial6, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial7, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial8, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial9, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial10, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial11, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial12, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial13, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial14, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial15, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial16, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial17, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial18, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial19, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial20, setter).with_height(partial_height).without_value());
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial21, setter).with_height(partial_height).without_value());
+                        });
+                        ui.horizontal_top(|ui| {
+                            // Phase values in line
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial0_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial1_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial2_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial3_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial4_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial5_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial6_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial7_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial8_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial9_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial10_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial11_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial12_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial13_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial14_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial15_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial16_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial17_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial18_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial19_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial20_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                            ui.add(VerticalParamSlider::for_param(&params.add_1_partial21_phase, setter).with_height(partial_height).without_value().set_reversed(true));
+                        });
+                    });                    
                 });
             },
         }
@@ -2083,6 +2218,12 @@ impl AudioModule {
                 self.grain_hold = params.grain_hold_1.value();
                 self.grain_gap = params.grain_gap_1.value();
                 self.grain_crossfade = params.grain_crossfade_1.value();
+                self.add_partial0 = params.add_1_partial0.value();
+                self.add_partial1 = params.add_1_partial1.value();
+                self.add_partial2 = params.add_1_partial2.value();
+                self.add_partial0_phase = params.add_1_partial0_phase.value();
+                self.add_partial1_phase = params.add_1_partial1_phase.value();
+                self.add_partial2_phase = params.add_1_partial2_phase.value();
             },
             2 => {
                 self.audio_module_type = params._audio_module_2_type.value();
@@ -2327,11 +2468,11 @@ impl AudioModule {
                                 // If our loaded sample variable or generated sample library has any content
                                 if self.loaded_sample[0].len() > 1 && self.sample_lib[0][0].len() > 1 && self.sample_lib.len() > 1 {
                                     // Create our granulizer/sampler starting position from our knob scale
-                                    scaled_sample_pos = if self.start_position > 0.0 && self.osc_retrigger != RetriggerStyle::Random {
+                                    scaled_sample_pos = if self.start_position > 0.0 && self.osc_retrigger != RetriggerStyle::Random && self.osc_retrigger != RetriggerStyle::UniRandom {
                                         (self.sample_lib[note as usize][0].len() as f32 * self.start_position).floor() as usize
                                     }
                                     // Retrigger and use 0
-                                    else if self.osc_retrigger != RetriggerStyle::Random {
+                                    else if self.osc_retrigger != RetriggerStyle::Random && self.osc_retrigger != RetriggerStyle::UniRandom {
                                         0_usize
                                     } 
                                     // Retrigger with random
@@ -2812,37 +2953,40 @@ impl AudioModule {
             }
         }
 
-        if self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler {
-            // Update our matching unison voices
-            for unison_voice in self.unison_voices.voices.iter_mut() {
-                // Move our phase outside of the midi events
-                // I couldn't find much on how to model this so I based it off previous note phase
-                unison_voice.phase += unison_voice.phase_delta;
-                if unison_voice.phase > 1.0 {
-                    unison_voice.phase -= 1.0;
+        match self.audio_module_type {
+            AudioModuleType::Osc | AudioModuleType::Sampler | AudioModuleType::Additive => {
+                // Update our matching unison voices
+                for unison_voice in self.unison_voices.voices.iter_mut() {
+                    // Move our phase outside of the midi events
+                    // I couldn't find much on how to model this so I based it off previous note phase
+                    unison_voice.phase += unison_voice.phase_delta;
+                    if unison_voice.phase > 1.0 {
+                        unison_voice.phase -= 1.0;
+                    }
+                    // Move from attack to decay if needed
+                    // Attack is over so use decay amount to reach sustain level - reusing current smoother
+                    if unison_voice.osc_attack.steps_left() == 0 && unison_voice.state == OscState::Attacking {
+                        unison_voice.state = OscState::Decaying;
+                        unison_voice.amp_current = unison_voice.osc_attack.next();
+                        // Now we will use decay smoother from here
+                        unison_voice.osc_decay.reset(unison_voice.amp_current);
+                        let sustain_scaled = self.osc_sustain / 999.9;
+                        unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                    }
+                    // Move from Decaying to Sustain hold
+                    if unison_voice.osc_decay.steps_left() == 0 && unison_voice.state == OscState::Decaying {
+                        unison_voice.state = OscState::Sustaining;
+                        let sustain_scaled = self.osc_sustain / 999.9;
+                        unison_voice.amp_current = sustain_scaled;
+                        unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
+                    }
+                    // End of release
+                    if unison_voice.state == OscState::Releasing && unison_voice.osc_release.steps_left() == 0 {
+                        unison_voice.state = OscState::Off;
+                    }
                 }
-                // Move from attack to decay if needed
-                // Attack is over so use decay amount to reach sustain level - reusing current smoother
-                if unison_voice.osc_attack.steps_left() == 0 && unison_voice.state == OscState::Attacking {
-                    unison_voice.state = OscState::Decaying;
-                    unison_voice.amp_current = unison_voice.osc_attack.next();
-                    // Now we will use decay smoother from here
-                    unison_voice.osc_decay.reset(unison_voice.amp_current);
-                    let sustain_scaled = self.osc_sustain / 999.9;
-                    unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
-                }
-                // Move from Decaying to Sustain hold
-                if unison_voice.osc_decay.steps_left() == 0 && unison_voice.state == OscState::Decaying {
-                    unison_voice.state = OscState::Sustaining;
-                    let sustain_scaled = self.osc_sustain / 999.9;
-                    unison_voice.amp_current = sustain_scaled;
-                    unison_voice.osc_decay.set_target(self.sample_rate, sustain_scaled);
-                }
-                // End of release
-                if unison_voice.state == OscState::Releasing && unison_voice.osc_release.steps_left() == 0 {
-                    unison_voice.state = OscState::Off;
-                }
-            }
+            },
+            _ => {}
         }
 
         // Add our new grain to our voices
@@ -2856,7 +3000,7 @@ impl AudioModule {
         let output_signal_l: f32;
         let output_signal_r: f32;
         (output_signal_l, output_signal_r) = match self.audio_module_type {
-            AudioModuleType::Osc => {
+            AudioModuleType::Osc | AudioModuleType::Additive => {
                 let mut summed_voices_l: f32 = 0.0;
                 let mut summed_voices_r: f32 = 0.0;
                 let mut stereo_voices_l: f32 = 0.0;
@@ -2874,16 +3018,31 @@ impl AudioModule {
                     voice.amp_current = temp_osc_gain_multiplier;
                         
                     voice.phase_delta = voice.frequency / self.sample_rate;
-                    center_voices += match self.osc_type {
-                        VoiceType::Sine  => Oscillator::calculate_sine(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                        VoiceType::Tri => Oscillator::calculate_tri(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                        VoiceType::Saw   => Oscillator::calculate_saw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                        VoiceType::RSaw  => Oscillator::calculate_rsaw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                        VoiceType::InSaw  => Oscillator::calculate_inward_saw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                        VoiceType::Ramp => Oscillator::calculate_ramp(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                        VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                        VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                    };
+                    if self.audio_module_type == AudioModuleType::Osc {
+                        center_voices += match self.osc_type {
+                            VoiceType::Sine  => Oscillator::calculate_sine(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Tri => Oscillator::calculate_tri(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Saw   => Oscillator::calculate_saw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::RSaw  => Oscillator::calculate_rsaw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::InSaw  => Oscillator::calculate_inward_saw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Ramp => Oscillator::calculate_ramp(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
+                        };
+                    }
+                    // This is the Additive scenario
+                    else {
+                        // Add up the partials
+                        let mut partial_sum: f32 = 0.0;
+                        partial_sum += Oscillator::calculate_fast_sine(Self::rescale_phase_added(voice.phase, self.add_partial0_phase)) * self.add_partial0 * temp_osc_gain_multiplier;
+                        let mut temp_freq_double = voice.frequency * 2.0;
+                        let mut temp_phase_delta = temp_freq_double / self.sample_rate;
+                        partial_sum += Oscillator::calculate_fast_sine(Self::rescale_phase_added(voice.phase, temp_phase_delta + self.add_partial1_phase)) * self.add_partial1 * temp_osc_gain_multiplier;
+                        temp_freq_double *= 2.0;
+                        temp_phase_delta = temp_freq_double / self.sample_rate;
+                        partial_sum += Oscillator::calculate_fast_sine(Self::rescale_phase_added(voice.phase, temp_phase_delta + self.add_partial2_phase)) * self.add_partial2 * temp_osc_gain_multiplier;
+                        center_voices += partial_sum;
+                    }
                 }
                 // Stereo applies to unison voices
                 for unison_voice in self.unison_voices.voices.iter_mut() {
@@ -2900,16 +3059,22 @@ impl AudioModule {
                     unison_voice.phase_delta = unison_voice.frequency / self.sample_rate;
 
                     if self.osc_unison > 1 {
-                        let temp_unison_voice = match self.osc_type {
-                            VoiceType::Sine  => Oscillator::calculate_sine(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::Tri => Oscillator::calculate_tri(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::Saw   => Oscillator::calculate_saw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::RSaw  => Oscillator::calculate_rsaw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::InSaw  => Oscillator::calculate_inward_saw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::Ramp => Oscillator::calculate_ramp(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                        };
+                        let mut temp_unison_voice: f32 = 0.0;
+                        if self.audio_module_type == AudioModuleType::Osc {
+                            temp_unison_voice = match self.osc_type {
+                                VoiceType::Sine  => Oscillator::calculate_sine(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Tri => Oscillator::calculate_tri(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Saw   => Oscillator::calculate_saw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::RSaw  => Oscillator::calculate_rsaw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::InSaw  => Oscillator::calculate_inward_saw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Ramp => Oscillator::calculate_ramp(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
+                            };
+                        }
+                        else {
+                            temp_unison_voice += Oscillator::calculate_fast_sine(Self::rescale_phase_added(unison_voice.phase, self.add_partial0_phase)) * self.add_partial0 * temp_osc_gain_multiplier;
+                        }
 
                         // Create our stereo pan for unison
 
@@ -3053,10 +3218,6 @@ impl AudioModule {
                     }
                 }
                 (summed_voices_l,summed_voices_r)
-            },
-            AudioModuleType::Additive => {
-                // Do nothing, return 0.0
-                (0.0, 0.0)
             },
         };
 
@@ -3305,5 +3466,11 @@ impl AudioModule {
         }
     
         angle * std::f32::consts::PI * sign // Use full scale for other cases
+    }
+
+    fn rescale_phase_added(voice_phase: f32, additive_phase: f32) -> f32 {
+        let temp = voice_phase + additive_phase;
+        let phase = if temp > 1.0 { temp - 1.0 } else { temp };
+        phase
     }
 }

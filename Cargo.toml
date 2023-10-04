@@ -16,6 +16,7 @@ crate-type = ["cdylib","lib"]
 [dependencies]
 flate2 = "1.0.27"
 hound = "3.5.0"
+lazy_static = "1.4.0"
 # Remove the `assert_process_allocs` feature to allow allocations on the audio
 # thread in debug builds.
 

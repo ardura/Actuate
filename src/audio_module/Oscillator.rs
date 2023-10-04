@@ -24,6 +24,20 @@ This is intended to be a building block used by other files in the Actuate synth
 use serde::{Deserialize, Serialize};
 use std::f32::consts::{self, PI, FRAC_2_PI};
 use nih_plug::{params::enums::Enum};
+use lazy_static::lazy_static;
+
+// Make a lookup table for faster but less accurate sine approx for additive
+const TABLE_SIZE: usize = 1024;
+lazy_static! {
+    static ref SIN_TABLE: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        for i in 0..TABLE_SIZE {
+            let phase = (i as f32 / TABLE_SIZE as f32) * std::f32::consts::PI * 2.0;
+            table[i] = phase.sin();
+        }
+        table
+    };
+}
 
 #[derive(Enum, PartialEq, Eq, Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum VoiceType {
@@ -65,6 +79,13 @@ pub enum RetriggerStyle {
 pub(crate) fn scale_range(input: f32, min_output: f32, max_output: f32) -> f32 {
     let scaled = input * (max_output - min_output) + min_output;
     scaled.clamp(min_output, max_output)
+}
+
+// Lookup table sine
+pub fn calculate_fast_sine(phase: f32) -> f32 {
+    let scaled_phase = phase % 1.0;
+    let index = (scaled_phase * TABLE_SIZE as f32) as usize;
+    SIN_TABLE[index]
 }
 
 // Sine wave oscillator modded with some sort of saw wave multiplication
