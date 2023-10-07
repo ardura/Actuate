@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use crate::egui::{vec2, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
 use nih_plug::{prelude::{Param, ParamSetter}, wrapper::clap::lazy_static};
-use nih_plug_egui::{widgets::util as nUtil, egui::{Pos2, Rect}};
+use nih_plug_egui::{widgets::util as nUtil, egui::{Pos2, Rect, Color32}};
 use nih_plug_egui::egui;
 use parking_lot::Mutex;
 
@@ -37,6 +37,9 @@ pub struct ParamSlider<'a, P: Param> {
     slider_height: Option<f32>,
     // Added in reversed function to have bar drawn other way
     reversed: bool,
+    bar_color: Color32,
+    background_color: Color32,
+    use_padding: bool,
 
     /// Will be set in the `ui()` function so we can request keyboard input focus on Alt+click.
     keyboard_focus_id: Option<egui::Id>,
@@ -56,10 +59,19 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             slider_height: None,
             // Added in reversed function to have bar drawn other way
             reversed: false,
+            bar_color: Color32::WHITE,
+            background_color: Color32::BLACK,
+            use_padding: false,
 
             // I removed this because it was causing errors on plugin load somehow in FL
             keyboard_focus_id: None,
         }
+    }
+
+    pub fn override_colors(mut self, bar_color: Color32, background: Color32) -> Self {
+        self.bar_color = bar_color;
+        self.background_color = background;
+        self
     }
 
     /// Don't draw the text slider's current value after the slider.
@@ -82,6 +94,11 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     /// Set reversed bar drawing - Ardura
     pub fn set_reversed(mut self, reversed: bool) -> Self {
         self.reversed = reversed;
+        self
+    }
+
+    pub fn use_padding(mut self, use_padding: bool) -> Self {
+        self.use_padding = use_padding;
         self
     }
 
@@ -291,7 +308,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     fn value_ui(&self, ui: &mut Ui) {
         let visuals = ui.visuals().widgets.inactive;
         let should_draw_frame = ui.visuals().button_frame;
-        let padding = ui.spacing().button_padding;
+        let padding = if self.use_padding { ui.spacing().button_padding } else { ui.spacing().button_padding / 2.0 };
 
         /*
         // I had to comment this out since the init of ParamSlider breaks because of the keyboard focus not existing in FL

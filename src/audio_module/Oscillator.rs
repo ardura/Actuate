@@ -27,7 +27,7 @@ use nih_plug::{params::enums::Enum};
 use lazy_static::lazy_static;
 
 // Make a lookup table for faster but less accurate sine approx for additive
-const TABLE_SIZE: usize = 1024;
+const TABLE_SIZE: usize = 2048;
 lazy_static! {
     static ref SIN_TABLE: [f32; TABLE_SIZE] = {
         let mut table = [0.0; TABLE_SIZE];
@@ -49,6 +49,7 @@ pub enum VoiceType {
     Ramp,
     Square,
     RSquare,
+    Noise,
 }
 
 #[derive(Enum, PartialEq, Eq, Debug, Copy, Clone)]
@@ -75,6 +76,8 @@ pub enum RetriggerStyle {
     UniRandom
 }
 
+
+
 // Super useful function to scale an input 0-1 into other ranges
 pub(crate) fn scale_range(input: f32, min_output: f32, max_output: f32) -> f32 {
     let scaled = input * (max_output - min_output) + min_output;
@@ -83,14 +86,36 @@ pub(crate) fn scale_range(input: f32, min_output: f32, max_output: f32) -> f32 {
 
 // Lookup table sine
 pub fn calculate_fast_sine(phase: f32) -> f32 {
-    let scaled_phase = phase % 1.0;
-    let index = (scaled_phase * TABLE_SIZE as f32) as usize;
-    SIN_TABLE[index]
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    let frac = phase * (TABLE_SIZE - 1) as f32 - index as f32;
+    let next_index = index + 1;
+
+    let sine = if next_index < TABLE_SIZE - 1 {
+        SIN_TABLE[index] * (1.0 - frac) + SIN_TABLE[next_index] * frac
+    } else {
+        SIN_TABLE[index] // If next_index is out of bounds, use the current index
+    };
+    sine
 }
 
 // Sine wave oscillator modded with some sort of saw wave multiplication
 pub fn calculate_sine(mod_amount: f32, phase: f32) -> f32 {
-    // f(x) = sin(x * tau) {0 < x < 1}
+    if mod_amount == 0.0 {
+        //let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        //return SIN_TABLE[index];
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        let frac = phase * (TABLE_SIZE - 1) as f32 - index as f32;
+        let next_index = index + 1;
+
+        let sine = if next_index < TABLE_SIZE - 1 {
+            SIN_TABLE[index] * (1.0 - frac) + SIN_TABLE[next_index] * frac
+        } else {
+            SIN_TABLE[index] // If next_index is out of bounds, use the current index
+        };
+        return sine;
+    }
+
+    // Continue with the existing code for other cases
     let scaled_phase = scale_range(phase, -1.0, 1.0);
     let tau = consts::TAU;
     let sine: f32;
@@ -116,6 +141,7 @@ pub fn calculate_sine(mod_amount: f32, phase: f32) -> f32 {
 
     sine
 }
+
     
 
 // Rounded Saw Wave with rounding amount
@@ -211,4 +237,17 @@ pub fn calculate_tri(mod_amount: f32, phase: f32) -> f32 {
     }
     // Use mod to fade between tri and weird tan tri
     tri*(1.0 - mod_amount) + tan_tri*mod_amount
+}
+
+#[allow(overflowing_literals)]
+pub fn generate_noise(mut x1: i32,mut x2: i32) -> f32 {
+    // 80% vol
+    let level = 0.8;
+    let f_scale = 2.0 / 0xFFFFFFFF as f32;
+
+    let scale = f_scale * level;
+    x1 ^= x2;
+    let sample = x2 as f32 * scale;
+    x2 += x1;
+    sample
 }

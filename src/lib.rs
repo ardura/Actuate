@@ -24,7 +24,7 @@ use StateVariableFilter::ResonanceType;
 use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Rect, Rounding, RichText, FontId, Pos2}, EguiState};
 use rfd::FileDialog;
 
-use std::{sync::{Arc, Mutex}, ops::RangeInclusive, fs::{File}, io::{Write}};
+use std::{sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}, ops::RangeInclusive, fs::{File}, io::{Write}};
 use nih_plug::{prelude::*};
 use phf::phf_map;
 use serde::{Deserialize, Serialize};
@@ -98,7 +98,6 @@ struct ActuatePreset {
     mod1_osc_decay: f32,
     mod1_osc_sustain: f32,
     mod1_osc_release: f32,
-    mod1_osc_mod_amount: f32,
     mod1_osc_retrigger: RetriggerStyle,
     mod1_osc_atk_curve: SmoothStyle,
     mod1_osc_dec_curve: SmoothStyle,
@@ -139,7 +138,6 @@ struct ActuatePreset {
     mod2_osc_decay: f32,
     mod2_osc_sustain: f32,
     mod2_osc_release: f32,
-    mod2_osc_mod_amount: f32,
     mod2_osc_retrigger: RetriggerStyle,
     mod2_osc_atk_curve: SmoothStyle,
     mod2_osc_dec_curve: SmoothStyle,
@@ -180,7 +178,6 @@ struct ActuatePreset {
     mod3_osc_decay: f32,
     mod3_osc_sustain: f32,
     mod3_osc_release: f32,
-    mod3_osc_mod_amount: f32,
     mod3_osc_retrigger: RetriggerStyle,
     mod3_osc_atk_curve: SmoothStyle,
     mod3_osc_dec_curve: SmoothStyle,
@@ -212,17 +209,19 @@ struct ActuatePreset {
 pub struct Actuate {
     pub params: Arc<ActuateParams>,
     pub sample_rate: f32,
+
+    // Plugin control Arcs
+    update_something: Arc<AtomicBool>,
+    clear_voices: Arc<AtomicBool>,
+    reload_entire_preset: Arc<Mutex<AtomicBool>>,
     
     // Modules
     audio_module_1: AudioModule,
     _audio_module_1_type: AudioModuleType,
-    prev_module_1: AudioModuleType,
     audio_module_2: AudioModule,
     _audio_module_2_type: AudioModuleType,
-    prev_module_2: AudioModuleType,
     audio_module_3: AudioModule,
     _audio_module_3_type: AudioModuleType,
-    prev_module_3: AudioModuleType,
 
     // Filter
     filter_l: StateVariableFilter::StateVariableFilter,
@@ -245,20 +244,26 @@ pub struct Actuate {
 
 impl Default for Actuate {
     fn default() -> Self {
+        // These are persistent fields to trigger updates like Diopser
+        let update_something = Arc::new(AtomicBool::new(false));
+        let clear_voices = Arc::new(AtomicBool::new(false));
+        let reload_entire_preset = Arc::new(Mutex::new(AtomicBool::new(false)));
+
         Self {
-            params: Arc::new(Default::default()),
+            params: Arc::new(ActuateParams::new(update_something.clone(), clear_voices.clone(), reload_entire_preset.clone())),
             sample_rate: 44100.0,
+
+            update_something: update_something,
+            clear_voices: clear_voices,
+            reload_entire_preset: reload_entire_preset,
 
             // Module 1
             audio_module_1: AudioModule::default(),
             _audio_module_1_type: AudioModuleType::Osc,
-            prev_module_1: AudioModuleType::Osc,
             audio_module_2: AudioModule::default(),
             _audio_module_2_type: AudioModuleType::Off,
-            prev_module_2: AudioModuleType::Off,
             audio_module_3: AudioModule::default(),
             _audio_module_3_type: AudioModuleType::Off,
-            prev_module_3: AudioModuleType::Off,
 
             // Filter
             filter_l: StateVariableFilter::StateVariableFilter::default(),
@@ -296,7 +301,6 @@ impl Default for Actuate {
                 mod1_osc_decay: 0.0001, 
                 mod1_osc_sustain: 999.9, 
                 mod1_osc_release: 5.0, 
-                mod1_osc_mod_amount: 0.0, 
                 mod1_osc_retrigger: RetriggerStyle::Retrigger, 
                 mod1_osc_atk_curve: SmoothStyle::Linear, 
                 mod1_osc_dec_curve: SmoothStyle::Linear, 
@@ -330,7 +334,6 @@ impl Default for Actuate {
                 mod2_osc_decay: 0.0001, 
                 mod2_osc_sustain: 999.9, 
                 mod2_osc_release: 5.0, 
-                mod2_osc_mod_amount: 0.0, 
                 mod2_osc_retrigger: RetriggerStyle::Retrigger, 
                 mod2_osc_atk_curve: SmoothStyle::Linear, 
                 mod2_osc_dec_curve: SmoothStyle::Linear, 
@@ -364,7 +367,6 @@ impl Default for Actuate {
                 mod3_osc_decay: 0.0001, 
                 mod3_osc_sustain: 999.9, 
                 mod3_osc_release: 5.0, 
-                mod3_osc_mod_amount: 0.0, 
                 mod3_osc_retrigger: RetriggerStyle::Retrigger, 
                 mod3_osc_atk_curve: SmoothStyle::Linear, 
                 mod3_osc_dec_curve: SmoothStyle::Linear, 
@@ -404,7 +406,6 @@ pub struct ActuateParams {
     #[id = "Master Level"]          pub master_level: FloatParam,
     #[id = "Max Voices"]            pub voice_limit: IntParam,
     #[id = "Preset"]                pub preset_index: IntParam,
-    #[id = "prev_preset_index"]     pub prev_preset_index: IntParam,
 
     // This audio module is what switches between functions for generators in the synth
     #[id = "audio_module_1_type"]   pub _audio_module_1_type: EnumParam<AudioModuleType>,
@@ -421,7 +422,6 @@ pub struct ActuateParams {
     #[id = "osc_1_octave"]          pub osc_1_octave: IntParam,
     #[id = "osc_1_semitones"]       pub osc_1_semitones: IntParam,
     #[id = "osc_1_detune"]          pub osc_1_detune: FloatParam,
-    #[id = "osc_1_mod_amount"]      pub osc_1_mod_amount: FloatParam,
     #[id = "osc_1_attack"]          pub osc_1_attack: FloatParam,
     #[id = "osc_1_decay"]           pub osc_1_decay: FloatParam,
     #[id = "osc_1_sustain"]         pub osc_1_sustain: FloatParam,
@@ -483,7 +483,6 @@ pub struct ActuateParams {
     #[id = "osc_2_octave"]          pub osc_2_octave: IntParam,
     #[id = "osc_2_semitones"]       pub osc_2_semitones: IntParam,
     #[id = "osc_2_detune"]          pub osc_2_detune: FloatParam,
-    #[id = "osc_2_mod_amount"]      pub osc_2_mod_amount: FloatParam,
     #[id = "osc_2_attack"]          pub osc_2_attack: FloatParam,
     #[id = "osc_2_decay"]           pub osc_2_decay: FloatParam,
     #[id = "osc_2_sustain"]         pub osc_2_sustain: FloatParam,
@@ -505,7 +504,6 @@ pub struct ActuateParams {
     #[id = "osc_3_octave"]          pub osc_3_octave: IntParam,
     #[id = "osc_3_semitones"]       pub osc_3_semitones: IntParam,
     #[id = "osc_3_detune"]          pub osc_3_detune: FloatParam,
-    #[id = "osc_3_mod_amount"]      pub osc_3_mod_amount: FloatParam,
     #[id = "osc_3_attack"]          pub osc_3_attack: FloatParam,
     #[id = "osc_3_decay"]           pub osc_3_decay: FloatParam,
     #[id = "osc_3_sustain"]         pub osc_3_sustain: FloatParam,
@@ -576,8 +574,12 @@ pub struct ActuateParams {
     #[id = "update_current_preset"] pub update_current_preset: BoolParam,
 }
 
-impl Default for ActuateParams {
-    fn default() -> Self {
+impl ActuateParams {
+    fn new(
+        update_something: Arc<AtomicBool>,
+        clear_voices: Arc<AtomicBool>,
+        reload_entire_preset: Arc<Mutex<AtomicBool>>,
+    ) -> Self {
         Self {
             editor_state: EguiState::from_size(WIDTH, HEIGHT),
 
@@ -585,12 +587,11 @@ impl Default for ActuateParams {
             ////////////////////////////////////////////////////////////////////////////////////
             master_level: FloatParam::new("Master", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 64, IntRange::Linear { min: 1, max: 512 }),
-            preset_index: IntParam::new("Preset", 0, IntRange::Linear { min: 0, max: (PRESET_BANK_SIZE - 1) as i32 }),
-            prev_preset_index: IntParam::new("prev_preset_index", -1, IntRange::Linear { min: -1, max: (PRESET_BANK_SIZE - 1) as i32}),
+            preset_index: IntParam::new("Preset", 0, IntRange::Linear { min: 0, max: (PRESET_BANK_SIZE - 1) as i32 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Release) }) }),
 
-            _audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc),
-            _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off),
-            _audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off),
+            _audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc).with_callback({ let clear_voices = clear_voices.clone(); Arc::new(move |_| { clear_voices.store(true, Ordering::Release) }) }),
+            _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({ let clear_voices = clear_voices.clone(); Arc::new(move |_| { clear_voices.store(true, Ordering::Release) }) }),
+            _audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({ let clear_voices = clear_voices.clone(); Arc::new(move |_| { clear_voices.store(true, Ordering::Release) }) }),
 
             audio_module_1_level: FloatParam::new("Level", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
             audio_module_2_level: FloatParam::new("Level", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
@@ -606,7 +607,6 @@ impl Default for ActuateParams {
             osc_1_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_unit("D"),
             osc_1_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_unit("S"),
             osc_1_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_unit("R"),
-            osc_1_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
             osc_1_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger),
             osc_1_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_1_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
@@ -614,28 +614,28 @@ impl Default for ActuateParams {
             osc_1_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }),
             osc_1_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)),
             osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }),
-            add_1_partial0: FloatParam::new("Partial 0", 1.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial1: FloatParam::new("Partial 1", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial2: FloatParam::new("Partial 2", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial3: FloatParam::new("Partial 3", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial4: FloatParam::new("Partial 4", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial5: FloatParam::new("Partial 5", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial6: FloatParam::new("Partial 6", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial7: FloatParam::new("Partial 7", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial8: FloatParam::new("Partial 8", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial9: FloatParam::new("Partial 9", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial10: FloatParam::new("Partial 10", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial11: FloatParam::new("Partial 11", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial12: FloatParam::new("Partial 12", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial13: FloatParam::new("Partial 13", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial14: FloatParam::new("Partial 14", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial15: FloatParam::new("Partial 15", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial16: FloatParam::new("Partial 16", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial17: FloatParam::new("Partial 17", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial18: FloatParam::new("Partial 18", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial19: FloatParam::new("Partial 19", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial20: FloatParam::new("Partial 20", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
-            add_1_partial21: FloatParam::new("Partial 21", 0.0, FloatRange::Reversed(&FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 })),
+            add_1_partial0: FloatParam::new("Partial 0", 1.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial1: FloatParam::new("Partial 1", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial2: FloatParam::new("Partial 2", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial3: FloatParam::new("Partial 3", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial4: FloatParam::new("Partial 4", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial5: FloatParam::new("Partial 5", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial6: FloatParam::new("Partial 6", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial7: FloatParam::new("Partial 7", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial8: FloatParam::new("Partial 8", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial9: FloatParam::new("Partial 9", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial10: FloatParam::new("Partial 10", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial11: FloatParam::new("Partial 11", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial12: FloatParam::new("Partial 12", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial13: FloatParam::new("Partial 13", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial14: FloatParam::new("Partial 14", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial15: FloatParam::new("Partial 15", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial16: FloatParam::new("Partial 16", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial17: FloatParam::new("Partial 17", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial18: FloatParam::new("Partial 18", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial19: FloatParam::new("Partial 19", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial20: FloatParam::new("Partial 20", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            add_1_partial21: FloatParam::new("Partial 21", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
             add_1_partial0_phase: FloatParam::new("Partial 0 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
             add_1_partial1_phase: FloatParam::new("Partial 1 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
             add_1_partial2_phase: FloatParam::new("Partial 2 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
@@ -668,7 +668,6 @@ impl Default for ActuateParams {
             osc_2_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
             osc_2_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
             osc_2_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
-            osc_2_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
             osc_2_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger),
             osc_2_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_2_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
@@ -689,7 +688,6 @@ impl Default for ActuateParams {
             osc_3_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
             osc_3_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
             osc_3_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()),
-            osc_3_mod_amount: FloatParam::new("Modifier", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
             osc_3_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger),
             osc_3_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear),
             osc_3_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear),
@@ -791,7 +789,11 @@ impl Plugin for Actuate {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = self.params.clone();
         let arc_preset = Arc::clone(&self.preset_lib);
-        let retrigger_preset_load = Arc::clone(&self.retrigger_preset_load);
+        //let update_something = Arc::clone(&self.update_something);
+        //let clear_voices = Arc::clone(&self.clear_voices);
+        let reload_entire_preset = Arc::clone(&self.reload_entire_preset);
+        //let reload_entire_preset = arc_reload_entire_preset.lock().unwrap();
+
         // Do our GUI stuff
         create_egui_editor(
             self.params.editor_state.clone(),
@@ -801,7 +803,6 @@ impl Plugin for Actuate {
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
                         let loaded_preset = &arc_preset.lock().unwrap()[params.preset_index.value() as usize];
-                        let retrigger_preset_load_arc = &retrigger_preset_load.lock().unwrap();
                         // Reset our buttons - bad practice most likely
                         if params.prev_preset.value() || params.next_preset.value() {
                             if params.next_preset.value() && params.preset_index.value() < 31{
@@ -814,19 +815,19 @@ impl Plugin for Actuate {
                             }
                             setter.set_parameter(&params.prev_preset, false);
                             setter.set_parameter(&params.next_preset, false);
+                            reload_entire_preset.lock().unwrap().store(true, Ordering::Relaxed);
                         }
-                        let mut new_loading_preset_bank = false;
                         if params.load_bank.value() || params.save_bank.value() || params.update_current_preset.value() {
                             if params.load_bank.value() {
                                 // Update to false preset value for next
-                                new_loading_preset_bank = true;
+                                reload_entire_preset.lock().unwrap().store(true, Ordering::Relaxed);
                             }
                             setter.set_parameter(&params.load_bank, false);
                             setter.set_parameter(&params.save_bank, false);
                             setter.set_parameter(&params.update_current_preset, false);
                         }
                         // Try to load preset into our params if possible
-                        if params.prev_preset_index.value() != params.preset_index.value() || **retrigger_preset_load_arc {
+                        if reload_entire_preset.lock().unwrap().load(Ordering::Relaxed) {
                             setter.set_parameter(&params._audio_module_1_type, loaded_preset.mod1_audio_module_type);
                             setter.set_parameter(&params.audio_module_1_level, loaded_preset.mod1_audio_module_level);
                             setter.set_parameter(&params.loop_sample_1, loaded_preset.mod1_loop_wavetable);
@@ -840,7 +841,6 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.osc_1_decay, loaded_preset.mod1_osc_decay);
                             setter.set_parameter(&params.osc_1_sustain, loaded_preset.mod1_osc_sustain);
                             setter.set_parameter(&params.osc_1_release, loaded_preset.mod1_osc_release);
-                            setter.set_parameter(&params.osc_1_mod_amount, loaded_preset.mod1_osc_mod_amount);
                             setter.set_parameter(&params.osc_1_retrigger, loaded_preset.mod1_osc_retrigger);
                             setter.set_parameter(&params.osc_1_atk_curve, loaded_preset.mod1_osc_atk_curve);
                             setter.set_parameter(&params.osc_1_dec_curve, loaded_preset.mod1_osc_dec_curve);
@@ -868,7 +868,6 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.osc_2_decay, loaded_preset.mod2_osc_decay);
                             setter.set_parameter(&params.osc_2_sustain, loaded_preset.mod2_osc_sustain);
                             setter.set_parameter(&params.osc_2_release, loaded_preset.mod2_osc_release);
-                            setter.set_parameter(&params.osc_2_mod_amount, loaded_preset.mod2_osc_mod_amount);
                             setter.set_parameter(&params.osc_2_retrigger, loaded_preset.mod2_osc_retrigger);
                             setter.set_parameter(&params.osc_2_atk_curve, loaded_preset.mod2_osc_atk_curve);
                             setter.set_parameter(&params.osc_2_dec_curve, loaded_preset.mod2_osc_dec_curve);
@@ -895,7 +894,6 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.osc_3_decay, loaded_preset.mod3_osc_decay);
                             setter.set_parameter(&params.osc_3_sustain, loaded_preset.mod3_osc_sustain);
                             setter.set_parameter(&params.osc_3_release, loaded_preset.mod3_osc_release);
-                            setter.set_parameter(&params.osc_3_mod_amount, loaded_preset.mod3_osc_mod_amount);
                             setter.set_parameter(&params.osc_3_retrigger, loaded_preset.mod3_osc_retrigger);
                             setter.set_parameter(&params.osc_3_atk_curve, loaded_preset.mod3_osc_atk_curve);
                             setter.set_parameter(&params.osc_3_dec_curve, loaded_preset.mod3_osc_dec_curve);
@@ -920,11 +918,7 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.filter_env_decay, loaded_preset.filter_env_decay);
                             setter.set_parameter(&params.filter_env_curve, loaded_preset.filter_env_curve);
 
-                            setter.set_parameter(&params.prev_preset_index, params.preset_index.value());
-                        }
-                        // Set this to reload preset after other thread loads in our bank file - the above if statement will be true and reload preset
-                        if new_loading_preset_bank || **retrigger_preset_load_arc{
-                            setter.set_parameter(&params.prev_preset_index, -1);
+                            reload_entire_preset.lock().unwrap().store(false, Ordering::Relaxed);
                         }
 
                         // Change colors - there's probably a better way to do this
@@ -1293,21 +1287,28 @@ impl Plugin for Actuate {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         // Clear any voices on change of module type (especially during play)
-        if self._audio_module_1_type != self.prev_module_1 {
+        if self.clear_voices.clone().load(Ordering::Relaxed) {
             self.audio_module_1.clear_voices();
-            self.prev_module_1 = self._audio_module_1_type;
-        }
-        if self._audio_module_2_type != self.prev_module_2 {
             self.audio_module_2.clear_voices();
-            self.prev_module_2 = self._audio_module_2_type;
-        }
-        if self._audio_module_3_type != self.prev_module_3 {
             self.audio_module_3.clear_voices();
-            self.prev_module_3 = self._audio_module_3_type;
+            self.clear_voices.store(false, Ordering::Relaxed);
         }
         self.process_midi(context, buffer);
         ProcessStatus::Normal
     }
+
+    const HARD_REALTIME_ONLY: bool = false;
+
+    fn task_executor(&mut self) -> TaskExecutor<Self> {
+        // In the default implementation we can simply ignore the value
+        Box::new(|_| ())
+    }
+
+    fn filter_state(state: &mut PluginState) {}
+
+    fn reset(&mut self) {}
+
+    fn deactivate(&mut self) {}
 }
 
 impl Actuate {
@@ -1324,7 +1325,7 @@ impl Actuate {
             }
             // Preset UI // next, prev, load, save
             // Load the non-gui related preset stuff!
-            if (self.params.prev_preset_index.value() != self.params.preset_index.value() || *self.retrigger_preset_load.clone().lock().unwrap()) && !self.file_dialog {
+            if (self.reload_entire_preset.clone().lock().unwrap().load(Ordering::Relaxed)) && !self.file_dialog {
                 self.file_dialog = true;
                 self.file_open_buffer_timer = 0;
 
@@ -1564,7 +1565,6 @@ impl Actuate {
                     mod1_osc_decay: 0.0001, 
                     mod1_osc_sustain: 999.9, 
                     mod1_osc_release: 5.0, 
-                    mod1_osc_mod_amount: 0.0, 
                     mod1_osc_retrigger: RetriggerStyle::Retrigger, 
                     mod1_osc_atk_curve: SmoothStyle::Linear, 
                     mod1_osc_dec_curve: SmoothStyle::Linear, 
@@ -1598,7 +1598,6 @@ impl Actuate {
                     mod2_osc_decay: 0.0001, 
                     mod2_osc_sustain: 999.9, 
                     mod2_osc_release: 5.0, 
-                    mod2_osc_mod_amount: 0.0, 
                     mod2_osc_retrigger: RetriggerStyle::Retrigger, 
                     mod2_osc_atk_curve: SmoothStyle::Linear, 
                     mod2_osc_dec_curve: SmoothStyle::Linear, 
@@ -1632,7 +1631,6 @@ impl Actuate {
                     mod3_osc_decay: 0.0001, 
                     mod3_osc_sustain: 999.9, 
                     mod3_osc_release: 5.0, 
-                    mod3_osc_mod_amount: 0.0, 
                     mod3_osc_retrigger: RetriggerStyle::Retrigger, 
                     mod3_osc_atk_curve: SmoothStyle::Linear, 
                     mod3_osc_dec_curve: SmoothStyle::Linear, 
@@ -1774,7 +1772,6 @@ impl Actuate {
             mod1_osc_decay: self.audio_module_1.osc_decay,
             mod1_osc_sustain: self.audio_module_1.osc_sustain,
             mod1_osc_release: self.audio_module_1.osc_release,
-            mod1_osc_mod_amount: self.audio_module_1.osc_mod_amount,
             mod1_osc_retrigger: self.audio_module_1.osc_retrigger,
             mod1_osc_atk_curve: self.audio_module_1.osc_atk_curve,
             mod1_osc_dec_curve: self.audio_module_1.osc_dec_curve,
@@ -1814,7 +1811,6 @@ impl Actuate {
             mod2_osc_decay: self.audio_module_2.osc_decay,
             mod2_osc_sustain: self.audio_module_2.osc_sustain,
             mod2_osc_release: self.audio_module_2.osc_release,
-            mod2_osc_mod_amount: self.audio_module_2.osc_mod_amount,
             mod2_osc_retrigger: self.audio_module_2.osc_retrigger,
             mod2_osc_atk_curve: self.audio_module_2.osc_atk_curve,
             mod2_osc_dec_curve: self.audio_module_2.osc_dec_curve,
@@ -1854,7 +1850,6 @@ impl Actuate {
             mod3_osc_decay: self.audio_module_3.osc_decay,
             mod3_osc_sustain: self.audio_module_3.osc_sustain,
             mod3_osc_release: self.audio_module_3.osc_release,
-            mod3_osc_mod_amount: self.audio_module_3.osc_mod_amount,
             mod3_osc_retrigger: self.audio_module_3.osc_retrigger,
             mod3_osc_atk_curve: self.audio_module_3.osc_atk_curve,
             mod3_osc_dec_curve: self.audio_module_3.osc_dec_curve,
