@@ -25,17 +25,16 @@ use std::{sync::Arc, collections::VecDeque, path::PathBuf, f32::consts::{SQRT_2}
 use nih_plug::{prelude::{Smoother, SmoothingStyle, ParamSetter, NoteEvent}, util, params::enums::Enum};
 use nih_plug_egui::{egui::{Ui, RichText, self}};
 use rand::Rng;
-use rfd::FileDialog;
 use pitch_shift::PitchShifter;
 use serde::{Deserialize, Serialize};
 
 // Audio module files
 pub(crate) mod Oscillator;
 use Oscillator::VoiceType;
-use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch, SMALLER_FONT, StateVariableFilter::ResonanceType, CustomVerticalSlider, CustomParamSlider};
+use crate::{ActuateParams, ui_knob, GUI_VALS, toggle_switch, SMALLER_FONT, CustomVerticalSlider, CustomParamSlider};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
 use CustomParamSlider::ParamSlider as HorizontalParamSlider;
-use self::Oscillator::{RetriggerStyle, OscState, SmoothStyle};
+use self::Oscillator::{RetriggerStyle, OscState, SmoothStyle, DeterministicWhiteNoiseGenerator};
 
 // When you create a new audio module, you should add it here
 #[derive(Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -182,8 +181,7 @@ pub struct AudioModule {
     is_playing: bool,
 
     // Noise variables
-    x1: i32,
-    x2: i32,
+    noise_obj: Oscillator::DeterministicWhiteNoiseGenerator,
 }
 
 // When you create a new audio module you need to add its default creation here as well
@@ -243,9 +241,7 @@ impl Default for AudioModule {
             is_playing: false,
 
             // Noise variables
-            x1: 0x67452301,
-            // Use the overflow property intentionally here
-            x2: 0xEFCDAB89,
+            noise_obj: DeterministicWhiteNoiseGenerator::new(371722539),
         }
     }
 }
@@ -267,6 +263,7 @@ impl AudioModule {
 
         // Prevent Speaker Destruction since setter is valid here - Resonance spikes and non clipped signal are deadly
         // I recognize this is ugly/bad practice
+        /*
         match params.filter_res_type.value() {
             ResonanceType::Default => {}, // Do nothing
             _ => { 
@@ -275,6 +272,7 @@ impl AudioModule {
                 }
             }
         }
+        */
 
         const VERT_BAR_HEIGHT: f32 = 106.0;
         let VERT_BAR_HEIGHT_SHORTENED: f32 = VERT_BAR_HEIGHT - ui.spacing().interact_size.y;
@@ -827,6 +825,15 @@ impl AudioModule {
             1 => {
                 self.audio_module_type = params._audio_module_1_type.value();
                 self.osc_type = params.osc_1_type.value();
+                if self.osc_octave != params.osc_1_octave.value() {
+                    let oct_shift = self.osc_octave - params.osc_1_octave.value();
+                    for voice in self.playing_voices.voices.iter_mut() {
+                        voice.note -= (oct_shift * 12) as u8;
+                    }
+                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                        uni_voice.note -= (oct_shift * 12) as u8;
+                    }
+                }
                 self.osc_octave = params.osc_1_octave.value();
                 self.osc_semitones = params.osc_1_semitones.value();
                 self.osc_detune = params.osc_1_detune.value();
@@ -859,6 +866,15 @@ impl AudioModule {
             2 => {
                 self.audio_module_type = params._audio_module_2_type.value();
                 self.osc_type = params.osc_2_type.value();
+                if self.osc_octave != params.osc_2_octave.value() {
+                    let oct_shift = self.osc_octave - params.osc_2_octave.value();
+                    for voice in self.playing_voices.voices.iter_mut() {
+                        voice.note -= (oct_shift * 12) as u8;
+                    }
+                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                        uni_voice.note -= (oct_shift * 12) as u8;
+                    }
+                }
                 self.osc_octave = params.osc_2_octave.value();
                 self.osc_semitones = params.osc_2_semitones.value();
                 self.osc_detune = params.osc_2_detune.value();
@@ -885,6 +901,15 @@ impl AudioModule {
             3 => {
                 self.audio_module_type = params._audio_module_3_type.value();
                 self.osc_type = params.osc_3_type.value();
+                if self.osc_octave != params.osc_3_octave.value() {
+                    let oct_shift = self.osc_octave - params.osc_3_octave.value();
+                    for voice in self.playing_voices.voices.iter_mut() {
+                        voice.note -= (oct_shift * 12) as u8;
+                    }
+                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                        uni_voice.note -= (oct_shift * 12) as u8;
+                    }
+                }
                 self.osc_octave = params.osc_3_octave.value();
                 self.osc_semitones = params.osc_3_semitones.value();
                 self.osc_detune = params.osc_3_detune.value();
@@ -916,56 +941,13 @@ impl AudioModule {
     // Handle the audio module midi events and regular pricessing
     // This is an INDIVIDUAL instance process unlike the GUI function
     // This sends back the OSC output + note on for filter to reset
-    pub fn process(&mut self, sample_id: usize, params: Arc<ActuateParams>, event_passed: Option<NoteEvent<()>>, voice_index: usize, voice_max: usize, file_open: &mut bool) -> (f32, f32, bool) {
+    pub fn process(&mut self, sample_id: usize, params: Arc<ActuateParams>, event_passed: Option<NoteEvent<()>>, voice_index: usize, voice_max: usize, something_updated: bool) -> (f32, f32, bool) {
         // If the process is in here the file dialog is not open per lib.rs
 
-        let temp_file_open = file_open.clone();
-        // Get around the egui ui thread by using BoolParam changes :)
-        if params.load_sample_1.value() && voice_index == 1 && !temp_file_open {
-            *file_open = true;
-            let sample_file = FileDialog::new()
-                        .add_filter("wav", &["wav"])
-                        //.set_directory("/")
-                        .pick_file();
-            if Option::is_some(&sample_file) {
-                self.load_new_sample(sample_file.unwrap());
-            }
+        if something_updated {
+            // This function pulls our parameters for each audio module index
+            self.consume_params(params, voice_index);
         }
-        else if params.load_sample_2.value() && voice_index == 2  && !temp_file_open {
-            *file_open = true;
-            let sample_file = FileDialog::new()
-                .add_filter("wav", &["wav"])
-                //.set_directory("/")
-                .pick_file();
-            if Option::is_some(&sample_file) {
-                self.load_new_sample(sample_file.unwrap());
-            }
-        }
-        else if params.load_sample_3.value() && voice_index == 3  && !temp_file_open {
-            *file_open = true;
-            let sample_file = FileDialog::new()
-                .add_filter("wav", &["wav"])
-                //.set_directory("/")
-                .pick_file();
-            if Option::is_some(&sample_file) {
-                self.load_new_sample(sample_file.unwrap());
-            }
-        }
-
-        // Skip processing if our file dialog is open/running
-        if *file_open {
-            self.playing_voices.voices.clear();
-            self.unison_voices.voices.clear();
-            return (0.0, 0.0, false);
-        }
-
-        // Loader gets changed back from gui thread and triggers this
-        if !params.load_sample_1.value() && !params.load_sample_1.value() && !params.load_sample_1.value() {
-            *file_open = false;
-        }
-
-        // This function pulls our parameters for each audio module index
-        self.consume_params(params, voice_index);
 
         // Midi events are processed here
         let mut note_on: bool = false;
@@ -1165,7 +1147,7 @@ impl AudioModule {
                         };
 
                         // Add our voice struct to our voice tracking deque
-                        self.playing_voices.voices.push_front(new_voice);
+                        self.playing_voices.voices.push_back(new_voice);
 
                         // Add unison voices to our voice tracking deque
                         if self.osc_unison > 1 && self.audio_module_type == AudioModuleType::Osc {
@@ -1222,7 +1204,7 @@ impl AudioModule {
                                     grain_state: GrainState::Attacking,
                                 };
                                 
-                                self.unison_voices.voices.push_front(new_unison_voice);
+                                self.unison_voices.voices.push_back(new_unison_voice);
                             }
                         }
 
@@ -1620,7 +1602,7 @@ impl AudioModule {
 
         // Add our new grain to our voices
         if new_grain {
-            self.playing_voices.voices.push_front(next_grain);
+            self.playing_voices.voices.push_back(next_grain);
         }
 
         ////////////////////////////////////////////////////////////
@@ -1649,15 +1631,15 @@ impl AudioModule {
                     voice.phase_delta = voice.frequency / self.sample_rate;
                     if self.audio_module_type == AudioModuleType::Osc {
                         center_voices += match self.osc_type {
-                            VoiceType::Sine  => Oscillator::calculate_sine(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::Tri => Oscillator::calculate_tri(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::Saw   => Oscillator::calculate_saw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::RSaw  => Oscillator::calculate_rsaw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::InSaw  => Oscillator::calculate_inward_saw(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::Ramp => Oscillator::calculate_ramp(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, voice.phase) * temp_osc_gain_multiplier,
-                            VoiceType::Noise => Oscillator::generate_noise(self.x1, self.x2) * temp_osc_gain_multiplier,
+                            VoiceType::Sine  => Oscillator::get_sine(voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Tri => Oscillator::get_tri(voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Saw   => Oscillator::get_saw(voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::RSaw  => Oscillator::get_rsaw(voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Ramp => Oscillator::get_ramp(voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Square => Oscillator::get_square(voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::RSquare => Oscillator::get_rsquare(voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Pulse => Oscillator::get_pulse(voice.phase) * temp_osc_gain_multiplier,
+                            VoiceType::Noise => self.noise_obj.generate_sample() * temp_osc_gain_multiplier,
                         };
                     }
                     // This is the Additive scenario
@@ -1692,15 +1674,15 @@ impl AudioModule {
                         let mut temp_unison_voice: f32 = 0.0;
                         if self.audio_module_type == AudioModuleType::Osc {
                             temp_unison_voice = match self.osc_type {
-                                VoiceType::Sine  => Oscillator::calculate_sine(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                                VoiceType::Tri => Oscillator::calculate_tri(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                                VoiceType::Saw   => Oscillator::calculate_saw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                                VoiceType::RSaw  => Oscillator::calculate_rsaw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                                VoiceType::InSaw  => Oscillator::calculate_inward_saw(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                                VoiceType::Ramp => Oscillator::calculate_ramp(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                                VoiceType::Square => Oscillator::calculate_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                                VoiceType::RSquare => Oscillator::calculate_rounded_square(self.osc_mod_amount, unison_voice.phase) * temp_osc_gain_multiplier,
-                                VoiceType::Noise => Oscillator::generate_noise(self.x1, self.x2) * temp_osc_gain_multiplier,
+                                VoiceType::Sine  => Oscillator::get_sine(unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Tri => Oscillator::get_tri(unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Saw   => Oscillator::get_saw(unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::RSaw  => Oscillator::get_rsaw(unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Ramp => Oscillator::get_ramp(unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Square => Oscillator::get_square(unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::RSquare => Oscillator::get_rsquare(unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Pulse => Oscillator::get_pulse(unison_voice.phase) * temp_osc_gain_multiplier,
+                                VoiceType::Noise => self.noise_obj.generate_sample() * temp_osc_gain_multiplier,
                             };
                         }
                         else {
@@ -1869,7 +1851,7 @@ impl AudioModule {
         self.unison_voices.voices.clear();
     }
 
-    fn load_new_sample(&mut self, path: PathBuf) {
+    pub fn load_new_sample(&mut self, path: PathBuf) {
         let reader = hound::WavReader::open(&path);
         if let Ok(mut reader) = reader {
             let spec = reader.spec();

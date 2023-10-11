@@ -27,8 +27,9 @@ use nih_plug::{params::enums::Enum};
 use lazy_static::lazy_static;
 
 // Make a lookup table for faster but less accurate sine approx for additive
-const TABLE_SIZE: usize = 2048;
+const TABLE_SIZE: usize = 512;
 lazy_static! {
+    // Generating waveform tables
     static ref SIN_TABLE: [f32; TABLE_SIZE] = {
         let mut table = [0.0; TABLE_SIZE];
         for i in 0..TABLE_SIZE {
@@ -37,6 +38,106 @@ lazy_static! {
         }
         table
     };
+    static ref SAW_TABLE: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;  // Adjusted phase calculation
+            // Calculate the sawtooth waveform directly
+            table[i] = -1.0 + 2.0 * phase;
+        }
+        table
+    };
+    static ref RSAW_TABLE: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        let rounding_amount: i32 = 15; // Adjust the rounding amount as needed
+        
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+            let scaled_phase = -1.0 + 2.0 * phase;
+            
+            // Calculate the rounded sawtooth waveform directly
+            table[i] = scaled_phase * (1.0 - scaled_phase.powi(2 * rounding_amount));
+        }
+        
+        table
+    };
+    static ref RAMP_TABLE: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+            let scaled_phase = -1.0 + 2.0 * phase;
+    
+            // Calculate the ramp wave directly
+            table[i] = -scaled_phase % consts::TAU;
+        }
+        
+        table
+    };
+    static ref SQUARE_TABLE: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+    
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+            
+            // Calculate the square wave directly
+            if phase < 0.5 {
+                table[i] = 1.0;  // Positive phase half
+            } else {
+                table[i] = -1.0;  // Negative phase half
+            }
+        }
+        
+        table
+    };
+    static ref PULSE_TABLE: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+    
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+            
+            // Calculate the pulse wave directly
+            if phase < 0.25 {
+                table[i] = 1.0;  // Positive phase quarter
+            } else {
+                table[i] = -1.0;  // Negative phase three-quarters
+            }
+        }
+        
+        table
+    };
+    static ref RSQUARE_TABLE: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        let mod_amount: f32 = 0.15;
+        let mod_scaled: i32 = scale_range(mod_amount, 2.0, 8.0).floor() as i32 * 2;
+        
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+            let scaled_phase = -1.0 + 2.0 * phase;
+            
+            // Calculate the rounded square wave directly
+            if scaled_phase < 0.0 {
+                table[i] = (2.0 * scaled_phase + 1.0).powi(mod_scaled) - 1.0;
+            } else {
+                table[i] = -(2.0 * scaled_phase - 1.0).powi(mod_scaled) + 1.0;
+            }
+        }
+        
+        table
+    };
+    static ref TRI_TABLE: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+            let tri = (FRAC_2_PI) * (((2.0 * PI) * phase).sin()).asin();
+            
+            // Store the calculated triangle wave value in the table
+            table[i] = tri;
+        }
+        
+        table
+    };    
 }
 
 #[derive(Enum, PartialEq, Eq, Debug, Copy, Clone, Serialize, Deserialize)]
@@ -45,10 +146,10 @@ pub enum VoiceType {
     Tri,
     Saw,
     RSaw,
-    InSaw,
     Ramp,
     Square,
     RSquare,
+    Pulse,
     Noise,
 }
 
@@ -98,156 +199,84 @@ pub fn calculate_fast_sine(phase: f32) -> f32 {
     sine
 }
 
-// Sine wave oscillator modded with some sort of saw wave multiplication
-pub fn calculate_sine(mod_amount: f32, phase: f32) -> f32 {
-    if mod_amount == 0.0 {
-        //let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-        //return SIN_TABLE[index];
-        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-        let frac = phase * (TABLE_SIZE - 1) as f32 - index as f32;
-        let next_index = index + 1;
+// Sine wave oscillator with lerp smoothing
+pub fn get_sine(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    let frac = phase * (TABLE_SIZE - 1) as f32 - index as f32;
+    let next_index = index + 1;
 
-        let sine = if next_index < TABLE_SIZE - 1 {
-            SIN_TABLE[index] * (1.0 - frac) + SIN_TABLE[next_index] * frac
-        } else {
-            SIN_TABLE[index] // If next_index is out of bounds, use the current index
-        };
-        return sine;
-    }
-
-    // Continue with the existing code for other cases
-    let scaled_phase = scale_range(phase, -1.0, 1.0);
-    let tau = consts::TAU;
-    let sine: f32;
-
-    match mod_amount {
-        mod_amount if mod_amount <= 0.33 => {
-            sine = (phase * tau).sin();
-        }
-        mod_amount if mod_amount < 0.67 => {
-            // X^2 Approximation
-            let x = 2.0 * scaled_phase;
-            sine = if x < 0.0 {
-                ((x + 1.0).powi(2) - 1.0) * 0.99
-            } else {
-                (-(x - 1.0).powi(2) + 1.0) * 0.99
-            };
-        }
-        _ => {
-            // Allegedly other efficient approximation
-            sine = (24.5 * scaled_phase / tau) - (24.5 * scaled_phase * scaled_phase.abs() / tau);
-        }
-    }
-
+    let sine = if next_index < TABLE_SIZE - 1 {
+        SIN_TABLE[index] * (1.0 - frac) + SIN_TABLE[next_index] * frac
+    } else {
+        SIN_TABLE[index] // If next_index is out of bounds, use the current index
+    };
     sine
 }
 
-    
-
 // Rounded Saw Wave with rounding amount
-pub fn calculate_rsaw(rounding: f32, phase: f32) -> f32 {
-    let rounding_amount: i32 = scale_range(rounding, 2.0, 30.0).floor() as i32;
-    let scaled_phase: f32 = scale_range(phase, -1.0, 1.0);
-    // n = rounding int
-    // f(x) = x * (1 − x^(2n))
-    scaled_phase * (1.0 - scaled_phase.powi(2 * rounding_amount))
+pub fn get_rsaw(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    return RSAW_TABLE[index];
 }
 
-
-// Saw Wave with half rectification in modifier
-pub fn calculate_saw(mod_to_bool: f32, phase: f32) -> f32 {
-    let half = mod_to_bool >= 0.5;
-    let scaled_phase = if half {
-        phase
-    } else {
-        scale_range(phase, -1.0, 1.0)
-    };
-    
-    // f(x) = x mod period
-    scaled_phase % consts::TAU
+// Saw Wave
+pub fn get_saw(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    return SAW_TABLE[index];
 }
 
-
-// Ramp Wave with half rectification in modifier
-pub fn calculate_ramp(mod_to_bool: f32, phase: f32) -> f32 {
-    let half = mod_to_bool >= 0.5;
-    let scaled_phase = if half {
-        phase
-    } else {
-        scale_range(phase, -1.0, 1.0)
-    };
-
-    // f(x) = -x mod period
-    -scaled_phase % consts::TAU
+// Ramp Wave
+pub fn get_ramp(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    return RAMP_TABLE[index];
 }
 
-// Inward Curved Saw Wave
-pub fn calculate_inward_saw(curve_amount: f32, phase: f32) -> f32 {
-    let mut calc_curve_amount: i32 = scale_range(curve_amount, 1.0, 4.99).floor() as i32;
-    
-    // Direct mappings of curve_amount
-    match calc_curve_amount {
-        1 => calc_curve_amount = 2,
-        2 => calc_curve_amount = 10,
-        3 => calc_curve_amount = 3,
-        4 => calc_curve_amount = 11,
-        // Unreachable
-        _ => calc_curve_amount = 1,
+// Square Wave
+pub fn get_square(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    return SQUARE_TABLE[index];
+}
+
+// 1/4 Pulse Wave
+pub fn get_pulse(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    return PULSE_TABLE[index];
+}
+
+pub fn get_rsquare(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    return RSQUARE_TABLE[index];
+}
+
+pub fn get_tri(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    return TRI_TABLE[index];
+}
+
+#[derive(Clone)]
+pub struct DeterministicWhiteNoiseGenerator {
+    seed: u64,
+}
+
+impl DeterministicWhiteNoiseGenerator {
+    pub fn new(seed: u64) -> Self {
+        // Magic number seed I made up to have same noise pattern every time
+        DeterministicWhiteNoiseGenerator { seed }
     }
 
-    let scaled_phase = scale_range(phase, -1.0, 1.0);
-
-    // Calculate the inward curved saw wave directly
-    let result = if scaled_phase <= 0.0 {
-        (scaled_phase + 1.0).powi(calc_curve_amount)
-    } else {
-        -(scaled_phase - 1.0).powi(calc_curve_amount)
-    };
-
-    result
-}
-
-pub fn calculate_square(mod_amount: f32, phase: f32) -> f32 {
-    let mod_scaled: f32 = scale_range(1.0 - mod_amount, 0.0625, 0.5);
-    // Hard cut function scaling to a pulse with mod
-    if phase >= mod_scaled {
-        -1.0
-    } else {
-        1.0
+    pub fn generate_sample(&mut self) -> f32 {
+        let random_value = self.xorshift();
+        // Scale the random value to be between -1.0 and 1.0
+        let sample = (random_value as f32 / u64::MAX as f32) * 2.0 - 1.0;
+        sample
     }
-}
 
-pub fn calculate_rounded_square(mod_amount: f32, phase: f32) -> f32 {
-    let scaled_phase: f32 = scale_range(phase, -1.0, 1.0);
-    let mod_scaled: i32 = scale_range(mod_amount, 2.0, 8.0).floor() as i32 * 2;
-    // Rounding function is approximated with these exponential functions
-    if scaled_phase <  0.0 {
-        (2.0 * scaled_phase + 1.0).powi(mod_scaled) - 1.0
-    } else {
-        -(2.0 * scaled_phase - 1.0).powi(mod_scaled) + 1.0
+    fn xorshift(&mut self) -> u64 {
+        let mut x = self.seed;
+        x ^= x << 21;
+        x ^= x >> 35;
+        x ^= x << 4;
+        self.seed = x;
+        x
     }
-}
-
-pub fn calculate_tri(mod_amount: f32, phase: f32) -> f32 {
-    let tri: f32 = (FRAC_2_PI) * (((2.0 * PI) * phase).sin()).asin();
-    let mut tan_tri: f32 = 0.0;
-    // Mix in 
-    if mod_amount >  0.0 {
-        tan_tri = ((phase * PI).sin()).tan()/(consts::FRAC_PI_2);
-    }
-    // Use mod to fade between tri and weird tan tri
-    tri*(1.0 - mod_amount) + tan_tri*mod_amount
-}
-
-#[allow(overflowing_literals)]
-pub fn generate_noise(mut x1: i32,mut x2: i32) -> f32 {
-    // 80% vol
-    let level = 0.8;
-    let f_scale = 2.0 / 0xFFFFFFFF as f32;
-
-    let scale = f_scale * level;
-    x1 ^= x2;
-    let sample = x2 as f32 * scale;
-    x2 += x1;
-    sample
 }
