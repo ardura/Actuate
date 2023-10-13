@@ -261,27 +261,13 @@ impl AudioModule {
             setter.set_parameter(&params.load_sample_3, false);
         }
 
-        // Prevent Speaker Destruction since setter is valid here - Resonance spikes and non clipped signal are deadly
-        // I recognize this is ugly/bad practice
-        /*
-        match params.filter_res_type.value() {
-            ResonanceType::Default => {}, // Do nothing
-            _ => { 
-                if params.filter_resonance.value() < 0.15 {
-                    setter.set_parameter(&params.filter_resonance, 0.15);
-                }
-            }
-        }
-        */
-
         const VERT_BAR_HEIGHT: f32 = 106.0;
         let VERT_BAR_HEIGHT_SHORTENED: f32 = VERT_BAR_HEIGHT - ui.spacing().interact_size.y;
         const VERT_BAR_WIDTH: f32 = 14.0;
         const HCURVE_WIDTH: f32 = 120.0;
         const HCURVE_BWIDTH: f32 = 28.0;
 
-        // This is kind of ugly but I couldn't figure out a better architechture for egui and separating audio modules
-        
+        // This is ugly but I couldn't figure out a better architechture for egui and separating audio modules
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         // Spot One (1)
@@ -820,7 +806,7 @@ impl AudioModule {
 
     // Index proper params from knobs
     // This lets us have a copy for voices, and also track changes like restretch changing or ADR slopes
-    fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) {
+    pub fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) {
         match voice_index {
             1 => {
                 self.audio_module_type = params._audio_module_1_type.value();
@@ -941,13 +927,8 @@ impl AudioModule {
     // Handle the audio module midi events and regular pricessing
     // This is an INDIVIDUAL instance process unlike the GUI function
     // This sends back the OSC output + note on for filter to reset
-    pub fn process(&mut self, sample_id: usize, params: Arc<ActuateParams>, event_passed: Option<NoteEvent<()>>, voice_index: usize, voice_max: usize, something_updated: bool) -> (f32, f32, bool) {
+    pub fn process(&mut self, sample_id: usize, event_passed: Option<NoteEvent<()>>, voice_max: usize) -> (f32, f32, bool) {
         // If the process is in here the file dialog is not open per lib.rs
-
-        if something_updated {
-            // This function pulls our parameters for each audio module index
-            self.consume_params(params, voice_index);
-        }
 
         // Midi events are processed here
         let mut note_on: bool = false;
@@ -1076,28 +1057,35 @@ impl AudioModule {
                         let scaled_end_pos;
                         match self.audio_module_type {
                             AudioModuleType::Sampler | AudioModuleType::Granulizer => {
-                                // If our loaded sample variable or generated sample library has any content
-                                if self.loaded_sample[0].len() > 1 && self.sample_lib[0][0].len() > 1 && self.sample_lib.len() > 1 {
-                                    // Create our granulizer/sampler starting position from our knob scale
-                                    scaled_sample_pos = if self.start_position > 0.0 && self.osc_retrigger != RetriggerStyle::Random && self.osc_retrigger != RetriggerStyle::UniRandom {
-                                        (self.sample_lib[note as usize][0].len() as f32 * self.start_position).floor() as usize
+                                // If ANY Sample content
+                                if self.loaded_sample.len() > 0 && self.sample_lib.len() > 0 {
+                                    // If our loaded sample variable or generated sample library has any content
+                                    if self.loaded_sample[0].len() > 1 && self.sample_lib[0][0].len() > 1 && self.sample_lib.len() > 1 {
+                                        // Create our granulizer/sampler starting position from our knob scale
+                                        scaled_sample_pos = if self.start_position > 0.0 && self.osc_retrigger != RetriggerStyle::Random && self.osc_retrigger != RetriggerStyle::UniRandom {
+                                            (self.sample_lib[note as usize][0].len() as f32 * self.start_position).floor() as usize
+                                        }
+                                        // Retrigger and use 0
+                                        else if self.osc_retrigger != RetriggerStyle::Random && self.osc_retrigger != RetriggerStyle::UniRandom {
+                                            0_usize
+                                        } 
+                                        // Retrigger with random
+                                        else {
+                                            new_phase.floor() as usize
+                                        };
+                                    
+                                        scaled_end_pos = if self._end_position < 1.0 {
+                                            (self.sample_lib[note as usize][0].len() as f32 * self._end_position).ceil() as usize
+                                        }
+                                        // use end positions
+                                        else {
+                                            self.sample_lib[note as usize][0].len()
+                                        };
                                     }
-                                    // Retrigger and use 0
-                                    else if self.osc_retrigger != RetriggerStyle::Random && self.osc_retrigger != RetriggerStyle::UniRandom {
-                                        0_usize
-                                    } 
-                                    // Retrigger with random
                                     else {
-                                        new_phase.floor() as usize
-                                    };
-                                
-                                    scaled_end_pos = if self._end_position < 1.0 {
-                                        (self.sample_lib[note as usize][0].len() as f32 * self._end_position).ceil() as usize
+                                        // Nothing is in our sample library, skip attempting audio output
+                                        return (0.0,0.0,false);
                                     }
-                                    // use end positions
-                                    else {
-                                        self.sample_lib[note as usize][0].len()
-                                    };
                                 }
                                 else {
                                     // Nothing is in our sample library, skip attempting audio output
