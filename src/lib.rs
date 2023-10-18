@@ -20,29 +20,44 @@ Actuate - Synthesizer + Sampler/Granulizer by Ardura
 */
 #![allow(non_snake_case)]
 
-use StateVariableFilter::ResonanceType;
-use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Rect, Rounding, RichText, FontId, Pos2}, EguiState};
+use nih_plug_egui::{
+    create_egui_editor,
+    egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Rounding, Vec2},
+    EguiState,
+};
 use rfd::FileDialog;
+use StateVariableFilter::ResonanceType;
 
-use std::{sync::{Arc, Mutex, atomic::{AtomicBool, Ordering, AtomicU32}}, ops::RangeInclusive, fs::{File}, io::{Write}};
-use nih_plug::{prelude::*};
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use nih_plug::prelude::*;
 use phf::phf_map;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
-use flate2::Compression;
-use flate2::write::GzEncoder;
-use flate2::read::GzDecoder;
+use std::{
+    fs::File,
+    io::Write,
+    ops::RangeInclusive,
+    sync::{
+        atomic::{AtomicBool, AtomicU32, Ordering},
+        Arc, Mutex,
+    },
+};
 
 // My Files
-use audio_module::{AudioModuleType, AudioModule, Oscillator::{self, RetriggerStyle, SmoothStyle}};
 use crate::audio_module::Oscillator::VoiceType;
-mod audio_module;
-mod StateVariableFilter;
-mod ui_knob;
-mod toggle_switch;
+use audio_module::{
+    AudioModule, AudioModuleType,
+    Oscillator::{self, RetriggerStyle, SmoothStyle},
+};
 mod BoolButton;
-mod CustomVerticalSlider;
 mod CustomParamSlider;
+mod CustomVerticalSlider;
+mod StateVariableFilter;
+mod audio_module;
+mod toggle_switch;
+mod ui_knob;
 
 pub struct LoadedSample(Vec<Vec<f32>>);
 
@@ -68,13 +83,14 @@ pub static GUI_VALS: phf::Map<&'static str, Color32> = phf_map! {
 
 // Font
 const FONT: nih_plug_egui::egui::FontId = FontId::monospace(14.0);
+const LOADING_FONT: nih_plug_egui::egui::FontId = FontId::monospace(20.0);
 const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::monospace(11.0);
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ActuatePreset {
     // Modules 1
     ///////////////////////////////////////////////////////////
-    mod1_audio_module_type: AudioModuleType,    
+    mod1_audio_module_type: AudioModuleType,
     mod1_audio_module_level: f32,
     // Granulizer/Sampler
     mod1_loaded_sample: Vec<Vec<f32>>,
@@ -114,7 +130,7 @@ struct ActuatePreset {
 
     // Modules 2
     ///////////////////////////////////////////////////////////
-    mod2_audio_module_type: AudioModuleType,    
+    mod2_audio_module_type: AudioModuleType,
     mod2_audio_module_level: f32,
     // Granulizer/Sampler
     mod2_loaded_sample: Vec<Vec<f32>>,
@@ -154,8 +170,8 @@ struct ActuatePreset {
 
     // Modules 3
     ///////////////////////////////////////////////////////////
-    mod3_audio_module_type: AudioModuleType,   
-    mod3_audio_module_level: f32, 
+    mod3_audio_module_type: AudioModuleType,
+    mod3_audio_module_level: f32,
     // Granulizer/Sampler
     mod3_loaded_sample: Vec<Vec<f32>>,
     mod3_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -217,19 +233,17 @@ pub struct Actuate {
     file_dialog: Arc<AtomicBool>,
     file_open_buffer_timer: Arc<AtomicU32>,
     current_preset: Arc<AtomicU32>,
-    
+
     update_current_preset: Arc<AtomicBool>,
     load_bank: Arc<AtomicBool>,
     save_bank: Arc<AtomicBool>,
-    next_preset: Arc<AtomicBool>,
-    prev_preset: Arc<AtomicBool>,
 
     // Modules
-    audio_module_1: AudioModule,
+    audio_module_1: Arc<Mutex<AudioModule>>,
     _audio_module_1_type: AudioModuleType,
-    audio_module_2: AudioModule,
+    audio_module_2: Arc<Mutex<AudioModule>>,
     _audio_module_2_type: AudioModuleType,
-    audio_module_3: AudioModule,
+    audio_module_3: Arc<Mutex<AudioModule>>,
     _audio_module_3_type: AudioModuleType,
 
     // Filter
@@ -259,22 +273,16 @@ impl Default for Actuate {
         let load_bank = Arc::new(AtomicBool::new(false));
         let save_bank = Arc::new(AtomicBool::new(false));
         let update_current_preset = Arc::new(AtomicBool::new(false));
-        let prev_preset = Arc::new(AtomicBool::new(false));
-        let next_preset = Arc::new(AtomicBool::new(false));
 
         Self {
-            params: Arc::new(
-                ActuateParams::new(
-                    update_something.clone(), 
-                    clear_voices.clone(), 
-                    file_dialog.clone(), 
-                    prev_preset.clone(), 
-                    next_preset.clone(), 
-                    update_current_preset.clone(), 
-                    load_bank.clone(), 
-                    save_bank.clone()
-                )
-            ),
+            params: Arc::new(ActuateParams::new(
+                update_something.clone(),
+                clear_voices.clone(),
+                file_dialog.clone(),
+                update_current_preset.clone(),
+                load_bank.clone(),
+                save_bank.clone(),
+            )),
             sample_rate: 44100.0,
 
             // Plugin control ARCs
@@ -288,15 +296,13 @@ impl Default for Actuate {
             load_bank: load_bank,
             save_bank: save_bank,
             update_current_preset: update_current_preset,
-            prev_preset: prev_preset,
-            next_preset: next_preset,
 
             // Module 1
-            audio_module_1: AudioModule::default(),
+            audio_module_1: Arc::new(Mutex::new(AudioModule::default())),
             _audio_module_1_type: AudioModuleType::Osc,
-            audio_module_2: AudioModule::default(),
+            audio_module_2: Arc::new(Mutex::new(AudioModule::default())),
             _audio_module_2_type: AudioModuleType::Off,
-            audio_module_3: AudioModule::default(),
+            audio_module_3: Arc::new(Mutex::new(AudioModule::default())),
             _audio_module_3_type: AudioModuleType::Off,
 
             // Filter
@@ -304,121 +310,122 @@ impl Default for Actuate {
             filter_r: StateVariableFilter::StateVariableFilter::default(),
             filter_mod_smoother: Smoother::new(SmoothingStyle::Linear(300.0)),
 
-            // Preset UI // next, prev, load, save, update
-            //buttons: vec![false, false, false, false, false],
-
             // Preset Library DEFAULT
             preset_lib_name: String::from("Default"),
-            preset_lib: Arc::new(Mutex::new(vec![ActuatePreset { 
-                mod1_audio_module_type: AudioModuleType::Osc, 
-                mod1_audio_module_level: 1.0,
-                mod1_loaded_sample: vec![vec![0.0,0.0]], 
-                mod1_sample_lib: vec![vec![vec![0.0,0.0]]], 
-                mod1_loop_wavetable: false, 
-                mod1_single_cycle: false, 
-                mod1_restretch: true, 
-                mod1_prev_restretch: false, 
-                mod1_grain_hold: 200,
-                mod1_grain_gap: 200,
-                mod1_start_position: 0.0,
-                mod1_end_position: 1.0,
-                mod1_grain_crossfade: 50,
-                mod1_osc_type: VoiceType::Sine, 
-                mod1_osc_octave: 0, 
-                mod1_osc_semitones: 0, 
-                mod1_osc_detune: 0.0, 
-                mod1_osc_attack: 0.0001, 
-                mod1_osc_decay: 0.0001, 
-                mod1_osc_sustain: 999.9, 
-                mod1_osc_release: 5.0, 
-                mod1_osc_retrigger: RetriggerStyle::Retrigger, 
-                mod1_osc_atk_curve: SmoothStyle::Linear, 
-                mod1_osc_dec_curve: SmoothStyle::Linear, 
-                mod1_osc_rel_curve: SmoothStyle::Linear, 
-                mod1_osc_unison: 1,
-                mod1_osc_unison_detune: 0.0,
-                mod1_osc_stereo: 0.0,
-                mod1_partial0: 1.0,
-                mod1_partial0_phase: 0.0,
-                mod1_partial1: 0.0,
-                mod1_partial1_phase: 0.0,
+            preset_lib: Arc::new(Mutex::new(vec![
+                ActuatePreset {
+                    mod1_audio_module_type: AudioModuleType::Osc,
+                    mod1_audio_module_level: 1.0,
+                    mod1_loaded_sample: vec![vec![0.0, 0.0]],
+                    mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                    mod1_loop_wavetable: false,
+                    mod1_single_cycle: false,
+                    mod1_restretch: true,
+                    mod1_prev_restretch: false,
+                    mod1_grain_hold: 200,
+                    mod1_grain_gap: 200,
+                    mod1_start_position: 0.0,
+                    mod1_end_position: 1.0,
+                    mod1_grain_crossfade: 50,
+                    mod1_osc_type: VoiceType::Sine,
+                    mod1_osc_octave: 0,
+                    mod1_osc_semitones: 0,
+                    mod1_osc_detune: 0.0,
+                    mod1_osc_attack: 0.0001,
+                    mod1_osc_decay: 0.0001,
+                    mod1_osc_sustain: 999.9,
+                    mod1_osc_release: 5.0,
+                    mod1_osc_retrigger: RetriggerStyle::Retrigger,
+                    mod1_osc_atk_curve: SmoothStyle::Linear,
+                    mod1_osc_dec_curve: SmoothStyle::Linear,
+                    mod1_osc_rel_curve: SmoothStyle::Linear,
+                    mod1_osc_unison: 1,
+                    mod1_osc_unison_detune: 0.0,
+                    mod1_osc_stereo: 0.0,
+                    mod1_partial0: 1.0,
+                    mod1_partial0_phase: 0.0,
+                    mod1_partial1: 0.0,
+                    mod1_partial1_phase: 0.0,
 
-                mod2_audio_module_type: AudioModuleType::Off, 
-                mod2_audio_module_level: 1.0,
-                mod2_loaded_sample: vec![vec![0.0,0.0]], 
-                mod2_sample_lib: vec![vec![vec![0.0,0.0]]], 
-                mod2_loop_wavetable: false, 
-                mod2_single_cycle: false, 
-                mod2_restretch: true, 
-                mod2_prev_restretch: false, 
-                mod2_grain_hold: 200,
-                mod2_grain_gap: 200,
-                mod2_start_position: 0.0,
-                mod2_end_position: 1.0,
-                mod2_grain_crossfade: 50,
-                mod2_osc_type: VoiceType::Sine, 
-                mod2_osc_octave: 0, 
-                mod2_osc_semitones: 0, 
-                mod2_osc_detune: 0.0, 
-                mod2_osc_attack: 0.0001, 
-                mod2_osc_decay: 0.0001, 
-                mod2_osc_sustain: 999.9, 
-                mod2_osc_release: 5.0, 
-                mod2_osc_retrigger: RetriggerStyle::Retrigger, 
-                mod2_osc_atk_curve: SmoothStyle::Linear, 
-                mod2_osc_dec_curve: SmoothStyle::Linear, 
-                mod2_osc_rel_curve: SmoothStyle::Linear, 
-                mod2_osc_unison: 1,
-                mod2_osc_unison_detune: 0.0,
-                mod2_osc_stereo: 0.0,
-                mod2_partial0: 1.0,
-                mod2_partial0_phase: 0.0,
-                mod2_partial1: 0.0,
-                mod2_partial1_phase: 0.0,
+                    mod2_audio_module_type: AudioModuleType::Off,
+                    mod2_audio_module_level: 1.0,
+                    mod2_loaded_sample: vec![vec![0.0, 0.0]],
+                    mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                    mod2_loop_wavetable: false,
+                    mod2_single_cycle: false,
+                    mod2_restretch: true,
+                    mod2_prev_restretch: false,
+                    mod2_grain_hold: 200,
+                    mod2_grain_gap: 200,
+                    mod2_start_position: 0.0,
+                    mod2_end_position: 1.0,
+                    mod2_grain_crossfade: 50,
+                    mod2_osc_type: VoiceType::Sine,
+                    mod2_osc_octave: 0,
+                    mod2_osc_semitones: 0,
+                    mod2_osc_detune: 0.0,
+                    mod2_osc_attack: 0.0001,
+                    mod2_osc_decay: 0.0001,
+                    mod2_osc_sustain: 999.9,
+                    mod2_osc_release: 5.0,
+                    mod2_osc_retrigger: RetriggerStyle::Retrigger,
+                    mod2_osc_atk_curve: SmoothStyle::Linear,
+                    mod2_osc_dec_curve: SmoothStyle::Linear,
+                    mod2_osc_rel_curve: SmoothStyle::Linear,
+                    mod2_osc_unison: 1,
+                    mod2_osc_unison_detune: 0.0,
+                    mod2_osc_stereo: 0.0,
+                    mod2_partial0: 1.0,
+                    mod2_partial0_phase: 0.0,
+                    mod2_partial1: 0.0,
+                    mod2_partial1_phase: 0.0,
 
-                mod3_audio_module_type: AudioModuleType::Off, 
-                mod3_audio_module_level: 1.0,
-                mod3_loaded_sample: vec![vec![0.0,0.0]], 
-                mod3_sample_lib: vec![vec![vec![0.0,0.0]]], 
-                mod3_loop_wavetable: false, 
-                mod3_single_cycle: false, 
-                mod3_restretch: true, 
-                mod3_prev_restretch: false, 
-                mod3_grain_hold: 200,
-                mod3_grain_gap: 200,
-                mod3_start_position: 0.0,
-                mod3_end_position: 1.0,
-                mod3_grain_crossfade: 50,
-                mod3_osc_type: VoiceType::Sine, 
-                mod3_osc_octave: 0, 
-                mod3_osc_semitones: 0, 
-                mod3_osc_detune: 0.0, 
-                mod3_osc_attack: 0.0001, 
-                mod3_osc_decay: 0.0001, 
-                mod3_osc_sustain: 999.9, 
-                mod3_osc_release: 5.0, 
-                mod3_osc_retrigger: RetriggerStyle::Retrigger, 
-                mod3_osc_atk_curve: SmoothStyle::Linear, 
-                mod3_osc_dec_curve: SmoothStyle::Linear, 
-                mod3_osc_rel_curve: SmoothStyle::Linear, 
-                mod3_osc_unison: 1,
-                mod3_osc_unison_detune: 0.0,
-                mod3_osc_stereo: 0.0,
-                mod3_partial0: 1.0,
-                mod3_partial0_phase: 0.0,
-                mod3_partial1: 0.0,
-                mod3_partial1_phase: 0.0,
+                    mod3_audio_module_type: AudioModuleType::Off,
+                    mod3_audio_module_level: 1.0,
+                    mod3_loaded_sample: vec![vec![0.0, 0.0]],
+                    mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                    mod3_loop_wavetable: false,
+                    mod3_single_cycle: false,
+                    mod3_restretch: true,
+                    mod3_prev_restretch: false,
+                    mod3_grain_hold: 200,
+                    mod3_grain_gap: 200,
+                    mod3_start_position: 0.0,
+                    mod3_end_position: 1.0,
+                    mod3_grain_crossfade: 50,
+                    mod3_osc_type: VoiceType::Sine,
+                    mod3_osc_octave: 0,
+                    mod3_osc_semitones: 0,
+                    mod3_osc_detune: 0.0,
+                    mod3_osc_attack: 0.0001,
+                    mod3_osc_decay: 0.0001,
+                    mod3_osc_sustain: 999.9,
+                    mod3_osc_release: 5.0,
+                    mod3_osc_retrigger: RetriggerStyle::Retrigger,
+                    mod3_osc_atk_curve: SmoothStyle::Linear,
+                    mod3_osc_dec_curve: SmoothStyle::Linear,
+                    mod3_osc_rel_curve: SmoothStyle::Linear,
+                    mod3_osc_unison: 1,
+                    mod3_osc_unison_detune: 0.0,
+                    mod3_osc_stereo: 0.0,
+                    mod3_partial0: 1.0,
+                    mod3_partial0_phase: 0.0,
+                    mod3_partial1: 0.0,
+                    mod3_partial1_phase: 0.0,
 
-                filter_wet: 1.0, 
-                filter_cutoff: 4000.0, 
-                filter_resonance: 1.0, 
-                filter_res_type: ResonanceType::Default, 
-                filter_lp_amount: 1.0, 
-                filter_hp_amount: 0.0, 
-                filter_bp_amount: 0.0, 
-                filter_env_peak: 0.0, 
-                filter_env_decay: 100.0, 
-                filter_env_curve: SmoothStyle::Linear }; PRESET_BANK_SIZE])),
+                    filter_wet: 1.0,
+                    filter_cutoff: 4000.0,
+                    filter_resonance: 1.0,
+                    filter_res_type: ResonanceType::Default,
+                    filter_lp_amount: 1.0,
+                    filter_hp_amount: 0.0,
+                    filter_bp_amount: 0.0,
+                    filter_env_peak: 0.0,
+                    filter_env_decay: 100.0,
+                    filter_env_curve: SmoothStyle::Linear
+                };
+                PRESET_BANK_SIZE
+            ])),
 
             dc_filter_l: StateVariableFilter::StateVariableFilter::default(),
             dc_filter_r: StateVariableFilter::StateVariableFilter::default(),
@@ -429,177 +436,329 @@ impl Default for Actuate {
 /// Plugin parameters struct
 #[derive(Params)]
 pub struct ActuateParams {
-    #[persist = "editor-state"]     editor_state: Arc<EguiState>,
+    #[persist = "editor-state"]
+    editor_state: Arc<EguiState>,
 
     // Synth-level settings
-    #[id = "Master Level"]          pub master_level: FloatParam,
-    #[id = "Max Voices"]            pub voice_limit: IntParam,
+    #[id = "Master Level"]
+    pub master_level: FloatParam,
+    #[id = "Max Voices"]
+    pub voice_limit: IntParam,
 
     // This audio module is what switches between functions for generators in the synth
-    #[id = "audio_module_1_type"]   pub _audio_module_1_type: EnumParam<AudioModuleType>,
-    #[id = "audio_module_2_type"]   pub _audio_module_2_type: EnumParam<AudioModuleType>,
-    #[id = "audio_module_3_type"]   pub _audio_module_3_type: EnumParam<AudioModuleType>,
+    #[id = "audio_module_1_type"]
+    pub _audio_module_1_type: EnumParam<AudioModuleType>,
+    #[id = "audio_module_2_type"]
+    pub _audio_module_2_type: EnumParam<AudioModuleType>,
+    #[id = "audio_module_3_type"]
+    pub _audio_module_3_type: EnumParam<AudioModuleType>,
 
     // Audio Module Gains
-    #[id = "audio_module_1_level"]  pub audio_module_1_level: FloatParam,
-    #[id = "audio_module_2_level"]  pub audio_module_2_level: FloatParam,
-    #[id = "audio_module_3_level"]  pub audio_module_3_level: FloatParam,
+    #[id = "audio_module_1_level"]
+    pub audio_module_1_level: FloatParam,
+    #[id = "audio_module_2_level"]
+    pub audio_module_2_level: FloatParam,
+    #[id = "audio_module_3_level"]
+    pub audio_module_3_level: FloatParam,
 
     // Controls for when audio_module_1_type is Osc
-    #[id = "osc_1_type"]            pub osc_1_type: EnumParam<VoiceType>,
-    #[id = "osc_1_octave"]          pub osc_1_octave: IntParam,
-    #[id = "osc_1_semitones"]       pub osc_1_semitones: IntParam,
-    #[id = "osc_1_detune"]          pub osc_1_detune: FloatParam,
-    #[id = "osc_1_attack"]          pub osc_1_attack: FloatParam,
-    #[id = "osc_1_decay"]           pub osc_1_decay: FloatParam,
-    #[id = "osc_1_sustain"]         pub osc_1_sustain: FloatParam,
-    #[id = "osc_1_release"]         pub osc_1_release: FloatParam,
-    #[id = "osc_1_retrigger"]       pub osc_1_retrigger: EnumParam<RetriggerStyle>,
-    #[id = "osc_1_atk_curve"]       pub osc_1_atk_curve: EnumParam<Oscillator::SmoothStyle>,
-    #[id = "osc_1_dec_curve"]       pub osc_1_dec_curve: EnumParam<Oscillator::SmoothStyle>,
-    #[id = "osc_1_rel_curve"]       pub osc_1_rel_curve: EnumParam<Oscillator::SmoothStyle>,
-    #[id = "osc_1_unison"]          pub osc_1_unison: IntParam,
-    #[id = "osc_1_unison_detune"]   pub osc_1_unison_detune: FloatParam,
-    #[id = "osc_1_stereo"]          pub osc_1_stereo: FloatParam,
-    #[id = "add_1_partial0"]        pub add_1_partial0: FloatParam,
-    #[id = "add_1_partial1"]        pub add_1_partial1: FloatParam,
-    #[id = "add_1_partial2"]        pub add_1_partial2: FloatParam,
-    #[id = "add_1_partial3"]        pub add_1_partial3: FloatParam,
-    #[id = "add_1_partial4"]        pub add_1_partial4: FloatParam,
-    #[id = "add_1_partial5"]        pub add_1_partial5: FloatParam,
-    #[id = "add_1_partial6"]        pub add_1_partial6: FloatParam,
-    #[id = "add_1_partial7"]        pub add_1_partial7: FloatParam,
-    #[id = "add_1_partial8"]        pub add_1_partial8: FloatParam,
-    #[id = "add_1_partial9"]        pub add_1_partial9: FloatParam,
-    #[id = "add_1_partial10"]       pub add_1_partial10: FloatParam,
-    #[id = "add_1_partial11"]       pub add_1_partial11: FloatParam,
-    #[id = "add_1_partial12"]       pub add_1_partial12: FloatParam,
-    #[id = "add_1_partial13"]       pub add_1_partial13: FloatParam,
-    #[id = "add_1_partial14"]       pub add_1_partial14: FloatParam,
-    #[id = "add_1_partial15"]       pub add_1_partial15: FloatParam,
-    #[id = "add_1_partial16"]       pub add_1_partial16: FloatParam,
-    #[id = "add_1_partial17"]       pub add_1_partial17: FloatParam,
-    #[id = "add_1_partial18"]       pub add_1_partial18: FloatParam,
-    #[id = "add_1_partial19"]       pub add_1_partial19: FloatParam,
-    #[id = "add_1_partial20"]       pub add_1_partial20: FloatParam,
-    #[id = "add_1_partial21"]       pub add_1_partial21: FloatParam,
-    #[id = "add_1_partial0_phase"]  pub add_1_partial0_phase: FloatParam,
-    #[id = "add_1_partial1_phase"]  pub add_1_partial1_phase: FloatParam,
-    #[id = "add_1_partial2_phase"]  pub add_1_partial2_phase: FloatParam,
-    #[id = "add_1_partial3_phase"]  pub add_1_partial3_phase: FloatParam,
-    #[id = "add_1_partial4_phase"]  pub add_1_partial4_phase: FloatParam,
-    #[id = "add_1_partial5_phase"]  pub add_1_partial5_phase: FloatParam,
-    #[id = "add_1_partial6_phase"]  pub add_1_partial6_phase: FloatParam,
-    #[id = "add_1_partial7_phase"]  pub add_1_partial7_phase: FloatParam,
-    #[id = "add_1_partial8_phase"]  pub add_1_partial8_phase: FloatParam,
-    #[id = "add_1_partial9_phase"]  pub add_1_partial9_phase: FloatParam,
-    #[id = "add_1_partial10_phase"] pub add_1_partial10_phase: FloatParam,
-    #[id = "add_1_partial11_phase"] pub add_1_partial11_phase: FloatParam,
-    #[id = "add_1_partial12_phase"] pub add_1_partial12_phase: FloatParam,
-    #[id = "add_1_partial13_phase"] pub add_1_partial13_phase: FloatParam,
-    #[id = "add_1_partial14_phase"] pub add_1_partial14_phase: FloatParam,
-    #[id = "add_1_partial15_phase"] pub add_1_partial15_phase: FloatParam,
-    #[id = "add_1_partial16_phase"] pub add_1_partial16_phase: FloatParam,
-    #[id = "add_1_partial17_phase"] pub add_1_partial17_phase: FloatParam,
-    #[id = "add_1_partial18_phase"] pub add_1_partial18_phase: FloatParam,
-    #[id = "add_1_partial19_phase"] pub add_1_partial19_phase: FloatParam,
-    #[id = "add_1_partial20_phase"] pub add_1_partial20_phase: FloatParam,
-    #[id = "add_1_partial21_phase"] pub add_1_partial21_phase: FloatParam,
+    #[id = "osc_1_type"]
+    pub osc_1_type: EnumParam<VoiceType>,
+    #[id = "osc_1_octave"]
+    pub osc_1_octave: IntParam,
+    #[id = "osc_1_semitones"]
+    pub osc_1_semitones: IntParam,
+    #[id = "osc_1_detune"]
+    pub osc_1_detune: FloatParam,
+    #[id = "osc_1_attack"]
+    pub osc_1_attack: FloatParam,
+    #[id = "osc_1_decay"]
+    pub osc_1_decay: FloatParam,
+    #[id = "osc_1_sustain"]
+    pub osc_1_sustain: FloatParam,
+    #[id = "osc_1_release"]
+    pub osc_1_release: FloatParam,
+    #[id = "osc_1_retrigger"]
+    pub osc_1_retrigger: EnumParam<RetriggerStyle>,
+    #[id = "osc_1_atk_curve"]
+    pub osc_1_atk_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_1_dec_curve"]
+    pub osc_1_dec_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_1_rel_curve"]
+    pub osc_1_rel_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_1_unison"]
+    pub osc_1_unison: IntParam,
+    #[id = "osc_1_unison_detune"]
+    pub osc_1_unison_detune: FloatParam,
+    #[id = "osc_1_stereo"]
+    pub osc_1_stereo: FloatParam,
+    #[id = "add_1_partial0"]
+    pub add_1_partial0: FloatParam,
+    #[id = "add_1_partial1"]
+    pub add_1_partial1: FloatParam,
+    #[id = "add_1_partial2"]
+    pub add_1_partial2: FloatParam,
+    #[id = "add_1_partial3"]
+    pub add_1_partial3: FloatParam,
+    #[id = "add_1_partial4"]
+    pub add_1_partial4: FloatParam,
+    #[id = "add_1_partial5"]
+    pub add_1_partial5: FloatParam,
+    #[id = "add_1_partial6"]
+    pub add_1_partial6: FloatParam,
+    #[id = "add_1_partial7"]
+    pub add_1_partial7: FloatParam,
+    #[id = "add_1_partial8"]
+    pub add_1_partial8: FloatParam,
+    #[id = "add_1_partial9"]
+    pub add_1_partial9: FloatParam,
+    #[id = "add_1_partial10"]
+    pub add_1_partial10: FloatParam,
+    #[id = "add_1_partial11"]
+    pub add_1_partial11: FloatParam,
+    #[id = "add_1_partial12"]
+    pub add_1_partial12: FloatParam,
+    #[id = "add_1_partial13"]
+    pub add_1_partial13: FloatParam,
+    #[id = "add_1_partial14"]
+    pub add_1_partial14: FloatParam,
+    #[id = "add_1_partial15"]
+    pub add_1_partial15: FloatParam,
+    #[id = "add_1_partial16"]
+    pub add_1_partial16: FloatParam,
+    #[id = "add_1_partial17"]
+    pub add_1_partial17: FloatParam,
+    #[id = "add_1_partial18"]
+    pub add_1_partial18: FloatParam,
+    #[id = "add_1_partial19"]
+    pub add_1_partial19: FloatParam,
+    #[id = "add_1_partial20"]
+    pub add_1_partial20: FloatParam,
+    #[id = "add_1_partial21"]
+    pub add_1_partial21: FloatParam,
+    #[id = "add_1_partial0_phase"]
+    pub add_1_partial0_phase: FloatParam,
+    #[id = "add_1_partial1_phase"]
+    pub add_1_partial1_phase: FloatParam,
+    #[id = "add_1_partial2_phase"]
+    pub add_1_partial2_phase: FloatParam,
+    #[id = "add_1_partial3_phase"]
+    pub add_1_partial3_phase: FloatParam,
+    #[id = "add_1_partial4_phase"]
+    pub add_1_partial4_phase: FloatParam,
+    #[id = "add_1_partial5_phase"]
+    pub add_1_partial5_phase: FloatParam,
+    #[id = "add_1_partial6_phase"]
+    pub add_1_partial6_phase: FloatParam,
+    #[id = "add_1_partial7_phase"]
+    pub add_1_partial7_phase: FloatParam,
+    #[id = "add_1_partial8_phase"]
+    pub add_1_partial8_phase: FloatParam,
+    #[id = "add_1_partial9_phase"]
+    pub add_1_partial9_phase: FloatParam,
+    #[id = "add_1_partial10_phase"]
+    pub add_1_partial10_phase: FloatParam,
+    #[id = "add_1_partial11_phase"]
+    pub add_1_partial11_phase: FloatParam,
+    #[id = "add_1_partial12_phase"]
+    pub add_1_partial12_phase: FloatParam,
+    #[id = "add_1_partial13_phase"]
+    pub add_1_partial13_phase: FloatParam,
+    #[id = "add_1_partial14_phase"]
+    pub add_1_partial14_phase: FloatParam,
+    #[id = "add_1_partial15_phase"]
+    pub add_1_partial15_phase: FloatParam,
+    #[id = "add_1_partial16_phase"]
+    pub add_1_partial16_phase: FloatParam,
+    #[id = "add_1_partial17_phase"]
+    pub add_1_partial17_phase: FloatParam,
+    #[id = "add_1_partial18_phase"]
+    pub add_1_partial18_phase: FloatParam,
+    #[id = "add_1_partial19_phase"]
+    pub add_1_partial19_phase: FloatParam,
+    #[id = "add_1_partial20_phase"]
+    pub add_1_partial20_phase: FloatParam,
+    #[id = "add_1_partial21_phase"]
+    pub add_1_partial21_phase: FloatParam,
 
     // Controls for when audio_module_2_type is Osc
-    #[id = "osc_2_type"]            pub osc_2_type: EnumParam<VoiceType>,
-    #[id = "osc_2_octave"]          pub osc_2_octave: IntParam,
-    #[id = "osc_2_semitones"]       pub osc_2_semitones: IntParam,
-    #[id = "osc_2_detune"]          pub osc_2_detune: FloatParam,
-    #[id = "osc_2_attack"]          pub osc_2_attack: FloatParam,
-    #[id = "osc_2_decay"]           pub osc_2_decay: FloatParam,
-    #[id = "osc_2_sustain"]         pub osc_2_sustain: FloatParam,
-    #[id = "osc_2_release"]         pub osc_2_release: FloatParam,
-    #[id = "osc_2_retrigger"]       pub osc_2_retrigger: EnumParam<RetriggerStyle>,
-    #[id = "osc_2_atk_curve"]       pub osc_2_atk_curve: EnumParam<Oscillator::SmoothStyle>,
-    #[id = "osc_2_dec_curve"]       pub osc_2_dec_curve: EnumParam<Oscillator::SmoothStyle>,
-    #[id = "osc_2_rel_curve"]       pub osc_2_rel_curve: EnumParam<Oscillator::SmoothStyle>,
-    #[id = "osc_2_unison"]          pub osc_2_unison: IntParam,
-    #[id = "osc_2_unison_detune"]   pub osc_2_unison_detune: FloatParam,
-    #[id = "osc_2_stereo"]          pub osc_2_stereo: FloatParam,
-    #[id = "add_2_partial0"]        pub add_2_partial0: FloatParam,
-    #[id = "add_2_partial0_phase"]  pub add_2_partial0_phase: FloatParam,
-    #[id = "add_2_partial1"]        pub add_2_partial1: FloatParam,
-    #[id = "add_2_partial1_phase"]  pub add_2_partial1_phase: FloatParam,
+    #[id = "osc_2_type"]
+    pub osc_2_type: EnumParam<VoiceType>,
+    #[id = "osc_2_octave"]
+    pub osc_2_octave: IntParam,
+    #[id = "osc_2_semitones"]
+    pub osc_2_semitones: IntParam,
+    #[id = "osc_2_detune"]
+    pub osc_2_detune: FloatParam,
+    #[id = "osc_2_attack"]
+    pub osc_2_attack: FloatParam,
+    #[id = "osc_2_decay"]
+    pub osc_2_decay: FloatParam,
+    #[id = "osc_2_sustain"]
+    pub osc_2_sustain: FloatParam,
+    #[id = "osc_2_release"]
+    pub osc_2_release: FloatParam,
+    #[id = "osc_2_retrigger"]
+    pub osc_2_retrigger: EnumParam<RetriggerStyle>,
+    #[id = "osc_2_atk_curve"]
+    pub osc_2_atk_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_2_dec_curve"]
+    pub osc_2_dec_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_2_rel_curve"]
+    pub osc_2_rel_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_2_unison"]
+    pub osc_2_unison: IntParam,
+    #[id = "osc_2_unison_detune"]
+    pub osc_2_unison_detune: FloatParam,
+    #[id = "osc_2_stereo"]
+    pub osc_2_stereo: FloatParam,
+    #[id = "add_2_partial0"]
+    pub add_2_partial0: FloatParam,
+    #[id = "add_2_partial0_phase"]
+    pub add_2_partial0_phase: FloatParam,
+    #[id = "add_2_partial1"]
+    pub add_2_partial1: FloatParam,
+    #[id = "add_2_partial1_phase"]
+    pub add_2_partial1_phase: FloatParam,
 
     // Controls for when audio_module_3_type is Osc
-    #[id = "osc_3_type"]            pub osc_3_type: EnumParam<VoiceType>,
-    #[id = "osc_3_octave"]          pub osc_3_octave: IntParam,
-    #[id = "osc_3_semitones"]       pub osc_3_semitones: IntParam,
-    #[id = "osc_3_detune"]          pub osc_3_detune: FloatParam,
-    #[id = "osc_3_attack"]          pub osc_3_attack: FloatParam,
-    #[id = "osc_3_decay"]           pub osc_3_decay: FloatParam,
-    #[id = "osc_3_sustain"]         pub osc_3_sustain: FloatParam,
-    #[id = "osc_3_release"]         pub osc_3_release: FloatParam,
-    #[id = "osc_3_retrigger"]       pub osc_3_retrigger: EnumParam<RetriggerStyle>,
-    #[id = "osc_3_atk_curve"]       pub osc_3_atk_curve: EnumParam<Oscillator::SmoothStyle>,
-    #[id = "osc_3_dec_curve"]       pub osc_3_dec_curve: EnumParam<Oscillator::SmoothStyle>,
-    #[id = "osc_3_rel_curve"]       pub osc_3_rel_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_3_type"]
+    pub osc_3_type: EnumParam<VoiceType>,
+    #[id = "osc_3_octave"]
+    pub osc_3_octave: IntParam,
+    #[id = "osc_3_semitones"]
+    pub osc_3_semitones: IntParam,
+    #[id = "osc_3_detune"]
+    pub osc_3_detune: FloatParam,
+    #[id = "osc_3_attack"]
+    pub osc_3_attack: FloatParam,
+    #[id = "osc_3_decay"]
+    pub osc_3_decay: FloatParam,
+    #[id = "osc_3_sustain"]
+    pub osc_3_sustain: FloatParam,
+    #[id = "osc_3_release"]
+    pub osc_3_release: FloatParam,
+    #[id = "osc_3_retrigger"]
+    pub osc_3_retrigger: EnumParam<RetriggerStyle>,
+    #[id = "osc_3_atk_curve"]
+    pub osc_3_atk_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_3_dec_curve"]
+    pub osc_3_dec_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "osc_3_rel_curve"]
+    pub osc_3_rel_curve: EnumParam<Oscillator::SmoothStyle>,
 
-    #[id = "osc_3_unison"]          pub osc_3_unison: IntParam,
-    #[id = "osc_3_unison_detune"]   pub osc_3_unison_detune: FloatParam,
-    #[id = "osc_3_stereo"]          pub osc_3_stereo: FloatParam,
-    #[id = "add_3_partial0"]        pub add_3_partial0: FloatParam,
-    #[id = "add_3_partial0_phase"]  pub add_3_partial0_phase: FloatParam,
-    #[id = "add_3_partial1"]        pub add_3_partial1: FloatParam,
-    #[id = "add_3_partial1_phase"]  pub add_3_partial1_phase: FloatParam,
+    #[id = "osc_3_unison"]
+    pub osc_3_unison: IntParam,
+    #[id = "osc_3_unison_detune"]
+    pub osc_3_unison_detune: FloatParam,
+    #[id = "osc_3_stereo"]
+    pub osc_3_stereo: FloatParam,
+    #[id = "add_3_partial0"]
+    pub add_3_partial0: FloatParam,
+    #[id = "add_3_partial0_phase"]
+    pub add_3_partial0_phase: FloatParam,
+    #[id = "add_3_partial1"]
+    pub add_3_partial1: FloatParam,
+    #[id = "add_3_partial1_phase"]
+    pub add_3_partial1_phase: FloatParam,
 
     // Controls for when audio_module_1_type is Sampler/Granulizer
-    #[id = "load_sample_1"]         pub load_sample_1: BoolParam,
-    #[id = "loop_sample_1"]         pub loop_sample_1: BoolParam,
-    #[id = "single_cycle_1"]        pub single_cycle_1: BoolParam,
-    #[id = "restretch_1"]           pub restretch_1: BoolParam,
-    #[id = "grain_hold_1"]          grain_hold_1: IntParam,
-    #[id = "grain_gap_1"]           grain_gap_1: IntParam,
-    #[id = "start_position_1"]      start_position_1: FloatParam,
-    #[id = "end_position_1"]        end_position_1: FloatParam,
-    #[id = "grain_crossfade_1"]     grain_crossfade_1: IntParam,
+    #[id = "load_sample_1"]
+    pub load_sample_1: BoolParam,
+    #[id = "loop_sample_1"]
+    pub loop_sample_1: BoolParam,
+    #[id = "single_cycle_1"]
+    pub single_cycle_1: BoolParam,
+    #[id = "restretch_1"]
+    pub restretch_1: BoolParam,
+    #[id = "grain_hold_1"]
+    grain_hold_1: IntParam,
+    #[id = "grain_gap_1"]
+    grain_gap_1: IntParam,
+    #[id = "start_position_1"]
+    start_position_1: FloatParam,
+    #[id = "end_position_1"]
+    end_position_1: FloatParam,
+    #[id = "grain_crossfade_1"]
+    grain_crossfade_1: IntParam,
 
     // Controls for when audio_module_2_type is Sampler/Granulizer
-    #[id = "load_sample_2"]         pub load_sample_2: BoolParam,
-    #[id = "loop_sample_2"]         pub loop_sample_2: BoolParam,
-    #[id = "single_cycle_2"]        pub single_cycle_2: BoolParam,
-    #[id = "restretch_2"]           pub restretch_2: BoolParam,
-    #[id = "grain_hold_2"]          grain_hold_2: IntParam,
-    #[id = "grain_gap_2"]           grain_gap_2: IntParam,
-    #[id = "start_position_2"]      start_position_2: FloatParam,
-    #[id = "end_position_2"]        end_position_2: FloatParam,
-    #[id = "grain_crossfade_2"]     grain_crossfade_2: IntParam,
+    #[id = "load_sample_2"]
+    pub load_sample_2: BoolParam,
+    #[id = "loop_sample_2"]
+    pub loop_sample_2: BoolParam,
+    #[id = "single_cycle_2"]
+    pub single_cycle_2: BoolParam,
+    #[id = "restretch_2"]
+    pub restretch_2: BoolParam,
+    #[id = "grain_hold_2"]
+    grain_hold_2: IntParam,
+    #[id = "grain_gap_2"]
+    grain_gap_2: IntParam,
+    #[id = "start_position_2"]
+    start_position_2: FloatParam,
+    #[id = "end_position_2"]
+    end_position_2: FloatParam,
+    #[id = "grain_crossfade_2"]
+    grain_crossfade_2: IntParam,
 
     // Controls for when audio_module_3_type is Sampler/Granulizer
-    #[id = "load_sample_3"]         pub load_sample_3: BoolParam,
-    #[id = "loop_sample_3"]         pub loop_sample_3: BoolParam,
-    #[id = "single_cycle_3"]        pub single_cycle_3: BoolParam,
-    #[id = "restretch_3"]           pub restretch_3: BoolParam,
-    #[id = "grain_hold_3"]          grain_hold_3: IntParam,
-    #[id = "grain_gap_3"]           grain_gap_3: IntParam,
-    #[id = "start_position_3"]      start_position_3: FloatParam,
-    #[id = "end_position_3"]        end_position_3: FloatParam,
-    #[id = "grain_crossfade_3"]     grain_crossfade_3: IntParam,
+    #[id = "load_sample_3"]
+    pub load_sample_3: BoolParam,
+    #[id = "loop_sample_3"]
+    pub loop_sample_3: BoolParam,
+    #[id = "single_cycle_3"]
+    pub single_cycle_3: BoolParam,
+    #[id = "restretch_3"]
+    pub restretch_3: BoolParam,
+    #[id = "grain_hold_3"]
+    grain_hold_3: IntParam,
+    #[id = "grain_gap_3"]
+    grain_gap_3: IntParam,
+    #[id = "start_position_3"]
+    start_position_3: FloatParam,
+    #[id = "end_position_3"]
+    end_position_3: FloatParam,
+    #[id = "grain_crossfade_3"]
+    grain_crossfade_3: IntParam,
 
     // Filter
-    #[id = "filter_wet"]            pub filter_wet: FloatParam,
-    #[id = "filter_cutoff"]         pub filter_cutoff: FloatParam,
-    #[id = "filter_resonance"]      pub filter_resonance: FloatParam,
-    #[id = "filter_res_type"]       pub filter_res_type: EnumParam<ResonanceType>,
-    #[id = "filter_lp_amount"]      pub filter_lp_amount: FloatParam,
-    #[id = "filter_hp_amount"]      pub filter_hp_amount: FloatParam,
-    #[id = "filter_bp_amount"]      pub filter_bp_amount: FloatParam,
-    #[id = "filter_env_peak"]       pub filter_env_peak: FloatParam,
-    #[id = "filter_env_decay"]      pub filter_env_decay: FloatParam,
-    #[id = "filter_env_curve"]      pub filter_env_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "filter_wet"]
+    pub filter_wet: FloatParam,
+    #[id = "filter_cutoff"]
+    pub filter_cutoff: FloatParam,
+    #[id = "filter_resonance"]
+    pub filter_resonance: FloatParam,
+    #[id = "filter_res_type"]
+    pub filter_res_type: EnumParam<ResonanceType>,
+    #[id = "filter_lp_amount"]
+    pub filter_lp_amount: FloatParam,
+    #[id = "filter_hp_amount"]
+    pub filter_hp_amount: FloatParam,
+    #[id = "filter_bp_amount"]
+    pub filter_bp_amount: FloatParam,
+    #[id = "filter_env_peak"]
+    pub filter_env_peak: FloatParam,
+    #[id = "filter_env_decay"]
+    pub filter_env_decay: FloatParam,
+    #[id = "filter_env_curve"]
+    pub filter_env_curve: EnumParam<Oscillator::SmoothStyle>,
 
     // UI Non-param Params
-    #[id = "param_load_bank"]             pub param_load_bank: BoolParam,
-    #[id = "param_save_bank"]             pub param_save_bank: BoolParam,
-    #[id = "param_next_preset"]           pub param_next_preset: BoolParam,
-    #[id = "param_prev_preset"]           pub param_prev_preset: BoolParam,
-    #[id = "param_update_current_preset"] pub param_update_current_preset: BoolParam,
+    #[id = "param_load_bank"]
+    pub param_load_bank: BoolParam,
+    #[id = "param_save_bank"]
+    pub param_save_bank: BoolParam,
+    #[id = "param_next_preset"]
+    pub param_next_preset: BoolParam,
+    #[id = "param_prev_preset"]
+    pub param_prev_preset: BoolParam,
+    #[id = "param_update_current_preset"]
+    pub param_update_current_preset: BoolParam,
+
+    // Not a param
+    #[id = "loading"]
+    pub loading: BoolParam,
 }
 
 impl ActuateParams {
@@ -607,8 +766,6 @@ impl ActuateParams {
         update_something: Arc<AtomicBool>,
         clear_voices: Arc<AtomicBool>,
         file_dialog: Arc<AtomicBool>,
-        prev_preset: Arc<AtomicBool>,
-        next_preset: Arc<AtomicBool>,
         update_current_preset: Arc<AtomicBool>,
         load_bank: Arc<AtomicBool>,
         save_bank: Arc<AtomicBool>,
@@ -618,198 +775,1170 @@ impl ActuateParams {
 
             // Top Level objects
             ////////////////////////////////////////////////////////////////////////////////////
-            master_level: FloatParam::new("Master", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            master_level: FloatParam::new("Master", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 64, IntRange::Linear { min: 1, max: 512 }),
 
-            _audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc).with_callback({ let clear_voices = clear_voices.clone(); Arc::new(move |_| { clear_voices.store(true, Ordering::Relaxed) }) }),
-            _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({ let clear_voices = clear_voices.clone(); Arc::new(move |_| { clear_voices.store(true, Ordering::Relaxed) }) }),
-            _audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({ let clear_voices = clear_voices.clone(); Arc::new(move |_| { clear_voices.store(true, Ordering::Relaxed) }) }),
+            _audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc).with_callback({
+                let clear_voices = clear_voices.clone();
+                Arc::new(move |_| clear_voices.store(true, Ordering::Relaxed))
+            }),
+            _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
+                let clear_voices = clear_voices.clone();
+                Arc::new(move |_| clear_voices.store(true, Ordering::Relaxed))
+            }),
+            _audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
+                let clear_voices = clear_voices.clone();
+                Arc::new(move |_| clear_voices.store(true, Ordering::Relaxed))
+            }),
 
-            audio_module_1_level: FloatParam::new("Level", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            audio_module_2_level: FloatParam::new("Level", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
-            audio_module_3_level: FloatParam::new("Level", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)).with_unit("%"),
+            audio_module_1_level: FloatParam::new(
+                "Level",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_unit("%"),
+            audio_module_2_level: FloatParam::new(
+                "Level",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_unit("%"),
+            audio_module_3_level: FloatParam::new(
+                "Level",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_unit("%"),
 
             // Oscillators
             ////////////////////////////////////////////////////////////////////////////////////
-            osc_1_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_unit("A").with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_unit("D").with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_unit("S").with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_unit("R").with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            add_1_partial0: FloatParam::new("Partial 0", 1.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial1: FloatParam::new("Partial 1", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial2: FloatParam::new("Partial 2", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial3: FloatParam::new("Partial 3", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial4: FloatParam::new("Partial 4", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial5: FloatParam::new("Partial 5", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial6: FloatParam::new("Partial 6", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial7: FloatParam::new("Partial 7", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial8: FloatParam::new("Partial 8", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial9: FloatParam::new("Partial 9", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial10: FloatParam::new("Partial 10", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial11: FloatParam::new("Partial 11", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial12: FloatParam::new("Partial 12", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial13: FloatParam::new("Partial 13", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial14: FloatParam::new("Partial 14", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial15: FloatParam::new("Partial 15", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial16: FloatParam::new("Partial 16", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial17: FloatParam::new("Partial 17", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial18: FloatParam::new("Partial 18", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial19: FloatParam::new("Partial 19", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial20: FloatParam::new("Partial 20", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial21: FloatParam::new("Partial 21", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial0_phase: FloatParam::new("Partial 0 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial1_phase: FloatParam::new("Partial 1 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial2_phase: FloatParam::new("Partial 2 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial3_phase: FloatParam::new("Partial 3 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial4_phase: FloatParam::new("Partial 4 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial5_phase: FloatParam::new("Partial 5 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial6_phase: FloatParam::new("Partial 6 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial7_phase: FloatParam::new("Partial 7 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial8_phase: FloatParam::new("Partial 8 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial9_phase: FloatParam::new("Partial 9 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial10_phase: FloatParam::new("Partial 10 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial11_phase: FloatParam::new("Partial 11 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial12_phase: FloatParam::new("Partial 12 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial13_phase: FloatParam::new("Partial 13 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial14_phase: FloatParam::new("Partial 14 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial15_phase: FloatParam::new("Partial 15 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial16_phase: FloatParam::new("Partial 16 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial17_phase: FloatParam::new("Partial 17 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial18_phase: FloatParam::new("Partial 18 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial19_phase: FloatParam::new("Partial 19 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial20_phase: FloatParam::new("Partial 20 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_1_partial21_phase: FloatParam::new("Partial 21 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            osc_1_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_1_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_1_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_1_detune: FloatParam::new(
+                "Detune",
+                0.0,
+                FloatRange::Linear {
+                    min: -0.999,
+                    max: 0.999,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_1_attack: FloatParam::new(
+                "Attack",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_unit("A")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_1_decay: FloatParam::new(
+                "Decay",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_unit("D")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_1_sustain: FloatParam::new(
+                "Sustain",
+                999.9,
+                FloatRange::Linear {
+                    min: 0.0001,
+                    max: 999.9,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_unit("S")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_1_release: FloatParam::new(
+                "Release",
+                5.0,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_unit("R")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_1_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger).with_callback(
+                {
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                },
+            ),
+            osc_1_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_1_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_1_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_1_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_1_unison_detune: FloatParam::new(
+                "Uni Detune",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            add_1_partial0: FloatParam::new(
+                "Partial 0",
+                1.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial1: FloatParam::new(
+                "Partial 1",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial2: FloatParam::new(
+                "Partial 2",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial3: FloatParam::new(
+                "Partial 3",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial4: FloatParam::new(
+                "Partial 4",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial5: FloatParam::new(
+                "Partial 5",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial6: FloatParam::new(
+                "Partial 6",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial7: FloatParam::new(
+                "Partial 7",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial8: FloatParam::new(
+                "Partial 8",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial9: FloatParam::new(
+                "Partial 9",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial10: FloatParam::new(
+                "Partial 10",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial11: FloatParam::new(
+                "Partial 11",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial12: FloatParam::new(
+                "Partial 12",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial13: FloatParam::new(
+                "Partial 13",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial14: FloatParam::new(
+                "Partial 14",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial15: FloatParam::new(
+                "Partial 15",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial16: FloatParam::new(
+                "Partial 16",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial17: FloatParam::new(
+                "Partial 17",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial18: FloatParam::new(
+                "Partial 18",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial19: FloatParam::new(
+                "Partial 19",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial20: FloatParam::new(
+                "Partial 20",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial21: FloatParam::new(
+                "Partial 21",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial0_phase: FloatParam::new(
+                "Partial 0 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial1_phase: FloatParam::new(
+                "Partial 1 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial2_phase: FloatParam::new(
+                "Partial 2 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial3_phase: FloatParam::new(
+                "Partial 3 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial4_phase: FloatParam::new(
+                "Partial 4 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial5_phase: FloatParam::new(
+                "Partial 5 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial6_phase: FloatParam::new(
+                "Partial 6 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial7_phase: FloatParam::new(
+                "Partial 7 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial8_phase: FloatParam::new(
+                "Partial 8 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial9_phase: FloatParam::new(
+                "Partial 9 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial10_phase: FloatParam::new(
+                "Partial 10 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial11_phase: FloatParam::new(
+                "Partial 11 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial12_phase: FloatParam::new(
+                "Partial 12 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial13_phase: FloatParam::new(
+                "Partial 13 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial14_phase: FloatParam::new(
+                "Partial 14 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial15_phase: FloatParam::new(
+                "Partial 15 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial16_phase: FloatParam::new(
+                "Partial 16 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial17_phase: FloatParam::new(
+                "Partial 17 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial18_phase: FloatParam::new(
+                "Partial 18 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial19_phase: FloatParam::new(
+                "Partial 19 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial20_phase: FloatParam::new(
+                "Partial 20 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_1_partial21_phase: FloatParam::new(
+                "Partial 21 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
 
+            osc_2_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_2_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_2_detune: FloatParam::new(
+                "Detune",
+                0.0,
+                FloatRange::Linear {
+                    min: -0.999,
+                    max: 0.999,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_2_attack: FloatParam::new(
+                "Attack",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_2_decay: FloatParam::new(
+                "Decay",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_2_sustain: FloatParam::new(
+                "Sustain",
+                999.9,
+                FloatRange::Linear {
+                    min: 0.0001,
+                    max: 999.9,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_2_release: FloatParam::new(
+                "Release",
+                5.0,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_2_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger).with_callback(
+                {
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                },
+            ),
+            osc_2_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_2_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_2_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_2_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_2_unison_detune: FloatParam::new(
+                "Uni Detune",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            add_2_partial0: FloatParam::new(
+                "Partial 0",
+                1.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_2_partial0_phase: FloatParam::new(
+                "Partial 0 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_2_partial1: FloatParam::new(
+                "Partial 1",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_2_partial1_phase: FloatParam::new(
+                "Partial 1 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
 
-            osc_2_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            add_2_partial0: FloatParam::new("Partial 0", 1.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_2_partial0_phase: FloatParam::new("Partial 0 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_2_partial1: FloatParam::new("Partial 1", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_2_partial1_phase: FloatParam::new("Partial 1 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-
-            osc_3_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_detune: FloatParam::new("Detune", 0.0, FloatRange::Linear { min: -0.999, max: 0.999 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_attack: FloatParam::new("Attack", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_decay: FloatParam::new("Decay", 0.0001, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_sustain: FloatParam::new("Sustain", 999.9, FloatRange::Linear { min: 0.0001, max: 999.9 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_release: FloatParam::new("Release", 5.0, FloatRange::Skewed { min: 0.0001, max: 999.9, factor: 0.5 }).with_step_size(0.0001).with_value_to_string(format_nothing()).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_unison_detune: FloatParam::new("Uni Detune", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_step_size(0.0001).with_value_to_string(formatters::v2s_f32_rounded(4)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            add_3_partial0: FloatParam::new("Partial 0", 1.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_3_partial0_phase: FloatParam::new("Partial 0 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_3_partial1: FloatParam::new("Partial 1", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
-            add_3_partial1_phase: FloatParam::new("Partial 1 Phase", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.4 }),
+            osc_3_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_3_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_3_detune: FloatParam::new(
+                "Detune",
+                0.0,
+                FloatRange::Linear {
+                    min: -0.999,
+                    max: 0.999,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_3_attack: FloatParam::new(
+                "Attack",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_3_decay: FloatParam::new(
+                "Decay",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_3_sustain: FloatParam::new(
+                "Sustain",
+                999.9,
+                FloatRange::Linear {
+                    min: 0.0001,
+                    max: 999.9,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_3_release: FloatParam::new(
+                "Release",
+                5.0,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(format_nothing())
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_3_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger).with_callback(
+                {
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                },
+            ),
+            osc_3_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_3_dec_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_3_rel_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_3_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            osc_3_unison_detune: FloatParam::new(
+                "Uni Detune",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_step_size(0.0001)
+            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            add_3_partial0: FloatParam::new(
+                "Partial 0",
+                1.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_3_partial0_phase: FloatParam::new(
+                "Partial 0 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_3_partial1: FloatParam::new(
+                "Partial 1",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
+            add_3_partial1_phase: FloatParam::new(
+                "Partial 1 Phase",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            ),
 
             // Granulizer/Sampler
             ////////////////////////////////////////////////////////////////////////////////////
-            load_sample_1: BoolParam::new("Load Sample", false).with_callback({ let file_dialog = file_dialog.clone(); Arc::new(move |_| { file_dialog.store(true, Ordering::Relaxed) }) }),
-            load_sample_2: BoolParam::new("Load Sample", false).with_callback({ let file_dialog = file_dialog.clone(); Arc::new(move |_| { file_dialog.store(true, Ordering::Relaxed) }) }),
-            load_sample_3: BoolParam::new("Load Sample", false).with_callback({ let file_dialog = file_dialog.clone(); Arc::new(move |_| { file_dialog.store(true, Ordering::Relaxed) }) }),
+            load_sample_1: BoolParam::new("Load Sample", false).with_callback({
+                let file_dialog = file_dialog.clone();
+                Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
+            }),
+            load_sample_2: BoolParam::new("Load Sample", false).with_callback({
+                let file_dialog = file_dialog.clone();
+                Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
+            }),
+            load_sample_3: BoolParam::new("Load Sample", false).with_callback({
+                let file_dialog = file_dialog.clone();
+                Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
+            }),
             // To loop the sampler/granulizer
-            loop_sample_1: BoolParam::new("Loop Sample", false).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            loop_sample_2: BoolParam::new("Loop Sample", false).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            loop_sample_3: BoolParam::new("Loop Sample", false).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
+            loop_sample_1: BoolParam::new("Loop Sample", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            loop_sample_2: BoolParam::new("Loop Sample", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            loop_sample_3: BoolParam::new("Loop Sample", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
             // Sampler only - toggle single cycle mode
-            single_cycle_1: BoolParam::new("Single Cycle", false).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            single_cycle_2: BoolParam::new("Single Cycle", false).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            single_cycle_3: BoolParam::new("Single Cycle", false).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
+            single_cycle_1: BoolParam::new("Single Cycle", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            single_cycle_2: BoolParam::new("Single Cycle", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            single_cycle_3: BoolParam::new("Single Cycle", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
             // Always true for granulizer/ can be off for sampler
-            restretch_1: BoolParam::new("Load Stretch", true).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            restretch_2: BoolParam::new("Load Stretch", true).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            restretch_3: BoolParam::new("Load Stretch", true).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
+            restretch_1: BoolParam::new("Load Stretch", true).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            restretch_2: BoolParam::new("Load Stretch", true).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            restretch_3: BoolParam::new("Load Stretch", true).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
             // This is from 0 to 2000 samples
-            grain_hold_1: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            grain_hold_2: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            grain_hold_3: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            grain_gap_1: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            grain_gap_2: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            grain_gap_3: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
+            grain_hold_1: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            grain_hold_2: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            grain_hold_3: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            grain_gap_1: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            grain_gap_2: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            grain_gap_3: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
             // This is going to be in % since sample can be any size
-            start_position_1: FloatParam::new("Start Pos", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            start_position_2: FloatParam::new("Start Pos", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            start_position_3: FloatParam::new("Start Pos", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            end_position_1: FloatParam::new("End Pos", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            end_position_2: FloatParam::new("End Pos", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            end_position_3: FloatParam::new("End Pos", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
+            start_position_1: FloatParam::new(
+                "Start Pos",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            start_position_2: FloatParam::new(
+                "Start Pos",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            start_position_3: FloatParam::new(
+                "Start Pos",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            end_position_1: FloatParam::new(
+                "End Pos",
+                1.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            end_position_2: FloatParam::new(
+                "End Pos",
+                1.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            end_position_3: FloatParam::new(
+                "End Pos",
+                1.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
             // Grain Crossfade
-            grain_crossfade_1: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            grain_crossfade_2: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
-            grain_crossfade_3: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 }).with_callback({ let update_something = update_something.clone(); Arc::new(move |_| { update_something.store(true, Ordering::Relaxed) }) }),
+            grain_crossfade_1: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            grain_crossfade_2: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            grain_crossfade_3: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 })
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
 
             // Filter
             ////////////////////////////////////////////////////////////////////////////////////
-            filter_lp_amount: FloatParam::new("Low Pass", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_hp_amount: FloatParam::new("High Pass", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_bp_amount: FloatParam::new("Band Pass", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_lp_amount: FloatParam::new(
+                "Low Pass",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_hp_amount: FloatParam::new(
+                "High Pass",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_bp_amount: FloatParam::new(
+                "Band Pass",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_percentage(0)),
 
-            filter_wet: FloatParam::new("Filter Wet", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_resonance: FloatParam::new("Bandwidth", 1.0, FloatRange::Linear { min: 0.1, max: 1.0 }).with_unit("%").with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_wet: FloatParam::new(
+                "Filter Wet",
+                0.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0)),
+            filter_resonance: FloatParam::new(
+                "Bandwidth",
+                1.0,
+                FloatRange::Linear { min: 0.1, max: 1.0 },
+            )
+            .with_unit("%")
+            .with_value_to_string(formatters::v2s_f32_percentage(0)),
             filter_res_type: EnumParam::new("Filter Type", ResonanceType::Default),
-            filter_cutoff: FloatParam::new("Frequency", 16000.0, FloatRange::Skewed { min: 20.0, max: 16000.0, factor: 0.5 }).with_step_size(1.0),
+            filter_cutoff: FloatParam::new(
+                "Frequency",
+                16000.0,
+                FloatRange::Skewed {
+                    min: 20.0,
+                    max: 16000.0,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(1.0),
 
-            filter_env_peak: FloatParam::new("Env Peak", 0.0, FloatRange::Linear { min: -4000.0, max: 4000.0}).with_step_size(1.0).with_value_to_string(format_nothing()),
-            filter_env_decay: FloatParam::new("Env Decay", 200.0, FloatRange::Skewed { min: 0.001, max: 999.9, factor: 0.2}).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            filter_env_curve: EnumParam::new("Env Curve",Oscillator::SmoothStyle::Linear),
+            filter_env_peak: FloatParam::new(
+                "Env Peak",
+                0.0,
+                FloatRange::Linear {
+                    min: -4000.0,
+                    max: 4000.0,
+                },
+            )
+            .with_step_size(1.0)
+            .with_value_to_string(format_nothing()),
+            filter_env_decay: FloatParam::new(
+                "Env Decay",
+                200.0,
+                FloatRange::Skewed {
+                    min: 0.001,
+                    max: 999.9,
+                    factor: 0.2,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            filter_env_curve: EnumParam::new("Env Curve", Oscillator::SmoothStyle::Linear),
 
             // UI Non-Param Params
             ////////////////////////////////////////////////////////////////////////////////////
-            param_load_bank: BoolParam::new("Load Bank", false).with_callback(
-                { 
-                    let load_bank = load_bank.clone(); 
-                    Arc::new(move |_| { load_bank.store(true, Ordering::Relaxed) }) 
+            param_load_bank: BoolParam::new("Load Bank", false).with_callback({
+                let load_bank = load_bank.clone();
+                Arc::new(move |_| load_bank.store(true, Ordering::Relaxed))
+            }),
+            param_save_bank: BoolParam::new("Save Bank", false).with_callback({
+                let save_bank = save_bank.clone();
+                Arc::new(move |_| save_bank.store(true, Ordering::Relaxed))
+            }),
+
+            // For some reason the callback doesn't work right here so I went by validating params for previous and next
+            param_next_preset: BoolParam::new("->", false),
+            param_prev_preset: BoolParam::new("<-", false),
+
+            param_update_current_preset: BoolParam::new("Update Current Preset", false)
+                .with_callback({
+                    let update_current_preset = update_current_preset.clone();
+                    Arc::new(move |_| update_current_preset.store(true, Ordering::Relaxed))
                 }),
-            param_save_bank: BoolParam::new("Save Bank", false).with_callback(
-                { 
-                    let save_bank = save_bank.clone(); 
-                    Arc::new(move |_| { save_bank.store(true, Ordering::Relaxed) }) 
-                }),
-            param_next_preset: BoolParam::new("->", false).with_callback(
-                {
-                    let next_preset = next_preset.clone(); 
-                    Arc::new(move |_| { next_preset.store(true, Ordering::Relaxed) }
-                ) }),
-            param_prev_preset: BoolParam::new("<-", false).with_callback(
-                { 
-                    let prev_preset = prev_preset.clone(); 
-                    Arc::new(move |_| { prev_preset.store(true, Ordering::Relaxed) }
-                ) }),
-            param_update_current_preset: BoolParam::new("Update Current Preset", false).with_callback(
-                { 
-                    let update_current_preset = update_current_preset.clone(); 
-                    Arc::new(move |_| { update_current_preset.store(true, Ordering::Relaxed) }
-                ) }),
+
+            // Not a param
+            loading: BoolParam::new("loading_mod", false),
         }
     }
 }
@@ -840,16 +1969,19 @@ impl Plugin for Actuate {
     // This draws our GUI with egui library
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = self.params.clone();
-        let arc_preset = Arc::clone(&self.preset_lib);  //Arc<Mutex<Vec<ActuatePreset>>>
+        let arc_preset = Arc::clone(&self.preset_lib); //Arc<Mutex<Vec<ActuatePreset>>>
         let clear_voices = Arc::clone(&self.clear_voices);
         let reload_entire_preset = Arc::clone(&self.reload_entire_preset);
         let current_preset = Arc::clone(&self.current_preset);
+        let AM1 = Arc::clone(&self.audio_module_1);
+        let AM2 = Arc::clone(&self.audio_module_2);
+        let AM3 = Arc::clone(&self.audio_module_3);
 
         let update_current_preset = Arc::clone(&self.update_current_preset);
-        let prev_preset = Arc::clone(&self.prev_preset);
-        let next_preset = Arc::clone(&self.next_preset);
         let load_bank = Arc::clone(&self.load_bank);
         let save_bank = Arc::clone(&self.save_bank);
+
+        let loading = Arc::clone(&self.file_dialog);
 
         // Do our GUI stuff
         create_egui_editor(
@@ -860,40 +1992,96 @@ impl Plugin for Actuate {
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
                         let current_preset_index = current_preset.load(Ordering::Relaxed);
+
                         // Reset our buttons
-                        if next_preset.load(Ordering::Relaxed) {
+                        if params.param_next_preset.value() {
+                            loading.store(true, Ordering::Relaxed);
+                            setter.set_parameter(&params.loading, true);
                             if current_preset_index < 31 {
                                 current_preset.store(current_preset_index + 1, Ordering::Relaxed);
+
+                                setter.set_parameter(&params.param_next_preset, false);
+                                clear_voices.store(true, Ordering::Relaxed);
+
+                                // This is manually here to make sure it appears for long loads from different threads
+                                // Create the loading popup here.
+                                let screen_size = Rect::from_x_y_ranges(
+                                RangeInclusive::new(0.0, WIDTH as f32),
+                                RangeInclusive::new(0.0, HEIGHT as f32));
+                                let popup_size = Vec2::new(400.0, 200.0);
+                                let popup_pos = screen_size.center();
+
+                                // Draw the loading popup content here.
+                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+
+                                // GUI thread misses this without this call here for some reason
+                                Actuate::reload_entire_preset(setter, params.clone(), (current_preset_index + 1) as usize, arc_preset.clone(), AM1.clone(), AM2.clone(), AM3.clone());
+
+                                // This is set for the process thread
+                                reload_entire_preset.store(true, Ordering::Relaxed);
                             }
-                            setter.set_parameter(&params.param_next_preset, false);
-                            next_preset.store(false, Ordering::Relaxed);
-                            clear_voices.store(true, Ordering::Relaxed);
-                            // GUI thread misses this without this call here for some reason
-                            Self::reload_entire_preset(setter, params.clone(), (current_preset_index + 1) as usize, arc_preset.clone());
-                            // This is set for the process thread
-                            reload_entire_preset.store(true, Ordering::Relaxed);
+                            setter.set_parameter(&params.loading, false);
                         }
-                        if prev_preset.load(Ordering::Relaxed) {
+                        if params.param_prev_preset.value() {
+                            loading.store(true, Ordering::Relaxed);
+                            setter.set_parameter(&params.loading, true);
                             if current_preset_index > 0 {
                                 current_preset.store(current_preset_index - 1, Ordering::Relaxed);
+
+                                setter.set_parameter(&params.param_prev_preset, false);
+                                clear_voices.store(true, Ordering::Relaxed);
+
+                                // This is manually here to make sure it appears for long loads from different threads
+                                // Create the loading popup here.
+                                let screen_size = Rect::from_x_y_ranges(
+                                    RangeInclusive::new(0.0, WIDTH as f32),
+                                    RangeInclusive::new(0.0, HEIGHT as f32));
+                                let popup_size = Vec2::new(400.0, 200.0);
+                                let popup_pos = screen_size.center();
+
+                                // Draw the loading popup content here.
+                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+
+                                // GUI thread misses this without this call here for some reason
+                                Actuate::reload_entire_preset(setter, params.clone(), (current_preset_index - 1) as usize, arc_preset.clone(), AM1.clone(), AM2.clone(), AM3.clone());
+
+                                // This is set for the process thread
+                                reload_entire_preset.store(true, Ordering::Relaxed);
                             }
-                            setter.set_parameter(&params.param_prev_preset, false);
-                            prev_preset.store(false, Ordering::Relaxed);
-                            clear_voices.store(true, Ordering::Relaxed);
-                            // GUI thread misses this without this call here for some reason
-                            Self::reload_entire_preset(setter, params.clone(), (current_preset_index - 1) as usize, arc_preset.clone());
-                            // This is set for the process thread
-                            reload_entire_preset.store(true, Ordering::Relaxed);
+                            setter.set_parameter(&params.loading, false);
                         }
                         if load_bank.load(Ordering::Relaxed) {
+                            setter.set_parameter(&params.loading, true);
                             reload_entire_preset.store(true, Ordering::Relaxed);
+                            loading.store(true, Ordering::Relaxed);
+
+                            // This is manually here to make sure it appears for long loads from different threads
+                            // Create the loading popup here.
+                            let screen_size = Rect::from_x_y_ranges(
+                            RangeInclusive::new(0.0, WIDTH as f32),
+                            RangeInclusive::new(0.0, HEIGHT as f32));
+                            let popup_size = Vec2::new(400.0, 200.0);
+                            let popup_pos = screen_size.center();
+
+                            // Draw the loading popup content here.
+                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+
+                            Actuate::reload_entire_preset(setter, params.clone(), current_preset_index as usize, arc_preset.clone(), AM1.clone(), AM2.clone(), AM3.clone());
                             setter.set_parameter(&params.param_load_bank, false);
+                            load_bank.store(false, Ordering::Relaxed);
+                            reload_entire_preset.store(false, Ordering::Relaxed);
+                            setter.set_parameter(&params.loading, false);
                         }
                         if save_bank.load(Ordering::Relaxed) {
                             setter.set_parameter(&params.param_save_bank, false);
+                            save_bank.store(false, Ordering::Relaxed);
                         }
-                        if update_current_preset.load(Ordering::Relaxed) {                            
+                        if update_current_preset.load(Ordering::Relaxed) || params.param_update_current_preset.value() {
                             setter.set_parameter(&params.param_update_current_preset, false);
+                            update_current_preset.store(false, Ordering::Relaxed);
                         }
 
                         // Change colors - there's probably a better way to do this
@@ -917,13 +2105,13 @@ impl Plugin for Actuate {
                         // Trying to draw background colors as rects
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32), 
-                                RangeInclusive::new(0.0, (HEIGHT as f32)*0.72)), 
+                                RangeInclusive::new(0.0, WIDTH as f32),
+                                RangeInclusive::new(0.0, (HEIGHT as f32)*0.72)),
                             Rounding::from(16.0), *GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap());
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32), 
-                                RangeInclusive::new((HEIGHT as f32)*0.72, HEIGHT as f32)), 
+                                RangeInclusive::new(0.0, WIDTH as f32),
+                                RangeInclusive::new((HEIGHT as f32)*0.72, HEIGHT as f32)),
                             Rounding::from(16.0), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap());
 
                         ui.set_style(style_var);
@@ -933,7 +2121,7 @@ impl Plugin for Actuate {
                             let synth_bar_space = 32.0;
                             ui.painter().rect_filled(
                                 Rect::from_x_y_ranges(
-                                    RangeInclusive::new(0.0, synth_bar_space), 
+                                    RangeInclusive::new(0.0, synth_bar_space),
                                     RangeInclusive::new(0.0, HEIGHT as f32)),
                                 Rounding::none(),
                                 *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap()
@@ -960,8 +2148,8 @@ impl Plugin for Actuate {
                                         // Side knobs for types
                                         ui.horizontal(|ui|{
                                             let audio_module_1_knob = ui_knob::ArcKnob::for_param(
-                                                &params._audio_module_1_type, 
-                                                setter, 
+                                                &params._audio_module_1_type,
+                                                setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
@@ -969,8 +2157,8 @@ impl Plugin for Actuate {
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_1_knob);
                                             let audio_module_1_level_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_1_level, 
-                                                setter, 
+                                                &params.audio_module_1_level,
+                                                setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
@@ -980,8 +2168,8 @@ impl Plugin for Actuate {
                                         });
                                         ui.horizontal(|ui|{
                                             let audio_module_2_knob = ui_knob::ArcKnob::for_param(
-                                                &params._audio_module_2_type, 
-                                                setter, 
+                                                &params._audio_module_2_type,
+                                                setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
@@ -989,8 +2177,8 @@ impl Plugin for Actuate {
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_2_knob);
                                             let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_2_level, 
-                                                setter, 
+                                                &params.audio_module_2_level,
+                                                setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
@@ -1000,8 +2188,8 @@ impl Plugin for Actuate {
                                         });
                                         ui.horizontal(|ui| {
                                             let audio_module_3_knob = ui_knob::ArcKnob::for_param(
-                                                &params._audio_module_3_type, 
-                                                setter, 
+                                                &params._audio_module_3_type,
+                                                setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
@@ -1009,8 +2197,8 @@ impl Plugin for Actuate {
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_3_knob);
                                             let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_3_level, 
-                                                setter, 
+                                                &params.audio_module_3_level,
+                                                setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
@@ -1020,29 +2208,29 @@ impl Plugin for Actuate {
                                         });
 
                                         let master_level_knob = ui_knob::ArcKnob::for_param(
-                                            &params.master_level, 
-                                            setter, 
+                                            &params.master_level,
+                                            setter,
                                             KNOB_SIZE + 12.0)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
                                             .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(master_level_knob);
-        
+
                                         let voice_limit_knob = ui_knob::ArcKnob::for_param(
-                                            &params.voice_limit, 
-                                            setter, 
+                                            &params.voice_limit,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
                                             .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(voice_limit_knob);
-    
+
                                         // Spacing under master knob to put filters in the right spot
                                         ui.add_space(KNOB_SIZE + 12.0);
                                     });
-                                
+
                                     ui.separator();
                                     ui.vertical(|ui|{
                                         ui.label(RichText::new("Generator Controls")
@@ -1054,14 +2242,14 @@ impl Plugin for Actuate {
                                 });
 
                                 ui.label("Filters");
-                                
+
                                 // Filter section
-                                
+
                                 ui.horizontal(|ui| {
                                     ui.vertical(|ui|{
                                         let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_wet, 
-                                            setter, 
+                                            &params.filter_wet,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1070,8 +2258,8 @@ impl Plugin for Actuate {
                                         ui.add(filter_wet_knob);
 
                                         let filter_resonance_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_resonance, 
-                                            setter, 
+                                            &params.filter_resonance,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1081,8 +2269,8 @@ impl Plugin for Actuate {
                                     });
                                     ui.vertical(|ui|{
                                         let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_cutoff, 
-                                            setter, 
+                                            &params.filter_cutoff,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1091,8 +2279,8 @@ impl Plugin for Actuate {
                                         ui.add(filter_cutoff_knob);
 
                                         let filter_res_type_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_res_type, 
-                                            setter, 
+                                            &params.filter_res_type,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1102,8 +2290,8 @@ impl Plugin for Actuate {
                                     });
                                     ui.vertical(|ui|{
                                         let filter_hp_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_hp_amount, 
-                                            setter, 
+                                            &params.filter_hp_amount,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1111,8 +2299,8 @@ impl Plugin for Actuate {
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_hp_knob);
                                         let filter_env_peak = ui_knob::ArcKnob::for_param(
-                                            &params.filter_env_peak, 
-                                            setter, 
+                                            &params.filter_env_peak,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1122,8 +2310,8 @@ impl Plugin for Actuate {
                                     });
                                     ui.vertical(|ui| {
                                         let filter_bp_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_bp_amount, 
-                                            setter, 
+                                            &params.filter_bp_amount,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1131,8 +2319,8 @@ impl Plugin for Actuate {
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_bp_knob);
                                         let filter_env_decay_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_env_decay, 
-                                            setter, 
+                                            &params.filter_env_decay,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1142,8 +2330,8 @@ impl Plugin for Actuate {
                                     });
                                     ui.vertical(|ui| {
                                         let filter_lp_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_lp_amount, 
-                                            setter, 
+                                            &params.filter_lp_amount,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1151,8 +2339,8 @@ impl Plugin for Actuate {
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_lp_knob);
                                         let filter_env_curve_knob = ui_knob::ArcKnob::for_param(
-                                            &params.filter_env_curve, 
-                                            setter, 
+                                            &params.filter_env_curve,
+                                            setter,
                                             KNOB_SIZE)
                                             .preset_style(ui_knob::KnobStyle::NewPresets1)
                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
@@ -1160,14 +2348,14 @@ impl Plugin for Actuate {
                                             .set_text_size(TEXT_SIZE);
                                         ui.add(filter_env_curve_knob);
                                     });
-                                    
+
                                     // Move Presets over!
                                     ui.add_space(46.0);
 
                                     ui.painter().rect_filled(
                                         Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.46, (WIDTH as f32) - (synth_bar_space + 4.0)), 
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)), 
+                                            RangeInclusive::new((WIDTH as f32)*0.46, (WIDTH as f32) - (synth_bar_space + 4.0)),
+                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                         Rounding::from(16.0),
                                         *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap()
                                     );
@@ -1204,7 +2392,7 @@ impl Plugin for Actuate {
                             // Synth Bars on left and right
                             ui.painter().rect_filled(
                                 Rect::from_x_y_ranges(
-                                    RangeInclusive::new(WIDTH as f32 - synth_bar_space, WIDTH as f32), 
+                                    RangeInclusive::new(WIDTH as f32 - synth_bar_space, WIDTH as f32),
                                     RangeInclusive::new(0.0, HEIGHT as f32)),
                                 Rounding::none(),
                                 *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap()
@@ -1217,9 +2405,22 @@ impl Plugin for Actuate {
                             ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,screw_space), 4.0, Color32::LIGHT_GRAY);
                             ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,HEIGHT as f32 - screw_space), 4.0, Color32::LIGHT_GRAY);
                         });
+
+                        if params.loading.value() || loading.load(Ordering::Relaxed) {
+                            // Create the loading popup here.
+                            let screen_size = Rect::from_x_y_ranges(
+                                RangeInclusive::new(0.0, WIDTH as f32),
+                                RangeInclusive::new(0.0, HEIGHT as f32));
+                            let popup_size = Vec2::new(400.0, 200.0);
+                            let popup_pos = screen_size.center();
+
+                            // Draw the loading popup content here.
+                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+                        }
                     });
-                }
-            )
+            },
+        )
     }
 
     fn initialize(
@@ -1241,9 +2442,10 @@ impl Plugin for Actuate {
     ) -> ProcessStatus {
         // Clear any voices on change of module type (especially during play)
         if self.clear_voices.clone().load(Ordering::Relaxed) {
-            self.audio_module_1.clear_voices();
-            self.audio_module_2.clear_voices();
-            self.audio_module_3.clear_voices();
+            self.audio_module_1.as_ref().lock().unwrap().clear_voices();
+            self.audio_module_2.as_ref().lock().unwrap().clear_voices();
+            self.audio_module_3.as_ref().lock().unwrap().clear_voices();
+
             self.clear_voices.store(false, Ordering::Relaxed);
             self.update_something.store(true, Ordering::Relaxed);
         }
@@ -1268,113 +2470,121 @@ impl Plugin for Actuate {
 impl Actuate {
     // Send midi events to the audio modules and let them process them - also send params so they can access
     fn process_midi(&mut self, context: &mut impl ProcessContext<Self>, buffer: &mut Buffer) {
-
         // Check if we're loading a file before process happens
-        if self.params.load_sample_1.value() && self.file_dialog.load(Ordering::Relaxed)  {
-            self.file_dialog.store(true, Ordering::Relaxed);
-            let sample_file = FileDialog::new()
-                        .add_filter("wav", &["wav"])
-                        //.set_directory("/")
-                        .pick_file();
-            if Option::is_some(&sample_file) {
-                self.audio_module_1.load_new_sample(sample_file.unwrap());
-            }
-        }
-        else if self.params.load_sample_2.value() && self.file_dialog.load(Ordering::Relaxed) {
+        if self.params.load_sample_1.value() && self.file_dialog.load(Ordering::Relaxed) {
             self.file_dialog.store(true, Ordering::Relaxed);
             let sample_file = FileDialog::new()
                 .add_filter("wav", &["wav"])
                 //.set_directory("/")
                 .pick_file();
             if Option::is_some(&sample_file) {
-                self.audio_module_2.load_new_sample(sample_file.unwrap());
+                self.audio_module_1
+                    .as_ref()
+                    .lock()
+                    .unwrap()
+                    .load_new_sample(sample_file.unwrap());
             }
-        }
-        else if self.params.load_sample_3.value() && self.file_dialog.load(Ordering::Relaxed) {
+        } else if self.params.load_sample_2.value() && self.file_dialog.load(Ordering::Relaxed) {
             self.file_dialog.store(true, Ordering::Relaxed);
             let sample_file = FileDialog::new()
                 .add_filter("wav", &["wav"])
                 //.set_directory("/")
                 .pick_file();
             if Option::is_some(&sample_file) {
-                self.audio_module_3.load_new_sample(sample_file.unwrap());
+                self.audio_module_2
+                    .as_ref()
+                    .lock()
+                    .unwrap()
+                    .load_new_sample(sample_file.unwrap());
+            }
+        } else if self.params.load_sample_3.value() && self.file_dialog.load(Ordering::Relaxed) {
+            self.file_dialog.store(true, Ordering::Relaxed);
+            let sample_file = FileDialog::new()
+                .add_filter("wav", &["wav"])
+                //.set_directory("/")
+                .pick_file();
+            if Option::is_some(&sample_file) {
+                self.audio_module_3
+                    .as_ref()
+                    .lock()
+                    .unwrap()
+                    .load_new_sample(sample_file.unwrap());
             }
         }
 
         for (sample_id, mut channel_samples) in buffer.iter_samples().enumerate() {
             // Get around post file loading breaking things with an arbitrary buffer
-            if self.file_dialog.load(Ordering::Relaxed) {
-                self.file_open_buffer_timer.store(self.file_open_buffer_timer.load(Ordering::Relaxed) + 1, Ordering::Relaxed);
+            if self.file_dialog.load(Ordering::Acquire) {
+                self.file_open_buffer_timer.store(
+                    self.file_open_buffer_timer.load(Ordering::Relaxed) + 1,
+                    Ordering::Relaxed,
+                );
                 if self.file_open_buffer_timer.load(Ordering::Relaxed) > FILE_OPEN_BUFFER_MAX {
                     self.file_open_buffer_timer.store(0, Ordering::Relaxed);
                     self.file_dialog.store(false, Ordering::Release);
                 }
             }
-            // Preset UI // next, prev, load, save
-            // Load the non-gui related preset stuff!
-            if (self.reload_entire_preset.load(Ordering::Relaxed)) {
-                self.file_dialog.store(true, Ordering::Release);
-                self.file_open_buffer_timer.store(0, Ordering::Release);
+            if self.load_bank.load(Ordering::Relaxed)
+                && !self.file_dialog.load(Ordering::Relaxed)
+                && self.file_open_buffer_timer.load(Ordering::Relaxed) == 0
+                && !self.reload_entire_preset.load(Ordering::Acquire)
+            {
+                let AM1c = self.audio_module_1.clone();
+                let AM2c = self.audio_module_2.clone();
+                let AM3c = self.audio_module_3.clone();
 
-                // This is like this because the reference goes away after each unwrap...
-                let current_preset_index = self.current_preset.load(Ordering::Relaxed) as usize;
-                self.audio_module_1.loaded_sample = Arc::clone(&self.preset_lib).lock().unwrap()[current_preset_index].mod1_loaded_sample.clone();
-                self.audio_module_1.sample_lib = Arc::clone(&self.preset_lib).lock().unwrap()[current_preset_index].mod1_sample_lib.clone();
-                self.audio_module_1.prev_restretch = Arc::clone(&self.preset_lib).lock().unwrap()[current_preset_index].mod1_prev_restretch.clone();
-            
-                self.audio_module_2.loaded_sample = Arc::clone(&self.preset_lib).lock().unwrap()[current_preset_index].mod2_loaded_sample.clone();
-                self.audio_module_2.sample_lib = Arc::clone(&self.preset_lib).lock().unwrap()[current_preset_index].mod2_sample_lib.clone();
-                self.audio_module_2.prev_restretch = Arc::clone(&self.preset_lib).lock().unwrap()[current_preset_index].mod2_prev_restretch.clone();
-            
-                self.audio_module_3.loaded_sample = Arc::clone(&self.preset_lib).lock().unwrap()[current_preset_index].mod3_loaded_sample.clone();
-                self.audio_module_3.sample_lib = Arc::clone(&self.preset_lib).lock().unwrap()[current_preset_index].mod3_sample_lib.clone();
-                self.audio_module_3.prev_restretch = Arc::clone(&self.preset_lib).lock().unwrap()[current_preset_index].mod3_prev_restretch.clone();
+                let mut AM1 = AM1c.lock().unwrap();
+                let mut AM2 = AM2c.lock().unwrap();
+                let mut AM3 = AM3c.lock().unwrap();
 
-                // Note audio module type from the module is used here instead of from the main self type
-                // This is because preset loading has changed it here first!
-                if self.audio_module_1.audio_module_type == AudioModuleType::Granulizer 
-                || self.audio_module_1.audio_module_type == AudioModuleType::Sampler {
-                    if self.audio_module_1.sample_lib.len() <= 1 {
-                        self.audio_module_1.regenerate_samples();
-                    }
-                }
-                if self.audio_module_2.audio_module_type == AudioModuleType::Granulizer 
-                || self.audio_module_2.audio_module_type == AudioModuleType::Sampler {
-                    if self.audio_module_2.sample_lib.len() <= 1 {
-                        self.audio_module_2.regenerate_samples();
-                    }
-                }
-                if self.audio_module_3.audio_module_type == AudioModuleType::Granulizer 
-                || self.audio_module_3.audio_module_type == AudioModuleType::Sampler {
-                    if self.audio_module_3.sample_lib.len() <= 1 {
-                        self.audio_module_3.regenerate_samples();
-                    }
-                }
-                // Reset this if we've regenerated
-                self.reload_entire_preset.store(false, Ordering::Relaxed);
-            }
-            if self.load_bank.load(Ordering::Relaxed) && !self.file_dialog.load(Ordering::Relaxed) {
                 self.file_dialog.store(true, Ordering::Relaxed);
-                self.file_open_buffer_timer.store(0, Ordering::Relaxed);
-                self.load_preset_bank();
-                // Update to change preset loading arc for next time a thread goes into gui side and here
-                self.reload_entire_preset.store(true, Ordering::Relaxed);
+                self.file_open_buffer_timer.store(1, Ordering::Relaxed);
+                let unserialized: Vec<ActuatePreset>;
+                (self.preset_lib_name, unserialized) = Actuate::load_preset_bank();
+                self.load_bank.store(false, Ordering::Relaxed);
+
+                let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
+                let mut locked_lib = arc_lib.lock().unwrap();
+
+                for (item_index, item) in unserialized.iter().enumerate() {
+                    // If our item exists then update it
+                    if let Some(existing_item) = locked_lib.get_mut(item_index) {
+                        *existing_item = item.clone();
+                    } else {
+                        // item_index is out of bounds in locked_lib
+                        // These get dropped as the preset size should be the same all around
+                    }
+                }
+
+                // Create missing samples on current preset
+                AM1.regenerate_samples();
+                AM2.regenerate_samples();
+                AM3.regenerate_samples();
+
+                // This is here again purposefully
+                self.reload_entire_preset.store(true, Ordering::Release);
             }
-            if self.save_bank.load(Ordering::Relaxed) && !self.file_dialog.load(Ordering::Relaxed) {
+            if self.save_bank.load(Ordering::Relaxed)
+                && !self.file_dialog.load(Ordering::Relaxed)
+                && self.file_open_buffer_timer.load(Ordering::Relaxed) == 0
+            {
                 self.file_dialog.store(true, Ordering::Relaxed);
-                self.file_open_buffer_timer.store(0, Ordering::Relaxed);
+                self.file_open_buffer_timer.store(1, Ordering::Relaxed);
                 self.save_preset_bank();
+                self.save_bank.store(false, Ordering::Relaxed);
             }
-            if self.update_current_preset.load(Ordering::Relaxed) && !self.file_dialog.load(Ordering::Relaxed) {
+            if self.update_current_preset.load(Ordering::Relaxed)
+                && !self.file_dialog.load(Ordering::Relaxed)
+            {
                 self.file_dialog.store(true, Ordering::Relaxed);
-                self.file_open_buffer_timer.store(0, Ordering::Relaxed);
-                let _updated_preset = self.update_current_preset();
+                self.file_open_buffer_timer.store(1, Ordering::Relaxed);
+                self.update_current_preset();
                 self.update_current_preset.store(false, Ordering::Relaxed);
             }
 
             // Prevent processing if our file dialog is open!!!
             if self.file_dialog.load(Ordering::Relaxed) {
-                return
+                return;
             }
 
             // Processing
@@ -1387,22 +2597,40 @@ impl Actuate {
             // This weird bit is to stop playing when going from play to stop
             // but also allowing playing of the synth while stopped
             // midi choke doesn't seem to be working in FL
-            if !context.transport().playing && (
-                self.audio_module_1.get_playing()
-                || self.audio_module_2.get_playing()
-                || self.audio_module_3.get_playing()
-            ) {
-                self.audio_module_1.set_playing(false);
-                self.audio_module_2.set_playing(false);
-                self.audio_module_3.set_playing(false);
-                self.audio_module_1.clear_voices();
-                self.audio_module_2.clear_voices();
-                self.audio_module_3.clear_voices();
+            if !context.transport().playing
+                && (self.audio_module_1.clone().lock().unwrap().get_playing()
+                    || self.audio_module_2.clone().lock().unwrap().get_playing()
+                    || self.audio_module_3.clone().lock().unwrap().get_playing())
+            {
+                // Create clones here
+                let AM1 = self.audio_module_1.clone();
+                let AM2 = self.audio_module_1.clone();
+                let AM3 = self.audio_module_1.clone();
+
+                // For some reason this format works vs doing lock and storing it earlier
+                AM1.lock().unwrap().set_playing(false);
+                AM2.lock().unwrap().set_playing(false);
+                AM3.lock().unwrap().set_playing(false);
+                AM1.lock().unwrap().clear_voices();
+                AM2.lock().unwrap().clear_voices();
+                AM3.lock().unwrap().clear_voices();
             }
             if context.transport().playing {
-                self.audio_module_1.set_playing(true);
-                self.audio_module_2.set_playing(true);
-                self.audio_module_3.set_playing(true);
+                self.audio_module_1
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .set_playing(true);
+                self.audio_module_2
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .set_playing(true);
+                self.audio_module_3
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .set_playing(true);
             }
 
             let midi_event: Option<NoteEvent<()>> = context.next_event();
@@ -1419,26 +2647,59 @@ impl Actuate {
             let mut reset_filter_controller3: bool = false;
 
             if self.update_something.load(Ordering::Relaxed) {
-                self.audio_module_1.consume_params(self.params.clone(), 1);
-                self.audio_module_2.consume_params(self.params.clone(), 2);
-                self.audio_module_3.consume_params(self.params.clone(), 3);
+                self.audio_module_1
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .consume_params(self.params.clone(), 1);
+                self.audio_module_2
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .consume_params(self.params.clone(), 2);
+                self.audio_module_3
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .consume_params(self.params.clone(), 3);
                 self.update_something.store(false, Ordering::Relaxed);
             }
 
             // Since File Dialog can be set by any of these we need to check each time
-            if !self.file_dialog.load(Ordering::Relaxed) && self.params._audio_module_1_type.value() != AudioModuleType::Off {
+            if !self.file_dialog.load(Ordering::Relaxed)
+                && self.params._audio_module_1_type.value() != AudioModuleType::Off
+            {
                 // We send our sample_id position, params, current midi event, module index, current voice max, and whether any params have changed
-                (wave1_l, wave1_r, reset_filter_controller1) = self.audio_module_1.process(sample_id, midi_event.clone(), sent_voice_max);
+                (wave1_l, wave1_r, reset_filter_controller1) = self
+                    .audio_module_1
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .process(sample_id, midi_event.clone(), sent_voice_max);
                 wave1_l *= self.params.audio_module_1_level.value();
                 wave1_r *= self.params.audio_module_1_level.value();
             }
-            if !self.file_dialog.load(Ordering::Relaxed) && self.params._audio_module_2_type.value() != AudioModuleType::Off {
-                (wave2_l, wave2_r, reset_filter_controller2) = self.audio_module_2.process(sample_id, midi_event.clone(), sent_voice_max);
+            if !self.file_dialog.load(Ordering::Relaxed)
+                && self.params._audio_module_2_type.value() != AudioModuleType::Off
+            {
+                (wave2_l, wave2_r, reset_filter_controller2) = self
+                    .audio_module_2
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .process(sample_id, midi_event.clone(), sent_voice_max);
                 wave2_l *= self.params.audio_module_2_level.value();
                 wave2_r *= self.params.audio_module_2_level.value();
             }
-            if !self.file_dialog.load(Ordering::Relaxed) && self.params._audio_module_3_type.value() != AudioModuleType::Off {
-                (wave3_l, wave3_r, reset_filter_controller3) = self.audio_module_3.process(sample_id, midi_event.clone(), sent_voice_max);
+            if !self.file_dialog.load(Ordering::Relaxed)
+                && self.params._audio_module_3_type.value() != AudioModuleType::Off
+            {
+                (wave3_l, wave3_r, reset_filter_controller3) = self
+                    .audio_module_3
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .process(sample_id, midi_event.clone(), sent_voice_max);
                 wave3_l *= self.params.audio_module_3_level.value();
                 wave3_r *= self.params.audio_module_3_level.value();
             }
@@ -1446,19 +2707,30 @@ impl Actuate {
             let mut left_output: f32 = wave1_l + wave2_l + wave3_l;
             let mut right_output: f32 = wave1_r + wave2_r + wave3_r;
 
-            if self.params.filter_wet.value() > 0.0  && !self.file_dialog.load(Ordering::Relaxed) {
+            if self.params.filter_wet.value() > 0.0 && !self.file_dialog.load(Ordering::Relaxed) {
                 // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
-                if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
+                if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3
+                {
                     self.filter_mod_smoother = match self.params.filter_env_curve.value() {
-                        SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(self.params.filter_env_decay.value())),
-                        SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(self.params.filter_env_decay.value())),
-                        SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(self.params.filter_env_decay.value())),
+                        SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
+                            self.params.filter_env_decay.value(),
+                        )),
+                        SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                            self.params.filter_env_decay.value(),
+                        )),
+                        SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                            self.params.filter_env_decay.value(),
+                        )),
                     };
                     // This makes our filter actuate point
-                    self.filter_mod_smoother.reset((self.params.filter_cutoff.value() + self.params.filter_env_peak.value()).clamp(20.0, 16000.0));
+                    self.filter_mod_smoother.reset(
+                        (self.params.filter_cutoff.value() + self.params.filter_env_peak.value())
+                            .clamp(20.0, 16000.0),
+                    );
 
                     // Set up the smoother for our filter movement
-                    self.filter_mod_smoother.set_target(self.sample_rate, self.params.filter_cutoff.value());
+                    self.filter_mod_smoother
+                        .set_target(self.sample_rate, self.params.filter_cutoff.value());
                 }
 
                 // use proper variable now that there are two filters
@@ -1467,16 +2739,16 @@ impl Actuate {
                 // Filtering before output
                 self.filter_l.update(
                     next_filter_step,
-                   self.params.filter_resonance.value(),
-                   self.sample_rate,
-                   self.params.filter_res_type.value(),
+                    self.params.filter_resonance.value(),
+                    self.sample_rate,
+                    self.params.filter_res_type.value(),
                 );
                 self.filter_r.update(
                     next_filter_step,
                     self.params.filter_resonance.value(),
                     self.sample_rate,
                     self.params.filter_res_type.value(),
-                 );
+                );
 
                 let low_l: f32;
                 let band_l: f32;
@@ -1488,21 +2760,25 @@ impl Actuate {
                 (low_l, band_l, high_l) = self.filter_l.process(left_output);
                 (low_r, band_r, high_r) = self.filter_r.process(right_output);
 
-                left_output = (low_l*self.params.filter_lp_amount.value() 
-                            + band_l*self.params.filter_bp_amount.value()
-                            + high_l*self.params.filter_hp_amount.value())*self.params.filter_wet.value()
-                            + left_output*(1.0-self.params.filter_wet.value());
+                left_output = (low_l * self.params.filter_lp_amount.value()
+                    + band_l * self.params.filter_bp_amount.value()
+                    + high_l * self.params.filter_hp_amount.value())
+                    * self.params.filter_wet.value()
+                    + left_output * (1.0 - self.params.filter_wet.value());
 
-                right_output = (low_r*self.params.filter_lp_amount.value() 
-                            + band_r*self.params.filter_bp_amount.value()
-                            + high_r*self.params.filter_hp_amount.value())*self.params.filter_wet.value()
-                            + right_output*(1.0-self.params.filter_wet.value());
+                right_output = (low_r * self.params.filter_lp_amount.value()
+                    + band_r * self.params.filter_bp_amount.value()
+                    + high_r * self.params.filter_hp_amount.value())
+                    * self.params.filter_wet.value()
+                    + right_output * (1.0 - self.params.filter_wet.value());
             }
 
             if !self.file_dialog.load(Ordering::Relaxed) {
                 // Remove DC Offsets with our SVF
-                self.dc_filter_l.update(20.0, 0.8, self.sample_rate, ResonanceType::Default);
-                self.dc_filter_r.update(20.0, 0.8, self.sample_rate, ResonanceType::Default);
+                self.dc_filter_l
+                    .update(20.0, 0.8, self.sample_rate, ResonanceType::Default);
+                self.dc_filter_r
+                    .update(20.0, 0.8, self.sample_rate, ResonanceType::Default);
                 (_, _, left_output) = self.dc_filter_l.process(left_output);
                 (_, _, right_output) = self.dc_filter_r.process(right_output);
             }
@@ -1514,181 +2790,180 @@ impl Actuate {
     }
 
     // Load presets
-    fn load_preset_bank(&mut self) {
+    fn load_preset_bank() -> (String, Vec<ActuatePreset>) {
         let loading_bank = FileDialog::new()
             .add_filter("bin", &["bin"]) // Use the same filter as in save_preset_bank
             .pick_file();
-        
+        let return_name;
+
         if let Some(loading_bank) = loading_bank {
-            self.preset_lib_name = loading_bank.to_str().unwrap_or("Invalid Path").to_string();
-            
+            return_name = loading_bank.to_str().unwrap_or("Invalid Path").to_string();
+
             // Read the compressed data from the file
             let mut compressed_data = Vec::new();
-            if let Err(err) = std::fs::File::open(&self.preset_lib_name)
+            if let Err(err) = std::fs::File::open(&return_name)
                 .and_then(|mut file| file.read_to_end(&mut compressed_data))
             {
                 eprintln!("Error reading compressed data from file: {}", err);
-                return;
+                return (err.to_string(), Vec::new());
             }
-    
+
             // Decompress the data
             let decompressed_data = Self::decompress_bytes(&compressed_data);
             if let Err(err) = decompressed_data {
                 eprintln!("Error decompressing data: {}", err);
-                return;
+                return (err.to_string(), Vec::new());
             }
-            
+
             // Deserialize the MessagePack data
             let file_string_data = decompressed_data.unwrap();
-            
-            // Deserialize into ActuatePreset - return default empty lib if error
-            let unserialized: Vec<ActuatePreset> = rmp_serde::from_slice(&file_string_data).unwrap_or(
-                vec![ActuatePreset { 
-                    mod1_audio_module_type: AudioModuleType::Osc, 
-                    mod1_audio_module_level: 1.0,
-                    mod1_loaded_sample: vec![vec![0.0,0.0]], 
-                    mod1_sample_lib: vec![vec![vec![0.0,0.0]]], 
-                    mod1_loop_wavetable: false, 
-                    mod1_single_cycle: false, 
-                    mod1_restretch: true, 
-                    mod1_prev_restretch: false, 
-                    mod1_grain_hold: 200,
-                    mod1_grain_gap: 200,
-                    mod1_start_position: 0.0,
-                    mod1_end_position: 1.0,
-                    mod1_grain_crossfade: 50,
-                    mod1_osc_type: VoiceType::Sine, 
-                    mod1_osc_octave: 0, 
-                    mod1_osc_semitones: 0, 
-                    mod1_osc_detune: 0.0, 
-                    mod1_osc_attack: 0.0001, 
-                    mod1_osc_decay: 0.0001, 
-                    mod1_osc_sustain: 999.9, 
-                    mod1_osc_release: 5.0, 
-                    mod1_osc_retrigger: RetriggerStyle::Retrigger, 
-                    mod1_osc_atk_curve: SmoothStyle::Linear, 
-                    mod1_osc_dec_curve: SmoothStyle::Linear, 
-                    mod1_osc_rel_curve: SmoothStyle::Linear, 
-                    mod1_osc_unison: 1,
-                    mod1_osc_unison_detune: 0.0,
-                    mod1_osc_stereo: 0.0,
-                    mod1_partial0: 1.0,
-                    mod1_partial0_phase: 0.0,
-                    mod1_partial1: 0.0,
-                    mod1_partial1_phase: 0.0,
-    
-                    mod2_audio_module_type: AudioModuleType::Off, 
-                    mod2_audio_module_level: 1.0,
-                    mod2_loaded_sample: vec![vec![0.0,0.0]], 
-                    mod2_sample_lib: vec![vec![vec![0.0,0.0]]], 
-                    mod2_loop_wavetable: false, 
-                    mod2_single_cycle: false, 
-                    mod2_restretch: true, 
-                    mod2_prev_restretch: false, 
-                    mod2_grain_hold: 200,
-                    mod2_grain_gap: 200,
-                    mod2_start_position: 0.0,
-                    mod2_end_position: 1.0,
-                    mod2_grain_crossfade: 50,
-                    mod2_osc_type: VoiceType::Sine, 
-                    mod2_osc_octave: 0, 
-                    mod2_osc_semitones: 0, 
-                    mod2_osc_detune: 0.0, 
-                    mod2_osc_attack: 0.0001, 
-                    mod2_osc_decay: 0.0001, 
-                    mod2_osc_sustain: 999.9, 
-                    mod2_osc_release: 5.0, 
-                    mod2_osc_retrigger: RetriggerStyle::Retrigger, 
-                    mod2_osc_atk_curve: SmoothStyle::Linear, 
-                    mod2_osc_dec_curve: SmoothStyle::Linear, 
-                    mod2_osc_rel_curve: SmoothStyle::Linear, 
-                    mod2_osc_unison: 1,
-                    mod2_osc_unison_detune: 0.0,
-                    mod2_osc_stereo: 0.0,
-                    mod2_partial0: 1.0,
-                    mod2_partial0_phase: 0.0,
-                    mod2_partial1: 0.0,
-                    mod2_partial1_phase: 0.0,
-    
-                    mod3_audio_module_type: AudioModuleType::Off, 
-                    mod3_audio_module_level: 1.0,
-                    mod3_loaded_sample: vec![vec![0.0,0.0]], 
-                    mod3_sample_lib: vec![vec![vec![0.0,0.0]]], 
-                    mod3_loop_wavetable: false, 
-                    mod3_single_cycle: false, 
-                    mod3_restretch: true, 
-                    mod3_prev_restretch: false, 
-                    mod3_grain_hold: 200,
-                    mod3_grain_gap: 200,
-                    mod3_start_position: 0.0,
-                    mod3_end_position: 1.0,
-                    mod3_grain_crossfade: 50,
-                    mod3_osc_type: VoiceType::Sine, 
-                    mod3_osc_octave: 0, 
-                    mod3_osc_semitones: 0, 
-                    mod3_osc_detune: 0.0, 
-                    mod3_osc_attack: 0.0001, 
-                    mod3_osc_decay: 0.0001, 
-                    mod3_osc_sustain: 999.9, 
-                    mod3_osc_release: 5.0, 
-                    mod3_osc_retrigger: RetriggerStyle::Retrigger, 
-                    mod3_osc_atk_curve: SmoothStyle::Linear, 
-                    mod3_osc_dec_curve: SmoothStyle::Linear, 
-                    mod3_osc_rel_curve: SmoothStyle::Linear, 
-                    mod3_osc_unison: 1,
-                    mod3_osc_unison_detune: 0.0,
-                    mod3_osc_stereo: 0.0,
-                    mod3_partial0: 1.0,
-                    mod3_partial0_phase: 0.0,
-                    mod3_partial1: 0.0,
-                    mod3_partial1_phase: 0.0,
-    
-                    filter_wet: 1.0, 
-                    filter_cutoff: 4000.0, 
-                    filter_resonance: 1.0, 
-                    filter_res_type: ResonanceType::Default, 
-                    filter_lp_amount: 1.0, 
-                    filter_hp_amount: 0.0, 
-                    filter_bp_amount: 0.0, 
-                    filter_env_peak: 0.0, 
-                    filter_env_decay: 100.0, 
-                    filter_env_curve: SmoothStyle::Linear }; PRESET_BANK_SIZE]
-            );
-            
-            let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
-            let mut locked_lib = arc_lib.lock().unwrap();
-            
-            for (item_index, item) in unserialized.iter().enumerate() {
-                // If our item exists then update it
-                if let Some(existing_item) = locked_lib.get_mut(item_index) {
-                    *existing_item = item.clone();
-                } else {
-                    // item_index is out of bounds in locked_lib
-                    // These get dropped as the preset size should be the same all around
-                }
-            }
 
-            if self._audio_module_1_type == AudioModuleType::Granulizer 
-            || self._audio_module_1_type == AudioModuleType::Sampler {
-                self.audio_module_1.regenerate_samples();
-            }
-            if self._audio_module_2_type == AudioModuleType::Granulizer 
-            || self._audio_module_2_type == AudioModuleType::Sampler {
-                self.audio_module_2.regenerate_samples();
-            }
-            if self._audio_module_3_type == AudioModuleType::Granulizer 
-            || self._audio_module_3_type == AudioModuleType::Sampler {
-                self.audio_module_3.regenerate_samples();
-            }
+            // Deserialize into ActuatePreset - return default empty lib if error
+            let unserialized: Vec<ActuatePreset> = rmp_serde::from_slice(&file_string_data)
+                .unwrap_or(vec![
+                    ActuatePreset {
+                        mod1_audio_module_type: AudioModuleType::Osc,
+                        mod1_audio_module_level: 1.0,
+                        mod1_loaded_sample: vec![vec![0.0, 0.0]],
+                        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                        mod1_loop_wavetable: false,
+                        mod1_single_cycle: false,
+                        mod1_restretch: true,
+                        mod1_prev_restretch: false,
+                        mod1_grain_hold: 200,
+                        mod1_grain_gap: 200,
+                        mod1_start_position: 0.0,
+                        mod1_end_position: 1.0,
+                        mod1_grain_crossfade: 50,
+                        mod1_osc_type: VoiceType::Sine,
+                        mod1_osc_octave: 0,
+                        mod1_osc_semitones: 0,
+                        mod1_osc_detune: 0.0,
+                        mod1_osc_attack: 0.0001,
+                        mod1_osc_decay: 0.0001,
+                        mod1_osc_sustain: 999.9,
+                        mod1_osc_release: 5.0,
+                        mod1_osc_retrigger: RetriggerStyle::Retrigger,
+                        mod1_osc_atk_curve: SmoothStyle::Linear,
+                        mod1_osc_dec_curve: SmoothStyle::Linear,
+                        mod1_osc_rel_curve: SmoothStyle::Linear,
+                        mod1_osc_unison: 1,
+                        mod1_osc_unison_detune: 0.0,
+                        mod1_osc_stereo: 0.0,
+                        mod1_partial0: 1.0,
+                        mod1_partial0_phase: 0.0,
+                        mod1_partial1: 0.0,
+                        mod1_partial1_phase: 0.0,
+
+                        mod2_audio_module_type: AudioModuleType::Off,
+                        mod2_audio_module_level: 1.0,
+                        mod2_loaded_sample: vec![vec![0.0, 0.0]],
+                        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                        mod2_loop_wavetable: false,
+                        mod2_single_cycle: false,
+                        mod2_restretch: true,
+                        mod2_prev_restretch: false,
+                        mod2_grain_hold: 200,
+                        mod2_grain_gap: 200,
+                        mod2_start_position: 0.0,
+                        mod2_end_position: 1.0,
+                        mod2_grain_crossfade: 50,
+                        mod2_osc_type: VoiceType::Sine,
+                        mod2_osc_octave: 0,
+                        mod2_osc_semitones: 0,
+                        mod2_osc_detune: 0.0,
+                        mod2_osc_attack: 0.0001,
+                        mod2_osc_decay: 0.0001,
+                        mod2_osc_sustain: 999.9,
+                        mod2_osc_release: 5.0,
+                        mod2_osc_retrigger: RetriggerStyle::Retrigger,
+                        mod2_osc_atk_curve: SmoothStyle::Linear,
+                        mod2_osc_dec_curve: SmoothStyle::Linear,
+                        mod2_osc_rel_curve: SmoothStyle::Linear,
+                        mod2_osc_unison: 1,
+                        mod2_osc_unison_detune: 0.0,
+                        mod2_osc_stereo: 0.0,
+                        mod2_partial0: 1.0,
+                        mod2_partial0_phase: 0.0,
+                        mod2_partial1: 0.0,
+                        mod2_partial1_phase: 0.0,
+
+                        mod3_audio_module_type: AudioModuleType::Off,
+                        mod3_audio_module_level: 1.0,
+                        mod3_loaded_sample: vec![vec![0.0, 0.0]],
+                        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                        mod3_loop_wavetable: false,
+                        mod3_single_cycle: false,
+                        mod3_restretch: true,
+                        mod3_prev_restretch: false,
+                        mod3_grain_hold: 200,
+                        mod3_grain_gap: 200,
+                        mod3_start_position: 0.0,
+                        mod3_end_position: 1.0,
+                        mod3_grain_crossfade: 50,
+                        mod3_osc_type: VoiceType::Sine,
+                        mod3_osc_octave: 0,
+                        mod3_osc_semitones: 0,
+                        mod3_osc_detune: 0.0,
+                        mod3_osc_attack: 0.0001,
+                        mod3_osc_decay: 0.0001,
+                        mod3_osc_sustain: 999.9,
+                        mod3_osc_release: 5.0,
+                        mod3_osc_retrigger: RetriggerStyle::Retrigger,
+                        mod3_osc_atk_curve: SmoothStyle::Linear,
+                        mod3_osc_dec_curve: SmoothStyle::Linear,
+                        mod3_osc_rel_curve: SmoothStyle::Linear,
+                        mod3_osc_unison: 1,
+                        mod3_osc_unison_detune: 0.0,
+                        mod3_osc_stereo: 0.0,
+                        mod3_partial0: 1.0,
+                        mod3_partial0_phase: 0.0,
+                        mod3_partial1: 0.0,
+                        mod3_partial1_phase: 0.0,
+
+                        filter_wet: 1.0,
+                        filter_cutoff: 4000.0,
+                        filter_resonance: 1.0,
+                        filter_res_type: ResonanceType::Default,
+                        filter_lp_amount: 1.0,
+                        filter_hp_amount: 0.0,
+                        filter_bp_amount: 0.0,
+                        filter_env_peak: 0.0,
+                        filter_env_decay: 100.0,
+                        filter_env_curve: SmoothStyle::Linear
+                    };
+                    PRESET_BANK_SIZE
+                ]);
+
+            return (return_name, unserialized);
         }
-        self.load_bank.store(false, Ordering::Relaxed);
+        return (String::from("Error"), Vec::new());
     }
 
-    fn reload_entire_preset(setter: &ParamSetter, params: Arc<ActuateParams>, current_preset_index: usize, arc_preset: Arc<Mutex<Vec<ActuatePreset>>>) {
+    fn reload_entire_preset(
+        setter: &ParamSetter,
+        params: Arc<ActuateParams>,
+        current_preset_index: usize,
+        arc_preset: Arc<Mutex<Vec<ActuatePreset>>>,
+        AMod1: Arc<Mutex<AudioModule>>,
+        AMod2: Arc<Mutex<AudioModule>>,
+        AMod3: Arc<Mutex<AudioModule>>,
+    ) {
+        // Create mutex locks for AudioModule
+        let mut AMod1 = AMod1.as_ref().lock().unwrap();
+        let mut AMod2 = AMod2.as_ref().lock().unwrap();
+        let mut AMod3 = AMod3.as_ref().lock().unwrap();
+
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset.lock().unwrap()[current_preset_index as usize];
-        setter.set_parameter(&params._audio_module_1_type, loaded_preset.mod1_audio_module_type);
-        setter.set_parameter(&params.audio_module_1_level, loaded_preset.mod1_audio_module_level);
+        setter.set_parameter(
+            &params._audio_module_1_type,
+            loaded_preset.mod1_audio_module_type,
+        );
+        setter.set_parameter(
+            &params.audio_module_1_level,
+            loaded_preset.mod1_audio_module_level,
+        );
         setter.set_parameter(&params.loop_sample_1, loaded_preset.mod1_loop_wavetable);
         setter.set_parameter(&params.single_cycle_1, loaded_preset.mod1_single_cycle);
         setter.set_parameter(&params.restretch_1, loaded_preset.mod1_restretch);
@@ -1705,16 +2980,28 @@ impl Actuate {
         setter.set_parameter(&params.osc_1_dec_curve, loaded_preset.mod1_osc_dec_curve);
         setter.set_parameter(&params.osc_1_rel_curve, loaded_preset.mod1_osc_rel_curve);
         setter.set_parameter(&params.osc_1_unison, loaded_preset.mod1_osc_unison);
-        setter.set_parameter(&params.osc_1_unison_detune, loaded_preset.mod1_osc_unison_detune);
+        setter.set_parameter(
+            &params.osc_1_unison_detune,
+            loaded_preset.mod1_osc_unison_detune,
+        );
         setter.set_parameter(&params.osc_1_stereo, loaded_preset.mod1_osc_stereo);
         setter.set_parameter(&params.grain_gap_1, loaded_preset.mod1_grain_gap);
         setter.set_parameter(&params.grain_hold_1, loaded_preset.mod1_grain_hold);
-        setter.set_parameter(&params.grain_crossfade_1, loaded_preset.mod1_grain_crossfade);
+        setter.set_parameter(
+            &params.grain_crossfade_1,
+            loaded_preset.mod1_grain_crossfade,
+        );
         setter.set_parameter(&params.start_position_1, loaded_preset.mod1_start_position);
         setter.set_parameter(&params.end_position_1, loaded_preset.mod1_end_position);
         // loaded sample, sample_lib, and prev restretch are controlled differently
-        setter.set_parameter(&params._audio_module_2_type, loaded_preset.mod2_audio_module_type);
-        setter.set_parameter(&params.audio_module_2_level, loaded_preset.mod2_audio_module_level);
+        setter.set_parameter(
+            &params._audio_module_2_type,
+            loaded_preset.mod2_audio_module_type,
+        );
+        setter.set_parameter(
+            &params.audio_module_2_level,
+            loaded_preset.mod2_audio_module_level,
+        );
         setter.set_parameter(&params.loop_sample_2, loaded_preset.mod2_loop_wavetable);
         setter.set_parameter(&params.single_cycle_2, loaded_preset.mod2_single_cycle);
         setter.set_parameter(&params.restretch_2, loaded_preset.mod2_restretch);
@@ -1731,16 +3018,28 @@ impl Actuate {
         setter.set_parameter(&params.osc_2_dec_curve, loaded_preset.mod2_osc_dec_curve);
         setter.set_parameter(&params.osc_2_rel_curve, loaded_preset.mod2_osc_rel_curve);
         setter.set_parameter(&params.osc_2_unison, loaded_preset.mod2_osc_unison);
-        setter.set_parameter(&params.osc_2_unison_detune, loaded_preset.mod2_osc_unison_detune);
+        setter.set_parameter(
+            &params.osc_2_unison_detune,
+            loaded_preset.mod2_osc_unison_detune,
+        );
         setter.set_parameter(&params.osc_2_stereo, loaded_preset.mod2_osc_stereo);
         setter.set_parameter(&params.grain_gap_2, loaded_preset.mod2_grain_gap);
         setter.set_parameter(&params.grain_hold_2, loaded_preset.mod2_grain_hold);
-        setter.set_parameter(&params.grain_crossfade_2, loaded_preset.mod2_grain_crossfade);
+        setter.set_parameter(
+            &params.grain_crossfade_2,
+            loaded_preset.mod2_grain_crossfade,
+        );
         setter.set_parameter(&params.start_position_2, loaded_preset.mod2_start_position);
         setter.set_parameter(&params.end_position_2, loaded_preset.mod2_end_position);
         // loaded sample, sample_lib, and prev restretch are controlled differently
-        setter.set_parameter(&params._audio_module_3_type, loaded_preset.mod3_audio_module_type);
-        setter.set_parameter(&params.audio_module_3_level, loaded_preset.mod3_audio_module_level);
+        setter.set_parameter(
+            &params._audio_module_3_type,
+            loaded_preset.mod3_audio_module_type,
+        );
+        setter.set_parameter(
+            &params.audio_module_3_level,
+            loaded_preset.mod3_audio_module_level,
+        );
         setter.set_parameter(&params.loop_sample_3, loaded_preset.mod3_loop_wavetable);
         setter.set_parameter(&params.single_cycle_3, loaded_preset.mod3_single_cycle);
         setter.set_parameter(&params.restretch_3, loaded_preset.mod3_restretch);
@@ -1757,23 +3056,57 @@ impl Actuate {
         setter.set_parameter(&params.osc_3_dec_curve, loaded_preset.mod3_osc_dec_curve);
         setter.set_parameter(&params.osc_3_rel_curve, loaded_preset.mod3_osc_rel_curve);
         setter.set_parameter(&params.osc_3_unison, loaded_preset.mod3_osc_unison);
-        setter.set_parameter(&params.osc_3_unison_detune, loaded_preset.mod3_osc_unison_detune);
+        setter.set_parameter(
+            &params.osc_3_unison_detune,
+            loaded_preset.mod3_osc_unison_detune,
+        );
         setter.set_parameter(&params.osc_3_stereo, loaded_preset.mod3_osc_stereo);
         setter.set_parameter(&params.grain_gap_3, loaded_preset.mod3_grain_gap);
         setter.set_parameter(&params.grain_hold_3, loaded_preset.mod3_grain_hold);
-        setter.set_parameter(&params.grain_crossfade_3, loaded_preset.mod3_grain_crossfade);
+        setter.set_parameter(
+            &params.grain_crossfade_3,
+            loaded_preset.mod3_grain_crossfade,
+        );
         setter.set_parameter(&params.start_position_3, loaded_preset.mod3_start_position);
         setter.set_parameter(&params.end_position_3, loaded_preset.mod3_end_position);
         setter.set_parameter(&params.filter_wet, loaded_preset.filter_wet);
         setter.set_parameter(&params.filter_cutoff, loaded_preset.filter_cutoff);
         setter.set_parameter(&params.filter_resonance, loaded_preset.filter_resonance);
-        setter.set_parameter(&params.filter_res_type, loaded_preset.filter_res_type.clone());
+        setter.set_parameter(
+            &params.filter_res_type,
+            loaded_preset.filter_res_type.clone(),
+        );
         setter.set_parameter(&params.filter_lp_amount, loaded_preset.filter_lp_amount);
         setter.set_parameter(&params.filter_hp_amount, loaded_preset.filter_hp_amount);
         setter.set_parameter(&params.filter_bp_amount, loaded_preset.filter_bp_amount);
         setter.set_parameter(&params.filter_env_peak, loaded_preset.filter_env_peak);
         setter.set_parameter(&params.filter_env_decay, loaded_preset.filter_env_decay);
         setter.set_parameter(&params.filter_env_curve, loaded_preset.filter_env_curve);
+
+        // Load the non-gui related preset stuff!
+        /*
+        setter: &ParamSetter,
+        params: Arc<ActuateParams>,
+        current_preset_index: usize,
+        arc_preset: Arc<Mutex<Vec<ActuatePreset>>>,
+        */
+        AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
+        AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
+        AMod1.restretch = loaded_preset.mod1_restretch;
+
+        AMod2.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
+        AMod2.sample_lib = loaded_preset.mod1_sample_lib.clone();
+        AMod2.restretch = loaded_preset.mod1_restretch;
+
+        AMod3.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
+        AMod3.sample_lib = loaded_preset.mod1_sample_lib.clone();
+        AMod3.restretch = loaded_preset.mod1_restretch;
+
+        // Note audio module type from the module is used here instead of from the main self type
+        // This is because preset loading has changed it here first!
+        AMod1.regenerate_samples();
+        AMod2.regenerate_samples();
+        AMod3.regenerate_samples();
     }
 
     fn save_preset_bank(&mut self) {
@@ -1782,34 +3115,35 @@ impl Actuate {
             .add_filter("bin", &["bin"]) // Use a binary format for audio data
             .set_file_name(&self.preset_lib_name)
             .save_file();
-    
+
         if let Some(location) = saving_bank {
             // Create our new save file
             let file = File::create(location.clone());
-    
+
             if let Ok(_file) = file {
                 // Serialize our data to a binary format (MessagePack)
                 let preset_store = Arc::clone(&self.preset_lib);
                 let mut preset_lock = preset_store.lock().unwrap();
-                
+
                 // Clear out our generated notes and only keep the samples themselves
                 for preset in preset_lock.iter_mut() {
                     preset.mod1_sample_lib.clear();
                     preset.mod2_sample_lib.clear();
                     preset.mod3_sample_lib.clear();
                 }
-    
+
                 // Serialize to MessagePack bytes
-                let serialized_data = rmp_serde::to_vec::<&Vec<ActuatePreset>>(&preset_lock.as_ref());
-    
+                let serialized_data =
+                    rmp_serde::to_vec::<&Vec<ActuatePreset>>(&preset_lock.as_ref());
+
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
                     return;
                 }
-    
+
                 // Compress the serialized data using different GzEncoder
                 let compressed_data = Self::compress_bytes(&serialized_data.unwrap());
-    
+
                 // Now you can write the compressed data to the file
                 if let Err(err) = std::fs::write(&location, &compressed_data) {
                     eprintln!("Error writing compressed data to file: {}", err);
@@ -1821,14 +3155,14 @@ impl Actuate {
         }
         self.save_bank.store(false, Ordering::Relaxed);
     }
-    
+
     // Functions to compress bytes and decompress using gz
     fn compress_bytes(data: &[u8]) -> Vec<u8> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
         encoder.write_all(data).unwrap();
         encoder.finish().unwrap()
     }
-    
+
     fn decompress_bytes(compressed_data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
         let mut decoder = GzDecoder::new(compressed_data);
         let mut decompressed_data = Vec::new();
@@ -1839,136 +3173,144 @@ impl Actuate {
     // Update our current preset
     fn update_current_preset(&mut self) {
         let arc_lib = Arc::clone(&self.preset_lib);
-        arc_lib.lock().unwrap()[self.current_preset.load(Ordering::Acquire) as usize] = ActuatePreset {
-            // Modules 1
-            ///////////////////////////////////////////////////////////
-            mod1_audio_module_type: self.params._audio_module_1_type.value(),
-            mod1_audio_module_level: self.params.audio_module_1_level.value(),
-            // Granulizer/Sampler
-            mod1_loaded_sample: self.audio_module_1.loaded_sample.clone(),
-            mod1_sample_lib: self.audio_module_1.sample_lib.clone(),
-            mod1_loop_wavetable: self.audio_module_1.loop_wavetable,
-            mod1_single_cycle: self.audio_module_1.single_cycle,
-            mod1_restretch: self.audio_module_1.restretch,
-            mod1_prev_restretch: self.audio_module_1.prev_restretch,
-            mod1_start_position: self.audio_module_1.start_position,
-            mod1_end_position: self.audio_module_1._end_position,
-            mod1_grain_crossfade: self.audio_module_1.grain_crossfade,
-            mod1_grain_gap: self.audio_module_1.grain_gap,
-            mod1_grain_hold: self.audio_module_1.grain_hold,
+        let AM1c = self.audio_module_1.clone();
+        let AM2c = self.audio_module_2.clone();
+        let AM3c = self.audio_module_3.clone();
 
-            // Osc module knob storage
-            mod1_osc_type: self.audio_module_1.osc_type,
-            mod1_osc_octave: self.audio_module_1.osc_octave,
-            mod1_osc_semitones: self.audio_module_1.osc_semitones,
-            mod1_osc_detune: self.audio_module_1.osc_detune,
-            mod1_osc_attack: self.audio_module_1.osc_attack,
-            mod1_osc_decay: self.audio_module_1.osc_decay,
-            mod1_osc_sustain: self.audio_module_1.osc_sustain,
-            mod1_osc_release: self.audio_module_1.osc_release,
-            mod1_osc_retrigger: self.audio_module_1.osc_retrigger,
-            mod1_osc_atk_curve: self.audio_module_1.osc_atk_curve,
-            mod1_osc_dec_curve: self.audio_module_1.osc_dec_curve,
-            mod1_osc_rel_curve: self.audio_module_1.osc_rel_curve,
-            mod1_osc_unison: self.audio_module_1.osc_unison,
-            mod1_osc_unison_detune: self.audio_module_1.osc_unison_detune,
-            mod1_osc_stereo: self.audio_module_1.osc_stereo,
+        let AM1 = AM1c.lock().unwrap();
+        let AM2 = AM2c.lock().unwrap();
+        let AM3 = AM3c.lock().unwrap();
+        arc_lib.lock().unwrap()[self.current_preset.load(Ordering::Acquire) as usize] =
+            ActuatePreset {
+                // Modules 1
+                ///////////////////////////////////////////////////////////
+                mod1_audio_module_type: self.params._audio_module_1_type.value(),
+                mod1_audio_module_level: self.params.audio_module_1_level.value(),
+                // Granulizer/Sampler
+                mod1_loaded_sample: AM1.loaded_sample.clone(),
+                mod1_sample_lib: AM1.sample_lib.clone(),
+                mod1_loop_wavetable: AM1.loop_wavetable,
+                mod1_single_cycle: AM1.single_cycle,
+                mod1_restretch: AM1.restretch,
+                mod1_prev_restretch: AM1.prev_restretch,
+                mod1_start_position: AM1.start_position,
+                mod1_end_position: AM1._end_position,
+                mod1_grain_crossfade: AM1.grain_crossfade,
+                mod1_grain_gap: AM1.grain_gap,
+                mod1_grain_hold: AM1.grain_hold,
 
-            mod1_partial0: self.audio_module_1.add_partial0,
-            mod1_partial0_phase: self.audio_module_1.add_partial0_phase,
-            mod1_partial1: self.audio_module_1.add_partial1,
-            mod1_partial1_phase: self.audio_module_1.add_partial1_phase,
+                // Osc module knob storage
+                mod1_osc_type: AM1.osc_type,
+                mod1_osc_octave: AM1.osc_octave,
+                mod1_osc_semitones: AM1.osc_semitones,
+                mod1_osc_detune: AM1.osc_detune,
+                mod1_osc_attack: AM1.osc_attack,
+                mod1_osc_decay: AM1.osc_decay,
+                mod1_osc_sustain: AM1.osc_sustain,
+                mod1_osc_release: AM1.osc_release,
+                mod1_osc_retrigger: AM1.osc_retrigger,
+                mod1_osc_atk_curve: AM1.osc_atk_curve,
+                mod1_osc_dec_curve: AM1.osc_dec_curve,
+                mod1_osc_rel_curve: AM1.osc_rel_curve,
+                mod1_osc_unison: AM1.osc_unison,
+                mod1_osc_unison_detune: AM1.osc_unison_detune,
+                mod1_osc_stereo: AM1.osc_stereo,
 
-            // Modules 2
-            ///////////////////////////////////////////////////////////
-            mod2_audio_module_type: self.params._audio_module_2_type.value(),    
-            mod2_audio_module_level: self.params.audio_module_2_level.value(),
-            // Granulizer/Sampler
-            mod2_loaded_sample: self.audio_module_2.loaded_sample.clone(),
-            mod2_sample_lib: self.audio_module_2.sample_lib.clone(),
-            mod2_loop_wavetable: self.audio_module_2.loop_wavetable,
-            mod2_single_cycle: self.audio_module_2.single_cycle,
-            mod2_restretch: self.audio_module_2.restretch,
-            mod2_prev_restretch: self.audio_module_2.prev_restretch,
-            mod2_start_position: self.audio_module_2.start_position,
-            mod2_end_position: self.audio_module_2._end_position,
-            mod2_grain_crossfade: self.audio_module_2.grain_crossfade,
-            mod2_grain_gap: self.audio_module_2.grain_gap,
-            mod2_grain_hold: self.audio_module_2.grain_hold,
+                mod1_partial0: AM1.add_partial0,
+                mod1_partial0_phase: AM1.add_partial0_phase,
+                mod1_partial1: AM1.add_partial1,
+                mod1_partial1_phase: AM1.add_partial1_phase,
 
-            // Osc module knob storage
-            mod2_osc_type: self.audio_module_2.osc_type,
-            mod2_osc_octave: self.audio_module_2.osc_octave,
-            mod2_osc_semitones: self.audio_module_2.osc_semitones,
-            mod2_osc_detune: self.audio_module_2.osc_detune,
-            mod2_osc_attack: self.audio_module_2.osc_attack,
-            mod2_osc_decay: self.audio_module_2.osc_decay,
-            mod2_osc_sustain: self.audio_module_2.osc_sustain,
-            mod2_osc_release: self.audio_module_2.osc_release,
-            mod2_osc_retrigger: self.audio_module_2.osc_retrigger,
-            mod2_osc_atk_curve: self.audio_module_2.osc_atk_curve,
-            mod2_osc_dec_curve: self.audio_module_2.osc_dec_curve,
-            mod2_osc_rel_curve: self.audio_module_2.osc_rel_curve,
-            mod2_osc_unison: self.audio_module_2.osc_unison,
-            mod2_osc_unison_detune: self.audio_module_2.osc_unison_detune,
-            mod2_osc_stereo: self.audio_module_2.osc_stereo,
+                // Modules 2
+                ///////////////////////////////////////////////////////////
+                mod2_audio_module_type: self.params._audio_module_2_type.value(),
+                mod2_audio_module_level: self.params.audio_module_2_level.value(),
+                // Granulizer/Sampler
+                mod2_loaded_sample: AM2.loaded_sample.clone(),
+                mod2_sample_lib: AM2.sample_lib.clone(),
+                mod2_loop_wavetable: AM2.loop_wavetable,
+                mod2_single_cycle: AM2.single_cycle,
+                mod2_restretch: AM2.restretch,
+                mod2_prev_restretch: AM2.prev_restretch,
+                mod2_start_position: AM2.start_position,
+                mod2_end_position: AM2._end_position,
+                mod2_grain_crossfade: AM2.grain_crossfade,
+                mod2_grain_gap: AM2.grain_gap,
+                mod2_grain_hold: AM2.grain_hold,
 
-            mod2_partial0: self.audio_module_2.add_partial0,
-            mod2_partial0_phase: self.audio_module_2.add_partial0_phase,
-            mod2_partial1: self.audio_module_2.add_partial1,
-            mod2_partial1_phase: self.audio_module_2.add_partial1_phase,
+                // Osc module knob storage
+                mod2_osc_type: AM2.osc_type,
+                mod2_osc_octave: AM2.osc_octave,
+                mod2_osc_semitones: AM2.osc_semitones,
+                mod2_osc_detune: AM2.osc_detune,
+                mod2_osc_attack: AM2.osc_attack,
+                mod2_osc_decay: AM2.osc_decay,
+                mod2_osc_sustain: AM2.osc_sustain,
+                mod2_osc_release: AM2.osc_release,
+                mod2_osc_retrigger: AM2.osc_retrigger,
+                mod2_osc_atk_curve: AM2.osc_atk_curve,
+                mod2_osc_dec_curve: AM2.osc_dec_curve,
+                mod2_osc_rel_curve: AM2.osc_rel_curve,
+                mod2_osc_unison: AM2.osc_unison,
+                mod2_osc_unison_detune: AM2.osc_unison_detune,
+                mod2_osc_stereo: AM2.osc_stereo,
 
-            // Modules 3
-            ///////////////////////////////////////////////////////////
-            mod3_audio_module_type: self.params._audio_module_3_type.value(),    
-            mod3_audio_module_level: self.params.audio_module_3_level.value(),
-            // Granulizer/Sampler
-            mod3_loaded_sample: self.audio_module_3.loaded_sample.clone(),
-            mod3_sample_lib: self.audio_module_3.sample_lib.clone(),
-            mod3_loop_wavetable: self.audio_module_3.loop_wavetable,
-            mod3_single_cycle: self.audio_module_3.single_cycle,
-            mod3_restretch: self.audio_module_3.restretch,
-            mod3_prev_restretch: self.audio_module_3.prev_restretch,
-            mod3_start_position: self.audio_module_3.start_position,
-            mod3_end_position: self.audio_module_3._end_position,
-            mod3_grain_crossfade: self.audio_module_3.grain_crossfade,
-            mod3_grain_gap: self.audio_module_3.grain_gap,
-            mod3_grain_hold: self.audio_module_3.grain_hold,
+                mod2_partial0: AM2.add_partial0,
+                mod2_partial0_phase: AM2.add_partial0_phase,
+                mod2_partial1: AM2.add_partial1,
+                mod2_partial1_phase: AM2.add_partial1_phase,
 
-            // Osc module knob storage
-            mod3_osc_type: self.audio_module_3.osc_type,
-            mod3_osc_octave: self.audio_module_3.osc_octave,
-            mod3_osc_semitones: self.audio_module_3.osc_semitones,
-            mod3_osc_detune: self.audio_module_3.osc_detune,
-            mod3_osc_attack: self.audio_module_3.osc_attack,
-            mod3_osc_decay: self.audio_module_3.osc_decay,
-            mod3_osc_sustain: self.audio_module_3.osc_sustain,
-            mod3_osc_release: self.audio_module_3.osc_release,
-            mod3_osc_retrigger: self.audio_module_3.osc_retrigger,
-            mod3_osc_atk_curve: self.audio_module_3.osc_atk_curve,
-            mod3_osc_dec_curve: self.audio_module_3.osc_dec_curve,
-            mod3_osc_rel_curve: self.audio_module_3.osc_rel_curve,
-            mod3_osc_unison: self.audio_module_3.osc_unison,
-            mod3_osc_unison_detune: self.audio_module_3.osc_unison_detune,
-            mod3_osc_stereo: self.audio_module_3.osc_stereo,
+                // Modules 3
+                ///////////////////////////////////////////////////////////
+                mod3_audio_module_type: self.params._audio_module_3_type.value(),
+                mod3_audio_module_level: self.params.audio_module_3_level.value(),
+                // Granulizer/Sampler
+                mod3_loaded_sample: AM3.loaded_sample.clone(),
+                mod3_sample_lib: AM3.sample_lib.clone(),
+                mod3_loop_wavetable: AM3.loop_wavetable,
+                mod3_single_cycle: AM3.single_cycle,
+                mod3_restretch: AM3.restretch,
+                mod3_prev_restretch: AM3.prev_restretch,
+                mod3_start_position: AM3.start_position,
+                mod3_end_position: AM3._end_position,
+                mod3_grain_crossfade: AM3.grain_crossfade,
+                mod3_grain_gap: AM3.grain_gap,
+                mod3_grain_hold: AM3.grain_hold,
 
-            mod3_partial0: self.audio_module_3.add_partial0,
-            mod3_partial0_phase: self.audio_module_3.add_partial0_phase,
-            mod3_partial1: self.audio_module_3.add_partial1,
-            mod3_partial1_phase: self.audio_module_3.add_partial1_phase,
+                // Osc module knob storage
+                mod3_osc_type: AM3.osc_type,
+                mod3_osc_octave: AM3.osc_octave,
+                mod3_osc_semitones: AM3.osc_semitones,
+                mod3_osc_detune: AM3.osc_detune,
+                mod3_osc_attack: AM3.osc_attack,
+                mod3_osc_decay: AM3.osc_decay,
+                mod3_osc_sustain: AM3.osc_sustain,
+                mod3_osc_release: AM3.osc_release,
+                mod3_osc_retrigger: AM3.osc_retrigger,
+                mod3_osc_atk_curve: AM3.osc_atk_curve,
+                mod3_osc_dec_curve: AM3.osc_dec_curve,
+                mod3_osc_rel_curve: AM3.osc_rel_curve,
+                mod3_osc_unison: AM3.osc_unison,
+                mod3_osc_unison_detune: AM3.osc_unison_detune,
+                mod3_osc_stereo: AM3.osc_stereo,
 
-            // Filter storage - gotten from params
-            filter_wet: self.params.filter_wet.value(),
-            filter_cutoff: self.params.filter_cutoff.value(),
-            filter_resonance: self.params.filter_resonance.value(),
-            filter_res_type: self.params.filter_res_type.value(),
-            filter_lp_amount: self.params.filter_lp_amount.value(),
-            filter_hp_amount: self.params.filter_hp_amount.value(),
-            filter_bp_amount: self.params.filter_bp_amount.value(),
-            filter_env_peak: self.params.filter_env_peak.value(),
-            filter_env_decay: self.params.filter_env_decay.value(),
-            filter_env_curve: self.params.filter_env_curve.value(),
-        };
+                mod3_partial0: AM3.add_partial0,
+                mod3_partial0_phase: AM3.add_partial0_phase,
+                mod3_partial1: AM3.add_partial1,
+                mod3_partial1_phase: AM3.add_partial1_phase,
+
+                // Filter storage - gotten from params
+                filter_wet: self.params.filter_wet.value(),
+                filter_cutoff: self.params.filter_cutoff.value(),
+                filter_resonance: self.params.filter_resonance.value(),
+                filter_res_type: self.params.filter_res_type.value(),
+                filter_lp_amount: self.params.filter_lp_amount.value(),
+                filter_hp_amount: self.params.filter_hp_amount.value(),
+                filter_bp_amount: self.params.filter_bp_amount.value(),
+                filter_env_peak: self.params.filter_env_peak.value(),
+                filter_env_decay: self.params.filter_env_decay.value(),
+                filter_env_curve: self.params.filter_env_curve.value(),
+            };
     }
 }
 
@@ -1987,17 +3329,13 @@ impl ClapPlugin for Actuate {
 
 impl Vst3Plugin for Actuate {
     const VST3_CLASS_ID: [u8; 16] = *b"ActuateArduraAAA";
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
-        Vst3SubCategory::Instrument,
-        Vst3SubCategory::Sampler,
-    ];
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Instrument, Vst3SubCategory::Sampler];
 }
 
 nih_export_clap!(Actuate);
 nih_export_vst3!(Actuate);
 
 pub fn format_nothing() -> Arc<dyn Fn(f32) -> String + Send + Sync> {
-    Arc::new(move | _ | {
-        String::new()
-    })
+    Arc::new(move |_| String::new())
 }

@@ -4,9 +4,12 @@
 use std::sync::Arc;
 
 use crate::egui::{vec2, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
-use nih_plug::{prelude::{Param, ParamSetter}, wrapper::clap::lazy_static};
-use nih_plug_egui::{widgets::util as nUtil};
+use nih_plug::{
+    prelude::{Param, ParamSetter},
+    wrapper::clap::lazy_static,
+};
 use nih_plug_egui::egui;
+use nih_plug_egui::widgets::util as nUtil;
 use parking_lot::Mutex;
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
@@ -246,21 +249,17 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
         // And finally draw the thing
         if ui.is_rect_visible(response.rect) {
-            
             if self.reversed {
                 ui.painter()
-                .rect_filled(response.rect, 0.0, ui.visuals().selection.bg_fill);
-            }
-            else {
+                    .rect_filled(response.rect, 0.0, ui.visuals().selection.bg_fill);
+            } else {
                 // We'll do a flat widget with background -> filled foreground -> slight border
                 ui.painter()
-                .rect_filled(response.rect, 0.0, ui.visuals().widgets.inactive.bg_fill);
+                    .rect_filled(response.rect, 0.0, ui.visuals().widgets.inactive.bg_fill);
             }
-            
 
             let filled_proportion = self.normalized_value();
             if filled_proportion > 0.0 {
-
                 let mut filled_rect = response.rect;
                 filled_rect.set_width(response.rect.width() * filled_proportion);
 
@@ -272,15 +271,14 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                         ui.visuals().widgets.inactive.bg_fill
                     };
                     ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
-                }
-                else {
+                } else {
                     let filled_bg = if response.dragged() {
                         nUtil::add_hsv(ui.visuals().selection.bg_fill, 0.0, -0.1, 0.1)
                     } else {
                         ui.visuals().selection.bg_fill
                     };
                     ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
-                }                
+                }
             }
 
             ui.painter().rect_stroke(
@@ -331,39 +329,42 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             }
         } else {
             */
-            let text = WidgetText::from(text_label).into_galley(
-                ui,
-                None,
-                // Redid this as label_width
-                //ui.available_width() - (padding.x * 2.0),
-                self.label_width,
-                TextStyle::Button,
-            );
+        let text = WidgetText::from(text_label).into_galley(
+            ui,
+            None,
+            // Redid this as label_width
+            //ui.available_width() - (padding.x * 2.0),
+            self.label_width,
+            TextStyle::Button,
+        );
 
-            //let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
-            let response = ui.allocate_response(vec2(self.label_width, text.size().y) + (padding * 2.0), Sense::click());
-            //if response.clicked() {
-                //self.begin_keyboard_entry(ui);
-            //}
+        //let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
+        let response = ui.allocate_response(
+            vec2(self.label_width, text.size().y) + (padding * 2.0),
+            Sense::click(),
+        );
+        //if response.clicked() {
+        //self.begin_keyboard_entry(ui);
+        //}
 
-            if ui.is_rect_visible(response.rect) {
-                if should_draw_frame {
-                    let fill = visuals.bg_fill;
-                    let stroke = visuals.bg_stroke;
-                    ui.painter().rect(
-                        response.rect.expand(visuals.expansion),
-                        visuals.rounding,
-                        fill,
-                        stroke,
-                    );
-                }
-
-                let text_pos = ui
-                    .layout()
-                    .align_size_within_rect(text.size(), response.rect.shrink2(padding))
-                    .min;
-                text.paint_with_visuals(ui.painter(), text_pos, &visuals);
+        if ui.is_rect_visible(response.rect) {
+            if should_draw_frame {
+                let fill = visuals.bg_fill;
+                let stroke = visuals.bg_stroke;
+                ui.painter().rect(
+                    response.rect.expand(visuals.expansion),
+                    visuals.rounding,
+                    fill,
+                    stroke,
+                );
             }
+
+            let text_pos = ui
+                .layout()
+                .align_size_within_rect(text.size(), response.rect.shrink2(padding))
+                .min;
+            text.paint_with_visuals(ui.painter(), text_pos, &visuals);
+        }
         //}
     }
 }

@@ -2,12 +2,17 @@
 //  this ui_knob.rs is built off a2aaron's knob base as part of nyasynth
 // https://github.com/a2aaron/nyasynth/blob/canon/src/ui_knob.rs
 
-use std::{f32::consts::TAU, ops::{Add, Sub, Mul}};
+use std::{
+    f32::consts::TAU,
+    ops::{Add, Mul, Sub},
+};
 
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
-    epaint::{PathShape, CircleShape}, pos2, Align2, Color32, FontId, Id, Pos2, Rect, Response, Rgba, Sense,
-    Shape, Stroke, Ui, Widget, self, Vec2,
+    self,
+    epaint::{CircleShape, PathShape},
+    pos2, Align2, Color32, FontId, Id, Pos2, Rect, Response, Rgba, Sense, Shape, Stroke, Ui, Vec2,
+    Widget,
 };
 use once_cell::sync::Lazy;
 
@@ -77,7 +82,7 @@ pub struct ArcKnob<'a, P: Param> {
     show_center_value: bool,
     text_size: f32,
     outline: bool,
-    padding: f32
+    padding: f32,
 }
 
 #[allow(dead_code)]
@@ -110,7 +115,7 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             label_text: String::new(),
             show_center_value: true,
             outline: false,
-            padding: 10.0
+            padding: 10.0,
         }
     }
 
@@ -121,7 +126,7 @@ impl<'a, P: Param> ArcKnob<'a, P> {
     }
 
     // Specify showing value when mouse-over
-    pub fn use_hover_text(mut self, new_bool: bool) -> Self  {
+    pub fn use_hover_text(mut self, new_bool: bool) -> Self {
         self.hover_text = new_bool;
         self
     }
@@ -186,8 +191,7 @@ impl<'a, P: Param> ArcKnob<'a, P> {
         self
     }
 
-    pub fn preset_style(mut self, style_id: KnobStyle) -> Self
-    {
+    pub fn preset_style(mut self, style_id: KnobStyle) -> Self {
         // These are all calculated off radius to scale better
         match style_id {
             KnobStyle::SmallTogether => {
@@ -235,7 +239,10 @@ impl<'a, P: Param> ArcKnob<'a, P> {
 impl<'a, P: Param> Widget for ArcKnob<'a, P> {
     fn ui(mut self, ui: &mut Ui) -> Response {
         // Figure out the size to reserve on screen for widget
-        let desired_size = egui::vec2(self.padding + self.radius*2.0,self.padding + self.radius*2.0);
+        let desired_size = egui::vec2(
+            self.padding + self.radius * 2.0,
+            self.padding + self.radius * 2.0,
+        );
         let response = ui.allocate_response(desired_size, Sense::click_and_drag());
         let value = self.slider_region.handle_response(&ui, &response);
 
@@ -258,7 +265,12 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             if self.outline {
                 let outline_stroke = Stroke::new(1.0, self.fill_color);
                 let outline_shape = Shape::Path(PathShape {
-                    points: get_arc_points(center, self.center_to_line_space + self.line_width, 1.0, 0.03),
+                    points: get_arc_points(
+                        center,
+                        self.center_to_line_space + self.line_width,
+                        1.0,
+                        0.03,
+                    ),
                     closed: false,
                     fill: Color32::TRANSPARENT,
                     stroke: outline_stroke,
@@ -270,7 +282,12 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             let line_stroke = Stroke::new(0.0, Color32::TRANSPARENT);
 
             // Center of Knob
-            let circle_shape = Shape::Circle(CircleShape{ center: center, radius: self.center_size, stroke: line_stroke, fill: self.fill_color });
+            let circle_shape = Shape::Circle(CircleShape {
+                center: center,
+                radius: self.center_size,
+                stroke: line_stroke,
+                fill: self.fill_color,
+            });
             painter.add(circle_shape);
 
             // Hover text of value
@@ -279,8 +296,10 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                     self.hover_text_content = self.slider_region.get_string();
                 }
                 ui.allocate_rect(
-                    Rect::from_center_size(center, Vec2::new(self.radius*2.0, self.radius*2.0)), Sense::hover())
-                        .on_hover_text(self.hover_text_content);
+                    Rect::from_center_size(center, Vec2::new(self.radius * 2.0, self.radius * 2.0)),
+                    Sense::hover(),
+                )
+                .on_hover_text(self.hover_text_content);
             }
 
             // Label text from response rect bound
@@ -289,22 +308,46 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             } else {
                 self.padding * 2.0
             };
-            let label_pos = Pos2::new(response.rect.center_bottom().x,response.rect.center_bottom().y - label_y);
-            let value_pos = Pos2::new(response.rect.center().x,response.rect.center().y);
+            let label_pos = Pos2::new(
+                response.rect.center_bottom().x,
+                response.rect.center_bottom().y - label_y,
+            );
+            let value_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
             if self.label_text.is_empty() {
-                painter.text(value_pos, Align2::CENTER_CENTER, self.slider_region.get_string(), FontId::proportional(self.text_size), self.line_color);
-                painter.text(label_pos, Align2::CENTER_CENTER, self.slider_region.param.name(), FontId::proportional(self.text_size), self.line_color);
+                painter.text(
+                    value_pos,
+                    Align2::CENTER_CENTER,
+                    self.slider_region.get_string(),
+                    FontId::proportional(self.text_size),
+                    self.line_color,
+                );
+                painter.text(
+                    label_pos,
+                    Align2::CENTER_CENTER,
+                    self.slider_region.param.name(),
+                    FontId::proportional(self.text_size),
+                    self.line_color,
+                );
+            } else {
+                painter.text(
+                    value_pos,
+                    Align2::CENTER_CENTER,
+                    self.label_text,
+                    FontId::proportional(self.text_size),
+                    self.line_color,
+                );
+                painter.text(
+                    label_pos,
+                    Align2::CENTER_CENTER,
+                    self.slider_region.param.name(),
+                    FontId::proportional(self.text_size),
+                    self.line_color,
+                );
             }
-            else {
-                painter.text(value_pos, Align2::CENTER_CENTER, self.label_text, FontId::proportional(self.text_size), self.line_color);
-                painter.text(label_pos, Align2::CENTER_CENTER, self.slider_region.param.name(), FontId::proportional(self.text_size), self.line_color);
-            }
-            
         });
         response
     }
 }
-
 
 fn get_arc_points(center: Pos2, radius: f32, value: f32, max_arc_distance: f32) -> Vec<Pos2> {
     let start_turns: f32 = 0.625;

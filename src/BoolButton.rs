@@ -3,8 +3,7 @@
 
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
-    Response,
-    Ui, Widget, self, Rect, style::WidgetVisuals, FontId, Stroke, Align2, Vec2,
+    self, style::WidgetVisuals, Align2, FontId, Rect, Response, Stroke, Ui, Vec2, Widget,
 };
 
 struct SliderRegion<'a, P: Param> {
@@ -33,30 +32,49 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         if response.clicked() {
             if value == 0.0 {
                 self.param_setter.set_parameter_normalized(self.param, 1.0);
-                how_on = ui.ctx().animate_bool(response.id, true );
+                how_on = ui.ctx().animate_bool(response.id, true);
                 visuals = ui.style().interact_selectable(&response, true);
                 value = 1.0;
-            }
-            else {
+            } else {
                 self.param_setter.set_parameter_normalized(self.param, 0.0);
-                how_on = ui.ctx().animate_bool(response.id, false );
+                how_on = ui.ctx().animate_bool(response.id, false);
                 visuals = ui.style().interact_selectable(&response, false);
                 value = 0.0;
             }
-        } 
-        else {
+        } else {
             let temp: bool = if value > 0.0 { true } else { false };
-            how_on = ui.ctx().animate_bool(response.id, temp );
+            how_on = ui.ctx().animate_bool(response.id, temp);
             visuals = ui.style().interact_selectable(&response, temp);
         }
 
         // DRAWING
         let rect = rect.expand(visuals.expansion);
-        ui.painter().rect(rect, 0.5, visuals.bg_fill.linear_multiply(0.8), visuals.bg_stroke);
+        ui.painter().rect(
+            rect,
+            0.5,
+            visuals.bg_fill.linear_multiply(0.8),
+            visuals.bg_stroke,
+        );
         // Paint the circle, animating it from left to right with `how_on`:
-        ui.painter().rect_stroke(rect, 0.5, Stroke::new(1.0, visuals.bg_stroke.color.linear_multiply((how_on + 0.2).clamp(0.2,1.2))));
+        ui.painter().rect_stroke(
+            rect,
+            0.5,
+            Stroke::new(
+                1.0,
+                visuals
+                    .bg_stroke
+                    .color
+                    .linear_multiply((how_on + 0.2).clamp(0.2, 1.2)),
+            ),
+        );
         let center = egui::pos2(rect.center().x, rect.center().y);
-        ui.painter().text(center, Align2::CENTER_CENTER, self.param.name(), self.font.clone(), visuals.text_color());
+        ui.painter().text(
+            center,
+            Align2::CENTER_CENTER,
+            self.param.name(),
+            self.font.clone(),
+            visuals.text_color(),
+        );
 
         value
     }
@@ -74,9 +92,15 @@ pub struct BoolButton<'a, P: Param> {
 #[allow(dead_code)]
 /// Create a BoolButton Object sized by ui.spacing().interact_size.y Units
 impl<'a, P: Param> BoolButton<'a, P> {
-    pub fn for_param(param: &'a P, param_setter: &'a ParamSetter, x_scaling: f32, y_scaling: f32, font: FontId) -> Self {
+    pub fn for_param(
+        param: &'a P,
+        param_setter: &'a ParamSetter,
+        x_scaling: f32,
+        y_scaling: f32,
+        font: FontId,
+    ) -> Self {
         BoolButton {
-            // Pass things to slider to get around 
+            // Pass things to slider to get around
             slider_region: SliderRegion::new(param, param_setter, font),
             scaling_x: x_scaling,
             scaling_y: y_scaling,
@@ -101,8 +125,9 @@ impl<'a, P: Param> Widget for BoolButton<'a, P> {
     fn ui(self, ui: &mut Ui) -> Response {
         // Figure out the size to reserve on screen for widget
         let (rect, response) = ui.allocate_exact_size(
-            ui.spacing().interact_size.y * Vec2::new(self.scaling_x, self.scaling_y), 
-            egui::Sense::click());
+            ui.spacing().interact_size.y * Vec2::new(self.scaling_x, self.scaling_y),
+            egui::Sense::click(),
+        );
         self.slider_region.handle_response(&ui, &response, rect);
         if self.inactive_iterator < self.deselect_timer {
             self.increment_deselect();
@@ -110,4 +135,3 @@ impl<'a, P: Param> Widget for BoolButton<'a, P> {
         response
     }
 }
-

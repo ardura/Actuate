@@ -1,6 +1,6 @@
-use std::f32::consts::PI;
 use nih_plug::prelude::Enum;
 use serde::{Deserialize, Serialize};
+use std::f32::consts::PI;
 
 // Modified implementation from https://www.musicdsp.org/en/latest/Filters/23-state-variable.html and A
 // Adapted to rust by Ardura
@@ -31,19 +31,25 @@ pub struct StateVariableFilter {
 impl Default for StateVariableFilter {
     fn default() -> Self {
         Self {
-           sample_rate: 44100.0,
-           q: 0.0,
-           frequency: 20000.0,
-           low_output: 0.0,
-           band_output: 0.0,
-           high_output: 0.0,
-           res_mode: ResonanceType::Default,
+            sample_rate: 44100.0,
+            q: 0.0,
+            frequency: 20000.0,
+            low_output: 0.0,
+            band_output: 0.0,
+            high_output: 0.0,
+            res_mode: ResonanceType::Default,
         }
     }
 }
 
 impl StateVariableFilter {
-    pub fn update(&mut self, frequency: f32, q: f32, sample_rate: f32, resonance_mode: ResonanceType) {
+    pub fn update(
+        &mut self,
+        frequency: f32,
+        q: f32,
+        sample_rate: f32,
+        resonance_mode: ResonanceType,
+    ) {
         if sample_rate != self.sample_rate {
             self.sample_rate = sample_rate;
         }
@@ -57,7 +63,7 @@ impl StateVariableFilter {
             self.res_mode = resonance_mode;
         }
         // Prevent speaker/ear destruction
-        if self.q < 0.15  && self.res_mode != ResonanceType::Default{
+        if self.q < 0.15 && self.res_mode != ResonanceType::Default {
             self.q = 0.15;
         }
     }
@@ -65,28 +71,40 @@ impl StateVariableFilter {
     pub fn process(&mut self, input: f32) -> (f32, f32, f32) {
         // Prevent large DC spikes by changing freq range
         match self.res_mode {
-            ResonanceType::Moog => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
-            ResonanceType::TB => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
-            ResonanceType::Arp => { self.frequency = self.frequency.clamp(1100.0, 16000.0); },
+            ResonanceType::Moog => {
+                self.frequency = self.frequency.clamp(1100.0, 16000.0);
+            }
+            ResonanceType::TB => {
+                self.frequency = self.frequency.clamp(1100.0, 16000.0);
+            }
+            ResonanceType::Arp => {
+                self.frequency = self.frequency.clamp(1100.0, 16000.0);
+            }
             _ => {}
         }
 
         // Calculate our normalized freq for filtering
         let normalized_freq: f32 = match self.res_mode {
-            ResonanceType::Default => (2.0 * PI * self.frequency) / (self.sample_rate*4.0),
-            ResonanceType::Moog => (2.0 * PI * self.frequency) / (self.sample_rate*0.5),
-            ResonanceType::TB => (2.0 * PI * self.frequency) / (self.sample_rate*0.5),
-            ResonanceType::Arp => (2.0 * PI * self.frequency) / (self.sample_rate*0.5),
+            ResonanceType::Default => (2.0 * PI * self.frequency) / (self.sample_rate * 4.0),
+            ResonanceType::Moog => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
+            ResonanceType::TB => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
+            ResonanceType::Arp => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
         };
-        
+
         // Calculate our resonance coefficient
         // This is here to save calls during filter sweeps even though a static filter will use more resources this way
         let resonance = match self.res_mode {
             ResonanceType::Default => (normalized_freq / (2.0 * self.q)).sin(),
             // These are all approximations I found then modified - I'm not claiming any accuracy - more like inspiration
-            ResonanceType::Moog => (16.0 * PI * self.q - 2.0) * (2.0 * PI * normalized_freq / self.sample_rate),
-            ResonanceType::TB => (8.0 * PI * self.q) * (PI * normalized_freq / self.sample_rate).tan(),
-            ResonanceType::Arp => (2.0 * PI * self.q + 0.3) * (2.0 * PI * normalized_freq / self.sample_rate),
+            ResonanceType::Moog => {
+                (16.0 * PI * self.q - 2.0) * (2.0 * PI * normalized_freq / self.sample_rate)
+            }
+            ResonanceType::TB => {
+                (8.0 * PI * self.q) * (PI * normalized_freq / self.sample_rate).tan()
+            }
+            ResonanceType::Arp => {
+                (2.0 * PI * self.q + 0.3) * (2.0 * PI * normalized_freq / self.sample_rate)
+            }
         };
 
         // Oversample by running multiple iterations

@@ -21,10 +21,10 @@ This is intended to be a building block used by other files in the Actuate synth
 
 #####################################
 */
-use serde::{Deserialize, Serialize};
-use std::f32::consts::{self, PI, FRAC_2_PI};
-use nih_plug::{params::enums::Enum};
 use lazy_static::lazy_static;
+use nih_plug::params::enums::Enum;
+use serde::{Deserialize, Serialize};
+use std::f32::consts::{self, FRAC_2_PI, PI};
 
 // Make a lookup table for faster but less accurate sine approx for additive
 const TABLE_SIZE: usize = 512;
@@ -50,36 +50,36 @@ lazy_static! {
     static ref RSAW_TABLE: [f32; TABLE_SIZE] = {
         let mut table = [0.0; TABLE_SIZE];
         let rounding_amount: i32 = 15; // Adjust the rounding amount as needed
-        
+
         for i in 0..TABLE_SIZE {
             let phase = i as f32 / (TABLE_SIZE - 1) as f32;
             let scaled_phase = -1.0 + 2.0 * phase;
-            
+
             // Calculate the rounded sawtooth waveform directly
             table[i] = scaled_phase * (1.0 - scaled_phase.powi(2 * rounding_amount));
         }
-        
+
         table
     };
     static ref RAMP_TABLE: [f32; TABLE_SIZE] = {
         let mut table = [0.0; TABLE_SIZE];
-        
+
         for i in 0..TABLE_SIZE {
             let phase = i as f32 / (TABLE_SIZE - 1) as f32;
             let scaled_phase = -1.0 + 2.0 * phase;
-    
+
             // Calculate the ramp wave directly
             table[i] = -scaled_phase % consts::TAU;
         }
-        
+
         table
     };
     static ref SQUARE_TABLE: [f32; TABLE_SIZE] = {
         let mut table = [0.0; TABLE_SIZE];
-    
+
         for i in 0..TABLE_SIZE {
             let phase = i as f32 / (TABLE_SIZE - 1) as f32;
-            
+
             // Calculate the square wave directly
             if phase < 0.5 {
                 table[i] = 1.0;  // Positive phase half
@@ -87,15 +87,15 @@ lazy_static! {
                 table[i] = -1.0;  // Negative phase half
             }
         }
-        
+
         table
     };
     static ref PULSE_TABLE: [f32; TABLE_SIZE] = {
         let mut table = [0.0; TABLE_SIZE];
-    
+
         for i in 0..TABLE_SIZE {
             let phase = i as f32 / (TABLE_SIZE - 1) as f32;
-            
+
             // Calculate the pulse wave directly
             if phase < 0.25 {
                 table[i] = 1.0;  // Positive phase quarter
@@ -103,18 +103,18 @@ lazy_static! {
                 table[i] = -1.0;  // Negative phase three-quarters
             }
         }
-        
+
         table
     };
     static ref RSQUARE_TABLE: [f32; TABLE_SIZE] = {
         let mut table = [0.0; TABLE_SIZE];
         let mod_amount: f32 = 0.15;
         let mod_scaled: i32 = scale_range(mod_amount, 2.0, 8.0).floor() as i32 * 2;
-        
+
         for i in 0..TABLE_SIZE {
             let phase = i as f32 / (TABLE_SIZE - 1) as f32;
             let scaled_phase = -1.0 + 2.0 * phase;
-            
+
             // Calculate the rounded square wave directly
             if scaled_phase < 0.0 {
                 table[i] = (2.0 * scaled_phase + 1.0).powi(mod_scaled) - 1.0;
@@ -122,22 +122,22 @@ lazy_static! {
                 table[i] = -(2.0 * scaled_phase - 1.0).powi(mod_scaled) + 1.0;
             }
         }
-        
+
         table
     };
     static ref TRI_TABLE: [f32; TABLE_SIZE] = {
         let mut table = [0.0; TABLE_SIZE];
-        
+
         for i in 0..TABLE_SIZE {
             let phase = i as f32 / (TABLE_SIZE - 1) as f32;
             let tri = (FRAC_2_PI) * (((2.0 * PI) * phase).sin()).asin();
-            
+
             // Store the calculated triangle wave value in the table
             table[i] = tri;
         }
-        
+
         table
-    };    
+    };
 }
 
 #[derive(Enum, PartialEq, Eq, Debug, Copy, Clone, Serialize, Deserialize)]
@@ -174,10 +174,8 @@ pub enum RetriggerStyle {
     Free,
     Retrigger,
     Random,
-    UniRandom
+    UniRandom,
 }
-
-
 
 // Super useful function to scale an input 0-1 into other ranges
 pub(crate) fn scale_range(input: f32, min_output: f32, max_output: f32) -> f32 {

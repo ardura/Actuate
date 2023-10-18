@@ -1,12 +1,8 @@
 // Ardura 2023 - Changing the toggle switch from egui demo to work with BoolParams for nih-plug
 // https://github.com/emilk/egui/blob/master/crates/egui_demo_lib/src/demo/toggle_switch.rs
 
-
 use nih_plug::prelude::{Param, ParamSetter};
-use nih_plug_egui::egui::{
-    Response,
-    Ui, Widget, self, Rect, style::WidgetVisuals,
-};
+use nih_plug_egui::egui::{self, style::WidgetVisuals, Rect, Response, Ui, Widget};
 
 struct SliderRegion<'a, P: Param> {
     param: &'a P,
@@ -32,31 +28,31 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         if response.clicked() {
             if value == 0.0 {
                 self.param_setter.set_parameter_normalized(self.param, 1.0);
-                how_on = ui.ctx().animate_bool(response.id, true );
+                how_on = ui.ctx().animate_bool(response.id, true);
                 visuals = ui.style().interact_selectable(&response, true);
                 value = 1.0;
-            }
-            else {
+            } else {
                 self.param_setter.set_parameter_normalized(self.param, 0.0);
-                how_on = ui.ctx().animate_bool(response.id, false );
+                how_on = ui.ctx().animate_bool(response.id, false);
                 visuals = ui.style().interact_selectable(&response, false);
                 value = 0.0;
             }
-        } 
-        else {
+        } else {
             let temp: bool = if value > 0.0 { true } else { false };
-            how_on = ui.ctx().animate_bool(response.id, temp );
+            how_on = ui.ctx().animate_bool(response.id, temp);
             visuals = ui.style().interact_selectable(&response, temp);
         }
 
         // DRAWING
         let rect = rect.expand(visuals.expansion);
         let radius = 0.5 * rect.height();
-        ui.painter().rect(rect, radius, visuals.bg_fill, visuals.bg_stroke);
+        ui.painter()
+            .rect(rect, radius, visuals.bg_fill, visuals.bg_stroke);
         // Paint the circle, animating it from left to right with `how_on`:
         let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
         let center = egui::pos2(circle_x, rect.center().y);
-        ui.painter().circle(center, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
+        ui.painter()
+            .circle(center, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
 
         value
     }
@@ -85,4 +81,3 @@ impl<'a, P: Param> Widget for ToggleSwitch<'a, P> {
         response
     }
 }
-

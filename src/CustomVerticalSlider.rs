@@ -1,12 +1,18 @@
 // Copy of CustomParamSlider from Canopy Reverb modified further into verticality
 // Needed to make some weird import changes to get this to work...Definitely should find a better way to do this in future...
 // Ardura
-use std::sync::Arc;
 use crate::egui::{vec2, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
-use nih_plug::{prelude::{Param, ParamSetter}, wrapper::clap::lazy_static};
-use nih_plug_egui::{widgets::util as nUtil, egui::{Pos2, Rect, Color32}};
+use nih_plug::{
+    prelude::{Param, ParamSetter},
+    wrapper::clap::lazy_static,
+};
 use nih_plug_egui::egui;
+use nih_plug_egui::{
+    egui::{Color32, Pos2, Rect},
+    widgets::util as nUtil,
+};
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
 /// noramlized parameter.
@@ -249,14 +255,12 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
         // And finally draw the thing
         if ui.is_rect_visible(response.rect) {
-            
             // Also flipped these orders for vertical
             if self.reversed {
                 // We'll do a flat widget with background -> filled foreground -> slight border
                 ui.painter()
                     .rect_filled(response.rect, 0.0, ui.visuals().widgets.inactive.bg_fill);
-            }
-            else {
+            } else {
                 ui.painter()
                     .rect_filled(response.rect, 0.0, ui.visuals().selection.bg_fill);
             }
@@ -266,10 +270,17 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 let left_bottom = response.rect.left_bottom();
                 let right_bottom = response.rect.right_bottom();
                 let rect_points = [
-                    Pos2::new(left_bottom.x, left_bottom.y - (response.rect.height() * filled_proportion)),    // Top left
-                    Pos2::new(right_bottom.x, right_bottom.y - (response.rect.height() * filled_proportion)),    // Top right
-                    left_bottom, 
-                    right_bottom];
+                    Pos2::new(
+                        left_bottom.x,
+                        left_bottom.y - (response.rect.height() * filled_proportion),
+                    ), // Top left
+                    Pos2::new(
+                        right_bottom.x,
+                        right_bottom.y - (response.rect.height() * filled_proportion),
+                    ), // Top right
+                    left_bottom,
+                    right_bottom,
+                ];
 
                 //let mut filled_rect = response.rect;
                 let mut filled_rect = Rect::from_points(&rect_points);
@@ -286,15 +297,14 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                         ui.visuals().selection.bg_fill
                     };
                     ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
-                }
-                else {
+                } else {
                     let filled_bg = if response.dragged() {
                         nUtil::add_hsv(ui.visuals().widgets.inactive.bg_fill, 0.0, -0.1, 0.1)
                     } else {
                         ui.visuals().widgets.inactive.bg_fill
                     };
                     ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
-                }                
+                }
             }
 
             ui.painter().rect_stroke(
@@ -308,7 +318,11 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     fn value_ui(&self, ui: &mut Ui) {
         let visuals = ui.visuals().widgets.inactive;
         let should_draw_frame = ui.visuals().button_frame;
-        let padding = if self.use_padding { ui.spacing().button_padding } else { ui.spacing().button_padding / 2.0 };
+        let padding = if self.use_padding {
+            ui.spacing().button_padding
+        } else {
+            ui.spacing().button_padding / 2.0
+        };
 
         /*
         // I had to comment this out since the init of ParamSlider breaks because of the keyboard focus not existing in FL
@@ -343,44 +357,48 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             }
         } else {
             */
-            let text = WidgetText::from(self.string_value()).into_galley(
-                ui,
-                None,
-                ui.available_width() - (padding.x * 2.0),
-                TextStyle::Button,
-            );
+        let text = WidgetText::from(self.string_value()).into_galley(
+            ui,
+            None,
+            ui.available_width() - (padding.x * 2.0),
+            TextStyle::Button,
+        );
 
-            let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
-            if response.clicked() {
-                //self.begin_keyboard_entry(ui);
+        let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
+        if response.clicked() {
+            //self.begin_keyboard_entry(ui);
+        }
+
+        if ui.is_rect_visible(response.rect) {
+            if should_draw_frame {
+                let fill = visuals.bg_fill;
+                let stroke = visuals.bg_stroke;
+                ui.painter().rect(
+                    response.rect.expand(visuals.expansion),
+                    visuals.rounding,
+                    fill,
+                    stroke,
+                );
             }
 
-            if ui.is_rect_visible(response.rect) {
-                if should_draw_frame {
-                    let fill = visuals.bg_fill;
-                    let stroke = visuals.bg_stroke;
-                    ui.painter().rect(
-                        response.rect.expand(visuals.expansion),
-                        visuals.rounding,
-                        fill,
-                        stroke,
-                    );
-                }
-
-                let text_pos = ui
-                    .layout()
-                    .align_size_within_rect(text.size(), response.rect.shrink2(padding))
-                    .min;
-                text.paint_with_visuals(ui.painter(), text_pos, &visuals);
-            }
+            let text_pos = ui
+                .layout()
+                .align_size_within_rect(text.size(), response.rect.shrink2(padding))
+                .min;
+            text.paint_with_visuals(ui.painter(), text_pos, &visuals);
+        }
         //}
     }
 }
 
 impl<P: Param> Widget for ParamSlider<'_, P> {
     fn ui(self, ui: &mut Ui) -> Response {
-        let slider_width = self.slider_width.unwrap_or_else(|| ui.spacing().interact_size.y);
-        let slider_height = self.slider_height.unwrap_or_else(|| ui.spacing().interact_size.x);
+        let slider_width = self
+            .slider_width
+            .unwrap_or_else(|| ui.spacing().interact_size.y);
+        let slider_height = self
+            .slider_height
+            .unwrap_or_else(|| ui.spacing().interact_size.x);
 
         // Changed to vertical to fix the label
         ui.vertical(|ui| {
