@@ -171,14 +171,6 @@ pub struct AudioModule {
     pub osc_unison_detune: f32,
     pub osc_stereo: f32,
 
-    // Additive variables
-    pub add_partial0: f32,
-    pub add_partial0_phase: f32,
-    pub add_partial1: f32,
-    pub add_partial1_phase: f32,
-    pub add_partial2: f32,
-    pub add_partial2_phase: f32,
-
     // Voice storage
     playing_voices: VoiceVec,
     unison_voices: VoiceVec,
@@ -230,14 +222,6 @@ impl Default for AudioModule {
             osc_unison: 1,
             osc_unison_detune: 0.0,
             osc_stereo: 1.0,
-
-            // Additive variables
-            add_partial0: 1.0,
-            add_partial0_phase: 0.0,
-            add_partial1: 0.0,
-            add_partial1_phase: 0.0,
-            add_partial2: 0.0,
-            add_partial2_phase: 0.0,
 
             // Voice storage
             playing_voices: VoiceVec {
@@ -2686,31 +2670,6 @@ impl AudioModule {
                             }
                         };
                     }
-                    // This is the Additive scenario
-                    else {
-                        // Add up the partials
-                        let mut partial_sum: f32 = 0.0;
-                        partial_sum += Oscillator::calculate_fast_sine(Self::rescale_phase_added(
-                            voice.phase,
-                            self.add_partial0_phase,
-                        )) * self.add_partial0
-                            * temp_osc_gain_multiplier;
-                        let mut temp_freq_double = voice.frequency * 2.0;
-                        let mut temp_phase_delta = temp_freq_double / self.sample_rate;
-                        partial_sum += Oscillator::calculate_fast_sine(Self::rescale_phase_added(
-                            voice.phase,
-                            temp_phase_delta + self.add_partial1_phase,
-                        )) * self.add_partial1
-                            * temp_osc_gain_multiplier;
-                        temp_freq_double *= 2.0;
-                        temp_phase_delta = temp_freq_double / self.sample_rate;
-                        partial_sum += Oscillator::calculate_fast_sine(Self::rescale_phase_added(
-                            voice.phase,
-                            temp_phase_delta + self.add_partial2_phase,
-                        )) * self.add_partial2
-                            * temp_osc_gain_multiplier;
-                        center_voices += partial_sum;
-                    }
                 }
                 // Stereo applies to unison voices
                 for unison_voice in self.unison_voices.voices.iter_mut() {
@@ -2766,13 +2725,6 @@ impl AudioModule {
                                     self.noise_obj.generate_sample() * temp_osc_gain_multiplier
                                 }
                             };
-                        } else {
-                            temp_unison_voice +=
-                                Oscillator::calculate_fast_sine(Self::rescale_phase_added(
-                                    unison_voice.phase,
-                                    self.add_partial0_phase,
-                                )) * self.add_partial0
-                                    * temp_osc_gain_multiplier;
                         }
 
                         // Create our stereo pan for unison
@@ -3196,11 +3148,5 @@ impl AudioModule {
         }
 
         angle * std::f32::consts::PI * sign // Use full scale for other cases
-    }
-
-    fn rescale_phase_added(voice_phase: f32, additive_phase: f32) -> f32 {
-        let temp = voice_phase + additive_phase;
-        let phase = if temp > 1.0 { temp - 1.0 } else { temp };
-        phase
     }
 }

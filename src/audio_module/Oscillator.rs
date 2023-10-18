@@ -183,20 +183,6 @@ pub(crate) fn scale_range(input: f32, min_output: f32, max_output: f32) -> f32 {
     scaled.clamp(min_output, max_output)
 }
 
-// Lookup table sine
-pub fn calculate_fast_sine(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    let frac = phase * (TABLE_SIZE - 1) as f32 - index as f32;
-    let next_index = index + 1;
-
-    let sine = if next_index < TABLE_SIZE - 1 {
-        SIN_TABLE[index] * (1.0 - frac) + SIN_TABLE[next_index] * frac
-    } else {
-        SIN_TABLE[index] // If next_index is out of bounds, use the current index
-    };
-    sine
-}
-
 // Sine wave oscillator with lerp smoothing
 pub fn get_sine(phase: f32) -> f32 {
     let index = (phase * (TABLE_SIZE - 1) as f32) as usize;

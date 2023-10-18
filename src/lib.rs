@@ -122,12 +122,6 @@ struct ActuatePreset {
     mod1_osc_unison_detune: f32,
     mod1_osc_stereo: f32,
 
-    // Additive
-    mod1_partial0: f32,
-    mod1_partial0_phase: f32,
-    mod1_partial1: f32,
-    mod1_partial1_phase: f32,
-
     // Modules 2
     ///////////////////////////////////////////////////////////
     mod2_audio_module_type: AudioModuleType,
@@ -162,12 +156,6 @@ struct ActuatePreset {
     mod2_osc_unison_detune: f32,
     mod2_osc_stereo: f32,
 
-    // Additive
-    mod2_partial0: f32,
-    mod2_partial0_phase: f32,
-    mod2_partial1: f32,
-    mod2_partial1_phase: f32,
-
     // Modules 3
     ///////////////////////////////////////////////////////////
     mod3_audio_module_type: AudioModuleType,
@@ -201,12 +189,6 @@ struct ActuatePreset {
     mod3_osc_unison: i32,
     mod3_osc_unison_detune: f32,
     mod3_osc_stereo: f32,
-
-    // Additive
-    mod3_partial0: f32,
-    mod3_partial0_phase: f32,
-    mod3_partial1: f32,
-    mod3_partial1_phase: f32,
 
     // Filter options
     filter_wet: f32,
@@ -342,10 +324,6 @@ impl Default for Actuate {
                     mod1_osc_unison: 1,
                     mod1_osc_unison_detune: 0.0,
                     mod1_osc_stereo: 0.0,
-                    mod1_partial0: 1.0,
-                    mod1_partial0_phase: 0.0,
-                    mod1_partial1: 0.0,
-                    mod1_partial1_phase: 0.0,
 
                     mod2_audio_module_type: AudioModuleType::Off,
                     mod2_audio_module_level: 1.0,
@@ -375,10 +353,6 @@ impl Default for Actuate {
                     mod2_osc_unison: 1,
                     mod2_osc_unison_detune: 0.0,
                     mod2_osc_stereo: 0.0,
-                    mod2_partial0: 1.0,
-                    mod2_partial0_phase: 0.0,
-                    mod2_partial1: 0.0,
-                    mod2_partial1_phase: 0.0,
 
                     mod3_audio_module_type: AudioModuleType::Off,
                     mod3_audio_module_level: 1.0,
@@ -408,10 +382,6 @@ impl Default for Actuate {
                     mod3_osc_unison: 1,
                     mod3_osc_unison_detune: 0.0,
                     mod3_osc_stereo: 0.0,
-                    mod3_partial0: 1.0,
-                    mod3_partial0_phase: 0.0,
-                    mod3_partial1: 0.0,
-                    mod3_partial1_phase: 0.0,
 
                     filter_wet: 1.0,
                     filter_cutoff: 4000.0,
@@ -492,94 +462,6 @@ pub struct ActuateParams {
     pub osc_1_unison_detune: FloatParam,
     #[id = "osc_1_stereo"]
     pub osc_1_stereo: FloatParam,
-    #[id = "add_1_partial0"]
-    pub add_1_partial0: FloatParam,
-    #[id = "add_1_partial1"]
-    pub add_1_partial1: FloatParam,
-    #[id = "add_1_partial2"]
-    pub add_1_partial2: FloatParam,
-    #[id = "add_1_partial3"]
-    pub add_1_partial3: FloatParam,
-    #[id = "add_1_partial4"]
-    pub add_1_partial4: FloatParam,
-    #[id = "add_1_partial5"]
-    pub add_1_partial5: FloatParam,
-    #[id = "add_1_partial6"]
-    pub add_1_partial6: FloatParam,
-    #[id = "add_1_partial7"]
-    pub add_1_partial7: FloatParam,
-    #[id = "add_1_partial8"]
-    pub add_1_partial8: FloatParam,
-    #[id = "add_1_partial9"]
-    pub add_1_partial9: FloatParam,
-    #[id = "add_1_partial10"]
-    pub add_1_partial10: FloatParam,
-    #[id = "add_1_partial11"]
-    pub add_1_partial11: FloatParam,
-    #[id = "add_1_partial12"]
-    pub add_1_partial12: FloatParam,
-    #[id = "add_1_partial13"]
-    pub add_1_partial13: FloatParam,
-    #[id = "add_1_partial14"]
-    pub add_1_partial14: FloatParam,
-    #[id = "add_1_partial15"]
-    pub add_1_partial15: FloatParam,
-    #[id = "add_1_partial16"]
-    pub add_1_partial16: FloatParam,
-    #[id = "add_1_partial17"]
-    pub add_1_partial17: FloatParam,
-    #[id = "add_1_partial18"]
-    pub add_1_partial18: FloatParam,
-    #[id = "add_1_partial19"]
-    pub add_1_partial19: FloatParam,
-    #[id = "add_1_partial20"]
-    pub add_1_partial20: FloatParam,
-    #[id = "add_1_partial21"]
-    pub add_1_partial21: FloatParam,
-    #[id = "add_1_partial0_phase"]
-    pub add_1_partial0_phase: FloatParam,
-    #[id = "add_1_partial1_phase"]
-    pub add_1_partial1_phase: FloatParam,
-    #[id = "add_1_partial2_phase"]
-    pub add_1_partial2_phase: FloatParam,
-    #[id = "add_1_partial3_phase"]
-    pub add_1_partial3_phase: FloatParam,
-    #[id = "add_1_partial4_phase"]
-    pub add_1_partial4_phase: FloatParam,
-    #[id = "add_1_partial5_phase"]
-    pub add_1_partial5_phase: FloatParam,
-    #[id = "add_1_partial6_phase"]
-    pub add_1_partial6_phase: FloatParam,
-    #[id = "add_1_partial7_phase"]
-    pub add_1_partial7_phase: FloatParam,
-    #[id = "add_1_partial8_phase"]
-    pub add_1_partial8_phase: FloatParam,
-    #[id = "add_1_partial9_phase"]
-    pub add_1_partial9_phase: FloatParam,
-    #[id = "add_1_partial10_phase"]
-    pub add_1_partial10_phase: FloatParam,
-    #[id = "add_1_partial11_phase"]
-    pub add_1_partial11_phase: FloatParam,
-    #[id = "add_1_partial12_phase"]
-    pub add_1_partial12_phase: FloatParam,
-    #[id = "add_1_partial13_phase"]
-    pub add_1_partial13_phase: FloatParam,
-    #[id = "add_1_partial14_phase"]
-    pub add_1_partial14_phase: FloatParam,
-    #[id = "add_1_partial15_phase"]
-    pub add_1_partial15_phase: FloatParam,
-    #[id = "add_1_partial16_phase"]
-    pub add_1_partial16_phase: FloatParam,
-    #[id = "add_1_partial17_phase"]
-    pub add_1_partial17_phase: FloatParam,
-    #[id = "add_1_partial18_phase"]
-    pub add_1_partial18_phase: FloatParam,
-    #[id = "add_1_partial19_phase"]
-    pub add_1_partial19_phase: FloatParam,
-    #[id = "add_1_partial20_phase"]
-    pub add_1_partial20_phase: FloatParam,
-    #[id = "add_1_partial21_phase"]
-    pub add_1_partial21_phase: FloatParam,
 
     // Controls for when audio_module_2_type is Osc
     #[id = "osc_2_type"]
@@ -612,14 +494,6 @@ pub struct ActuateParams {
     pub osc_2_unison_detune: FloatParam,
     #[id = "osc_2_stereo"]
     pub osc_2_stereo: FloatParam,
-    #[id = "add_2_partial0"]
-    pub add_2_partial0: FloatParam,
-    #[id = "add_2_partial0_phase"]
-    pub add_2_partial0_phase: FloatParam,
-    #[id = "add_2_partial1"]
-    pub add_2_partial1: FloatParam,
-    #[id = "add_2_partial1_phase"]
-    pub add_2_partial1_phase: FloatParam,
 
     // Controls for when audio_module_3_type is Osc
     #[id = "osc_3_type"]
@@ -653,14 +527,6 @@ pub struct ActuateParams {
     pub osc_3_unison_detune: FloatParam,
     #[id = "osc_3_stereo"]
     pub osc_3_stereo: FloatParam,
-    #[id = "add_3_partial0"]
-    pub add_3_partial0: FloatParam,
-    #[id = "add_3_partial0_phase"]
-    pub add_3_partial0_phase: FloatParam,
-    #[id = "add_3_partial1"]
-    pub add_3_partial1: FloatParam,
-    #[id = "add_3_partial1_phase"]
-    pub add_3_partial1_phase: FloatParam,
 
     // Controls for when audio_module_1_type is Sampler/Granulizer
     #[id = "load_sample_1"]
@@ -950,402 +816,6 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            add_1_partial0: FloatParam::new(
-                "Partial 0",
-                1.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial1: FloatParam::new(
-                "Partial 1",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial2: FloatParam::new(
-                "Partial 2",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial3: FloatParam::new(
-                "Partial 3",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial4: FloatParam::new(
-                "Partial 4",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial5: FloatParam::new(
-                "Partial 5",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial6: FloatParam::new(
-                "Partial 6",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial7: FloatParam::new(
-                "Partial 7",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial8: FloatParam::new(
-                "Partial 8",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial9: FloatParam::new(
-                "Partial 9",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial10: FloatParam::new(
-                "Partial 10",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial11: FloatParam::new(
-                "Partial 11",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial12: FloatParam::new(
-                "Partial 12",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial13: FloatParam::new(
-                "Partial 13",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial14: FloatParam::new(
-                "Partial 14",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial15: FloatParam::new(
-                "Partial 15",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial16: FloatParam::new(
-                "Partial 16",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial17: FloatParam::new(
-                "Partial 17",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial18: FloatParam::new(
-                "Partial 18",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial19: FloatParam::new(
-                "Partial 19",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial20: FloatParam::new(
-                "Partial 20",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial21: FloatParam::new(
-                "Partial 21",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial0_phase: FloatParam::new(
-                "Partial 0 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial1_phase: FloatParam::new(
-                "Partial 1 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial2_phase: FloatParam::new(
-                "Partial 2 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial3_phase: FloatParam::new(
-                "Partial 3 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial4_phase: FloatParam::new(
-                "Partial 4 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial5_phase: FloatParam::new(
-                "Partial 5 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial6_phase: FloatParam::new(
-                "Partial 6 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial7_phase: FloatParam::new(
-                "Partial 7 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial8_phase: FloatParam::new(
-                "Partial 8 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial9_phase: FloatParam::new(
-                "Partial 9 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial10_phase: FloatParam::new(
-                "Partial 10 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial11_phase: FloatParam::new(
-                "Partial 11 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial12_phase: FloatParam::new(
-                "Partial 12 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial13_phase: FloatParam::new(
-                "Partial 13 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial14_phase: FloatParam::new(
-                "Partial 14 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial15_phase: FloatParam::new(
-                "Partial 15 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial16_phase: FloatParam::new(
-                "Partial 16 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial17_phase: FloatParam::new(
-                "Partial 17 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial18_phase: FloatParam::new(
-                "Partial 18 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial19_phase: FloatParam::new(
-                "Partial 19 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial20_phase: FloatParam::new(
-                "Partial 20 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_1_partial21_phase: FloatParam::new(
-                "Partial 21 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
 
             osc_2_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
                 let update_something = update_something.clone();
@@ -1476,42 +946,6 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            add_2_partial0: FloatParam::new(
-                "Partial 0",
-                1.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_2_partial0_phase: FloatParam::new(
-                "Partial 0 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_2_partial1: FloatParam::new(
-                "Partial 1",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_2_partial1_phase: FloatParam::new(
-                "Partial 1 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
 
             osc_3_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
                 let update_something = update_something.clone();
@@ -1642,42 +1076,6 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            add_3_partial0: FloatParam::new(
-                "Partial 0",
-                1.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_3_partial0_phase: FloatParam::new(
-                "Partial 0 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_3_partial1: FloatParam::new(
-                "Partial 1",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
-            add_3_partial1_phase: FloatParam::new(
-                "Partial 1 Phase",
-                0.0,
-                FloatRange::Skewed {
-                    min: 0.0,
-                    max: 1.0,
-                    factor: 0.4,
-                },
-            ),
 
             // Granulizer/Sampler
             ////////////////////////////////////////////////////////////////////////////////////
@@ -2850,10 +2248,6 @@ impl Actuate {
                         mod1_osc_unison: 1,
                         mod1_osc_unison_detune: 0.0,
                         mod1_osc_stereo: 0.0,
-                        mod1_partial0: 1.0,
-                        mod1_partial0_phase: 0.0,
-                        mod1_partial1: 0.0,
-                        mod1_partial1_phase: 0.0,
 
                         mod2_audio_module_type: AudioModuleType::Off,
                         mod2_audio_module_level: 1.0,
@@ -2883,10 +2277,6 @@ impl Actuate {
                         mod2_osc_unison: 1,
                         mod2_osc_unison_detune: 0.0,
                         mod2_osc_stereo: 0.0,
-                        mod2_partial0: 1.0,
-                        mod2_partial0_phase: 0.0,
-                        mod2_partial1: 0.0,
-                        mod2_partial1_phase: 0.0,
 
                         mod3_audio_module_type: AudioModuleType::Off,
                         mod3_audio_module_level: 1.0,
@@ -2916,10 +2306,6 @@ impl Actuate {
                         mod3_osc_unison: 1,
                         mod3_osc_unison_detune: 0.0,
                         mod3_osc_stereo: 0.0,
-                        mod3_partial0: 1.0,
-                        mod3_partial0_phase: 0.0,
-                        mod3_partial1: 0.0,
-                        mod3_partial1_phase: 0.0,
 
                         filter_wet: 1.0,
                         filter_cutoff: 4000.0,
@@ -3216,11 +2602,6 @@ impl Actuate {
                 mod1_osc_unison_detune: AM1.osc_unison_detune,
                 mod1_osc_stereo: AM1.osc_stereo,
 
-                mod1_partial0: AM1.add_partial0,
-                mod1_partial0_phase: AM1.add_partial0_phase,
-                mod1_partial1: AM1.add_partial1,
-                mod1_partial1_phase: AM1.add_partial1_phase,
-
                 // Modules 2
                 ///////////////////////////////////////////////////////////
                 mod2_audio_module_type: self.params._audio_module_2_type.value(),
@@ -3255,11 +2636,6 @@ impl Actuate {
                 mod2_osc_unison_detune: AM2.osc_unison_detune,
                 mod2_osc_stereo: AM2.osc_stereo,
 
-                mod2_partial0: AM2.add_partial0,
-                mod2_partial0_phase: AM2.add_partial0_phase,
-                mod2_partial1: AM2.add_partial1,
-                mod2_partial1_phase: AM2.add_partial1_phase,
-
                 // Modules 3
                 ///////////////////////////////////////////////////////////
                 mod3_audio_module_type: self.params._audio_module_3_type.value(),
@@ -3293,11 +2669,6 @@ impl Actuate {
                 mod3_osc_unison: AM3.osc_unison,
                 mod3_osc_unison_detune: AM3.osc_unison_detune,
                 mod3_osc_stereo: AM3.osc_stereo,
-
-                mod3_partial0: AM3.add_partial0,
-                mod3_partial0_phase: AM3.add_partial0_phase,
-                mod3_partial1: AM3.add_partial1,
-                mod3_partial1_phase: AM3.add_partial1_phase,
 
                 // Filter storage - gotten from params
                 filter_wet: self.params.filter_wet.value(),
