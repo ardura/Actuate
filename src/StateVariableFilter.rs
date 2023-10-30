@@ -26,6 +26,7 @@ pub struct StateVariableFilter {
     band_output: f32,
     high_output: f32,
     res_mode: ResonanceType,
+    oversample: i32,
 }
 
 impl Default for StateVariableFilter {
@@ -38,11 +39,17 @@ impl Default for StateVariableFilter {
             band_output: 0.0,
             high_output: 0.0,
             res_mode: ResonanceType::Default,
+            oversample: 4,
         }
     }
 }
 
 impl StateVariableFilter {
+    pub fn set_oversample(mut self, oversample_amount: i32) -> Self {
+        self.oversample = oversample_amount;
+        self
+    }
+
     pub fn update(
         &mut self,
         frequency: f32,
@@ -70,6 +77,7 @@ impl StateVariableFilter {
 
     pub fn process(&mut self, input: f32) -> (f32, f32, f32) {
         // Prevent large DC spikes by changing freq range
+        /*
         match self.res_mode {
             ResonanceType::Moog => {
                 self.frequency = self.frequency.clamp(1100.0, 16000.0);
@@ -82,6 +90,7 @@ impl StateVariableFilter {
             }
             _ => {}
         }
+        */
 
         // Calculate our normalized freq for filtering
         let normalized_freq: f32 = match self.res_mode {
@@ -108,7 +117,7 @@ impl StateVariableFilter {
         };
 
         // Oversample by running multiple iterations
-        for _ in 0..4 {
+        for _ in 0..self.oversample {
             self.low_output += normalized_freq * self.band_output;
             self.high_output = input - self.low_output - self.q * self.band_output;
             self.band_output += resonance * self.high_output;

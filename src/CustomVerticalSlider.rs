@@ -43,8 +43,8 @@ pub struct ParamSlider<'a, P: Param> {
     slider_height: Option<f32>,
     // Added in reversed function to have bar drawn other way
     reversed: bool,
-    bar_color: Color32,
-    background_color: Color32,
+    background_set_color: Color32,
+    bar_set_color: Color32,
     use_padding: bool,
 
     /// Will be set in the `ui()` function so we can request keyboard input focus on Alt+click.
@@ -65,8 +65,8 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             slider_height: None,
             // Added in reversed function to have bar drawn other way
             reversed: false,
-            bar_color: Color32::WHITE,
-            background_color: Color32::BLACK,
+            background_set_color: Color32::TEMPORARY_COLOR,
+            bar_set_color: Color32::TEMPORARY_COLOR,
             use_padding: false,
 
             // I removed this because it was causing errors on plugin load somehow in FL
@@ -74,9 +74,13 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         }
     }
 
-    pub fn override_colors(mut self, bar_color: Color32, background: Color32) -> Self {
-        self.bar_color = bar_color;
-        self.background_color = background;
+    pub fn override_colors(
+        mut self,
+        background_set_color: Color32,
+        bar_set_color: Color32,
+    ) -> Self {
+        self.background_set_color = background_set_color;
+        self.bar_set_color = bar_set_color;
         self
     }
 
@@ -292,9 +296,17 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 // Vertical has this flipped to make sense vs the horizontal bar
                 if self.reversed {
                     let filled_bg = if response.dragged() {
-                        nUtil::add_hsv(ui.visuals().selection.bg_fill, 0.0, -0.1, 0.1)
+                        if self.bar_set_color == Color32::TEMPORARY_COLOR {
+                            nUtil::add_hsv(ui.visuals().selection.bg_fill, 0.0, -0.1, 0.1)
+                        } else {
+                            nUtil::add_hsv(self.bar_set_color, 0.0, -0.1, 0.1)
+                        }
                     } else {
-                        ui.visuals().selection.bg_fill
+                        if self.bar_set_color == Color32::TEMPORARY_COLOR {
+                            ui.visuals().selection.bg_fill
+                        } else {
+                            self.bar_set_color
+                        }
                     };
                     ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
                 } else {
@@ -307,11 +319,19 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 }
             }
 
-            ui.painter().rect_stroke(
-                response.rect,
-                0.0,
-                Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
-            );
+            if self.background_set_color == Color32::TEMPORARY_COLOR {
+                ui.painter().rect_stroke(
+                    response.rect,
+                    0.0,
+                    Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
+                );
+            } else {
+                ui.painter().rect_stroke(
+                    response.rect,
+                    0.0,
+                    Stroke::new(1.0, self.background_set_color),
+                );
+            }
         }
     }
 

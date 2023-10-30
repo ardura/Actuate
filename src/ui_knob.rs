@@ -1,5 +1,5 @@
 // Ardura 2023 - ui_knob.rs - egui + nih-plug parameter widget with customization
-//  this ui_knob.rs is built off a2aaron's knob base as part of nyasynth
+//  this ui_knob.rs is built off a2aaron's knob base as part of nyasynth and Robbert's ParamSlider code
 // https://github.com/a2aaron/nyasynth/blob/canon/src/ui_knob.rs
 
 use std::{
@@ -7,6 +7,7 @@ use std::{
     ops::{Add, Mul, Sub},
 };
 
+use lazy_static::lazy_static;
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
     self,
@@ -17,6 +18,15 @@ use nih_plug_egui::egui::{
 use once_cell::sync::Lazy;
 
 static DRAG_AMOUNT_MEMORY_ID: Lazy<Id> = Lazy::new(|| Id::new("drag_amount_memory_id"));
+/// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
+/// noramlized parameter.
+const GRANULAR_DRAG_MULTIPLIER: f32 = 0.0015;
+
+lazy_static! {
+    static ref DRAG_NORMALIZED_START_VALUE_MEMORY_ID: egui::Id = egui::Id::new((file!(), 0));
+//    static ref DRAG_AMOUNT_MEMORY_ID: egui::Id = egui::Id::new((file!(), 1));
+    static ref VALUE_ENTRY_MEMORY_ID: egui::Id = egui::Id::new((file!(), 2));
+}
 
 struct SliderRegion<'a, P: Param> {
     param: &'a P,
@@ -41,6 +51,10 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         }
 
         if response.dragged() {
+            if ui.input().modifiers.shift {
+                self.granular_drag(ui, -response.drag_delta());
+            } else {
+            }
             // Invert the y axis, since we want dragging up to increase the value and down to
             // decrease it, but drag_delta() has the y-axis increasing downwards.
             let delta = -response.drag_delta().y;
@@ -65,6 +79,64 @@ impl<'a, P: Param> SliderRegion<'a, P> {
 
     fn get_string(&self) -> String {
         self.param.to_string()
+    }
+
+    fn granular_drag(&self, ui: &Ui, drag_delta: Vec2) {
+        // Remember the intial position when we started with the granular drag. This value gets
+        // reset whenever we have a normal itneraction with the slider.
+        let start_value = if Self::get_drag_amount_memory(ui) == 0.0 {
+            Self::set_drag_normalized_start_value_memory(ui, self.normalized_value());
+            self.normalized_value()
+        } else {
+            Self::get_drag_normalized_start_value_memory(ui)
+        };
+
+        let total_drag_distance = drag_delta.x + Self::get_drag_amount_memory(ui);
+        Self::set_drag_amount_memory(ui, total_drag_distance);
+
+        self.set_normalized_value(
+            (start_value + (total_drag_distance * GRANULAR_DRAG_MULTIPLIER)).clamp(0.0, 1.0),
+        );
+    }
+
+    fn get_drag_normalized_start_value_memory(ui: &Ui) -> f32 {
+        ui.memory()
+            .data
+            .get_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID)
+            .unwrap_or(0.5)
+    }
+
+    fn set_drag_normalized_start_value_memory(ui: &Ui, amount: f32) {
+        ui.memory()
+            .data
+            .insert_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID, amount);
+    }
+
+    fn get_drag_amount_memory(ui: &Ui) -> f32 {
+        ui.memory()
+            .data
+            .get_temp(*DRAG_AMOUNT_MEMORY_ID)
+            .unwrap_or(0.0)
+    }
+
+    fn set_drag_amount_memory(ui: &Ui, amount: f32) {
+        ui.memory().data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, amount);
+    }
+
+    fn set_normalized_value(&self, normalized: f32) {
+        // Pulled this and other drag memory stuff from ParamSlider
+        let value = self.param.preview_plain(normalized);
+        if value != self.plain_value() {
+            self.param_setter.set_parameter(self.param, value);
+        }
+    }
+
+    fn plain_value(&self) -> P::Plain {
+        self.param.modulated_plain_value()
+    }
+
+    fn normalized_value(&self) -> f32 {
+        self.param.modulated_normalized_value()
     }
 }
 

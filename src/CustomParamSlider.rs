@@ -8,7 +8,7 @@ use nih_plug::{
     prelude::{Param, ParamSetter},
     wrapper::clap::lazy_static,
 };
-use nih_plug_egui::egui;
+use nih_plug_egui::egui::{self, Color32};
 use nih_plug_egui::widgets::util as nUtil;
 use parking_lot::Mutex;
 
@@ -44,6 +44,11 @@ pub struct ParamSlider<'a, P: Param> {
     // Added in label side and width to prevent movement
     left_sided_label: bool,
     label_width: f32,
+    background_set_color: Color32,
+    bar_set_color: Color32,
+
+    padding: f32,
+    slim_height_scale: f32,
 
     /// Will be set in the `ui()` function so we can request keyboard input focus on Alt+click.
     keyboard_focus_id: Option<egui::Id>,
@@ -62,11 +67,26 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             slider_width: None,
             // Added in reversed function to have bar drawn other way
             reversed: false,
+            background_set_color: Color32::TEMPORARY_COLOR,
+            bar_set_color: Color32::TEMPORARY_COLOR,
             left_sided_label: false,
             label_width: 50.0,
 
+            padding: -1.0,
+            slim_height_scale: 0.8,
+
             keyboard_focus_id: None,
         }
+    }
+
+    pub fn override_colors(
+        mut self,
+        background_set_color: Color32,
+        bar_set_color: Color32,
+    ) -> Self {
+        self.background_set_color = background_set_color;
+        self.bar_set_color = bar_set_color;
+        self
     }
 
     /// Don't draw the text slider's current value after the slider.
@@ -94,6 +114,17 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
     pub fn set_left_sided_label(mut self, lsl: bool) -> Self {
         self.left_sided_label = lsl;
+        self
+    }
+
+    pub fn no_padding(mut self) -> Self {
+        self.padding = 0.0;
+        self
+    }
+
+    /// Default is 0.8, less makes vertical height shorter
+    pub fn slimmer(mut self, scale: f32) -> Self {
+        self.slim_height_scale = scale;
         self
     }
 
@@ -266,9 +297,17 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 // Added to reverse filling - Ardura
                 if self.reversed {
                     let filled_bg = if response.dragged() {
-                        nUtil::add_hsv(ui.visuals().widgets.inactive.bg_fill, 0.0, -0.1, 0.1)
+                        if self.bar_set_color == Color32::TEMPORARY_COLOR {
+                            nUtil::add_hsv(ui.visuals().selection.bg_fill, 0.0, -0.1, 0.1)
+                        } else {
+                            nUtil::add_hsv(self.bar_set_color, 0.0, -0.1, 0.1)
+                        }
                     } else {
-                        ui.visuals().widgets.inactive.bg_fill
+                        if self.bar_set_color == Color32::TEMPORARY_COLOR {
+                            ui.visuals().selection.bg_fill
+                        } else {
+                            self.bar_set_color
+                        }
                     };
                     ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
                 } else {
@@ -281,18 +320,31 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 }
             }
 
-            ui.painter().rect_stroke(
-                response.rect,
-                0.0,
-                Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
-            );
+            if self.background_set_color == Color32::TEMPORARY_COLOR {
+                ui.painter().rect_stroke(
+                    response.rect,
+                    0.0,
+                    Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
+                );
+            } else {
+                ui.painter().rect_stroke(
+                    response.rect,
+                    0.0,
+                    Stroke::new(1.0, self.background_set_color),
+                );
+            }
         }
     }
 
     fn value_ui(&self, ui: &mut Ui) {
         let visuals = ui.visuals().widgets.inactive;
         let should_draw_frame = ui.visuals().button_frame;
-        let padding = ui.spacing().button_padding;
+        let padding: Vec2;
+        if self.padding == -1.0 {
+            padding = ui.spacing().button_padding;
+        } else {
+            padding = Vec2::new(self.padding, self.padding);
+        }
 
         let text_label = self.param.name().to_string() + ":" + &self.string_value().to_string();
 
@@ -380,10 +432,17 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
                 self.value_ui(ui);
             }
 
+            let slimmer_scale: f32;
+            if self.slim_height_scale == -1.0 {
+                slimmer_scale = 0.8;
+            } else {
+                slimmer_scale = self.slim_height_scale;
+            }
+
             // Allocate space, but add some padding on the top and bottom to make it look a bit slimmer.
             let height = ui
                 .text_style_height(&TextStyle::Body)
-                .max(ui.spacing().interact_size.y * 0.8);
+                .max(ui.spacing().interact_size.y * slimmer_scale);
             let slider_height = ui.painter().round_to_pixel(height * 0.8);
             let mut response = ui
                 .vertical(|ui| {

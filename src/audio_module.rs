@@ -260,6 +260,7 @@ impl AudioModule {
         const VERT_BAR_WIDTH: f32 = 14.0;
         const HCURVE_WIDTH: f32 = 120.0;
         const HCURVE_BWIDTH: f32 = 28.0;
+        const DISABLED_SPACE: f32 = 110.0;
 
         // This is ugly but I couldn't figure out a better architechture for egui and separating audio modules
 
@@ -270,6 +271,7 @@ impl AudioModule {
             AudioModuleType::Off => {
                 // Blank space
                 ui.label("Disabled");
+                ui.add_space(DISABLED_SPACE);
             }
             AudioModuleType::Osc => {
                 const KNOB_SIZE: f32 = 30.0;
@@ -384,8 +386,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -394,8 +396,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -404,8 +406,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -414,8 +416,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
 
@@ -425,22 +427,36 @@ impl AudioModule {
                                 HorizontalParamSlider::for_param(&params.osc_1_atk_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                         });
                     });
+                    // Keep the UI happy from moving
+                    ui.add_space(1.0);
                 });
             }
             AudioModuleType::Sampler => {
@@ -532,16 +548,22 @@ impl AudioModule {
                             ui.add(end_position_1_knob);
                         });
                         // ADSR
-                        ui.add(VerticalParamSlider::for_param(&params.osc_1_attack, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_1_decay, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_1_sustain, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_1_release, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_1_attack, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_1_decay, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_1_sustain, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_1_release, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
 
                         // Curve sliders
                         ui.vertical(|ui| {
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
+                                *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
+                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
+                                *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
+                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
+                                *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
+                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
                         });
                     });
                 });
@@ -686,8 +708,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -696,8 +718,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -706,8 +728,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -716,8 +738,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
 
@@ -727,19 +749,31 @@ impl AudioModule {
                                 HorizontalParamSlider::for_param(&params.osc_1_atk_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                         });
                     });
@@ -757,6 +791,7 @@ impl AudioModule {
             AudioModuleType::Off => {
                 // Blank space
                 ui.label("Disabled");
+                ui.add_space(DISABLED_SPACE);
             }
             AudioModuleType::Osc => {
                 const KNOB_SIZE: f32 = 30.0;
@@ -871,8 +906,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -881,8 +916,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -891,8 +926,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -901,8 +936,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
 
@@ -912,22 +947,36 @@ impl AudioModule {
                                 HorizontalParamSlider::for_param(&params.osc_2_atk_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                         });
                     });
+                    // Keep the UI happy from moving
+                    ui.add_space(1.0);
                 });
             }
             AudioModuleType::Sampler => {
@@ -1019,16 +1068,22 @@ impl AudioModule {
                             ui.add(end_position_2_knob);
                         });
                         // ADSR
-                        ui.add(VerticalParamSlider::for_param(&params.osc_2_attack, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_2_decay, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_2_sustain, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_2_release, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_2_attack, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_2_decay, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_2_sustain, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_2_release, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
 
                         // Curve sliders
                         ui.vertical(|ui| {
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_2_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_2_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
+                                *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
+                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
+                                *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
+                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
+                                *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
+                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
                         });
                     });
                 });
@@ -1173,8 +1228,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -1183,8 +1238,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -1193,8 +1248,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -1203,8 +1258,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
 
@@ -1214,19 +1269,31 @@ impl AudioModule {
                                 HorizontalParamSlider::for_param(&params.osc_2_atk_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                         });
                     });
@@ -1244,6 +1311,7 @@ impl AudioModule {
             AudioModuleType::Off => {
                 // Blank space
                 ui.label("Disabled");
+                ui.add_space(DISABLED_SPACE);
             }
             AudioModuleType::Osc => {
                 const KNOB_SIZE: f32 = 30.0;
@@ -1358,8 +1426,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -1368,8 +1436,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -1378,8 +1446,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -1388,8 +1456,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
 
@@ -1399,22 +1467,36 @@ impl AudioModule {
                                 HorizontalParamSlider::for_param(&params.osc_3_atk_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                         });
                     });
+                    // Keep the UI happy from moving
+                    ui.add_space(1.0);
                 });
             }
             AudioModuleType::Sampler => {
@@ -1506,16 +1588,22 @@ impl AudioModule {
                             ui.add(end_position_3_knob);
                         });
                         // ADSR
-                        ui.add(VerticalParamSlider::for_param(&params.osc_3_attack, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_3_decay, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_3_sustain, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_3_release, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_3_attack, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_3_decay, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_3_sustain, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                        ui.add(VerticalParamSlider::for_param(&params.osc_3_release, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
 
                         // Curve sliders
                         ui.vertical(|ui| {
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_3_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_3_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
+                                *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
+                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
+                                *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
+                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
+                            ui.add(HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
+                                *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
+                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()));
                         });
                     });
                 });
@@ -1660,8 +1748,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -1670,8 +1758,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -1680,8 +1768,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
                         ui.add(
@@ -1690,8 +1778,8 @@ impl AudioModule {
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
                                 .override_colors(
-                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                     *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
                                 ),
                         );
 
@@ -1701,19 +1789,31 @@ impl AudioModule {
                                 HorizontalParamSlider::for_param(&params.osc_3_atk_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH),
+                                    .set_label_width(HCURVE_WIDTH)
+                                    .override_colors(
+                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(),
+                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                    ),
                             );
                         });
                     });
@@ -1739,6 +1839,15 @@ impl AudioModule {
                     }
                 }
                 self.osc_octave = params.osc_1_octave.value();
+                if self.osc_semitones != params.osc_1_semitones.value() {
+                    let semi_shift = self.osc_semitones - params.osc_1_semitones.value();
+                    for voice in self.playing_voices.voices.iter_mut() {
+                        voice.note -= semi_shift as u8;
+                    }
+                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                        uni_voice.note -= semi_shift as u8;
+                    }
+                }
                 self.osc_semitones = params.osc_1_semitones.value();
                 self.osc_detune = params.osc_1_detune.value();
                 self.osc_attack = params.osc_1_attack.value();
@@ -1774,6 +1883,15 @@ impl AudioModule {
                     }
                 }
                 self.osc_octave = params.osc_2_octave.value();
+                if self.osc_semitones != params.osc_2_semitones.value() {
+                    let semi_shift = self.osc_semitones - params.osc_2_semitones.value();
+                    for voice in self.playing_voices.voices.iter_mut() {
+                        voice.note -= semi_shift as u8;
+                    }
+                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                        uni_voice.note -= semi_shift as u8;
+                    }
+                }
                 self.osc_semitones = params.osc_2_semitones.value();
                 self.osc_detune = params.osc_2_detune.value();
                 self.osc_attack = params.osc_2_attack.value();
@@ -1809,6 +1927,15 @@ impl AudioModule {
                     }
                 }
                 self.osc_octave = params.osc_3_octave.value();
+                if self.osc_semitones != params.osc_3_semitones.value() {
+                    let semi_shift = self.osc_semitones - params.osc_3_semitones.value();
+                    for voice in self.playing_voices.voices.iter_mut() {
+                        voice.note -= semi_shift as u8;
+                    }
+                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                        uni_voice.note -= semi_shift as u8;
+                    }
+                }
                 self.osc_semitones = params.osc_3_semitones.value();
                 self.osc_detune = params.osc_3_detune.value();
                 self.osc_attack = params.osc_3_attack.value();
@@ -1844,17 +1971,18 @@ impl AudioModule {
         sample_id: usize,
         event_passed: Option<NoteEvent<()>>,
         voice_max: usize,
-    ) -> (f32, f32, bool) {
+    ) -> (f32, f32, bool, bool) {
         // If the process is in here the file dialog is not open per lib.rs
 
         // Midi events are processed here
         let mut note_on: bool = false;
+        let mut note_off: bool = false;
         match event_passed {
             // The event was valid
             Some(mut event) => {
                 event = event_passed.unwrap();
                 if event.timing() > sample_id as u32 {
-                    return (0.0, 0.0, false);
+                    return (0.0, 0.0, false, false);
                 }
                 match event {
                     ////////////////////////////////////////////////////////////
@@ -2051,15 +2179,15 @@ impl AudioModule {
                                         };
                                     } else {
                                         // Nothing is in our sample library, skip attempting audio output
-                                        return (0.0, 0.0, false);
+                                        return (0.0, 0.0, false, false);
                                     }
                                 } else {
                                     // Nothing is in our sample library, skip attempting audio output
-                                    return (0.0, 0.0, false);
+                                    return (0.0, 0.0, false, false);
                                 }
                             }
                             _ => {
-                                // These fields aren't used by Osc, Off, Or Additive
+                                // These fields aren't used by Osc, Off
                                 scaled_sample_pos = 0;
                                 scaled_end_pos = 0;
                             }
@@ -2276,6 +2404,9 @@ impl AudioModule {
                     // MIDI EVENT NOTE OFF
                     ////////////////////////////////////////////////////////////
                     NoteEvent::NoteOff { note, .. } => {
+                        // Set note off variable to pass back to filter
+                        note_off = true;
+
                         // Get voices on our note and not already releasing
                         // When a voice reaches 0.0 target on releasing
 
@@ -2287,13 +2418,15 @@ impl AudioModule {
                             shifted_note += 31;
                         }
 
+                        // Calculate note shifting to match note on shifts
+                        let semi_shift: u8 = self.osc_semitones as u8;
                         shifted_note = match self.osc_octave {
-                            -2 => shifted_note - 24,
-                            -1 => shifted_note - 12,
-                            0 => shifted_note,
-                            1 => shifted_note + 12,
-                            2 => shifted_note + 24,
-                            _ => shifted_note,
+                            -2 => shifted_note - 24 + semi_shift,
+                            -1 => shifted_note - 12 + semi_shift,
+                            0 => shifted_note + semi_shift,
+                            1 => shifted_note + 12 + semi_shift,
+                            2 => shifted_note + 24 + semi_shift,
+                            _ => shifted_note + semi_shift,
                         };
 
                         if self.audio_module_type == AudioModuleType::Osc {
@@ -2397,7 +2530,7 @@ impl AudioModule {
         };
         let mut new_grain: bool = false;
 
-        // Second check for off notes before output to cut down on interating...with iterating
+        // Second check for off notes before output to cut down on iterating...with iterating
         for (i, voice) in self.playing_voices.voices.clone().iter().enumerate() {
             if voice.state == OscState::Off {
                 self.playing_voices.voices.remove(i);
@@ -2901,7 +3034,7 @@ impl AudioModule {
         };
 
         // Send it back
-        (output_signal_l, output_signal_r, note_on)
+        (output_signal_l, output_signal_r, note_on, note_off)
     }
 
     pub fn set_playing(&mut self, new_bool: bool) {

@@ -27,6 +27,7 @@ lazy_static = "1.4.0"
 
 nih_plug = { path = "../../nih-plug-master/nih-plug-master/", features = ["assert_process_allocs"]}
 nih_plug_egui = { path = "../../nih-plug-master/nih-plug-master/nih_plug_egui" }
+num-traits = "0.2.17"
 once_cell = "1.18.0"
 parking_lot = "0.12.1"
 phf = { version = "0.11.2", features = ["macros"] }
