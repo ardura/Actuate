@@ -22,7 +22,7 @@ Actuate - Synthesizer + Sampler/Granulizer by Ardura
 
 use nih_plug_egui::{
     create_egui_editor,
-    egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Rounding, Vec2, Id, LayerId},
+    egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Rounding, Vec2, Id},
     EguiState, widgets::ParamSlider,
 };
 // Imports
@@ -116,10 +116,22 @@ pub enum ModulationSource {
 #[derive(Debug, PartialEq, Enum, Clone, Serialize, Deserialize)]
 pub enum ModulationDestination {
     None,
-    FilterCutoff,
-    FilterResonance,
-    Detune,
-    UnisonDetune,
+    Cutoff_1,
+    Cutoff_2,
+    Resonance_1,
+    Resonance_2,
+    Osc1Detune, 
+    Osc2Detune, 
+    Osc3Detune, 
+    Osc1UniDetune,
+    Osc2UniDetune,
+    Osc3UniDetune,
+    HP_Amount_1, 
+    LP_Amount_1, 
+    BP_Amount_1, 
+    HP_Amount_2, 
+    LP_Amount_2, 
+    BP_Amount_2, 
 }
 
 // Values for Audio Module Routing
@@ -2562,7 +2574,7 @@ impl Plugin for Actuate {
                                                     Rect::from_x_y_ranges(
                                                         RangeInclusive::new((WIDTH as f32)*0.43, (WIDTH as f32)*0.58),
                                                         RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                    Rounding::from(8.0),
+                                                    Rounding::from(16.0),
                                                     *GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap()
                                                 );
                                             } else {
@@ -3082,80 +3094,47 @@ impl Plugin for Actuate {
                                                             .set_show_label(false);
                                                         ui.add(mod_1_knob);
                                                         ui.separator();
-                                                        CustomComboBox::ComboBox::from_label(params.mod_source_1.value().to_string())
+                                                        CustomComboBox::ComboBox::new("mod_source_1_ID",params.mod_source_1.value().to_string(), true, 5)
                                                             .selected_text(format!("{:?}", *mod_source_1_tracker.lock().unwrap()))
+                                                            .width(70.0)
                                                             .show_ui(ui, |ui|{
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::None, "Nothing");
+                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::None, "None");
+                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
                                                                 ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
                                                                 ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
                                                                 ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
                                                             });
                                                         if *mod_source_1_tracker.lock().unwrap() != params.mod_source_1.value() {
-                                                            setter.set_parameter( &params.mod_source_1, *mod_source_1_tracker.lock().unwrap());
+                                                            setter.set_parameter( &params.mod_source_1, mod_source_1_tracker.lock().unwrap().clone());
                                                         }
-
-
-                                                        let menu_button_ui = ui.menu_button(params.mod_source_1.value().to_string(), |ui| {
-                                                            // Create the loading popup here.
-                                                            let menu_size = Vec2::new(400.0, 600.0);
-                                                            let menu_pos = Pos2 { x: WIDTH as f32 - 200.0, y: HEIGHT as f32 - 700.0 };
-                                                            let MENU_RECT = Rect::from_two_pos(menu_pos, menu_pos + menu_size);
-                                                            let menu_ui = ui.allocate_ui(menu_size, |ui|{
-                                                                if ui.button(ModulationSource::None.to_string()).clicked() {
-                                                                    setter.set_parameter( &params.mod_source_1, ModulationSource::None);
-                                                                    ui.close_menu();
-                                                                }
-                                                                if ui.button(ModulationSource::LFO1.to_string()).clicked() {
-                                                                    setter.set_parameter( &params.mod_source_1, ModulationSource::LFO1);
-                                                                    ui.close_menu();
-                                                                }
-                                                                if ui.button(ModulationSource::LFO2.to_string()).clicked() {
-                                                                    setter.set_parameter( &params.mod_source_1, ModulationSource::LFO2);
-                                                                    ui.close_menu();
-                                                                }
-                                                                if ui.button(ModulationSource::LFO3.to_string()).clicked() {
-                                                                    setter.set_parameter( &params.mod_source_1, ModulationSource::LFO3);
-                                                                    ui.close_menu();
-                                                                }
-                                                            });
-                                                            menu_ui.response.ctx.translate_layer(menu_ui.response.layer_id, Vec2 { x: 0.0, y: -700.0 });
-                                                            if menu_ui.response.layer_id == ui.layer_id() {
-                                                                ui.label("SAME");
-                                                            } else {
-                                                                ui.label("DIFFERENT");
-                                                            }
-                                                        }).inner.;
-                                                        //menu_button_ui.response.ctx.move_to_top(LayerId::new(egui::Order::Foreground, Id::new("TopLayer")));
-                                                        //menu_button_ui.response.ctx.translate_layer(menu_button_ui.response.layer_id, Vec2 { x: 0.0, y: -100.0 });
-                                                        ui.label(RichText::new("Modulates")
+                                                        ui.label(RichText::new("Mods")
                                                             .font(FONT)
                                                             .color(Color32::BLACK));
-                                                        /*
-                                                        let responseButton = ui.menu_button(params.mod_destination_1.value().to_string(), |ui|{
-                                                            if ui.button(ModulationDestination::None.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_1, ModulationDestination::None);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::FilterCutoff.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_1, ModulationDestination::FilterCutoff);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::FilterResonance.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_1, ModulationDestination::FilterResonance);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::Detune.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_1, ModulationDestination::Detune);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::UnisonDetune.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_1, ModulationDestination::UnisonDetune);
-                                                                ui.close_menu();
-                                                            }
-                                                        });
-                                                        responseButton.response.ctx.move_to_top(LayerId::new(egui::Order::Foreground, Id::new("TopLayer")));
-                                                        responseButton.response.ctx.translate_layer(responseButton.response.layer_id, Vec2 { x: 0.0, y: -700.0 });
-                                                        */
+                                                        CustomComboBox::ComboBox::new("mod_dest_1_ID", params.mod_destination_1.value().to_string(), true, 17)
+                                                            .selected_text(format!("{:?}", *mod_dest_1_tracker.lock().unwrap()))
+                                                            .width(100.0)
+                                                            .show_ui(ui, |ui|{
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::None, "None");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc2 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::HP_Amount_1, "Highpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::LP_Amount_1, "Lowpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::BP_Amount_1, "Bandpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::HP_Amount_2, "Highpass 2");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::LP_Amount_2, "Lowpass 2");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::BP_Amount_2, "Bandpass 2");
+                                                            });
+                                                        if *mod_dest_1_tracker.lock().unwrap() != params.mod_destination_1.value() {
+                                                            setter.set_parameter( &params.mod_destination_1, mod_dest_1_tracker.lock().unwrap().clone());
+                                                        }
                                                     });
                                                     ui.separator();
 
@@ -3172,49 +3151,47 @@ impl Plugin for Actuate {
                                                             .set_show_label(false);
                                                         ui.add(mod_2_knob);
                                                         ui.separator();
-                                                        ui.menu_button(params.mod_source_2.value().to_string(), |ui|{
-                                                            if ui.button(ModulationSource::None.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_2, ModulationSource::None);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationSource::LFO1.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_2, ModulationSource::LFO1);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationSource::LFO2.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_2, ModulationSource::LFO2);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationSource::LFO3.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_2, ModulationSource::LFO3);
-                                                                ui.close_menu();
-                                                            }
-                                                        });
-                                                        ui.label(RichText::new("Modulates")
+                                                        CustomComboBox::ComboBox::new("mod_source_2_ID",params.mod_source_2.value().to_string(), true, 5)
+                                                            .selected_text(format!("{:?}", *mod_source_2_tracker.lock().unwrap()))
+                                                            .width(70.0)
+                                                            .show_ui(ui, |ui|{
+                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::None, "None");
+                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
+                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
+                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
+                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
+                                                            });
+                                                        if *mod_source_2_tracker.lock().unwrap() != params.mod_source_2.value() {
+                                                            setter.set_parameter( &params.mod_source_2, mod_source_2_tracker.lock().unwrap().clone());
+                                                        }
+                                                        ui.label(RichText::new("Mods")
                                                             .font(FONT)
                                                             .color(Color32::BLACK));
-                                                        ui.menu_button(params.mod_destination_2.value().to_string(), |ui|{
-                                                            if ui.button(ModulationDestination::None.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_2, ModulationDestination::None);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::FilterCutoff.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_2, ModulationDestination::FilterCutoff);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::FilterResonance.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_2, ModulationDestination::FilterResonance);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::Detune.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_2, ModulationDestination::Detune);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::UnisonDetune.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_2, ModulationDestination::UnisonDetune);
-                                                                ui.close_menu();
-                                                            }
-                                                        });
+                                                        CustomComboBox::ComboBox::new("mod_dest_2_ID", params.mod_destination_2.value().to_string(), true, 5)
+                                                            .selected_text(format!("{:?}", *mod_dest_2_tracker.lock().unwrap()))
+                                                            .width(100.0)
+                                                            .show_ui(ui, |ui|{
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::None, "None");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc2 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::HP_Amount_1, "Highpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::LP_Amount_1, "Lowpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::BP_Amount_1, "Bandpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::HP_Amount_2, "Highpass 2");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::LP_Amount_2, "Lowpass 2");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::BP_Amount_2, "Bandpass 2");
+                                                            });
+                                                        if *mod_dest_2_tracker.lock().unwrap() != params.mod_destination_2.value() {
+                                                            setter.set_parameter( &params.mod_destination_2, mod_dest_2_tracker.lock().unwrap().clone());
+                                                        }
                                                     });
                                                     ui.separator();
 
@@ -3231,49 +3208,47 @@ impl Plugin for Actuate {
                                                             .set_show_label(false);
                                                         ui.add(mod_3_knob);
                                                         ui.separator();
-                                                        ui.menu_button(params.mod_source_3.value().to_string(), |ui|{
-                                                            if ui.button(ModulationSource::None.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_3, ModulationSource::None);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationSource::LFO1.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_3, ModulationSource::LFO1);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationSource::LFO2.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_3, ModulationSource::LFO2);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationSource::LFO3.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_3, ModulationSource::LFO3);
-                                                                ui.close_menu();
-                                                            }
-                                                        });
-                                                        ui.label(RichText::new("Modulates")
+                                                        CustomComboBox::ComboBox::new("mod_source_3_ID",params.mod_source_3.value().to_string(), true, 5)
+                                                            .selected_text(format!("{:?}", *mod_source_3_tracker.lock().unwrap()))
+                                                            .width(70.0)
+                                                            .show_ui(ui, |ui|{
+                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::None, "None");
+                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
+                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
+                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
+                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
+                                                            });
+                                                        if *mod_source_3_tracker.lock().unwrap() != params.mod_source_3.value() {
+                                                            setter.set_parameter( &params.mod_source_3, mod_source_3_tracker.lock().unwrap().clone());
+                                                        }
+                                                        ui.label(RichText::new("Mods")
                                                             .font(FONT)
                                                             .color(Color32::BLACK));
-                                                        ui.menu_button(params.mod_destination_3.value().to_string(), |ui|{
-                                                            if ui.button(ModulationDestination::None.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_3, ModulationDestination::None);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::FilterCutoff.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_3, ModulationDestination::FilterCutoff);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::FilterResonance.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_3, ModulationDestination::FilterResonance);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::Detune.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_3, ModulationDestination::Detune);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::UnisonDetune.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_3, ModulationDestination::UnisonDetune);
-                                                                ui.close_menu();
-                                                            }
-                                                        });
+                                                        CustomComboBox::ComboBox::new("mod_dest_3_ID", params.mod_destination_3.value().to_string(), true, 5)
+                                                            .selected_text(format!("{:?}", *mod_dest_3_tracker.lock().unwrap()))
+                                                            .width(100.0)
+                                                            .show_ui(ui, |ui|{
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::None, "None");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc2 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::HP_Amount_1, "Highpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::LP_Amount_1, "Lowpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::BP_Amount_1, "Bandpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::HP_Amount_2, "Highpass 2");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::LP_Amount_2, "Lowpass 2");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::BP_Amount_2, "Bandpass 2");
+                                                            });
+                                                        if *mod_dest_3_tracker.lock().unwrap() != params.mod_destination_3.value() {
+                                                            setter.set_parameter( &params.mod_destination_3, mod_dest_3_tracker.lock().unwrap().clone());
+                                                        }
                                                     });
                                                     ui.separator();
 
@@ -3290,49 +3265,47 @@ impl Plugin for Actuate {
                                                             .set_show_label(false);
                                                         ui.add(mod_4_knob);
                                                         ui.separator();
-                                                        ui.menu_button(params.mod_source_4.value().to_string(), |ui|{
-                                                            if ui.button(ModulationSource::None.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_4, ModulationSource::None);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationSource::LFO1.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_4, ModulationSource::LFO1);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationSource::LFO2.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_4, ModulationSource::LFO2);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationSource::LFO3.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_source_4, ModulationSource::LFO3);
-                                                                ui.close_menu();
-                                                            }
-                                                        });
-                                                        ui.label(RichText::new("Modulates")
+                                                        CustomComboBox::ComboBox::new("mod_source_4_ID",params.mod_source_4.value().to_string(), true, 5)
+                                                            .selected_text(format!("{:?}", *mod_source_4_tracker.lock().unwrap()))
+                                                            .width(70.0)
+                                                            .show_ui(ui, |ui|{
+                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::None, "None");
+                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
+                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
+                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
+                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
+                                                            });
+                                                        if *mod_source_4_tracker.lock().unwrap() != params.mod_source_4.value() {
+                                                            setter.set_parameter( &params.mod_source_4, mod_source_4_tracker.lock().unwrap().clone());
+                                                        }
+                                                        ui.label(RichText::new("Mods")
                                                             .font(FONT)
                                                             .color(Color32::BLACK));
-                                                        ui.menu_button(params.mod_destination_4.value().to_string(), |ui|{
-                                                            if ui.button(ModulationDestination::None.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_4, ModulationDestination::None);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::FilterCutoff.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_4, ModulationDestination::FilterCutoff);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::FilterResonance.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_4, ModulationDestination::FilterResonance);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::Detune.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_4, ModulationDestination::Detune);
-                                                                ui.close_menu();
-                                                            }
-                                                            if ui.button(ModulationDestination::UnisonDetune.to_string()).clicked() {
-                                                                setter.set_parameter( &params.mod_destination_4, ModulationDestination::UnisonDetune);
-                                                                ui.close_menu();
-                                                            }
-                                                        });
+                                                        CustomComboBox::ComboBox::new("mod_dest_4_ID", params.mod_destination_4.value().to_string(), true, 5)
+                                                            .selected_text(format!("{:?}", *mod_dest_4_tracker.lock().unwrap()))
+                                                            .width(100.0)
+                                                            .show_ui(ui, |ui|{
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::None, "None");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc2 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::HP_Amount_1, "Highpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::LP_Amount_1, "Lowpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::BP_Amount_1, "Bandpass 1");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::HP_Amount_2, "Highpass 2");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::LP_Amount_2, "Lowpass 2");
+                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::BP_Amount_2, "Bandpass 2");
+                                                            });
+                                                        if *mod_dest_4_tracker.lock().unwrap() != params.mod_destination_4.value() {
+                                                            setter.set_parameter( &params.mod_destination_4, mod_dest_4_tracker.lock().unwrap().clone());
+                                                        }
                                                     });
                                                     ui.separator();
                                                 });

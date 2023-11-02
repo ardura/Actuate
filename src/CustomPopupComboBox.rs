@@ -140,7 +140,7 @@ pub fn show_tooltip_at<R>(
     suggested_position: Option<Pos2>,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
-    let above = false;
+    let above = true;
     show_tooltip_at_avoid_dyn(
         ctx,
         id,
@@ -302,10 +302,36 @@ pub fn popup_below_widget<R>(
     ui: &Ui,
     popup_id: Id,
     widget_response: &Response,
+    display_above: bool,
+    num_options: f32,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
     if ui.memory().is_popup_open(popup_id) {
-        let inner = Area::new(popup_id)
+        let inner;
+        if display_above {
+            inner = Area::new(popup_id)
+            .order(Order::Foreground)
+            .fixed_pos(Pos2 {x: widget_response.rect.left_top().x, y: widget_response.rect.left_top().y - widget_response.rect.height()*(num_options + 1.0)})
+            .show(ui.ctx(), |ui| {
+                // Note: we use a separate clip-rect for this area, so the popup can be outside the parent.
+                // See https://github.com/emilk/egui/issues/825
+                let frame = Frame::popup(ui.style());
+                let frame_margin = frame.inner_margin + frame.outer_margin;
+                frame
+                    .show(ui, |ui| {
+                        ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
+                            ui.set_width(widget_response.rect.width() - frame_margin.sum().x);
+                            // Added to force the height
+                            //ui.set_height(widget_response.rect.height()*(num_options));
+                            add_contents(ui)
+                        })
+                        .inner
+                    })
+                    .inner
+            })
+            .inner;
+        } else {
+            inner = Area::new(popup_id)
             .order(Order::Foreground)
             .fixed_pos(widget_response.rect.left_bottom())
             .show(ui.ctx(), |ui| {
@@ -324,6 +350,7 @@ pub fn popup_below_widget<R>(
                     .inner
             })
             .inner;
+        }
 
         if ui.input().key_pressed(Key::Escape) || widget_response.clicked_elsewhere() {
             ui.memory().close_popup();
