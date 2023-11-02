@@ -12,8 +12,8 @@ use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
     self,
     epaint::{CircleShape, PathShape},
-    pos2, Align2, Color32, FontId, Id, Pos2, Rect, Response, Rgba, Sense, Shape, Stroke, Ui, Vec2,
-    Widget,
+    pos2, Align2, Color32, FontId, Pos2, Rect, Response, Rgba, Sense, Shape, Stroke, Ui, Vec2,
+    Widget, Id,
 };
 use once_cell::sync::Lazy;
 
@@ -51,13 +51,15 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         }
 
         if response.dragged() {
-            if ui.input().modifiers.shift {
-                self.granular_drag(ui, -response.drag_delta());
-            } else {
-            }
+            let delta: f32;
             // Invert the y axis, since we want dragging up to increase the value and down to
             // decrease it, but drag_delta() has the y-axis increasing downwards.
-            let delta = -response.drag_delta().y;
+            if ui.input().modifiers.shift {
+                delta = -response.drag_delta().y * GRANULAR_DRAG_MULTIPLIER;
+            } else {
+                delta = -response.drag_delta().y;
+            }
+            
             let mut memory = ui.memory();
             let value = memory.data.get_temp_mut_or(*DRAG_AMOUNT_MEMORY_ID, value);
             *value = (*value + delta / 100.0).clamp(0.0, 1.0);
@@ -80,64 +82,6 @@ impl<'a, P: Param> SliderRegion<'a, P> {
     fn get_string(&self) -> String {
         self.param.to_string()
     }
-
-    fn granular_drag(&self, ui: &Ui, drag_delta: Vec2) {
-        // Remember the intial position when we started with the granular drag. This value gets
-        // reset whenever we have a normal itneraction with the slider.
-        let start_value = if Self::get_drag_amount_memory(ui) == 0.0 {
-            Self::set_drag_normalized_start_value_memory(ui, self.normalized_value());
-            self.normalized_value()
-        } else {
-            Self::get_drag_normalized_start_value_memory(ui)
-        };
-
-        let total_drag_distance = drag_delta.x + Self::get_drag_amount_memory(ui);
-        Self::set_drag_amount_memory(ui, total_drag_distance);
-
-        self.set_normalized_value(
-            (start_value + (total_drag_distance * GRANULAR_DRAG_MULTIPLIER)).clamp(0.0, 1.0),
-        );
-    }
-
-    fn get_drag_normalized_start_value_memory(ui: &Ui) -> f32 {
-        ui.memory()
-            .data
-            .get_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID)
-            .unwrap_or(0.5)
-    }
-
-    fn set_drag_normalized_start_value_memory(ui: &Ui, amount: f32) {
-        ui.memory()
-            .data
-            .insert_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID, amount);
-    }
-
-    fn get_drag_amount_memory(ui: &Ui) -> f32 {
-        ui.memory()
-            .data
-            .get_temp(*DRAG_AMOUNT_MEMORY_ID)
-            .unwrap_or(0.0)
-    }
-
-    fn set_drag_amount_memory(ui: &Ui, amount: f32) {
-        ui.memory().data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, amount);
-    }
-
-    fn set_normalized_value(&self, normalized: f32) {
-        // Pulled this and other drag memory stuff from ParamSlider
-        let value = self.param.preview_plain(normalized);
-        if value != self.plain_value() {
-            self.param_setter.set_parameter(self.param, value);
-        }
-    }
-
-    fn plain_value(&self) -> P::Plain {
-        self.param.modulated_plain_value()
-    }
-
-    fn normalized_value(&self) -> f32 {
-        self.param.modulated_normalized_value()
-    }
 }
 
 pub struct ArcKnob<'a, P: Param> {
@@ -155,6 +99,7 @@ pub struct ArcKnob<'a, P: Param> {
     text_size: f32,
     outline: bool,
     padding: f32,
+    show_label: bool,
 }
 
 #[allow(dead_code)]
@@ -188,6 +133,7 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             show_center_value: true,
             outline: false,
             padding: 10.0,
+            show_label: true,
         }
     }
 
@@ -260,6 +206,12 @@ impl<'a, P: Param> ArcKnob<'a, P> {
     // Set center value of knob visibility
     pub fn set_show_center_value(mut self, new_bool: bool) -> Self {
         self.show_center_value = new_bool;
+        self
+    }
+
+    // Set center value of knob visibility
+    pub fn set_show_label(mut self, new_bool: bool) -> Self {
+        self.show_label = new_bool;
         self
     }
 
@@ -380,41 +332,43 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             } else {
                 self.padding * 2.0
             };
-            let label_pos = Pos2::new(
-                response.rect.center_bottom().x,
-                response.rect.center_bottom().y - label_y,
-            );
-            let value_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
-            if self.label_text.is_empty() {
-                painter.text(
-                    value_pos,
-                    Align2::CENTER_CENTER,
-                    self.slider_region.get_string(),
-                    FontId::proportional(self.text_size),
-                    self.line_color,
+            if self.show_label {
+                let label_pos = Pos2::new(
+                    response.rect.center_bottom().x,
+                    response.rect.center_bottom().y - label_y,
                 );
-                painter.text(
-                    label_pos,
-                    Align2::CENTER_CENTER,
-                    self.slider_region.param.name(),
-                    FontId::proportional(self.text_size),
-                    self.line_color,
-                );
-            } else {
-                painter.text(
-                    value_pos,
-                    Align2::CENTER_CENTER,
-                    self.label_text,
-                    FontId::proportional(self.text_size),
-                    self.line_color,
-                );
-                painter.text(
-                    label_pos,
-                    Align2::CENTER_CENTER,
-                    self.slider_region.param.name(),
-                    FontId::proportional(self.text_size),
-                    self.line_color,
-                );
+                let value_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
+                if self.label_text.is_empty() {
+                    painter.text(
+                        value_pos,
+                        Align2::CENTER_CENTER,
+                        self.slider_region.get_string(),
+                        FontId::proportional(self.text_size),
+                        self.line_color,
+                    );
+                    painter.text(
+                        label_pos,
+                        Align2::CENTER_CENTER,
+                        self.slider_region.param.name(),
+                        FontId::proportional(self.text_size),
+                        self.line_color,
+                    );
+                } else {
+                    painter.text(
+                        value_pos,
+                        Align2::CENTER_CENTER,
+                        self.label_text,
+                        FontId::proportional(self.text_size),
+                        self.line_color,
+                    );
+                    painter.text(
+                        label_pos,
+                        Align2::CENTER_CENTER,
+                        self.slider_region.param.name(),
+                        FontId::proportional(self.text_size),
+                        self.line_color,
+                    );
+                }
             }
         });
         response

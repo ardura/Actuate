@@ -3,21 +3,25 @@
 
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
-    self, style::WidgetVisuals, Align2, FontId, Rect, Response, Stroke, Ui, Vec2, Widget,
+    self, style::WidgetVisuals, Align2, FontId, Rect, Response, Stroke, Ui, Vec2, Widget, Color32,
 };
 
 struct SliderRegion<'a, P: Param> {
     param: &'a P,
     param_setter: &'a ParamSetter<'a>,
     font: FontId,
+    background_color: Color32,
+    text_color: Color32,
 }
 
 impl<'a, P: Param> SliderRegion<'a, P> {
-    fn new(param: &'a P, param_setter: &'a ParamSetter, font: FontId) -> Self {
+    fn new(param: &'a P, param_setter: &'a ParamSetter, font: FontId, background_color: Color32, text_color: Color32) -> Self {
         SliderRegion {
             param,
             param_setter,
             font,
+            background_color,
+            text_color
         }
     }
 
@@ -52,7 +56,11 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         ui.painter().rect(
             rect,
             0.5,
-            visuals.bg_fill.linear_multiply(0.8),
+            if self.background_color == Color32::TEMPORARY_COLOR {
+                visuals.bg_fill.linear_multiply(0.8)
+            } else {
+                self.background_color
+            },
             visuals.bg_stroke,
         );
         // Paint the circle, animating it from left to right with `how_on`:
@@ -73,7 +81,11 @@ impl<'a, P: Param> SliderRegion<'a, P> {
             Align2::CENTER_CENTER,
             self.param.name(),
             self.font.clone(),
-            visuals.text_color(),
+            if self.text_color == Color32::TEMPORARY_COLOR {
+                visuals.text_color()
+            } else {
+                self.text_color
+            },
         );
 
         value
@@ -101,7 +113,7 @@ impl<'a, P: Param> BoolButton<'a, P> {
     ) -> Self {
         BoolButton {
             // Pass things to slider to get around
-            slider_region: SliderRegion::new(param, param_setter, font),
+            slider_region: SliderRegion::new(param, param_setter, font, Color32::TEMPORARY_COLOR, Color32::TEMPORARY_COLOR),
             scaling_x: x_scaling,
             scaling_y: y_scaling,
             deselect_timer: 200,
@@ -118,6 +130,16 @@ impl<'a, P: Param> BoolButton<'a, P> {
     // To be called from gui thread to move from inactive to active
     pub fn increment_deselect(mut self) {
         self.inactive_iterator += 1;
+    }
+
+    pub fn with_background_color(mut self, new_color: Color32) -> Self {
+        self.slider_region.background_color = new_color;
+        self
+    }
+
+    pub fn with_text_color(mut self, new_color: Color32) -> Self {
+        self.slider_region.background_color = new_color;
+        self
     }
 }
 

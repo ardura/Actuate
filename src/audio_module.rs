@@ -256,11 +256,11 @@ impl AudioModule {
         }
 
         const VERT_BAR_HEIGHT: f32 = 106.0;
-        let VERT_BAR_HEIGHT_SHORTENED: f32 = VERT_BAR_HEIGHT - ui.spacing().interact_size.y;
+        let VERT_BAR_HEIGHT_SHORTENED: f32 = VERT_BAR_HEIGHT - ui.spacing().interact_size.y - 3.0;
         const VERT_BAR_WIDTH: f32 = 14.0;
         const HCURVE_WIDTH: f32 = 120.0;
         const HCURVE_BWIDTH: f32 = 28.0;
-        const DISABLED_SPACE: f32 = 110.0;
+        const DISABLED_SPACE: f32 = 116.0;
 
         // This is ugly but I couldn't figure out a better architechture for egui and separating audio modules
 
@@ -278,6 +278,7 @@ impl AudioModule {
                 const TEXT_SIZE: f32 = 12.0;
                 // Oscillator
                 ui.vertical(|ui| {
+                    ui.add_space(1.0);
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             let osc_1_type_knob =
@@ -455,8 +456,6 @@ impl AudioModule {
                             );
                         });
                     });
-                    // Keep the UI happy from moving
-                    ui.add_space(1.0);
                 });
             }
             AudioModuleType::Sampler => {
@@ -798,6 +797,7 @@ impl AudioModule {
                 const TEXT_SIZE: f32 = 12.0;
                 // Oscillator
                 ui.vertical(|ui| {
+                    ui.add_space(1.0);
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             let osc_2_type_knob =
@@ -975,8 +975,6 @@ impl AudioModule {
                             );
                         });
                     });
-                    // Keep the UI happy from moving
-                    ui.add_space(1.0);
                 });
             }
             AudioModuleType::Sampler => {
@@ -1318,6 +1316,8 @@ impl AudioModule {
                 const TEXT_SIZE: f32 = 12.0;
                 // Oscillator
                 ui.vertical(|ui| {
+                    // For some reason, 2.0 fixes the gui moving instead of 1.0
+                    ui.add_space(2.0);
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             let osc_3_type_knob =
@@ -1495,8 +1495,6 @@ impl AudioModule {
                             );
                         });
                     });
-                    // Keep the UI happy from moving
-                    ui.add_space(1.0);
                 });
             }
             AudioModuleType::Sampler => {
