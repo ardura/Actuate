@@ -27,6 +27,9 @@ pub enum LFOSnapValues {
     Quarter,
     QuarterD,
     QuarterT,
+    Eighth,
+    EighthD,
+    EighthT,
     Sixteen,
     SixteenD,
     SixteenT,
@@ -67,6 +70,18 @@ impl LFOController {
 
     pub fn set_phase(&mut self, phase: f32) {
         self.phase = phase;
+    }
+
+    pub fn get_frequency(&mut self) -> f32{
+        self.frequency
+    }
+
+    pub fn get_waveform(&mut self) -> Waveform {
+        self.waveform
+    }
+
+    pub fn get_phase(&mut self) -> f32{
+        self.phase
     }
 
     pub fn next_sample(&mut self, sample_rate: f32) -> f32 {

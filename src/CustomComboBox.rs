@@ -1,6 +1,9 @@
+use crate::{egui::style::WidgetVisuals, CustomPopupComboBox::popup_below_widget, *};
 use epaint::Shape;
-use nih_plug_egui::egui::{epaint, Ui, WidgetText, InnerResponse, WidgetInfo, Response, WidgetType, Sense, TextStyle, NumExt, ScrollArea, Painter, vec2, Stroke};
-use crate::{egui::style::WidgetVisuals, *, CustomPopupComboBox::popup_below_widget};
+use nih_plug_egui::egui::{
+    epaint, vec2, InnerResponse, NumExt, Painter, Response, ScrollArea, Sense, Stroke, TextStyle,
+    Ui, WidgetInfo, WidgetText, WidgetType,
+};
 
 /// A function that paints the [`ComboBox`] icon
 pub type IconPainter = Box<dyn FnOnce(&Ui, Rect, &WidgetVisuals, bool)>;
@@ -36,7 +39,12 @@ pub struct ComboBox {
 
 impl ComboBox {
     /// Create new [`ComboBox`] with id and label
-    pub fn new(id_source: impl std::hash::Hash, label: impl Into<WidgetText>, display_above: bool, num_options: u16) -> Self {
+    pub fn new(
+        id_source: impl std::hash::Hash,
+        label: impl Into<WidgetText>,
+        display_above: bool,
+        num_options: u16,
+    ) -> Self {
         Self {
             id_source: Id::new(id_source),
             label: Some(label.into()),
@@ -149,7 +157,7 @@ impl ComboBox {
             icon,
             display_above,
             num_options,
-            show_label
+            show_label,
         } = self;
 
         let button_id = ui.make_persistent_id(id_source);
@@ -158,7 +166,15 @@ impl ComboBox {
             if let Some(width) = width {
                 ui.spacing_mut().slider_width = width; // yes, this is ugly. Will remove later.
             }
-            let mut ir = combo_box_dyn(ui, button_id, selected_text, menu_contents, icon, display_above, num_options);
+            let mut ir = combo_box_dyn(
+                ui,
+                button_id,
+                selected_text,
+                menu_contents,
+                icon,
+                display_above,
+                num_options,
+            );
             if self.show_label {
                 if let Some(label) = label {
                     ir.response
@@ -265,7 +281,12 @@ fn combo_box_dyn<'c, R>(
                     is_popup_open,
                 );
             } else {
-                paint_default_icon(ui.painter(), icon_rect.expand(visuals.expansion), visuals, display_above);
+                paint_default_icon(
+                    ui.painter(),
+                    icon_rect.expand(visuals.expansion),
+                    visuals,
+                    display_above,
+                );
             }
 
             let text_rect = Align2::LEFT_CENTER.align_size_within_rect(galley.size(), rect);
@@ -277,12 +298,19 @@ fn combo_box_dyn<'c, R>(
         ui.memory().toggle_popup(popup_id);
     }
     //let inner = crate::egui::popup::popup_below_widget(ui, popup_id, &button_response, |ui| {
-    let inner = popup_below_widget(ui, popup_id, &button_response, display_above, num_options as f32, |ui| {
-        ScrollArea::vertical()
-            .max_height(ui.spacing().combo_height*2.0)
-            .show(ui, menu_contents)
-            .inner
-    });
+    let inner = popup_below_widget(
+        ui,
+        popup_id,
+        &button_response,
+        display_above,
+        num_options as f32,
+        |ui| {
+            ScrollArea::vertical()
+                .max_height(ui.spacing().combo_height * 2.0)
+                .show(ui, menu_contents)
+                .inner
+        },
+    );
 
     InnerResponse {
         inner,

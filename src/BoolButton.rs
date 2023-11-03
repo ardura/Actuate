@@ -3,7 +3,7 @@
 
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
-    self, style::WidgetVisuals, Align2, FontId, Rect, Response, Stroke, Ui, Vec2, Widget, Color32,
+    self, style::WidgetVisuals, Align2, Color32, FontId, Rect, Response, Stroke, Ui, Vec2, Widget,
 };
 
 struct SliderRegion<'a, P: Param> {
@@ -15,13 +15,19 @@ struct SliderRegion<'a, P: Param> {
 }
 
 impl<'a, P: Param> SliderRegion<'a, P> {
-    fn new(param: &'a P, param_setter: &'a ParamSetter, font: FontId, background_color: Color32, text_color: Color32) -> Self {
+    fn new(
+        param: &'a P,
+        param_setter: &'a ParamSetter,
+        font: FontId,
+        background_color: Color32,
+        text_color: Color32,
+    ) -> Self {
         SliderRegion {
             param,
             param_setter,
             font,
             background_color,
-            text_color
+            text_color,
         }
     }
 
@@ -113,7 +119,13 @@ impl<'a, P: Param> BoolButton<'a, P> {
     ) -> Self {
         BoolButton {
             // Pass things to slider to get around
-            slider_region: SliderRegion::new(param, param_setter, font, Color32::TEMPORARY_COLOR, Color32::TEMPORARY_COLOR),
+            slider_region: SliderRegion::new(
+                param,
+                param_setter,
+                font,
+                Color32::TEMPORARY_COLOR,
+                Color32::TEMPORARY_COLOR,
+            ),
             scaling_x: x_scaling,
             scaling_y: y_scaling,
             deselect_timer: 200,

@@ -1,6 +1,9 @@
 //! Show popup windows, tooltips, context menus etc.
 
-use nih_plug_egui::egui::{Context, Ui, vec2, NumExt, InnerResponse, Id, Vec2, Rect, Pos2, WidgetText, widgets, Widget, containers, Order, Response, Area, Frame, Layout, Align, Key};
+use nih_plug_egui::egui::{
+    containers, vec2, widgets, Align, Area, Context, Frame, Id, InnerResponse, Key, Layout, NumExt,
+    Order, Pos2, Rect, Response, Ui, Vec2, Widget, WidgetText,
+};
 
 //use crate::*;
 
@@ -310,46 +313,50 @@ pub fn popup_below_widget<R>(
         let inner;
         if display_above {
             inner = Area::new(popup_id)
-            .order(Order::Foreground)
-            .fixed_pos(Pos2 {x: widget_response.rect.left_top().x, y: widget_response.rect.left_top().y - widget_response.rect.height()*(num_options + 1.0)})
-            .show(ui.ctx(), |ui| {
-                // Note: we use a separate clip-rect for this area, so the popup can be outside the parent.
-                // See https://github.com/emilk/egui/issues/825
-                let frame = Frame::popup(ui.style());
-                let frame_margin = frame.inner_margin + frame.outer_margin;
-                frame
-                    .show(ui, |ui| {
-                        ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
-                            ui.set_width(widget_response.rect.width() - frame_margin.sum().x);
-                            // Added to force the height
-                            //ui.set_height(widget_response.rect.height()*(num_options));
-                            add_contents(ui)
+                .order(Order::Foreground)
+                .fixed_pos(Pos2 {
+                    x: widget_response.rect.left_top().x,
+                    y: widget_response.rect.left_top().y
+                        - widget_response.rect.height() * (num_options + 1.0),
+                })
+                .show(ui.ctx(), |ui| {
+                    // Note: we use a separate clip-rect for this area, so the popup can be outside the parent.
+                    // See https://github.com/emilk/egui/issues/825
+                    let frame = Frame::popup(ui.style());
+                    let frame_margin = frame.inner_margin + frame.outer_margin;
+                    frame
+                        .show(ui, |ui| {
+                            ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
+                                ui.set_width(widget_response.rect.width() - frame_margin.sum().x);
+                                // Added to force the height
+                                //ui.set_height(widget_response.rect.height()*(num_options));
+                                add_contents(ui)
+                            })
+                            .inner
                         })
                         .inner
-                    })
-                    .inner
-            })
-            .inner;
+                })
+                .inner;
         } else {
             inner = Area::new(popup_id)
-            .order(Order::Foreground)
-            .fixed_pos(widget_response.rect.left_bottom())
-            .show(ui.ctx(), |ui| {
-                // Note: we use a separate clip-rect for this area, so the popup can be outside the parent.
-                // See https://github.com/emilk/egui/issues/825
-                let frame = Frame::popup(ui.style());
-                let frame_margin = frame.inner_margin + frame.outer_margin;
-                frame
-                    .show(ui, |ui| {
-                        ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
-                            ui.set_width(widget_response.rect.width() - frame_margin.sum().x);
-                            add_contents(ui)
+                .order(Order::Foreground)
+                .fixed_pos(widget_response.rect.left_bottom())
+                .show(ui.ctx(), |ui| {
+                    // Note: we use a separate clip-rect for this area, so the popup can be outside the parent.
+                    // See https://github.com/emilk/egui/issues/825
+                    let frame = Frame::popup(ui.style());
+                    let frame_margin = frame.inner_margin + frame.outer_margin;
+                    frame
+                        .show(ui, |ui| {
+                            ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
+                                ui.set_width(widget_response.rect.width() - frame_margin.sum().x);
+                                add_contents(ui)
+                            })
+                            .inner
                         })
                         .inner
-                    })
-                    .inner
-            })
-            .inner;
+                })
+                .inner;
         }
 
         if ui.input().key_pressed(Key::Escape) || widget_response.clicked_elsewhere() {

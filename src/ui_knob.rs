@@ -12,8 +12,8 @@ use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
     self,
     epaint::{CircleShape, PathShape},
-    pos2, Align2, Color32, FontId, Pos2, Rect, Response, Rgba, Sense, Shape, Stroke, Ui, Vec2,
-    Widget, Id,
+    pos2, Align2, Color32, FontId, Id, Pos2, Rect, Response, Rgba, Sense, Shape, Stroke, Ui, Vec2,
+    Widget,
 };
 use once_cell::sync::Lazy;
 
@@ -59,7 +59,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
             } else {
                 delta = -response.drag_delta().y;
             }
-            
+
             let mut memory = ui.memory();
             let value = memory.data.get_temp_mut_or(*DRAG_AMOUNT_MEMORY_ID, value);
             *value = (*value + delta / 100.0).clamp(0.0, 1.0);
@@ -113,6 +113,7 @@ pub enum KnobStyle {
     SmallSmallOutline,
     // Newer presets
     NewPresets1,
+    NewPresets2,
 }
 
 #[allow(dead_code)]
@@ -252,6 +253,12 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             KnobStyle::NewPresets1 => {
                 self.center_size = self.radius * 0.6;
                 self.line_width = self.radius * 0.4;
+                self.center_to_line_space = self.radius * 0.0125;
+                self.padding = 0.0;
+            }
+            KnobStyle::NewPresets2 => {
+                self.center_size = self.radius * 0.5;
+                self.line_width = self.radius * 0.5;
                 self.center_to_line_space = self.radius * 0.0125;
                 self.padding = 0.0;
             }

@@ -22,18 +22,22 @@ Actuate - Synthesizer + Sampler/Granulizer by Ardura
 
 use nih_plug_egui::{
     create_egui_editor,
-    egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Rounding, Vec2, Id},
-    EguiState, widgets::ParamSlider,
+    egui::{self, Align2, Color32, FontId, Id, Pos2, Rect, RichText, Rounding, Vec2},
+    widgets::ParamSlider,
+    EguiState,
 };
 // Imports
-use rfd::FileDialog;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use nih_plug::prelude::*;
 use phf::phf_map;
+use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
-use std::{io::Read, fmt::{Debug, self}};
+use std::{
+    fmt::{self, Debug},
+    io::Read,
+};
 use std::{
     fs::File,
     io::Write,
@@ -54,10 +58,10 @@ use CustomParamSlider::ParamSlider as HorizontalParamSlider;
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
 use StateVariableFilter::ResonanceType;
 mod BoolButton;
-mod CustomParamSlider;
-mod CustomVerticalSlider;
 mod CustomComboBox;
+mod CustomParamSlider;
 mod CustomPopupComboBox;
+mod CustomVerticalSlider;
 mod LFOController;
 mod StateVariableFilter;
 mod audio_module;
@@ -101,7 +105,7 @@ enum LFOSelect {
     LFO1,
     LFO2,
     LFO3,
-    Modulation
+    Modulation,
 }
 
 #[derive(Debug, PartialEq, Enum, Clone, Serialize, Deserialize)]
@@ -120,18 +124,18 @@ pub enum ModulationDestination {
     Cutoff_2,
     Resonance_1,
     Resonance_2,
-    Osc1Detune, 
-    Osc2Detune, 
-    Osc3Detune, 
+    Osc1Detune,
+    Osc2Detune,
+    Osc3Detune,
     Osc1UniDetune,
     Osc2UniDetune,
     Osc3UniDetune,
-    HP_Amount_1, 
-    LP_Amount_1, 
-    BP_Amount_1, 
-    HP_Amount_2, 
-    LP_Amount_2, 
-    BP_Amount_2, 
+    HP_Amount_1,
+    LP_Amount_1,
+    BP_Amount_1,
+    HP_Amount_2,
+    LP_Amount_2,
+    BP_Amount_2,
 }
 
 // Values for Audio Module Routing
@@ -469,25 +473,7 @@ impl Default for Actuate {
             lfo_1: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
             lfo_2: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
             lfo_3: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
-            /*
-            Note Type            Equation to Calculate Frequency (Hz)   Frequency at 120 BPM (Hz)
-            -------------------------------------------------------------------------------------
-            Whole Note           1 / (60 / 120)                        2.00 Hz
-            Dotted Whole Note    1 / (60 / 120 * 1.5)                  1.33 Hz
-            Half Note            1 / (60 / 120 / 2)                    4.00 Hz
-            Dotted Half Note     1 / (60 / 120 / 2 * 1.5)              2.67 Hz
-            Quarter Note         1 / (60 / 120 / 4)                    8.00 Hz
-            Dotted Quarter Note  1 / (60 / 120 / 4 * 1.5)              5.33 Hz
-            Eighth Note          1 / (60 / 120 / 8)                    16.00 Hz
-            Dotted Eighth Note   1 / (60 / 120 / 8 * 1.5)              10.67 Hz
-            Sixteenth Note       1 / (60 / 120 / 16)                   32.00 Hz
-            Dotted Sixteenth Note 1 / (60 / 120 / 16 * 1.5)             21.33 Hz
-            Triplet Whole Note   1 / (60 / 120 / 3)                    3.33 Hz
-            Triplet Half Note    1 / (60 / 120 / 6)                    6.67 Hz
-            Triplet Quarter Note 1 / (60 / 120 / 12)                   13.33 Hz
-            Triplet Eighth Note  1 / (60 / 120 / 24)                   26.67 Hz
-            Triplet Sixteenth Note 1 / (60 / 120 / 48)                 53.33 Hz
-            */
+            
             // Preset Library DEFAULT
             preset_lib_name: String::from("Default"),
             preset_lib: Arc::new(Mutex::new(vec![
@@ -1643,7 +1629,7 @@ impl ActuateParams {
             ////////////////////////////////////////////////////////////////////////////////////
             filter_lp_amount: FloatParam::new(
                 "Low Pass",
-                0.0,
+                1.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_value_to_string(formatters::v2s_f32_percentage(0))
@@ -1674,7 +1660,7 @@ impl ActuateParams {
 
             filter_wet: FloatParam::new(
                 "Filter Wet",
-                0.0,
+                1.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_unit("%")
@@ -1801,7 +1787,7 @@ impl ActuateParams {
 
             filter_lp_amount_2: FloatParam::new(
                 "Low Pass",
-                0.0,
+                1.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_value_to_string(formatters::v2s_f32_percentage(0))
@@ -1832,7 +1818,7 @@ impl ActuateParams {
 
             filter_wet_2: FloatParam::new(
                 "Filter Wet",
-                0.0,
+                1.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_unit("%")
@@ -2048,10 +2034,42 @@ impl ActuateParams {
 
             // Modulators
             ////////////////////////////////////////////////////////////////////////////////////
-            mod_amount_knob_1: FloatParam::new("Mod Amt 1", 0.0, FloatRange::Linear { min: -1.0, max: 1.0 }).with_value_to_string(format_nothing()),
-            mod_amount_knob_2: FloatParam::new("Mod Amt 2", 0.0, FloatRange::Linear { min: -1.0, max: 1.0 }).with_value_to_string(format_nothing()),
-            mod_amount_knob_3: FloatParam::new("Mod Amt 3", 0.0, FloatRange::Linear { min: -1.0, max: 1.0 }).with_value_to_string(format_nothing()),
-            mod_amount_knob_4: FloatParam::new("Mod Amt 4", 0.0, FloatRange::Linear { min: -1.0, max: 1.0 }).with_value_to_string(format_nothing()),
+            mod_amount_knob_1: FloatParam::new(
+                "Mod Amt 1",
+                0.0,
+                FloatRange::Linear {
+                    min: -1.0,
+                    max: 1.0,
+                },
+            )
+            .with_value_to_string(format_nothing()),
+            mod_amount_knob_2: FloatParam::new(
+                "Mod Amt 2",
+                0.0,
+                FloatRange::Linear {
+                    min: -1.0,
+                    max: 1.0,
+                },
+            )
+            .with_value_to_string(format_nothing()),
+            mod_amount_knob_3: FloatParam::new(
+                "Mod Amt 3",
+                0.0,
+                FloatRange::Linear {
+                    min: -1.0,
+                    max: 1.0,
+                },
+            )
+            .with_value_to_string(format_nothing()),
+            mod_amount_knob_4: FloatParam::new(
+                "Mod Amt 4",
+                0.0,
+                FloatRange::Linear {
+                    min: -1.0,
+                    max: 1.0,
+                },
+            )
+            .with_value_to_string(format_nothing()),
             mod_source_1: EnumParam::new("Source 1", ModulationSource::None),
             mod_source_2: EnumParam::new("Source 2", ModulationSource::None),
             mod_source_3: EnumParam::new("Source 3", ModulationSource::None),
@@ -2673,7 +2691,7 @@ impl Plugin for Actuate {
                                                     Rect::from_x_y_ranges(
                                                         RangeInclusive::new((WIDTH as f32)*0.43, (WIDTH as f32)*0.58),
                                                         RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                    Rounding::from(8.0),
+                                                    Rounding::from(16.0),
                                                     *GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap()
                                                 );
                                             }
@@ -2858,7 +2876,7 @@ impl Plugin for Actuate {
                                                 Rect::from_x_y_ranges(
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(8.0),
+                                                Rounding::from(16.0),
                                                 *GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap()
                                             );
                                         }
@@ -2867,7 +2885,7 @@ impl Plugin for Actuate {
                                                 Rect::from_x_y_ranges(
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(8.0),
+                                                Rounding::from(16.0),
                                                 *GUI_VALS.get("SYNTH_SOFT_BLUE").unwrap()
                                             );
                                         }
@@ -2876,7 +2894,7 @@ impl Plugin for Actuate {
                                                 Rect::from_x_y_ranges(
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(8.0),
+                                                Rounding::from(16.0),
                                                 *GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap()
                                             );
                                         }
@@ -2885,7 +2903,7 @@ impl Plugin for Actuate {
                                                 Rect::from_x_y_ranges(
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(8.0),
+                                                Rounding::from(16.0),
                                                 *GUI_VALS.get("LIGHTER_PURPLE").unwrap()
                                             );
                                         }
@@ -3088,7 +3106,7 @@ impl Plugin for Actuate {
                                                             &params.mod_amount_knob_1,
                                                             setter,
                                                             12.0)
-                                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                            .preset_style(ui_knob::KnobStyle::NewPresets2)
                                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
                                                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                                                             .set_show_label(false);
@@ -3145,7 +3163,7 @@ impl Plugin for Actuate {
                                                             &params.mod_amount_knob_2,
                                                             setter,
                                                             12.0)
-                                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                            .preset_style(ui_knob::KnobStyle::NewPresets2)
                                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
                                                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                                                             .set_show_label(false);
@@ -3167,7 +3185,7 @@ impl Plugin for Actuate {
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT)
                                                             .color(Color32::BLACK));
-                                                        CustomComboBox::ComboBox::new("mod_dest_2_ID", params.mod_destination_2.value().to_string(), true, 5)
+                                                        CustomComboBox::ComboBox::new("mod_dest_2_ID", params.mod_destination_2.value().to_string(), true, 17)
                                                             .selected_text(format!("{:?}", *mod_dest_2_tracker.lock().unwrap()))
                                                             .width(100.0)
                                                             .show_ui(ui, |ui|{
@@ -3202,7 +3220,7 @@ impl Plugin for Actuate {
                                                             &params.mod_amount_knob_3,
                                                             setter,
                                                             12.0)
-                                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                            .preset_style(ui_knob::KnobStyle::NewPresets2)
                                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
                                                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                                                             .set_show_label(false);
@@ -3224,7 +3242,7 @@ impl Plugin for Actuate {
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT)
                                                             .color(Color32::BLACK));
-                                                        CustomComboBox::ComboBox::new("mod_dest_3_ID", params.mod_destination_3.value().to_string(), true, 5)
+                                                        CustomComboBox::ComboBox::new("mod_dest_3_ID", params.mod_destination_3.value().to_string(), true, 17)
                                                             .selected_text(format!("{:?}", *mod_dest_3_tracker.lock().unwrap()))
                                                             .width(100.0)
                                                             .show_ui(ui, |ui|{
@@ -3259,7 +3277,7 @@ impl Plugin for Actuate {
                                                             &params.mod_amount_knob_4,
                                                             setter,
                                                             12.0)
-                                                            .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                            .preset_style(ui_knob::KnobStyle::NewPresets2)
                                                             .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
                                                             .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
                                                             .set_show_label(false);
@@ -3281,7 +3299,7 @@ impl Plugin for Actuate {
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT)
                                                             .color(Color32::BLACK));
-                                                        CustomComboBox::ComboBox::new("mod_dest_4_ID", params.mod_destination_4.value().to_string(), true, 5)
+                                                        CustomComboBox::ComboBox::new("mod_dest_4_ID", params.mod_destination_4.value().to_string(), true, 17)
                                                             .selected_text(format!("{:?}", *mod_dest_4_tracker.lock().unwrap()))
                                                             .width(100.0)
                                                             .show_ui(ui, |ui|{
@@ -3396,6 +3414,134 @@ impl Plugin for Actuate {
 impl Actuate {
     // Send midi events to the audio modules and let them process them - also send params so they can access
     fn process_midi(&mut self, context: &mut impl ProcessContext<Self>, buffer: &mut Buffer) {
+        let mut lfo_1_current: f32 = -2.0;
+        let mut lfo_2_current: f32 = -2.0;
+        let mut lfo_3_current: f32 = -2.0;
+        
+        // Update our LFOs per each sample
+        /////////////////////////////////////////////////////////////////////////////////////////////
+        let bpm = context.transport().tempo.unwrap_or(1.0) as f32;
+        if self.params.lfo1_enable.value() {
+            lfo_1_current = self.lfo_1.next_sample(self.sample_rate);
+
+            // Update LFO Frequency
+            if self.params.lfo1_sync.value() {
+                let divisor = match self.params.lfo1_snap.value() {
+                    LFOController::LFOSnapValues::Whole => 1.0,
+                    LFOController::LFOSnapValues::WholeD => 1.5,
+                    LFOController::LFOSnapValues::WholeT => 3.0,
+                    LFOController::LFOSnapValues::Half => 2.0,
+                    LFOController::LFOSnapValues::HalfD => 3.0 * 1.5,
+                    LFOController::LFOSnapValues::HalfT => 6.0,
+                    LFOController::LFOSnapValues::Quarter => 4.0,
+                    LFOController::LFOSnapValues::QuarterD => 4.0 * 1.5,
+                    LFOController::LFOSnapValues::QuarterT => 12.0,
+                    LFOController::LFOSnapValues::Eighth => 8.0,
+                    LFOController::LFOSnapValues::EighthD => 8.0 * 1.5,
+                    LFOController::LFOSnapValues::EighthT => 24.0,
+                    LFOController::LFOSnapValues::Sixteen => 16.0,
+                    LFOController::LFOSnapValues::SixteenD => 16.0 * 1.5,
+                    LFOController::LFOSnapValues::SixteenT => 48.0,
+                };
+
+                let freq_snap = 1.0 / (60.0 / bpm / divisor);
+                if self.params.lfo1_freq.value() != freq_snap {
+                    self.lfo_1.set_frequency(freq_snap);
+                }
+            } else {
+                if self.params.lfo1_freq.value() != self.lfo_1.get_frequency() {
+                    self.lfo_1.set_frequency(self.params.lfo1_freq.value());
+                }
+            }
+            
+            // Update LFO Waveform
+            if self.params.lfo1_waveform.value() != self.lfo_1.get_waveform() {
+                self.lfo_1.set_waveform(self.params.lfo1_waveform.value());
+            }
+
+            /*
+            if self.params.lfo1_phase.value() != self.lfo_1.get_phase() {
+                self.lfo_1.set_frequency(self.params.lfo1_freq.value());
+            }
+            */
+        }
+        if self.params.lfo2_enable.value() {
+            lfo_2_current = self.lfo_2.next_sample(self.sample_rate);
+
+            // Update LFO Frequency
+            if self.params.lfo2_sync.value() {
+                let divisor = match self.params.lfo2_snap.value() {
+                    LFOController::LFOSnapValues::Whole => 1.0,
+                    LFOController::LFOSnapValues::WholeD => 1.5,
+                    LFOController::LFOSnapValues::WholeT => 3.0,
+                    LFOController::LFOSnapValues::Half => 2.0,
+                    LFOController::LFOSnapValues::HalfD => 3.0 * 1.5,
+                    LFOController::LFOSnapValues::HalfT => 6.0,
+                    LFOController::LFOSnapValues::Quarter => 4.0,
+                    LFOController::LFOSnapValues::QuarterD => 4.0 * 1.5,
+                    LFOController::LFOSnapValues::QuarterT => 12.0,
+                    LFOController::LFOSnapValues::Eighth => 8.0,
+                    LFOController::LFOSnapValues::EighthD => 8.0 * 1.5,
+                    LFOController::LFOSnapValues::EighthT => 24.0,
+                    LFOController::LFOSnapValues::Sixteen => 16.0,
+                    LFOController::LFOSnapValues::SixteenD => 16.0 * 1.5,
+                    LFOController::LFOSnapValues::SixteenT => 48.0,
+                };
+
+                let freq_snap = 1.0 / (60.0 / bpm / divisor);
+                if self.params.lfo2_freq.value() != freq_snap {
+                    self.lfo_2.set_frequency(freq_snap);
+                }
+            } else {
+                if self.params.lfo2_freq.value() != self.lfo_2.get_frequency() {
+                    self.lfo_2.set_frequency(self.params.lfo2_freq.value());
+                }
+            }
+            
+            // Update LFO Waveform
+            if self.params.lfo2_waveform.value() != self.lfo_2.get_waveform() {
+                self.lfo_2.set_waveform(self.params.lfo2_waveform.value());
+            }
+        }
+        if self.params.lfo3_enable.value() {
+            lfo_3_current = self.lfo_3.next_sample(self.sample_rate);
+
+            // Update LFO Frequency
+            if self.params.lfo3_sync.value() {
+                let divisor = match self.params.lfo3_snap.value() {
+                    LFOController::LFOSnapValues::Whole => 1.0,
+                    LFOController::LFOSnapValues::WholeD => 1.5,
+                    LFOController::LFOSnapValues::WholeT => 3.0,
+                    LFOController::LFOSnapValues::Half => 2.0,
+                    LFOController::LFOSnapValues::HalfD => 3.0 * 1.5,
+                    LFOController::LFOSnapValues::HalfT => 6.0,
+                    LFOController::LFOSnapValues::Quarter => 4.0,
+                    LFOController::LFOSnapValues::QuarterD => 4.0 * 1.5,
+                    LFOController::LFOSnapValues::QuarterT => 12.0,
+                    LFOController::LFOSnapValues::Eighth => 8.0,
+                    LFOController::LFOSnapValues::EighthD => 8.0 * 1.5,
+                    LFOController::LFOSnapValues::EighthT => 24.0,
+                    LFOController::LFOSnapValues::Sixteen => 16.0,
+                    LFOController::LFOSnapValues::SixteenD => 16.0 * 1.5,
+                    LFOController::LFOSnapValues::SixteenT => 48.0,
+                };
+
+                let freq_snap = 1.0 / (60.0 / bpm / divisor);
+                if self.params.lfo3_freq.value() != freq_snap {
+                    self.lfo_3.set_frequency(freq_snap);
+                }
+            } else {
+                if self.params.lfo3_freq.value() != self.lfo_3.get_frequency() {
+                    self.lfo_3.set_frequency(self.params.lfo3_freq.value());
+                }
+            }
+            
+            // Update LFO Waveform
+            if self.params.lfo3_waveform.value() != self.lfo_3.get_waveform() {
+                self.lfo_3.set_waveform(self.params.lfo3_waveform.value());
+            }
+        }
+
         // Check if we're loading a file before process happens
         if self.params.load_sample_1.value() && self.file_dialog.load(Ordering::Relaxed) {
             self.file_dialog.store(true, Ordering::Relaxed);
@@ -3522,7 +3668,7 @@ impl Actuate {
             }
 
             // Processing
-            /////////////////////////////////////////////////////////////////////////
+            /////////////////////////////////////////////////////////////////////////////////////////////////
 
             // Reset our output buffer signal
             *channel_samples.get_mut(0).unwrap() = 0.0;
@@ -3604,6 +3750,93 @@ impl Actuate {
                 self.update_something.store(false, Ordering::Relaxed);
             }
 
+            // Modulations
+            /////////////////////////////////////////////////////////////////////////////////////////////////
+            let mod_value_1: f32;
+            let mod_value_2: f32;
+            let mod_value_3: f32;
+
+            mod_value_1 = match self.params.mod_source_1.value() {
+                ModulationSource::None => { -2.0 },
+                ModulationSource::LFO1 => { lfo_1_current },
+                ModulationSource::LFO2 => { lfo_2_current },
+                ModulationSource::LFO3 => { lfo_3_current },
+                ModulationSource::Velocity => { match midi_event.clone().unwrap() {
+                        NoteEvent::NoteOn { velocity, timing: _, voice_id: _, channel: _, note: _ } => { velocity },
+                        _ => { -2.0 },
+                    }
+                },
+            };
+
+            mod_value_2 = match self.params.mod_source_2.value() {
+                ModulationSource::None => { -2.0 },
+                ModulationSource::LFO1 => { lfo_1_current },
+                ModulationSource::LFO2 => { lfo_2_current },
+                ModulationSource::LFO3 => { lfo_3_current },
+                ModulationSource::Velocity => { match midi_event.clone().unwrap() {
+                        NoteEvent::NoteOn { velocity, timing: _, voice_id: _, channel: _, note: _ } => { velocity },
+                        _ => { -2.0 },
+                    }
+                },
+            };
+
+            mod_value_3 = match self.params.mod_source_3.value() {
+                ModulationSource::None => { -2.0 },
+                ModulationSource::LFO1 => { lfo_1_current },
+                ModulationSource::LFO2 => { lfo_2_current },
+                ModulationSource::LFO3 => { lfo_3_current },
+                ModulationSource::Velocity => { match midi_event.clone().unwrap() {
+                        NoteEvent::NoteOn { velocity, timing: _, voice_id: _, channel: _, note: _ } => { velocity },
+                        _ => { -2.0 },
+                    }
+                },
+            };
+
+            let mut temp_mod_cutoff_1: f32 = 0.0;
+            let mut temp_mod_cutoff_2: f32 = 0.0;
+            let mut temp_mod_resonance_1: f32 = 0.0;
+            let mut temp_mod_resonance_2: f32 = 0.0;
+            let mut temp_mod_detune_1: f32 = 0.0;
+            let mut temp_mod_detune_2: f32 = 0.0;
+            let mut temp_mod_detune_3: f32 = 0.0;
+            let mut temp_mod_uni_detune_1: f32 = 0.0;
+            let mut temp_mod_uni_detune_2: f32 = 0.0;
+            let mut temp_mod_uni_detune_3: f32 = 0.0;
+            let mut temp_mod_hp_1: f32 = 0.0;
+            let mut temp_mod_hp_2: f32 = 0.0;
+            let mut temp_mod_bp_1: f32 = 0.0;
+            let mut temp_mod_bp_2: f32 = 0.0;
+            let mut temp_mod_lp_1: f32 = 0.0;
+            let mut temp_mod_lp_2: f32 = 0.0;
+            if mod_value_1 != -2.0 {
+                match self.params.mod_destination_1.value() {
+                    ModulationDestination::None => {},
+                    ModulationDestination::Cutoff_1 => { temp_mod_cutoff_1 = 5000.0 * mod_value_1; },
+                    ModulationDestination::Cutoff_2 => { temp_mod_cutoff_2 = 5000.0 * mod_value_1; },
+                    ModulationDestination::Resonance_1 => { temp_mod_resonance_1 = 1.0 * mod_value_1; },
+                    ModulationDestination::Resonance_2 => { temp_mod_resonance_2 = 1.0 * mod_value_1; },
+                    fill these in
+                    ModulationDestination::Osc1Detune => todo!(),
+                    ModulationDestination::Osc2Detune => todo!(),
+                    ModulationDestination::Osc3Detune => todo!(),
+                    ModulationDestination::Osc1UniDetune => todo!(),
+                    ModulationDestination::Osc2UniDetune => todo!(),
+                    ModulationDestination::Osc3UniDetune => todo!(),
+                    ModulationDestination::HP_Amount_1 => todo!(),
+                    ModulationDestination::LP_Amount_1 => todo!(),
+                    ModulationDestination::BP_Amount_1 => todo!(),
+                    ModulationDestination::HP_Amount_2 => todo!(),
+                    ModulationDestination::LP_Amount_2 => todo!(),
+                    ModulationDestination::BP_Amount_2 => todo!(),
+                }
+            }
+
+
+
+
+            // Audio Module Processing of Audio kicks off here
+            /////////////////////////////////////////////////////////////////////////////////////////////////
+
             // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::Relaxed)
                 && self.params._audio_module_1_type.value() != AudioModuleType::Off
@@ -3655,6 +3888,22 @@ impl Actuate {
                 wave3_r *= self.params.audio_module_3_level.value();
             }
 
+            /////////////////////////////////////////////////////////////////////////////////////////////////
+            // Audio Module Processing over
+
+            // If a new note has happened we should reset the phase of our LFO if sync enabled
+            if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
+                if self.params.lfo1_sync.value() {
+                    self.lfo_1.set_phase(self.params.lfo1_phase.value());
+                }
+                if self.params.lfo2_sync.value() {
+                    self.lfo_2.set_phase(self.params.lfo2_phase.value());
+                }
+                if self.params.lfo3_sync.value() {
+                    self.lfo_3.set_phase(self.params.lfo3_phase.value());
+                }
+            }
+
             // Define the outputs for filter routing or non-filter routing
             let mut left_output_filter1: f32 = 0.0;
             let mut right_output_filter1: f32 = 0.0;
@@ -3662,16 +3911,16 @@ impl Actuate {
             let mut right_output_filter2: f32 = 0.0;
             let mut left_output: f32 = 0.0;
             let mut right_output: f32 = 0.0;
-            
+
             match self.params.audio_module_1_routing.value() {
                 AMFilterRouting::Bypass => {
                     left_output += wave1_l;
                     right_output += wave1_r;
-                },
+                }
                 AMFilterRouting::Filter1 => {
                     left_output_filter1 += wave1_l;
                     right_output_filter1 += wave1_r;
-                },
+                }
                 AMFilterRouting::Filter2 => {
                     left_output_filter2 += wave1_l;
                     right_output_filter2 += wave1_r;
@@ -3688,11 +3937,11 @@ impl Actuate {
                 AMFilterRouting::Bypass => {
                     left_output += wave2_l;
                     right_output += wave2_r;
-                },
+                }
                 AMFilterRouting::Filter1 => {
                     left_output_filter1 += wave2_l;
                     right_output_filter1 += wave2_r;
-                },
+                }
                 AMFilterRouting::Filter2 => {
                     left_output_filter2 += wave2_l;
                     right_output_filter2 += wave2_r;
@@ -3709,11 +3958,11 @@ impl Actuate {
                 AMFilterRouting::Bypass => {
                     left_output += wave3_l;
                     right_output += wave3_r;
-                },
+                }
                 AMFilterRouting::Filter1 => {
                     left_output_filter1 += wave3_l;
                     right_output_filter1 += wave3_r;
-                },
+                }
                 AMFilterRouting::Filter2 => {
                     left_output_filter1 += wave3_l;
                     right_output_filter2 += wave3_r;
@@ -3726,310 +3975,95 @@ impl Actuate {
                 }
             }
 
-            // Filter 1 Processing
-            ///////////////////////////////////////////////////////////////
-
-            if self.params.filter_wet.value() > 0.0 && !self.file_dialog.load(Ordering::Relaxed) {
-                // Filter state movement code
-                //////////////////////////////////////////
-
-                // If a note is ending and we should enter releasing
-                if note_off_filter_controller1
-                    || note_off_filter_controller2
-                    || note_off_filter_controller3
-                {
-                    self.filter_state_1 = OscState::Releasing;
-
-                    self.filter_rel_smoother_1 = match self.params.filter_env_rel_curve.value() {
-                        SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                            self.params.filter_env_release.value(),
-                        )),
-                        SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                            self.params.filter_env_release.value(),
-                        )),
-                        SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                            self.params.filter_env_release.value(),
-                        )),
-                    };
-
-                    // Reset our filter release to be at sustain level to start
-                    self.filter_rel_smoother_1.reset(
-                        self.params.filter_cutoff.value()
-                            * (self.params.filter_env_sustain.value() / 999.9),
+            let mut filter1_processed_l: f32 = 0.0;
+            let mut filter1_processed_r: f32 = 0.0;
+            let mut filter2_processed_l: f32 = 0.0;
+            let mut filter2_processed_r: f32 = 0.0;
+            match self.params.filter_routing.value() {
+                FilterRouting::Parallel => {
+                    self.filter_process_1(
+                        note_off_filter_controller1,
+                        note_off_filter_controller2,
+                        note_off_filter_controller3,
+                        reset_filter_controller1,
+                        reset_filter_controller2,
+                        reset_filter_controller3,
+                        left_output_filter1,
+                        right_output_filter1,
+                        &mut filter1_processed_l,
+                        &mut filter1_processed_r,
                     );
-
-                    // Move release to the cutoff to end
-                    self.filter_rel_smoother_1
-                        .set_target(self.sample_rate, self.params.filter_cutoff.value());
-                }
-
-                // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
-                if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3
-                {
-                    // Set our filter in attack state
-                    self.filter_state_1 = OscState::Attacking;
-
-                    // Consume our params for smoothing
-                    self.filter_atk_smoother_1 = match self.params.filter_env_atk_curve.value() {
-                        SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                            self.params.filter_env_attack.value(),
-                        )),
-                        SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                            self.params.filter_env_attack.value(),
-                        )),
-                        SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                            self.params.filter_env_attack.value(),
-                        )),
-                    };
-
-                    // Reset our attack to start from the filter cutoff
-                    self.filter_atk_smoother_1
-                        .reset(self.params.filter_cutoff.value());
-
-                    // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
-                    self.filter_atk_smoother_1.set_target(
-                        self.sample_rate,
-                        (self.params.filter_cutoff.value() + self.params.filter_env_peak.value())
-                            .clamp(20.0, 16000.0),
+                    self.filter_process_2(
+                        note_off_filter_controller1,
+                        note_off_filter_controller2,
+                        note_off_filter_controller3,
+                        reset_filter_controller1,
+                        reset_filter_controller2,
+                        reset_filter_controller3,
+                        left_output_filter2,
+                        right_output_filter2,
+                        &mut filter2_processed_l,
+                        &mut filter2_processed_r,
                     );
+                    left_output += filter1_processed_l + filter2_processed_l;
+                    right_output += filter1_processed_r + filter2_processed_r;
                 }
-
-                // If our attack has finished
-                if self.filter_atk_smoother_1.steps_left() == 0
-                    && self.filter_state_1 == OscState::Attacking
-                {
-                    self.filter_state_1 = OscState::Decaying;
-
-                    self.filter_dec_smoother_1 = match self.params.filter_env_dec_curve.value() {
-                        SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                            self.params.filter_env_decay.value(),
-                        )),
-                        SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                            self.params.filter_env_decay.value(),
-                        )),
-                        SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                            self.params.filter_env_decay.value(),
-                        )),
-                    };
-
-                    // This makes our filter decay start at env peak point
-                    self.filter_dec_smoother_1.reset(
-                        (self.params.filter_cutoff.value() + self.params.filter_env_peak.value())
-                            .clamp(20.0, 16000.0),
+                FilterRouting::Series12 => {
+                    self.filter_process_1(
+                        note_off_filter_controller1,
+                        note_off_filter_controller2,
+                        note_off_filter_controller3,
+                        reset_filter_controller1,
+                        reset_filter_controller2,
+                        reset_filter_controller3,
+                        left_output_filter1,
+                        right_output_filter1,
+                        &mut filter1_processed_l,
+                        &mut filter1_processed_r,
                     );
-
-                    // Set up the smoother for our filter movement to go from our decay point to our sustain point
-                    self.filter_dec_smoother_1.set_target(
-                        self.sample_rate,
-                        self.params.filter_cutoff.value()
-                            * (self.params.filter_env_sustain.value() / 999.9),
+                    self.filter_process_2(
+                        note_off_filter_controller1,
+                        note_off_filter_controller2,
+                        note_off_filter_controller3,
+                        reset_filter_controller1,
+                        reset_filter_controller2,
+                        reset_filter_controller3,
+                        filter1_processed_l,
+                        filter1_processed_r,
+                        &mut filter2_processed_l,
+                        &mut filter2_processed_r,
                     );
+                    left_output += filter2_processed_l;
+                    right_output += filter2_processed_r;
                 }
-                // If our decay has finished move to sustain state
-                if self.filter_dec_smoother_1.steps_left() == 0
-                    && self.filter_state_1 == OscState::Decaying
-                {
-                    self.filter_state_1 = OscState::Sustaining;
-                }
-
-                // use proper variable now that there are four filters and multiple states
-                let next_filter_step = match self.filter_state_1 {
-                    OscState::Attacking => self.filter_atk_smoother_1.next(),
-                    OscState::Decaying | OscState::Sustaining => self.filter_dec_smoother_1.next(),
-                    OscState::Releasing => self.filter_rel_smoother_1.next(),
-                    // I don't expect this to be used
-                    _ => self.params.filter_cutoff.value(),
-                };
-
-                // Filtering before output
-                self.filter_l_1.update(
-                    next_filter_step,
-                    self.params.filter_resonance.value(),
-                    self.sample_rate,
-                    self.params.filter_res_type.value(),
-                );
-                self.filter_r_1.update(
-                    next_filter_step,
-                    self.params.filter_resonance.value(),
-                    self.sample_rate,
-                    self.params.filter_res_type.value(),
-                );
-
-                let low_l: f32;
-                let band_l: f32;
-                let high_l: f32;
-                let low_r: f32;
-                let band_r: f32;
-                let high_r: f32;
-
-                (low_l, band_l, high_l) = self.filter_l_1.process(left_output_filter1);
-                (low_r, band_r, high_r) = self.filter_r_1.process(right_output_filter1);
-
-                left_output += (low_l * self.params.filter_lp_amount.value()
-                    + band_l * self.params.filter_bp_amount.value()
-                    + high_l * self.params.filter_hp_amount.value())
-                    * self.params.filter_wet.value()
-                    + left_output * (1.0 - self.params.filter_wet.value());
-
-                right_output += (low_r * self.params.filter_lp_amount.value()
-                    + band_r * self.params.filter_bp_amount.value()
-                    + high_r * self.params.filter_hp_amount.value())
-                    * self.params.filter_wet.value()
-                    + right_output * (1.0 - self.params.filter_wet.value());
-            }
-
-            // Filter 2 Processing
-            ///////////////////////////////////////////////////////////////
-
-            if self.params.filter_wet_2.value() > 0.0 && !self.file_dialog.load(Ordering::Relaxed) {
-                // Filter state movement code
-                //////////////////////////////////////////
-
-                // If a note is ending and we should enter releasing
-                if note_off_filter_controller1
-                    || note_off_filter_controller2
-                    || note_off_filter_controller3
-                {
-                    self.filter_state_2 = OscState::Releasing;
-
-                    self.filter_rel_smoother_2 = match self.params.filter_env_rel_curve_2.value() {
-                        SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                            self.params.filter_env_release_2.value(),
-                        )),
-                        SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                            self.params.filter_env_release_2.value(),
-                        )),
-                        SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                            self.params.filter_env_release_2.value(),
-                        )),
-                    };
-
-                    // Reset our filter release to be at sustain level to start
-                    self.filter_rel_smoother_2.reset(
-                        self.params.filter_cutoff_2.value()
-                            * (self.params.filter_env_sustain_2.value() / 999.9),
+                FilterRouting::Series21 => {
+                    self.filter_process_2(
+                        note_off_filter_controller1,
+                        note_off_filter_controller2,
+                        note_off_filter_controller3,
+                        reset_filter_controller1,
+                        reset_filter_controller2,
+                        reset_filter_controller3,
+                        left_output_filter2,
+                        right_output_filter2,
+                        &mut filter2_processed_l,
+                        &mut filter2_processed_r,
                     );
-
-                    // Move release to the cutoff to end
-                    self.filter_rel_smoother_2
-                        .set_target(self.sample_rate, self.params.filter_cutoff_2.value());
-                }
-
-                // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
-                if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3
-                {
-                    // Set our filter in attack state
-                    self.filter_state_2 = OscState::Attacking;
-
-                    // Consume our params for smoothing
-                    self.filter_atk_smoother_2 = match self.params.filter_env_atk_curve_2.value() {
-                        SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                            self.params.filter_env_attack_2.value(),
-                        )),
-                        SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                            self.params.filter_env_attack_2.value(),
-                        )),
-                        SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                            self.params.filter_env_attack_2.value(),
-                        )),
-                    };
-
-                    // Reset our attack to start from the filter cutoff
-                    self.filter_atk_smoother_2
-                        .reset(self.params.filter_cutoff_2.value());
-
-                    // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
-                    self.filter_atk_smoother_2.set_target(
-                        self.sample_rate,
-                        (self.params.filter_cutoff_2.value()
-                            + self.params.filter_env_peak_2.value())
-                        .clamp(20.0, 16000.0),
+                    self.filter_process_1(
+                        note_off_filter_controller1,
+                        note_off_filter_controller2,
+                        note_off_filter_controller3,
+                        reset_filter_controller1,
+                        reset_filter_controller2,
+                        reset_filter_controller3,
+                        filter2_processed_l,
+                        filter2_processed_r,
+                        &mut filter1_processed_l,
+                        &mut filter1_processed_r,
                     );
+                    left_output += filter1_processed_l;
+                    right_output += filter1_processed_r;
                 }
-
-                // If our attack has finished
-                if self.filter_atk_smoother_2.steps_left() == 0
-                    && self.filter_state_2 == OscState::Attacking
-                {
-                    self.filter_state_2 = OscState::Decaying;
-
-                    self.filter_dec_smoother_2 = match self.params.filter_env_dec_curve_2.value() {
-                        SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                            self.params.filter_env_decay_2.value(),
-                        )),
-                        SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                            self.params.filter_env_decay_2.value(),
-                        )),
-                        SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                            self.params.filter_env_decay_2.value(),
-                        )),
-                    };
-
-                    // This makes our filter decay start at env peak point
-                    self.filter_dec_smoother_2.reset(
-                        (self.params.filter_cutoff_2.value()
-                            + self.params.filter_env_peak_2.value())
-                        .clamp(20.0, 16000.0),
-                    );
-
-                    // Set up the smoother for our filter movement to go from our decay point to our sustain point
-                    self.filter_dec_smoother_2.set_target(
-                        self.sample_rate,
-                        self.params.filter_cutoff_2.value()
-                            * (self.params.filter_env_sustain_2.value() / 999.9),
-                    );
-                }
-                // If our decay has finished move to sustain state
-                if self.filter_dec_smoother_2.steps_left() == 0
-                    && self.filter_state_2 == OscState::Decaying
-                {
-                    self.filter_state_2 = OscState::Sustaining;
-                }
-
-                // use proper variable now that there are four filters and multiple states
-                let next_filter_step = match self.filter_state_2 {
-                    OscState::Attacking => self.filter_atk_smoother_2.next(),
-                    OscState::Decaying | OscState::Sustaining => self.filter_dec_smoother_2.next(),
-                    OscState::Releasing => self.filter_rel_smoother_2.next(),
-                    // I don't expect this to be used
-                    _ => self.params.filter_cutoff_2.value(),
-                };
-
-                // Filtering before output
-                self.filter_l_2.update(
-                    next_filter_step,
-                    self.params.filter_resonance_2.value(),
-                    self.sample_rate,
-                    self.params.filter_res_type_2.value(),
-                );
-                self.filter_r_2.update(
-                    next_filter_step,
-                    self.params.filter_resonance_2.value(),
-                    self.sample_rate,
-                    self.params.filter_res_type_2.value(),
-                );
-
-                let low_l: f32;
-                let band_l: f32;
-                let high_l: f32;
-                let low_r: f32;
-                let band_r: f32;
-                let high_r: f32;
-
-                (low_l, band_l, high_l) = self.filter_l_2.process(left_output_filter2);
-                (low_r, band_r, high_r) = self.filter_r_2.process(right_output_filter2);
-
-                left_output += (low_l * self.params.filter_lp_amount_2.value()
-                    + band_l * self.params.filter_bp_amount_2.value()
-                    + high_l * self.params.filter_hp_amount_2.value())
-                    * self.params.filter_wet_2.value()
-                    + left_output * (1.0 - self.params.filter_wet_2.value());
-
-                right_output += (low_r * self.params.filter_lp_amount_2.value()
-                    + band_r * self.params.filter_bp_amount_2.value()
-                    + high_r * self.params.filter_hp_amount_2.value())
-                    * self.params.filter_wet_2.value()
-                    + right_output * (1.0 - self.params.filter_wet_2.value());
             }
 
             // DC Offset Removal
@@ -4673,6 +4707,298 @@ impl Actuate {
                 mod_amount_3: self.params.mod_amount_knob_3.value(),
                 mod_amount_4: self.params.mod_amount_knob_4.value(),
             };
+    }
+
+    fn filter_process_1(
+        &mut self,
+        note_off_filter_controller1: bool,
+        note_off_filter_controller2: bool,
+        note_off_filter_controller3: bool,
+        reset_filter_controller1: bool,
+        reset_filter_controller2: bool,
+        reset_filter_controller3: bool,
+        left_input_filter1: f32,
+        right_input_filter1: f32,
+        left_output: &mut f32,
+        right_output: &mut f32,
+    ) {
+        // Filter 1 Processing
+        ///////////////////////////////////////////////////////////////
+        if self.params.filter_wet.value() > 0.0 && !self.file_dialog.load(Ordering::Relaxed) {
+            // Filter state movement code
+            //////////////////////////////////////////
+            // If a note is ending and we should enter releasing
+            if note_off_filter_controller1
+                || note_off_filter_controller2
+                || note_off_filter_controller3
+            {
+                self.filter_state_1 = OscState::Releasing;
+                self.filter_rel_smoother_1 = match self.params.filter_env_rel_curve.value() {
+                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
+                        self.params.filter_env_release.value(),
+                    )),
+                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                        self.params.filter_env_release.value(),
+                    )),
+                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                        self.params.filter_env_release.value(),
+                    )),
+                };
+                // Reset our filter release to be at sustain level to start
+                self.filter_rel_smoother_1.reset(
+                    self.params.filter_cutoff.value()
+                        * (self.params.filter_env_sustain.value() / 999.9),
+                );
+                // Move release to the cutoff to end
+                self.filter_rel_smoother_1
+                    .set_target(self.sample_rate, self.params.filter_cutoff.value());
+            }
+            // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
+            if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
+                // Set our filter in attack state
+                self.filter_state_1 = OscState::Attacking;
+                // Consume our params for smoothing
+                self.filter_atk_smoother_1 = match self.params.filter_env_atk_curve.value() {
+                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
+                        self.params.filter_env_attack.value(),
+                    )),
+                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                        self.params.filter_env_attack.value(),
+                    )),
+                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                        self.params.filter_env_attack.value(),
+                    )),
+                };
+                // Reset our attack to start from the filter cutoff
+                self.filter_atk_smoother_1
+                    .reset(self.params.filter_cutoff.value());
+                // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
+                self.filter_atk_smoother_1.set_target(
+                    self.sample_rate,
+                    (self.params.filter_cutoff.value() + self.params.filter_env_peak.value())
+                        .clamp(20.0, 16000.0),
+                );
+            }
+            // If our attack has finished
+            if self.filter_atk_smoother_1.steps_left() == 0
+                && self.filter_state_1 == OscState::Attacking
+            {
+                self.filter_state_1 = OscState::Decaying;
+                self.filter_dec_smoother_1 = match self.params.filter_env_dec_curve.value() {
+                    SmoothStyle::Linear => {
+                        Smoother::new(SmoothingStyle::Linear(self.params.filter_env_decay.value()))
+                    }
+                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                        self.params.filter_env_decay.value(),
+                    )),
+                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                        self.params.filter_env_decay.value(),
+                    )),
+                };
+                // This makes our filter decay start at env peak point
+                self.filter_dec_smoother_1.reset(
+                    (self.params.filter_cutoff.value() + self.params.filter_env_peak.value())
+                        .clamp(20.0, 16000.0),
+                );
+                // Set up the smoother for our filter movement to go from our decay point to our sustain point
+                self.filter_dec_smoother_1.set_target(
+                    self.sample_rate,
+                    self.params.filter_cutoff.value()
+                        * (self.params.filter_env_sustain.value() / 999.9),
+                );
+            }
+            // If our decay has finished move to sustain state
+            if self.filter_dec_smoother_1.steps_left() == 0
+                && self.filter_state_1 == OscState::Decaying
+            {
+                self.filter_state_1 = OscState::Sustaining;
+            }
+            // use proper variable now that there are four filters and multiple states
+            let next_filter_step = match self.filter_state_1 {
+                OscState::Attacking => self.filter_atk_smoother_1.next(),
+                OscState::Decaying | OscState::Sustaining => self.filter_dec_smoother_1.next(),
+                OscState::Releasing => self.filter_rel_smoother_1.next(),
+                // I don't expect this to be used
+                _ => self.params.filter_cutoff.value(),
+            };
+            // Filtering before output
+            self.filter_l_1.update(
+                next_filter_step,
+                self.params.filter_resonance.value(),
+                self.sample_rate,
+                self.params.filter_res_type.value(),
+            );
+            self.filter_r_1.update(
+                next_filter_step,
+                self.params.filter_resonance.value(),
+                self.sample_rate,
+                self.params.filter_res_type.value(),
+            );
+            let low_l: f32;
+            let band_l: f32;
+            let high_l: f32;
+            let low_r: f32;
+            let band_r: f32;
+            let high_r: f32;
+            (low_l, band_l, high_l) = self.filter_l_1.process(left_input_filter1);
+            (low_r, band_r, high_r) = self.filter_r_1.process(right_input_filter1);
+            *left_output += (low_l * self.params.filter_lp_amount.value()
+                + band_l * self.params.filter_bp_amount.value()
+                + high_l * self.params.filter_hp_amount.value())
+                * self.params.filter_wet.value()
+                + *left_output * (1.0 - self.params.filter_wet.value());
+            *right_output += (low_r * self.params.filter_lp_amount.value()
+                + band_r * self.params.filter_bp_amount.value()
+                + high_r * self.params.filter_hp_amount.value())
+                * self.params.filter_wet.value()
+                + *right_output * (1.0 - self.params.filter_wet.value());
+        }
+    }
+
+    fn filter_process_2(
+        &mut self,
+        note_off_filter_controller1: bool,
+        note_off_filter_controller2: bool,
+        note_off_filter_controller3: bool,
+        reset_filter_controller1: bool,
+        reset_filter_controller2: bool,
+        reset_filter_controller3: bool,
+        left_input_filter2: f32,
+        right_input_filter2: f32,
+        left_output: &mut f32,
+        right_output: &mut f32,
+    ) {
+        // Filter 2 Processing
+        ///////////////////////////////////////////////////////////////
+        if self.params.filter_wet_2.value() > 0.0 && !self.file_dialog.load(Ordering::Relaxed) {
+            // Filter state movement code
+            //////////////////////////////////////////
+            // If a note is ending and we should enter releasing
+            if note_off_filter_controller1
+                || note_off_filter_controller2
+                || note_off_filter_controller3
+            {
+                self.filter_state_2 = OscState::Releasing;
+                self.filter_rel_smoother_2 = match self.params.filter_env_rel_curve_2.value() {
+                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
+                        self.params.filter_env_release_2.value(),
+                    )),
+                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                        self.params.filter_env_release_2.value(),
+                    )),
+                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                        self.params.filter_env_release_2.value(),
+                    )),
+                };
+                // Reset our filter release to be at sustain level to start
+                self.filter_rel_smoother_2.reset(
+                    self.params.filter_cutoff_2.value()
+                        * (self.params.filter_env_sustain_2.value() / 999.9),
+                );
+                // Move release to the cutoff to end
+                self.filter_rel_smoother_2
+                    .set_target(self.sample_rate, self.params.filter_cutoff_2.value());
+            }
+            // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
+            if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
+                // Set our filter in attack state
+                self.filter_state_2 = OscState::Attacking;
+                // Consume our params for smoothing
+                self.filter_atk_smoother_2 = match self.params.filter_env_atk_curve_2.value() {
+                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
+                        self.params.filter_env_attack_2.value(),
+                    )),
+                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                        self.params.filter_env_attack_2.value(),
+                    )),
+                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                        self.params.filter_env_attack_2.value(),
+                    )),
+                };
+                // Reset our attack to start from the filter cutoff
+                self.filter_atk_smoother_2
+                    .reset(self.params.filter_cutoff_2.value());
+                // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
+                self.filter_atk_smoother_2.set_target(
+                    self.sample_rate,
+                    (self.params.filter_cutoff_2.value() + self.params.filter_env_peak_2.value())
+                        .clamp(20.0, 16000.0),
+                );
+            }
+            // If our attack has finished
+            if self.filter_atk_smoother_2.steps_left() == 0
+                && self.filter_state_2 == OscState::Attacking
+            {
+                self.filter_state_2 = OscState::Decaying;
+                self.filter_dec_smoother_2 = match self.params.filter_env_dec_curve_2.value() {
+                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
+                        self.params.filter_env_decay_2.value(),
+                    )),
+                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                        self.params.filter_env_decay_2.value(),
+                    )),
+                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                        self.params.filter_env_decay_2.value(),
+                    )),
+                };
+                // This makes our filter decay start at env peak point
+                self.filter_dec_smoother_2.reset(
+                    (self.params.filter_cutoff_2.value() + self.params.filter_env_peak_2.value())
+                        .clamp(20.0, 16000.0),
+                );
+                // Set up the smoother for our filter movement to go from our decay point to our sustain point
+                self.filter_dec_smoother_2.set_target(
+                    self.sample_rate,
+                    self.params.filter_cutoff_2.value()
+                        * (self.params.filter_env_sustain_2.value() / 999.9),
+                );
+            }
+            // If our decay has finished move to sustain state
+            if self.filter_dec_smoother_2.steps_left() == 0
+                && self.filter_state_2 == OscState::Decaying
+            {
+                self.filter_state_2 = OscState::Sustaining;
+            }
+            // use proper variable now that there are four filters and multiple states
+            let next_filter_step = match self.filter_state_2 {
+                OscState::Attacking => self.filter_atk_smoother_2.next(),
+                OscState::Decaying | OscState::Sustaining => self.filter_dec_smoother_2.next(),
+                OscState::Releasing => self.filter_rel_smoother_2.next(),
+                // I don't expect this to be used
+                _ => self.params.filter_cutoff_2.value(),
+            };
+            // Filtering before output
+            self.filter_l_2.update(
+                next_filter_step,
+                self.params.filter_resonance_2.value(),
+                self.sample_rate,
+                self.params.filter_res_type_2.value(),
+            );
+            self.filter_r_2.update(
+                next_filter_step,
+                self.params.filter_resonance_2.value(),
+                self.sample_rate,
+                self.params.filter_res_type_2.value(),
+            );
+            let low_l: f32;
+            let band_l: f32;
+            let high_l: f32;
+            let low_r: f32;
+            let band_r: f32;
+            let high_r: f32;
+            (low_l, band_l, high_l) = self.filter_l_2.process(left_input_filter2);
+            (low_r, band_r, high_r) = self.filter_r_2.process(right_input_filter2);
+            *left_output += (low_l * self.params.filter_lp_amount_2.value()
+                + band_l * self.params.filter_bp_amount_2.value()
+                + high_l * self.params.filter_hp_amount_2.value())
+                * self.params.filter_wet_2.value()
+                + *left_output * (1.0 - self.params.filter_wet_2.value());
+            *right_output += (low_r * self.params.filter_lp_amount_2.value()
+                + band_r * self.params.filter_bp_amount_2.value()
+                + high_r * self.params.filter_hp_amount_2.value())
+                * self.params.filter_wet_2.value()
+                + *right_output * (1.0 - self.params.filter_wet_2.value());
+        }
     }
 }
 
