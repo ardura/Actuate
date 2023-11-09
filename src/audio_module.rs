@@ -69,6 +69,8 @@ struct SingleVoice {
     note: u8,
     /// Velocity of our note
     _velocity: f32,
+    /// Mod amount for velocity inputted to this AM
+    vel_mod_amount: f32,
     /// The voice's current phase.
     phase: f32,
     /// The phase increment. This is based on the voice's frequency, derived from the note index.
@@ -1969,18 +1971,25 @@ impl AudioModule {
         sample_id: usize,
         event_passed: Option<NoteEvent<()>>,
         voice_max: usize,
-    ) -> (f32, f32, bool, bool) {
+        detune_mod: f32,
+        uni_detune_mod: f32,
+        velocity_mod: f32,
+        uni_velocity_mod: f32,
+        vel_gain_mod: bool,
+        vel_lfo_gain_mod: f32,
+    ) -> (f32, f32, bool, bool, f32) {
         // If the process is in here the file dialog is not open per lib.rs
 
         // Midi events are processed here
         let mut note_on: bool = false;
         let mut note_off: bool = false;
+        let mut returned_velocity: f32 = -1.0;
         match event_passed {
             // The event was valid
             Some(mut event) => {
                 event = event_passed.unwrap();
                 if event.timing() > sample_id as u32 {
-                    return (0.0, 0.0, false, false);
+                    return (0.0, 0.0, false, false, 0.0);
                 }
                 match event {
                     ////////////////////////////////////////////////////////////
@@ -1991,6 +2000,7 @@ impl AudioModule {
                     } => {
                         // Osc + generic stuff
                         note_on = true;
+                        returned_velocity = velocity;
                         let mut new_phase: f32 = 0.0;
 
                         // Sampler when single cycle needs this!!!
@@ -2021,8 +2031,15 @@ impl AudioModule {
                         note += self.osc_semitones as u8;
                         // Shift our note per detune
                         // I'm so glad nih-plug has this helper for f32 conversions!
-                        let base_note = note as f32 + self.osc_detune;
-                        let detuned_note: f32 = util::f32_midi_note_to_freq(base_note);
+                        let base_note = if velocity_mod <= 0.0 {
+                            note as f32 + self.osc_detune + detune_mod
+                        } else {
+                            note as f32
+                                + self.osc_detune
+                                + detune_mod
+                                + velocity_mod.clamp(0.0, 1.0) * velocity
+                        };
+                        //let detuned_note: f32 = util::f32_midi_note_to_freq(base_note);
 
                         // Reset the retrigger on Oscs
                         match self.osc_retrigger {
@@ -2075,11 +2092,17 @@ impl AudioModule {
                                 // Create the detuned notes around the base note
                                 if unison_voice % 2 == 1 {
                                     unison_notes[unison_voice] = util::f32_midi_note_to_freq(
-                                        base_note + detune_step * (unison_voice + 1) as f32,
+                                        base_note
+                                            + uni_detune_mod
+                                            + (uni_velocity_mod.clamp(0.0, 1.0) * velocity)
+                                            + detune_step * (unison_voice + 1) as f32,
                                     );
                                 } else {
                                     unison_notes[unison_voice] = util::f32_midi_note_to_freq(
-                                        base_note - detune_step * (unison_voice) as f32,
+                                        base_note
+                                            - uni_detune_mod
+                                            - (uni_velocity_mod.clamp(0.0, 1.0) * velocity)
+                                            - detune_step * (unison_voice) as f32,
                                     );
                                 }
                             }
@@ -2177,11 +2200,11 @@ impl AudioModule {
                                         };
                                     } else {
                                         // Nothing is in our sample library, skip attempting audio output
-                                        return (0.0, 0.0, false, false);
+                                        return (0.0, 0.0, false, false, 0.0);
                                     }
                                 } else {
                                     // Nothing is in our sample library, skip attempting audio output
-                                    return (0.0, 0.0, false, false);
+                                    return (0.0, 0.0, false, false, 0.0);
                                 }
                             }
                             _ => {
@@ -2195,8 +2218,10 @@ impl AudioModule {
                         let new_voice: SingleVoice = SingleVoice {
                             note: note,
                             _velocity: velocity,
+                            vel_mod_amount: velocity_mod,
                             phase: new_phase,
-                            phase_delta: detuned_note / self.sample_rate,
+                            //phase_delta: detuned_note / self.sample_rate,
+                            phase_delta: 0.0,
                             state: OscState::Attacking,
                             // These get cloned since smoother cannot be copied
                             amp_current: 0.0,
@@ -2205,7 +2230,8 @@ impl AudioModule {
                             osc_release: release_smoother.clone(),
                             _detune: self.osc_detune,
                             _unison_detune_value: self.osc_unison_detune,
-                            frequency: detuned_note,
+                            //frequency: detuned_note,
+                            frequency: 0.0,
                             _attack_time: self.osc_attack,
                             _decay_time: self.osc_decay,
                             _release_time: self.osc_release,
@@ -2260,6 +2286,7 @@ impl AudioModule {
                                 let new_unison_voice: SingleVoice = SingleVoice {
                                     note: note,
                                     _velocity: velocity,
+                                    vel_mod_amount: uni_velocity_mod,
                                     phase: uni_phase,
                                     phase_delta: unison_notes[unison_voice] / self.sample_rate,
                                     state: OscState::Attacking,
@@ -2270,7 +2297,8 @@ impl AudioModule {
                                     osc_release: release_smoother.clone(),
                                     _detune: self.osc_detune,
                                     _unison_detune_value: self.osc_unison_detune,
-                                    frequency: unison_notes[unison_voice],
+                                    //frequency: unison_notes[unison_voice],
+                                    frequency: 0.0,
                                     //frequency: detuned_note,
                                     _attack_time: self.osc_attack,
                                     _decay_time: self.osc_decay,
@@ -2304,6 +2332,7 @@ impl AudioModule {
                                 SingleVoice {
                                     note: 0,
                                     _velocity: 0.0,
+                                    vel_mod_amount: 0.0,
                                     phase: 0.0,
                                     phase_delta: 0.0,
                                     state: OscState::Off,
@@ -2344,6 +2373,7 @@ impl AudioModule {
                                     SingleVoice {
                                         note: 0,
                                         _velocity: 0.0,
+                                        vel_mod_amount: 0.0,
                                         phase: new_phase,
                                         phase_delta: 0.0,
                                         state: OscState::Off,
@@ -2496,6 +2526,7 @@ impl AudioModule {
         let mut next_grain: SingleVoice = SingleVoice {
             note: 0,
             _velocity: 0.0,
+            vel_mod_amount: 0.0,
             phase: 0.0,
             phase_delta: 0.0,
             state: OscState::Off,
@@ -2649,6 +2680,7 @@ impl AudioModule {
                     next_grain = SingleVoice {
                         note: voice.note,
                         _velocity: voice._velocity,
+                        vel_mod_amount: 0.0,
                         phase: voice.phase,
                         phase_delta: voice.phase_delta,
                         state: voice.state,
@@ -2759,17 +2791,50 @@ impl AudioModule {
                 let mut stereo_voices_r: f32 = 0.0;
                 let mut center_voices: f32 = 0.0;
                 for voice in self.playing_voices.voices.iter_mut() {
+                    let temp_osc_gain_multiplier: f32;
                     // Get our current gain amount for use in match below
-                    let temp_osc_gain_multiplier: f32 = match voice.state {
-                        OscState::Attacking => voice.osc_attack.next(),
-                        OscState::Decaying => voice.osc_decay.next(),
-                        OscState::Sustaining => self.osc_sustain / 999.9,
-                        OscState::Releasing => voice.osc_release.next(),
-                        OscState::Off => 0.0,
-                    };
+                    // Include gain scaling if mod is there
+                    if vel_gain_mod {
+                        temp_osc_gain_multiplier = match voice.state {
+                            OscState::Attacking => {
+                                voice.osc_attack.next() * voice._velocity * vel_lfo_gain_mod
+                            }
+                            OscState::Decaying => {
+                                voice.osc_decay.next() * voice._velocity * vel_lfo_gain_mod
+                            }
+                            OscState::Sustaining => {
+                                (self.osc_sustain / 999.9) * voice._velocity * vel_lfo_gain_mod
+                            }
+                            OscState::Releasing => {
+                                voice.osc_release.next() * voice._velocity * vel_lfo_gain_mod
+                            }
+                            OscState::Off => 0.0,
+                        };
+                    } else {
+                        temp_osc_gain_multiplier = match voice.state {
+                            OscState::Attacking => voice.osc_attack.next() * vel_lfo_gain_mod,
+                            OscState::Decaying => voice.osc_decay.next() * vel_lfo_gain_mod,
+                            OscState::Sustaining => (self.osc_sustain / 999.9) * vel_lfo_gain_mod,
+                            OscState::Releasing => voice.osc_release.next() * vel_lfo_gain_mod,
+                            OscState::Off => 0.0,
+                        };
+                    }
+
                     voice.amp_current = temp_osc_gain_multiplier;
 
-                    voice.phase_delta = voice.frequency / self.sample_rate;
+                    if voice.vel_mod_amount == 0.0 {
+                        let base_note = voice.note as f32 + voice._detune + detune_mod;
+                        voice.phase_delta =
+                            util::f32_midi_note_to_freq(base_note) / self.sample_rate;
+                    } else {
+                        let base_note = voice.note as f32
+                            + voice._detune
+                            + detune_mod
+                            + (voice.vel_mod_amount * voice._velocity);
+                        voice.phase_delta =
+                            util::f32_midi_note_to_freq(base_note) / self.sample_rate;
+                    }
+
                     if self.audio_module_type == AudioModuleType::Osc {
                         center_voices += match self.osc_type {
                             VoiceType::Sine => {
@@ -2804,17 +2869,62 @@ impl AudioModule {
                 }
                 // Stereo applies to unison voices
                 for unison_voice in self.unison_voices.voices.iter_mut() {
+                    let temp_osc_gain_multiplier: f32;
                     // Get our current gain amount for use in match below
-                    let temp_osc_gain_multiplier: f32 = match unison_voice.state {
-                        OscState::Attacking => unison_voice.osc_attack.next(),
-                        OscState::Decaying => unison_voice.osc_decay.next(),
-                        OscState::Sustaining => self.osc_sustain / 999.9,
-                        OscState::Releasing => unison_voice.osc_release.next(),
-                        OscState::Off => 0.0,
-                    };
+                    // Include gain scaling if mod is there
+                    if vel_gain_mod {
+                        temp_osc_gain_multiplier = match unison_voice.state {
+                            OscState::Attacking => {
+                                unison_voice.osc_attack.next()
+                                    * unison_voice._velocity
+                                    * vel_lfo_gain_mod
+                            }
+                            OscState::Decaying => {
+                                unison_voice.osc_decay.next()
+                                    * unison_voice._velocity
+                                    * vel_lfo_gain_mod
+                            }
+                            OscState::Sustaining => {
+                                (self.osc_sustain / 999.9)
+                                    * unison_voice._velocity
+                                    * vel_lfo_gain_mod
+                            }
+                            OscState::Releasing => {
+                                unison_voice.osc_release.next()
+                                    * unison_voice._velocity
+                                    * vel_lfo_gain_mod
+                            }
+                            OscState::Off => 0.0,
+                        };
+                    } else {
+                        temp_osc_gain_multiplier = match unison_voice.state {
+                            OscState::Attacking => {
+                                unison_voice.osc_attack.next() * vel_lfo_gain_mod
+                            }
+                            OscState::Decaying => unison_voice.osc_decay.next() * vel_lfo_gain_mod,
+                            OscState::Sustaining => (self.osc_sustain / 999.9) * vel_lfo_gain_mod,
+                            OscState::Releasing => {
+                                unison_voice.osc_release.next() * vel_lfo_gain_mod
+                            }
+                            OscState::Off => 0.0,
+                        };
+                    }
+
                     unison_voice.amp_current = temp_osc_gain_multiplier;
 
-                    unison_voice.phase_delta = unison_voice.frequency / self.sample_rate;
+                    if unison_voice.vel_mod_amount == 0.0 {
+                        let base_note =
+                            unison_voice.note as f32 + unison_voice._unison_detune_value + uni_detune_mod;
+                        unison_voice.phase_delta =
+                            util::f32_midi_note_to_freq(base_note) / self.sample_rate;
+                    } else {
+                        let base_note = unison_voice.note as f32
+                            + unison_voice._unison_detune_value
+                            + uni_detune_mod
+                            + (unison_voice.vel_mod_amount * unison_voice._velocity);
+                        unison_voice.phase_delta =
+                            util::f32_midi_note_to_freq(base_note) / self.sample_rate;
+                    }
 
                     if self.osc_unison > 1 {
                         let mut temp_unison_voice: f32 = 0.0;
@@ -3032,7 +3142,13 @@ impl AudioModule {
         };
 
         // Send it back
-        (output_signal_l, output_signal_r, note_on, note_off)
+        (
+            output_signal_l,
+            output_signal_r,
+            note_on,
+            note_off,
+            returned_velocity,
+        )
     }
 
     pub fn set_playing(&mut self, new_bool: bool) {

@@ -61,18 +61,18 @@ impl StateVariableFilter {
             self.sample_rate = sample_rate;
         }
         if q != self.q {
-            self.q = q;
+            self.q = q.clamp(0.0, 1.0);
         }
         if frequency != self.frequency {
-            self.frequency = frequency;
+            self.frequency = frequency.clamp(20.0, 16000.0);
         }
         if resonance_mode != self.res_mode {
             self.res_mode = resonance_mode;
         }
         // Prevent speaker/ear destruction
-        if self.q < 0.15 && self.res_mode != ResonanceType::Default {
-            self.q = 0.15;
-        }
+        //if self.q < 0.15 && self.res_mode != ResonanceType::Default {
+        //    self.q = 0.15;
+        //}
     }
 
     pub fn process(&mut self, input: f32) -> (f32, f32, f32) {

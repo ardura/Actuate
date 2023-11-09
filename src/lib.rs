@@ -117,6 +117,7 @@ pub enum ModulationSource {
     LFO3,
 }
 
+#[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Enum, Clone, Serialize, Deserialize)]
 pub enum ModulationDestination {
     None,
@@ -124,18 +125,18 @@ pub enum ModulationDestination {
     Cutoff_2,
     Resonance_1,
     Resonance_2,
+    All_Gain,
+    Osc1_Gain,
+    Osc2_Gain,
+    Osc3_Gain,
+    All_Detune,
     Osc1Detune,
     Osc2Detune,
     Osc3Detune,
+    All_UniDetune,
     Osc1UniDetune,
     Osc2UniDetune,
     Osc3UniDetune,
-    HP_Amount_1,
-    LP_Amount_1,
-    BP_Amount_1,
-    HP_Amount_2,
-    LP_Amount_2,
-    BP_Amount_2,
 }
 
 // Values for Audio Module Routing
@@ -175,6 +176,22 @@ pub enum FilterRouting {
 const FONT: nih_plug_egui::egui::FontId = FontId::monospace(14.0);
 const LOADING_FONT: nih_plug_egui::egui::FontId = FontId::monospace(20.0);
 const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::monospace(11.0);
+
+/// Modulation struct for passing mods to audio modules
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ModulationStruct {
+    temp_mod_cutoff_1: f32,
+    temp_mod_cutoff_2: f32,
+    temp_mod_resonance_1: f32,
+    temp_mod_resonance_2: f32,
+    temp_mod_detune_1: f32,
+    temp_mod_detune_2: f32,
+    temp_mod_detune_3: f32,
+    temp_mod_uni_detune_1: f32,
+    temp_mod_uni_detune_2: f32,
+    temp_mod_uni_detune_3: f32,
+    temp_mod_vel_sum: f32,
+}
 
 /// This is the structure that represents a storable preset value
 #[derive(Serialize, Deserialize, Clone)]
@@ -473,7 +490,7 @@ impl Default for Actuate {
             lfo_1: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
             lfo_2: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
             lfo_3: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
-            
+
             // Preset Library DEFAULT
             preset_lib_name: String::from("Default"),
             preset_lib: Arc::new(Mutex::new(vec![
@@ -581,11 +598,11 @@ impl Default for Actuate {
                     filter_env_dec_curve: SmoothStyle::Linear,
                     filter_env_rel_curve: SmoothStyle::Linear,
 
-                    filter_wet_2: 1.0,
+                    filter_wet_2: 0.0,
                     filter_cutoff_2: 4000.0,
                     filter_resonance_2: 1.0,
                     filter_res_type_2: ResonanceType::Default,
-                    filter_lp_amount_2: 1.0,
+                    filter_lp_amount_2: 0.0,
                     filter_hp_amount_2: 0.0,
                     filter_bp_amount_2: 0.0,
                     filter_env_peak_2: 0.0,
@@ -1670,9 +1687,9 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             filter_resonance: FloatParam::new(
-                "Bandwidth",
+                "Resonance",
                 1.0,
-                FloatRange::Linear { min: 0.1, max: 1.0 },
+                FloatRange::Reversed(&FloatRange::Linear { min: 0.1, max: 1.0 }),
             )
             .with_unit("%")
             .with_value_to_string(formatters::v2s_f32_percentage(0)),
@@ -1970,9 +1987,9 @@ impl ActuateParams {
                 4.62, // Defualt is half note at 138 bpm
                 FloatRange::Skewed {
                     min: 1.0,
-                    max: 160.0,
-                    factor: 0.4,
-                }, // Based on max bpm of 300
+                    max: 9600.0,
+                    factor: 0.3,
+                }, // Based on max bpm of 300 w/ 32nd notes
             )
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(2))
             .with_callback({
@@ -1984,9 +2001,9 @@ impl ActuateParams {
                 4.62, // Defualt is half note at 138 bpm
                 FloatRange::Skewed {
                     min: 1.0,
-                    max: 160.0,
-                    factor: 0.4,
-                }, // Based on max bpm of 300
+                    max: 9600.0,
+                    factor: 0.3,
+                }, // Based on max bpm of 300 w/ 32nd notes
             )
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(2))
             .with_callback({
@@ -1998,9 +2015,9 @@ impl ActuateParams {
                 4.62, // Defualt is half note at 138 bpm
                 FloatRange::Skewed {
                     min: 1.0,
-                    max: 160.0,
-                    factor: 0.4,
-                }, // Based on max bpm of 300
+                    max: 9600.0,
+                    factor: 0.3,
+                }, // Based on max bpm of 300 w/ 32nd notes
             )
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(2))
             .with_callback({
@@ -2022,12 +2039,12 @@ impl ActuateParams {
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             ),
             lfo2_phase: FloatParam::new(
-                "LFO1 Phase",
+                "LFO2 Phase",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             ),
             lfo3_phase: FloatParam::new(
-                "LFO1 Phase",
+                "LFO3 Phase",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             ),
@@ -3137,18 +3154,18 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
                                                                 ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
                                                                 ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::All_Gain, "All Gain");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1_Gain, "Osc1 Gain");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc2_Gain, "Osc2 Gain");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc3_Gain, "Osc3 Gain");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::All_Detune, "All Detune");
                                                                 ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc2 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc2Detune, "Osc2 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc3Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::All_UniDetune, "All UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::HP_Amount_1, "Highpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::LP_Amount_1, "Lowpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::BP_Amount_1, "Bandpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::HP_Amount_2, "Highpass 2");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::LP_Amount_2, "Lowpass 2");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::BP_Amount_2, "Bandpass 2");
                                                             });
                                                         if *mod_dest_1_tracker.lock().unwrap() != params.mod_destination_1.value() {
                                                             setter.set_parameter( &params.mod_destination_1, mod_dest_1_tracker.lock().unwrap().clone());
@@ -3194,18 +3211,18 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
                                                                 ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
                                                                 ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::All_Gain, "All Gain");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1_Gain, "Osc1 Gain");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc2_Gain, "Osc2 Gain");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc3_Gain, "Osc3 Gain");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::All_Detune, "All Detune");
                                                                 ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc2 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc2Detune, "Osc2 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc3Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::All_UniDetune, "All UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::HP_Amount_1, "Highpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::LP_Amount_1, "Lowpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::BP_Amount_1, "Bandpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::HP_Amount_2, "Highpass 2");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::LP_Amount_2, "Lowpass 2");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::BP_Amount_2, "Bandpass 2");
                                                             });
                                                         if *mod_dest_2_tracker.lock().unwrap() != params.mod_destination_2.value() {
                                                             setter.set_parameter( &params.mod_destination_2, mod_dest_2_tracker.lock().unwrap().clone());
@@ -3251,18 +3268,18 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
                                                                 ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
                                                                 ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::All_Gain, "All Gain");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1_Gain, "Osc1 Gain");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc2_Gain, "Osc2 Gain");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc3_Gain, "Osc3 Gain");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::All_Detune, "All Detune");
                                                                 ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc2 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc2Detune, "Osc2 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc3Detune, "Osc3 Detune");
+                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::All_UniDetune, "All UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::HP_Amount_1, "Highpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::LP_Amount_1, "Lowpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::BP_Amount_1, "Bandpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::HP_Amount_2, "Highpass 2");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::LP_Amount_2, "Lowpass 2");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::BP_Amount_2, "Bandpass 2");
                                                             });
                                                         if *mod_dest_3_tracker.lock().unwrap() != params.mod_destination_3.value() {
                                                             setter.set_parameter( &params.mod_destination_3, mod_dest_3_tracker.lock().unwrap().clone());
@@ -3300,27 +3317,27 @@ impl Plugin for Actuate {
                                                             .font(FONT)
                                                             .color(Color32::BLACK));
                                                         CustomComboBox::ComboBox::new("mod_dest_4_ID", params.mod_destination_4.value().to_string(), true, 17)
-                                                            .selected_text(format!("{:?}", *mod_dest_4_tracker.lock().unwrap()))
-                                                            .width(100.0)
-                                                            .show_ui(ui, |ui|{
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::None, "None");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc2 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc3 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::HP_Amount_1, "Highpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::LP_Amount_1, "Lowpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::BP_Amount_1, "Bandpass 1");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::HP_Amount_2, "Highpass 2");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::LP_Amount_2, "Lowpass 2");
-                                                                ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::BP_Amount_2, "Bandpass 2");
-                                                            });
+                                                        .selected_text(format!("{:?}", *mod_dest_4_tracker.lock().unwrap()))
+                                                        .width(100.0)
+                                                        .show_ui(ui, |ui|{
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::None, "None");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::All_Gain, "All Gain");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1_Gain, "Osc1 Gain");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc2_Gain, "Osc2 Gain");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc3_Gain, "Osc3 Gain");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::All_Detune, "All Detune");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc2Detune, "Osc2 Detune");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc3Detune, "Osc3 Detune");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::All_UniDetune, "All UniDetune");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
+                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
+                                                        });
                                                         if *mod_dest_4_tracker.lock().unwrap() != params.mod_destination_4.value() {
                                                             setter.set_parameter( &params.mod_destination_4, mod_dest_4_tracker.lock().unwrap().clone());
                                                         }
@@ -3417,34 +3434,41 @@ impl Actuate {
         let mut lfo_1_current: f32 = -2.0;
         let mut lfo_2_current: f32 = -2.0;
         let mut lfo_3_current: f32 = -2.0;
-        
+
         // Update our LFOs per each sample
         /////////////////////////////////////////////////////////////////////////////////////////////
         let bpm = context.transport().tempo.unwrap_or(1.0) as f32;
         if self.params.lfo1_enable.value() {
-            lfo_1_current = self.lfo_1.next_sample(self.sample_rate);
-
             // Update LFO Frequency
             if self.params.lfo1_sync.value() {
-                let divisor = match self.params.lfo1_snap.value() {
-                    LFOController::LFOSnapValues::Whole => 1.0,
-                    LFOController::LFOSnapValues::WholeD => 1.5,
-                    LFOController::LFOSnapValues::WholeT => 3.0,
-                    LFOController::LFOSnapValues::Half => 2.0,
-                    LFOController::LFOSnapValues::HalfD => 3.0 * 1.5,
-                    LFOController::LFOSnapValues::HalfT => 6.0,
-                    LFOController::LFOSnapValues::Quarter => 4.0,
-                    LFOController::LFOSnapValues::QuarterD => 4.0 * 1.5,
-                    LFOController::LFOSnapValues::QuarterT => 12.0,
-                    LFOController::LFOSnapValues::Eighth => 8.0,
-                    LFOController::LFOSnapValues::EighthD => 8.0 * 1.5,
-                    LFOController::LFOSnapValues::EighthT => 24.0,
-                    LFOController::LFOSnapValues::Sixteen => 16.0,
-                    LFOController::LFOSnapValues::SixteenD => 16.0 * 1.5,
-                    LFOController::LFOSnapValues::SixteenT => 48.0,
+                let multiplier = match self.params.lfo1_snap.value() {
+                    LFOController::LFOSnapValues::Quad => 0.5 / 3.0,
+                    LFOController::LFOSnapValues::QuadD => (0.5 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::QuadT => 0.5 / 4.5,
+                    LFOController::LFOSnapValues::Double => 1.0 / 3.0,
+                    LFOController::LFOSnapValues::DoubleD => (1.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::DoubleT => 1.0 / 4.5,
+                    LFOController::LFOSnapValues::Whole => 2.0 / 3.0,
+                    LFOController::LFOSnapValues::WholeD => (2.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::WholeT => 2.0 / 4.5,
+                    LFOController::LFOSnapValues::Half => 4.0 / 3.0,
+                    LFOController::LFOSnapValues::HalfD => (4.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::HalfT => 4.0 / 4.5,
+                    LFOController::LFOSnapValues::Quarter => 8.0 / 3.0,
+                    LFOController::LFOSnapValues::QuarterD => (8.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::QuarterT => 8.0 / 4.5,
+                    LFOController::LFOSnapValues::Eighth => 16.0 / 3.0,
+                    LFOController::LFOSnapValues::EighthD => (16.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::EighthT => 16.0 / 4.5,
+                    LFOController::LFOSnapValues::Sixteen => 32.0 / 3.0,
+                    LFOController::LFOSnapValues::SixteenD => (32.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::SixteenT => 32.0 / 4.5,
+                    LFOController::LFOSnapValues::ThirtySecond => 64.0 / 3.0,
+                    LFOController::LFOSnapValues::ThirtySecondD => (64.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::ThirtySecondT => 64.0 / 4.5,
                 };
-
-                let freq_snap = 1.0 / (60.0 / bpm / divisor);
+                let duration = 1.0 / (bpm * multiplier);
+                let freq_snap = 1.0 / duration;
                 if self.params.lfo1_freq.value() != freq_snap {
                     self.lfo_1.set_frequency(freq_snap);
                 }
@@ -3453,42 +3477,43 @@ impl Actuate {
                     self.lfo_1.set_frequency(self.params.lfo1_freq.value());
                 }
             }
-            
+
             // Update LFO Waveform
             if self.params.lfo1_waveform.value() != self.lfo_1.get_waveform() {
                 self.lfo_1.set_waveform(self.params.lfo1_waveform.value());
             }
-
-            /*
-            if self.params.lfo1_phase.value() != self.lfo_1.get_phase() {
-                self.lfo_1.set_frequency(self.params.lfo1_freq.value());
-            }
-            */
         }
         if self.params.lfo2_enable.value() {
-            lfo_2_current = self.lfo_2.next_sample(self.sample_rate);
-
             // Update LFO Frequency
             if self.params.lfo2_sync.value() {
-                let divisor = match self.params.lfo2_snap.value() {
-                    LFOController::LFOSnapValues::Whole => 1.0,
-                    LFOController::LFOSnapValues::WholeD => 1.5,
-                    LFOController::LFOSnapValues::WholeT => 3.0,
-                    LFOController::LFOSnapValues::Half => 2.0,
-                    LFOController::LFOSnapValues::HalfD => 3.0 * 1.5,
-                    LFOController::LFOSnapValues::HalfT => 6.0,
-                    LFOController::LFOSnapValues::Quarter => 4.0,
-                    LFOController::LFOSnapValues::QuarterD => 4.0 * 1.5,
-                    LFOController::LFOSnapValues::QuarterT => 12.0,
-                    LFOController::LFOSnapValues::Eighth => 8.0,
-                    LFOController::LFOSnapValues::EighthD => 8.0 * 1.5,
-                    LFOController::LFOSnapValues::EighthT => 24.0,
-                    LFOController::LFOSnapValues::Sixteen => 16.0,
-                    LFOController::LFOSnapValues::SixteenD => 16.0 * 1.5,
-                    LFOController::LFOSnapValues::SixteenT => 48.0,
+                let multiplier = match self.params.lfo2_snap.value() {
+                    LFOController::LFOSnapValues::Quad => 0.5 / 3.0,
+                    LFOController::LFOSnapValues::QuadD => (0.5 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::QuadT => 0.5 / 4.5,
+                    LFOController::LFOSnapValues::Double => 1.0 / 3.0,
+                    LFOController::LFOSnapValues::DoubleD => (1.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::DoubleT => 1.0 / 4.5,
+                    LFOController::LFOSnapValues::Whole => 2.0 / 3.0,
+                    LFOController::LFOSnapValues::WholeD => (2.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::WholeT => 2.0 / 4.5,
+                    LFOController::LFOSnapValues::Half => 4.0 / 3.0,
+                    LFOController::LFOSnapValues::HalfD => (4.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::HalfT => 4.0 / 4.5,
+                    LFOController::LFOSnapValues::Quarter => 8.0 / 3.0,
+                    LFOController::LFOSnapValues::QuarterD => (8.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::QuarterT => 8.0 / 4.5,
+                    LFOController::LFOSnapValues::Eighth => 16.0 / 3.0,
+                    LFOController::LFOSnapValues::EighthD => (16.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::EighthT => 16.0 / 4.5,
+                    LFOController::LFOSnapValues::Sixteen => 32.0 / 3.0,
+                    LFOController::LFOSnapValues::SixteenD => (32.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::SixteenT => 32.0 / 4.5,
+                    LFOController::LFOSnapValues::ThirtySecond => 64.0 / 3.0,
+                    LFOController::LFOSnapValues::ThirtySecondD => (64.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::ThirtySecondT => 64.0 / 4.5,
                 };
-
-                let freq_snap = 1.0 / (60.0 / bpm / divisor);
+                let duration = 1.0 / (bpm * multiplier);
+                let freq_snap = 1.0 / duration;
                 if self.params.lfo2_freq.value() != freq_snap {
                     self.lfo_2.set_frequency(freq_snap);
                 }
@@ -3497,36 +3522,43 @@ impl Actuate {
                     self.lfo_2.set_frequency(self.params.lfo2_freq.value());
                 }
             }
-            
+
             // Update LFO Waveform
             if self.params.lfo2_waveform.value() != self.lfo_2.get_waveform() {
                 self.lfo_2.set_waveform(self.params.lfo2_waveform.value());
             }
         }
         if self.params.lfo3_enable.value() {
-            lfo_3_current = self.lfo_3.next_sample(self.sample_rate);
-
             // Update LFO Frequency
             if self.params.lfo3_sync.value() {
-                let divisor = match self.params.lfo3_snap.value() {
-                    LFOController::LFOSnapValues::Whole => 1.0,
-                    LFOController::LFOSnapValues::WholeD => 1.5,
-                    LFOController::LFOSnapValues::WholeT => 3.0,
-                    LFOController::LFOSnapValues::Half => 2.0,
-                    LFOController::LFOSnapValues::HalfD => 3.0 * 1.5,
-                    LFOController::LFOSnapValues::HalfT => 6.0,
-                    LFOController::LFOSnapValues::Quarter => 4.0,
-                    LFOController::LFOSnapValues::QuarterD => 4.0 * 1.5,
-                    LFOController::LFOSnapValues::QuarterT => 12.0,
-                    LFOController::LFOSnapValues::Eighth => 8.0,
-                    LFOController::LFOSnapValues::EighthD => 8.0 * 1.5,
-                    LFOController::LFOSnapValues::EighthT => 24.0,
-                    LFOController::LFOSnapValues::Sixteen => 16.0,
-                    LFOController::LFOSnapValues::SixteenD => 16.0 * 1.5,
-                    LFOController::LFOSnapValues::SixteenT => 48.0,
+                let multiplier = match self.params.lfo3_snap.value() {
+                    LFOController::LFOSnapValues::Quad => 0.5 / 3.0,
+                    LFOController::LFOSnapValues::QuadD => (0.5 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::QuadT => 0.5 / 4.5,
+                    LFOController::LFOSnapValues::Double => 1.0 / 3.0,
+                    LFOController::LFOSnapValues::DoubleD => (1.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::DoubleT => 1.0 / 4.5,
+                    LFOController::LFOSnapValues::Whole => 2.0 / 3.0,
+                    LFOController::LFOSnapValues::WholeD => (2.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::WholeT => 2.0 / 4.5,
+                    LFOController::LFOSnapValues::Half => 4.0 / 3.0,
+                    LFOController::LFOSnapValues::HalfD => (4.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::HalfT => 4.0 / 4.5,
+                    LFOController::LFOSnapValues::Quarter => 8.0 / 3.0,
+                    LFOController::LFOSnapValues::QuarterD => (8.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::QuarterT => 8.0 / 4.5,
+                    LFOController::LFOSnapValues::Eighth => 16.0 / 3.0,
+                    LFOController::LFOSnapValues::EighthD => (16.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::EighthT => 16.0 / 4.5,
+                    LFOController::LFOSnapValues::Sixteen => 32.0 / 3.0,
+                    LFOController::LFOSnapValues::SixteenD => (32.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::SixteenT => 32.0 / 4.5,
+                    LFOController::LFOSnapValues::ThirtySecond => 64.0 / 3.0,
+                    LFOController::LFOSnapValues::ThirtySecondD => (64.0 / 3.0) * 1.5,
+                    LFOController::LFOSnapValues::ThirtySecondT => 64.0 / 4.5,
                 };
-
-                let freq_snap = 1.0 / (60.0 / bpm / divisor);
+                let duration = 1.0 / (bpm * multiplier);
+                let freq_snap = 1.0 / duration;
                 if self.params.lfo3_freq.value() != freq_snap {
                     self.lfo_3.set_frequency(freq_snap);
                 }
@@ -3535,7 +3567,7 @@ impl Actuate {
                     self.lfo_3.set_frequency(self.params.lfo3_freq.value());
                 }
             }
-            
+
             // Update LFO Waveform
             if self.params.lfo3_waveform.value() != self.lfo_3.get_waveform() {
                 self.lfo_3.set_waveform(self.params.lfo3_waveform.value());
@@ -3755,41 +3787,102 @@ impl Actuate {
             let mod_value_1: f32;
             let mod_value_2: f32;
             let mod_value_3: f32;
+            let mod_value_4: f32;
 
             mod_value_1 = match self.params.mod_source_1.value() {
-                ModulationSource::None => { -2.0 },
-                ModulationSource::LFO1 => { lfo_1_current },
-                ModulationSource::LFO2 => { lfo_2_current },
-                ModulationSource::LFO3 => { lfo_3_current },
-                ModulationSource::Velocity => { match midi_event.clone().unwrap() {
-                        NoteEvent::NoteOn { velocity, timing: _, voice_id: _, channel: _, note: _ } => { velocity },
-                        _ => { -2.0 },
+                ModulationSource::None => -2.0,
+                ModulationSource::LFO1 => lfo_1_current * self.params.mod_amount_knob_1.value(),
+                ModulationSource::LFO2 => lfo_2_current * self.params.mod_amount_knob_1.value(),
+                ModulationSource::LFO3 => lfo_3_current * self.params.mod_amount_knob_1.value(),
+                ModulationSource::Velocity => {
+                    match midi_event.clone().unwrap_or(NoteEvent::Choke {
+                        timing: 0_u32,
+                        voice_id: Some(0_i32),
+                        channel: 0_u8,
+                        note: 0_u8,
+                    }) {
+                        NoteEvent::NoteOn {
+                            velocity,
+                            timing: _,
+                            voice_id: _,
+                            channel: _,
+                            note: _,
+                        } => (velocity * self.params.mod_amount_knob_1.value()).clamp(0.0, 1.0),
+                        _ => -2.0,
                     }
-                },
+                }
             };
 
             mod_value_2 = match self.params.mod_source_2.value() {
-                ModulationSource::None => { -2.0 },
-                ModulationSource::LFO1 => { lfo_1_current },
-                ModulationSource::LFO2 => { lfo_2_current },
-                ModulationSource::LFO3 => { lfo_3_current },
-                ModulationSource::Velocity => { match midi_event.clone().unwrap() {
-                        NoteEvent::NoteOn { velocity, timing: _, voice_id: _, channel: _, note: _ } => { velocity },
-                        _ => { -2.0 },
+                ModulationSource::None => -2.0,
+                ModulationSource::LFO1 => lfo_1_current * self.params.mod_amount_knob_2.value(),
+                ModulationSource::LFO2 => lfo_2_current * self.params.mod_amount_knob_2.value(),
+                ModulationSource::LFO3 => lfo_3_current * self.params.mod_amount_knob_2.value(),
+                ModulationSource::Velocity => {
+                    match midi_event.clone().unwrap_or(NoteEvent::Choke {
+                        timing: 0_u32,
+                        voice_id: Some(0_i32),
+                        channel: 0_u8,
+                        note: 0_u8,
+                    }) {
+                        NoteEvent::NoteOn {
+                            velocity,
+                            timing: _,
+                            voice_id: _,
+                            channel: _,
+                            note: _,
+                        } => (velocity * self.params.mod_amount_knob_2.value()).clamp(0.0, 1.0),
+                        _ => -2.0,
                     }
-                },
+                }
             };
 
             mod_value_3 = match self.params.mod_source_3.value() {
-                ModulationSource::None => { -2.0 },
-                ModulationSource::LFO1 => { lfo_1_current },
-                ModulationSource::LFO2 => { lfo_2_current },
-                ModulationSource::LFO3 => { lfo_3_current },
-                ModulationSource::Velocity => { match midi_event.clone().unwrap() {
-                        NoteEvent::NoteOn { velocity, timing: _, voice_id: _, channel: _, note: _ } => { velocity },
-                        _ => { -2.0 },
+                ModulationSource::None => -2.0,
+                ModulationSource::LFO1 => lfo_1_current * self.params.mod_amount_knob_3.value(),
+                ModulationSource::LFO2 => lfo_2_current * self.params.mod_amount_knob_3.value(),
+                ModulationSource::LFO3 => lfo_3_current * self.params.mod_amount_knob_3.value(),
+                ModulationSource::Velocity => {
+                    match midi_event.clone().unwrap_or(NoteEvent::Choke {
+                        timing: 0_u32,
+                        voice_id: Some(0_i32),
+                        channel: 0_u8,
+                        note: 0_u8,
+                    }) {
+                        NoteEvent::NoteOn {
+                            velocity,
+                            timing: _,
+                            voice_id: _,
+                            channel: _,
+                            note: _,
+                        } => (velocity * self.params.mod_amount_knob_3.value()).clamp(0.0, 1.0),
+                        _ => -2.0,
                     }
-                },
+                }
+            };
+
+            mod_value_4 = match self.params.mod_source_4.value() {
+                ModulationSource::None => -2.0,
+                ModulationSource::LFO1 => lfo_1_current * self.params.mod_amount_knob_4.value(),
+                ModulationSource::LFO2 => lfo_2_current * self.params.mod_amount_knob_4.value(),
+                ModulationSource::LFO3 => lfo_3_current * self.params.mod_amount_knob_4.value(),
+                ModulationSource::Velocity => {
+                    match midi_event.clone().unwrap_or(NoteEvent::Choke {
+                        timing: 0_u32,
+                        voice_id: Some(0_i32),
+                        channel: 0_u8,
+                        note: 0_u8,
+                    }) {
+                        NoteEvent::NoteOn {
+                            velocity,
+                            timing: _,
+                            voice_id: _,
+                            channel: _,
+                            note: _,
+                        } => (velocity * self.params.mod_amount_knob_4.value()).clamp(0.0, 1.0),
+                        _ => -2.0,
+                    }
+                }
             };
 
             let mut temp_mod_cutoff_1: f32 = 0.0;
@@ -3802,41 +3895,483 @@ impl Actuate {
             let mut temp_mod_uni_detune_1: f32 = 0.0;
             let mut temp_mod_uni_detune_2: f32 = 0.0;
             let mut temp_mod_uni_detune_3: f32 = 0.0;
-            let mut temp_mod_hp_1: f32 = 0.0;
-            let mut temp_mod_hp_2: f32 = 0.0;
-            let mut temp_mod_bp_1: f32 = 0.0;
-            let mut temp_mod_bp_2: f32 = 0.0;
-            let mut temp_mod_lp_1: f32 = 0.0;
-            let mut temp_mod_lp_2: f32 = 0.0;
+            // These are used for velocity to detune linkages
+            let mut temp_mod_vel_sum: f32 = 0.0;
+            let mut temp_mod_uni_vel_sum: f32 = 0.0;
+            let mut temp_mod_gain_1: bool = false;
+            let mut temp_mod_gain_2: bool = false;
+            let mut temp_mod_gain_3: bool = false;
+            let mut temp_mod_lfo_gain_1: f32 = 1.0;
+            let mut temp_mod_lfo_gain_2: f32 = 1.0;
+            let mut temp_mod_lfo_gain_3: f32 = 1.0;
+            // Modulation structs to pass things
+            let mut modulations_1: ModulationStruct;
+            let mut modulations_2: ModulationStruct;
+            let mut modulations_3: ModulationStruct;
+            let mut modulations_4: ModulationStruct;
             if mod_value_1 != -2.0 {
                 match self.params.mod_destination_1.value() {
-                    ModulationDestination::None => {},
-                    ModulationDestination::Cutoff_1 => { temp_mod_cutoff_1 = 5000.0 * mod_value_1; },
-                    ModulationDestination::Cutoff_2 => { temp_mod_cutoff_2 = 5000.0 * mod_value_1; },
-                    ModulationDestination::Resonance_1 => { temp_mod_resonance_1 = 1.0 * mod_value_1; },
-                    ModulationDestination::Resonance_2 => { temp_mod_resonance_2 = 1.0 * mod_value_1; },
-                    fill these in
-                    ModulationDestination::Osc1Detune => todo!(),
-                    ModulationDestination::Osc2Detune => todo!(),
-                    ModulationDestination::Osc3Detune => todo!(),
-                    ModulationDestination::Osc1UniDetune => todo!(),
-                    ModulationDestination::Osc2UniDetune => todo!(),
-                    ModulationDestination::Osc3UniDetune => todo!(),
-                    ModulationDestination::HP_Amount_1 => todo!(),
-                    ModulationDestination::LP_Amount_1 => todo!(),
-                    ModulationDestination::BP_Amount_1 => todo!(),
-                    ModulationDestination::HP_Amount_2 => todo!(),
-                    ModulationDestination::LP_Amount_2 => todo!(),
-                    ModulationDestination::BP_Amount_2 => todo!(),
+                    ModulationDestination::None => {}
+                    ModulationDestination::Cutoff_1 => {
+                        temp_mod_cutoff_1 += 5000.0 * mod_value_1;
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        temp_mod_cutoff_2 += 5000.0 * mod_value_1;
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        temp_mod_resonance_1 += mod_value_1;
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        temp_mod_resonance_2 += mod_value_1;
+                    }
+                    ModulationDestination::All_Detune => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_1;
+                        }
+                        temp_mod_detune_1 += mod_value_1;
+                        temp_mod_detune_2 += mod_value_1;
+                        temp_mod_detune_3 += mod_value_1;
+                    }
+                    ModulationDestination::Osc1Detune => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_1;
+                        }
+                        temp_mod_detune_1 += mod_value_1;
+                    }
+                    ModulationDestination::Osc2Detune => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_1;
+                        }
+                        temp_mod_detune_2 += mod_value_1;
+                    }
+                    ModulationDestination::Osc3Detune => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_1;
+                        }
+                        temp_mod_detune_3 += mod_value_1;
+                    }
+                    ModulationDestination::All_UniDetune => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_1;
+                        }
+                        temp_mod_uni_detune_1 += mod_value_1;
+                        temp_mod_uni_detune_2 += mod_value_1;
+                        temp_mod_uni_detune_3 += mod_value_1;
+                    }
+                    ModulationDestination::Osc1UniDetune => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_1;
+                        }
+                        temp_mod_uni_detune_1 += mod_value_1;
+                    }
+                    ModulationDestination::Osc2UniDetune => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_1;
+                        }
+                        temp_mod_uni_detune_2 += mod_value_1;
+                    }
+                    ModulationDestination::Osc3UniDetune => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_1;
+                        }
+                        temp_mod_uni_detune_3 += mod_value_1;
+                    }
+                    ModulationDestination::All_Gain => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = true;
+                            temp_mod_gain_2 = true;
+                            temp_mod_gain_3 = true;
+                        } else {
+                            temp_mod_lfo_gain_1 = mod_value_1;
+                            temp_mod_lfo_gain_2 = mod_value_1;
+                            temp_mod_lfo_gain_3 = mod_value_1;
+                        }
+                    }
+                    ModulationDestination::Osc1_Gain => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = true;
+                        } else {
+                            temp_mod_lfo_gain_1 = mod_value_1;
+                        }
+                    }
+                    ModulationDestination::Osc2_Gain => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_gain_2 = true;
+                        } else {
+                            temp_mod_lfo_gain_2 = mod_value_1;
+                        }
+                    }
+                    ModulationDestination::Osc3_Gain => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_gain_3 = true;
+                        } else {
+                            temp_mod_lfo_gain_3 = mod_value_1;
+                        }
+                    }
+                }
+            }
+            if mod_value_2 != -2.0 {
+                match self.params.mod_destination_2.value() {
+                    ModulationDestination::None => {}
+                    ModulationDestination::Cutoff_1 => {
+                        temp_mod_cutoff_1 += 5000.0 * mod_value_2;
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        temp_mod_cutoff_2 += 5000.0 * mod_value_2;
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        temp_mod_resonance_1 += mod_value_2;
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        temp_mod_resonance_2 += mod_value_2;
+                    }
+                    ModulationDestination::All_Detune => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_2;
+                        }
+                        temp_mod_detune_1 += mod_value_2;
+                        temp_mod_detune_2 += mod_value_2;
+                        temp_mod_detune_3 += mod_value_2;
+                    }
+                    ModulationDestination::Osc1Detune => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_2;
+                        }
+                        temp_mod_detune_1 += mod_value_2;
+                    }
+                    ModulationDestination::Osc2Detune => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_2;
+                        }
+                        temp_mod_detune_2 += mod_value_2;
+                    }
+                    ModulationDestination::Osc3Detune => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_2;
+                        }
+                        temp_mod_detune_3 += mod_value_2;
+                    }
+                    ModulationDestination::All_UniDetune => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_2;
+                        }
+                        temp_mod_uni_detune_1 += mod_value_2;
+                        temp_mod_uni_detune_2 += mod_value_2;
+                        temp_mod_uni_detune_3 += mod_value_2;
+                    }
+                    ModulationDestination::Osc1UniDetune => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_2;
+                        }
+                        temp_mod_uni_detune_1 += mod_value_2;
+                    }
+                    ModulationDestination::Osc2UniDetune => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_2;
+                        }
+                        temp_mod_uni_detune_2 += mod_value_2;
+                    }
+                    ModulationDestination::Osc3UniDetune => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_2;
+                        }
+                        temp_mod_uni_detune_3 += mod_value_2;
+                    }
+                    ModulationDestination::All_Gain => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = true;
+                            temp_mod_gain_2 = true;
+                            temp_mod_gain_3 = true;
+                        } else {
+                            temp_mod_lfo_gain_1 = mod_value_2;
+                            temp_mod_lfo_gain_2 = mod_value_2;
+                            temp_mod_lfo_gain_3 = mod_value_2;
+                        }
+                    }
+                    ModulationDestination::Osc1_Gain => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = true;
+                        } else {
+                            temp_mod_lfo_gain_1 = mod_value_2;
+                        }
+                    }
+                    ModulationDestination::Osc2_Gain => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_gain_2 = true;
+                        } else {
+                            temp_mod_lfo_gain_2 = mod_value_2;
+                        }
+                    }
+                    ModulationDestination::Osc3_Gain => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_gain_3 = true;
+                        } else {
+                            temp_mod_lfo_gain_3 = mod_value_2;
+                        }
+                    }
+                }
+            }
+            if mod_value_3 != -2.0 {
+                match self.params.mod_destination_3.value() {
+                    ModulationDestination::None => {}
+                    ModulationDestination::Cutoff_1 => {
+                        temp_mod_cutoff_1 += 5000.0 * mod_value_3;
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        temp_mod_cutoff_2 += 5000.0 * mod_value_3;
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        temp_mod_resonance_1 += mod_value_3;
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        temp_mod_resonance_2 += mod_value_3;
+                    }
+                    ModulationDestination::All_Detune => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_3;
+                        }
+                        temp_mod_detune_1 += mod_value_3;
+                        temp_mod_detune_2 += mod_value_3;
+                        temp_mod_detune_3 += mod_value_3;
+                    }
+                    ModulationDestination::Osc1Detune => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_3;
+                        }
+                        temp_mod_detune_1 += mod_value_3;
+                    }
+                    ModulationDestination::Osc2Detune => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_3;
+                        }
+                        temp_mod_detune_2 += mod_value_3;
+                    }
+                    ModulationDestination::Osc3Detune => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_3;
+                        }
+                        temp_mod_detune_3 += mod_value_3;
+                    }
+                    ModulationDestination::All_UniDetune => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_3;
+                        }
+                        temp_mod_uni_detune_1 += mod_value_3;
+                        temp_mod_uni_detune_2 += mod_value_3;
+                        temp_mod_uni_detune_3 += mod_value_3;
+                    }
+                    ModulationDestination::Osc1UniDetune => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_3;
+                        }
+                        temp_mod_uni_detune_1 += mod_value_3;
+                    }
+                    ModulationDestination::Osc2UniDetune => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_3;
+                        }
+                        temp_mod_uni_detune_2 += mod_value_3;
+                    }
+                    ModulationDestination::Osc3UniDetune => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_3;
+                        }
+                        temp_mod_uni_detune_3 += mod_value_3;
+                    }
+                    ModulationDestination::All_Gain => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = true;
+                            temp_mod_gain_2 = true;
+                            temp_mod_gain_3 = true;
+                        } else {
+                            temp_mod_lfo_gain_1 = mod_value_3;
+                            temp_mod_lfo_gain_2 = mod_value_3;
+                            temp_mod_lfo_gain_3 = mod_value_3;
+                        }
+                    }
+                    ModulationDestination::Osc1_Gain => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = true;
+                        } else {
+                            temp_mod_lfo_gain_1 = mod_value_3;
+                        }
+                    }
+                    ModulationDestination::Osc2_Gain => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_gain_2 = true;
+                        } else {
+                            temp_mod_lfo_gain_2 = mod_value_3;
+                        }
+                    }
+                    ModulationDestination::Osc3_Gain => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_gain_3 = true;
+                        } else {
+                            temp_mod_lfo_gain_3 = mod_value_3;
+                        }
+                    }
+                }
+            }
+            if mod_value_4 != -2.0 {
+                match self.params.mod_destination_1.value() {
+                    ModulationDestination::None => {}
+                    ModulationDestination::Cutoff_1 => {
+                        temp_mod_cutoff_1 += 5000.0 * mod_value_4;
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        temp_mod_cutoff_2 += 5000.0 * mod_value_4;
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        temp_mod_resonance_1 += mod_value_4;
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        temp_mod_resonance_2 += mod_value_4;
+                    }
+                    ModulationDestination::All_Detune => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_4;
+                        }
+                        temp_mod_detune_1 += mod_value_4;
+                        temp_mod_detune_2 += mod_value_4;
+                        temp_mod_detune_3 += mod_value_4;
+                    }
+                    ModulationDestination::Osc1Detune => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_4;
+                        }
+                        temp_mod_detune_1 += mod_value_4;
+                    }
+                    ModulationDestination::Osc2Detune => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_4;
+                        }
+                        temp_mod_detune_2 += mod_value_4;
+                    }
+                    ModulationDestination::Osc3Detune => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_4;
+                        }
+                        temp_mod_detune_3 += mod_value_4;
+                    }
+                    ModulationDestination::All_UniDetune => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_vel_sum += mod_value_4;
+                        }
+                        temp_mod_uni_detune_1 += mod_value_4;
+                        temp_mod_uni_detune_2 += mod_value_4;
+                        temp_mod_uni_detune_3 += mod_value_4;
+                    }
+                    ModulationDestination::Osc1UniDetune => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_4;
+                        }
+                        temp_mod_uni_detune_1 += mod_value_4;
+                    }
+                    ModulationDestination::Osc2UniDetune => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_4;
+                        }
+                        temp_mod_uni_detune_2 += mod_value_4;
+                    }
+                    ModulationDestination::Osc3UniDetune => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_uni_vel_sum += mod_value_4;
+                        }
+                        temp_mod_uni_detune_3 += mod_value_4;
+                    }
+                    ModulationDestination::All_Gain => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = true;
+                            temp_mod_gain_2 = true;
+                            temp_mod_gain_3 = true;
+                        } else {
+                            temp_mod_lfo_gain_1 = mod_value_4;
+                            temp_mod_lfo_gain_2 = mod_value_4;
+                            temp_mod_lfo_gain_3 = mod_value_4;
+                        }
+                    }
+                    ModulationDestination::Osc1_Gain => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = true;
+                        } else {
+                            temp_mod_lfo_gain_1 = mod_value_4;
+                        }
+                    }
+                    ModulationDestination::Osc2_Gain => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_gain_2 = true;
+                        } else {
+                            temp_mod_lfo_gain_2 = mod_value_4;
+                        }
+                    }
+                    ModulationDestination::Osc3_Gain => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_gain_3 = true;
+                        } else {
+                            temp_mod_lfo_gain_3 = mod_value_4;
+                        }
+                    }
                 }
             }
 
-
-
+            // I think this makes sense to split into structs so each modulation path has its own easily debuggable chain
+            modulations_1 = ModulationStruct {
+                temp_mod_cutoff_1: temp_mod_cutoff_1,
+                temp_mod_cutoff_2: temp_mod_cutoff_2,
+                temp_mod_resonance_1: temp_mod_resonance_1,
+                temp_mod_resonance_2: temp_mod_resonance_2,
+                temp_mod_detune_1: temp_mod_detune_1,
+                temp_mod_detune_2: temp_mod_detune_2,
+                temp_mod_detune_3: temp_mod_detune_3,
+                temp_mod_uni_detune_1: temp_mod_uni_detune_1,
+                temp_mod_uni_detune_2: temp_mod_uni_detune_2,
+                temp_mod_uni_detune_3: temp_mod_uni_detune_3,
+                temp_mod_vel_sum: temp_mod_vel_sum,
+            };
+            modulations_2 = ModulationStruct {
+                temp_mod_cutoff_1: temp_mod_cutoff_1,
+                temp_mod_cutoff_2: temp_mod_cutoff_2,
+                temp_mod_resonance_1: temp_mod_resonance_1,
+                temp_mod_resonance_2: temp_mod_resonance_2,
+                temp_mod_detune_1: temp_mod_detune_1,
+                temp_mod_detune_2: temp_mod_detune_2,
+                temp_mod_detune_3: temp_mod_detune_3,
+                temp_mod_uni_detune_1: temp_mod_uni_detune_1,
+                temp_mod_uni_detune_2: temp_mod_uni_detune_2,
+                temp_mod_uni_detune_3: temp_mod_uni_detune_3,
+                temp_mod_vel_sum: temp_mod_vel_sum,
+            };
+            modulations_3 = ModulationStruct {
+                temp_mod_cutoff_1: temp_mod_cutoff_1,
+                temp_mod_cutoff_2: temp_mod_cutoff_2,
+                temp_mod_resonance_1: temp_mod_resonance_1,
+                temp_mod_resonance_2: temp_mod_resonance_2,
+                temp_mod_detune_1: temp_mod_detune_1,
+                temp_mod_detune_2: temp_mod_detune_2,
+                temp_mod_detune_3: temp_mod_detune_3,
+                temp_mod_uni_detune_1: temp_mod_uni_detune_1,
+                temp_mod_uni_detune_2: temp_mod_uni_detune_2,
+                temp_mod_uni_detune_3: temp_mod_uni_detune_3,
+                temp_mod_vel_sum: temp_mod_vel_sum,
+            };
+            modulations_4 = ModulationStruct {
+                temp_mod_cutoff_1: temp_mod_cutoff_1,
+                temp_mod_cutoff_2: temp_mod_cutoff_2,
+                temp_mod_resonance_1: temp_mod_resonance_1,
+                temp_mod_resonance_2: temp_mod_resonance_2,
+                temp_mod_detune_1: temp_mod_detune_1,
+                temp_mod_detune_2: temp_mod_detune_2,
+                temp_mod_detune_3: temp_mod_detune_3,
+                temp_mod_uni_detune_1: temp_mod_uni_detune_1,
+                temp_mod_uni_detune_2: temp_mod_uni_detune_2,
+                temp_mod_uni_detune_3: temp_mod_uni_detune_3,
+                temp_mod_vel_sum: temp_mod_vel_sum,
+            };
 
             // Audio Module Processing of Audio kicks off here
             /////////////////////////////////////////////////////////////////////////////////////////////////
 
+            let mut current_note_on_velocity: f32 = 0.0;
             // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::Relaxed)
                 && self.params._audio_module_1_type.value() != AudioModuleType::Off
@@ -3847,10 +4382,23 @@ impl Actuate {
                     wave1_r,
                     reset_filter_controller1,
                     note_off_filter_controller1,
+                    current_note_on_velocity,
                 ) = self.audio_module_1.clone().lock().unwrap().process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
+                    modulations_1.temp_mod_detune_1
+                        + modulations_2.temp_mod_detune_1
+                        + modulations_3.temp_mod_detune_1
+                        + modulations_4.temp_mod_detune_1,
+                    modulations_1.temp_mod_uni_detune_1
+                        + modulations_2.temp_mod_uni_detune_1
+                        + modulations_3.temp_mod_uni_detune_1
+                        + modulations_4.temp_mod_uni_detune_1,
+                    temp_mod_vel_sum,
+                    temp_mod_uni_vel_sum,
+                    temp_mod_gain_1,
+                    temp_mod_lfo_gain_1,
                 );
                 wave1_l *= self.params.audio_module_1_level.value();
                 wave1_r *= self.params.audio_module_1_level.value();
@@ -3863,10 +4411,23 @@ impl Actuate {
                     wave2_r,
                     reset_filter_controller2,
                     note_off_filter_controller2,
+                    current_note_on_velocity,
                 ) = self.audio_module_2.clone().lock().unwrap().process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
+                    modulations_1.temp_mod_detune_2
+                        + modulations_2.temp_mod_detune_2
+                        + modulations_3.temp_mod_detune_2
+                        + modulations_4.temp_mod_detune_2,
+                    modulations_1.temp_mod_uni_detune_2
+                        + modulations_2.temp_mod_uni_detune_2
+                        + modulations_3.temp_mod_uni_detune_2
+                        + modulations_4.temp_mod_uni_detune_2,
+                    temp_mod_vel_sum,
+                    temp_mod_uni_vel_sum,
+                    temp_mod_gain_2,
+                    temp_mod_lfo_gain_2,
                 );
                 wave2_l *= self.params.audio_module_2_level.value();
                 wave2_r *= self.params.audio_module_2_level.value();
@@ -3879,14 +4440,33 @@ impl Actuate {
                     wave3_r,
                     reset_filter_controller3,
                     note_off_filter_controller3,
+                    current_note_on_velocity,
                 ) = self.audio_module_3.clone().lock().unwrap().process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
+                    modulations_1.temp_mod_detune_3
+                        + modulations_2.temp_mod_detune_3
+                        + modulations_3.temp_mod_detune_3
+                        + modulations_4.temp_mod_detune_3,
+                    modulations_1.temp_mod_uni_detune_3
+                        + modulations_2.temp_mod_uni_detune_3
+                        + modulations_3.temp_mod_uni_detune_3
+                        + modulations_4.temp_mod_uni_detune_3,
+                    temp_mod_vel_sum,
+                    temp_mod_uni_vel_sum,
+                    temp_mod_gain_3,
+                    temp_mod_lfo_gain_3,
                 );
                 wave3_l *= self.params.audio_module_3_level.value();
                 wave3_r *= self.params.audio_module_3_level.value();
             }
+
+            // Reassign new current velocity if note on just happened
+            modulations_1.temp_mod_vel_sum = current_note_on_velocity * mod_value_1;
+            modulations_2.temp_mod_vel_sum = current_note_on_velocity * mod_value_2;
+            modulations_3.temp_mod_vel_sum = current_note_on_velocity * mod_value_3;
+            modulations_4.temp_mod_vel_sum = current_note_on_velocity * mod_value_4;
 
             /////////////////////////////////////////////////////////////////////////////////////////////////
             // Audio Module Processing over
@@ -3902,6 +4482,17 @@ impl Actuate {
                 if self.params.lfo3_sync.value() {
                     self.lfo_3.set_phase(self.params.lfo3_phase.value());
                 }
+            }
+
+            // Get our new LFO values
+            if self.params.lfo1_enable.value() {
+                lfo_1_current = self.lfo_1.next_sample(self.sample_rate);
+            }
+            if self.params.lfo2_enable.value() {
+                lfo_2_current = self.lfo_2.next_sample(self.sample_rate);
+            }
+            if self.params.lfo3_enable.value() {
+                lfo_3_current = self.lfo_3.next_sample(self.sample_rate);
             }
 
             // Define the outputs for filter routing or non-filter routing
@@ -3979,6 +4570,87 @@ impl Actuate {
             let mut filter1_processed_r: f32 = 0.0;
             let mut filter2_processed_l: f32 = 0.0;
             let mut filter2_processed_r: f32 = 0.0;
+            let mut vel_cutoff_1: f32 = 0.0;
+            let mut vel_cutoff_2: f32 = 0.0;
+            let mut vel_resonance_1: f32 = 0.0;
+            let mut vel_resonance_2: f32 = 0.0;
+            if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                match self.params.mod_destination_1.value() {
+                    ModulationDestination::Cutoff_1 => {
+                        vel_cutoff_1 =
+                            ((modulations_1.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        vel_cutoff_2 =
+                            ((modulations_1.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        vel_resonance_1 = (1.0 - (modulations_1.temp_mod_vel_sum)).clamp(0.0, 1.0);
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        vel_resonance_2 = (1.0 - (modulations_1.temp_mod_vel_sum)).clamp(0.0, 1.0);
+                    }
+                    _ => {}
+                }
+            }
+            if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                match self.params.mod_destination_2.value() {
+                    ModulationDestination::Cutoff_1 => {
+                        vel_cutoff_1 =
+                            ((modulations_2.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        vel_cutoff_2 =
+                            ((modulations_2.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        vel_resonance_1 = (1.0 - (modulations_2.temp_mod_vel_sum)).clamp(0.0, 1.0);
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        vel_resonance_2 = (1.0 - (modulations_2.temp_mod_vel_sum)).clamp(0.0, 1.0);
+                    }
+                    _ => {}
+                }
+            }
+            if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                match self.params.mod_destination_3.value() {
+                    ModulationDestination::Cutoff_1 => {
+                        vel_cutoff_1 =
+                            ((modulations_3.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        vel_cutoff_2 =
+                            ((modulations_3.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        vel_resonance_1 = (1.0 - (modulations_3.temp_mod_vel_sum)).clamp(0.0, 1.0);
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        vel_resonance_2 = (1.0 - (modulations_3.temp_mod_vel_sum)).clamp(0.0, 1.0);
+                    }
+                    _ => {}
+                }
+            }
+            if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                match self.params.mod_destination_4.value() {
+                    ModulationDestination::Cutoff_1 => {
+                        vel_cutoff_1 =
+                            ((modulations_4.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        vel_cutoff_2 =
+                            ((modulations_4.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        vel_resonance_1 = (1.0 - (modulations_4.temp_mod_vel_sum)).clamp(0.0, 1.0);
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        vel_resonance_2 = (1.0 - (modulations_4.temp_mod_vel_sum)).clamp(0.0, 1.0);
+                    }
+                    _ => {}
+                }
+            }
+
             match self.params.filter_routing.value() {
                 FilterRouting::Parallel => {
                     self.filter_process_1(
@@ -3992,6 +4664,16 @@ impl Actuate {
                         right_output_filter1,
                         &mut filter1_processed_l,
                         &mut filter1_processed_r,
+                        modulations_1.temp_mod_cutoff_1
+                            + modulations_2.temp_mod_cutoff_1
+                            + modulations_3.temp_mod_cutoff_1
+                            + modulations_4.temp_mod_cutoff_1
+                            + vel_cutoff_1,
+                        modulations_1.temp_mod_resonance_1
+                            + modulations_2.temp_mod_resonance_1
+                            + modulations_3.temp_mod_resonance_1
+                            + modulations_4.temp_mod_resonance_1
+                            + vel_resonance_1,
                     );
                     self.filter_process_2(
                         note_off_filter_controller1,
@@ -4004,6 +4686,16 @@ impl Actuate {
                         right_output_filter2,
                         &mut filter2_processed_l,
                         &mut filter2_processed_r,
+                        modulations_1.temp_mod_cutoff_2
+                            + modulations_2.temp_mod_cutoff_2
+                            + modulations_3.temp_mod_cutoff_2
+                            + modulations_4.temp_mod_cutoff_2
+                            + vel_cutoff_2,
+                        modulations_1.temp_mod_resonance_2
+                            + modulations_2.temp_mod_resonance_2
+                            + modulations_3.temp_mod_resonance_2
+                            + modulations_4.temp_mod_resonance_2
+                            + vel_resonance_2,
                     );
                     left_output += filter1_processed_l + filter2_processed_l;
                     right_output += filter1_processed_r + filter2_processed_r;
@@ -4020,6 +4712,16 @@ impl Actuate {
                         right_output_filter1,
                         &mut filter1_processed_l,
                         &mut filter1_processed_r,
+                        modulations_1.temp_mod_cutoff_1
+                            + modulations_2.temp_mod_cutoff_1
+                            + modulations_3.temp_mod_cutoff_1
+                            + modulations_4.temp_mod_cutoff_1
+                            + vel_cutoff_1,
+                        modulations_1.temp_mod_resonance_1
+                            + modulations_2.temp_mod_resonance_1
+                            + modulations_3.temp_mod_resonance_1
+                            + modulations_4.temp_mod_resonance_1
+                            + vel_resonance_1,
                     );
                     self.filter_process_2(
                         note_off_filter_controller1,
@@ -4032,6 +4734,16 @@ impl Actuate {
                         filter1_processed_r,
                         &mut filter2_processed_l,
                         &mut filter2_processed_r,
+                        modulations_1.temp_mod_cutoff_2
+                            + modulations_2.temp_mod_cutoff_2
+                            + modulations_3.temp_mod_cutoff_2
+                            + modulations_4.temp_mod_cutoff_2
+                            + vel_cutoff_2,
+                        modulations_1.temp_mod_resonance_2
+                            + modulations_2.temp_mod_resonance_2
+                            + modulations_3.temp_mod_resonance_2
+                            + modulations_4.temp_mod_resonance_2
+                            + vel_resonance_2,
                     );
                     left_output += filter2_processed_l;
                     right_output += filter2_processed_r;
@@ -4048,6 +4760,16 @@ impl Actuate {
                         right_output_filter2,
                         &mut filter2_processed_l,
                         &mut filter2_processed_r,
+                        modulations_1.temp_mod_cutoff_2
+                            + modulations_2.temp_mod_cutoff_2
+                            + modulations_3.temp_mod_cutoff_2
+                            + modulations_4.temp_mod_cutoff_2
+                            + vel_cutoff_2,
+                        modulations_1.temp_mod_resonance_2
+                            + modulations_2.temp_mod_resonance_2
+                            + modulations_3.temp_mod_resonance_2
+                            + modulations_4.temp_mod_resonance_2
+                            + vel_resonance_2,
                     );
                     self.filter_process_1(
                         note_off_filter_controller1,
@@ -4060,6 +4782,16 @@ impl Actuate {
                         filter2_processed_r,
                         &mut filter1_processed_l,
                         &mut filter1_processed_r,
+                        modulations_1.temp_mod_cutoff_1
+                            + modulations_2.temp_mod_cutoff_1
+                            + modulations_3.temp_mod_cutoff_1
+                            + modulations_4.temp_mod_cutoff_1
+                            + vel_cutoff_1,
+                        modulations_1.temp_mod_resonance_1
+                            + modulations_2.temp_mod_resonance_1
+                            + modulations_3.temp_mod_resonance_1
+                            + modulations_4.temp_mod_resonance_1
+                            + vel_resonance_1,
                     );
                     left_output += filter1_processed_l;
                     right_output += filter1_processed_r;
@@ -4417,6 +5149,42 @@ impl Actuate {
         );
         setter.set_parameter(&params.start_position_3, loaded_preset.mod3_start_position);
         setter.set_parameter(&params.end_position_3, loaded_preset.mod3_end_position);
+
+        setter.set_parameter(&params.lfo1_enable, loaded_preset.lfo1_enable);
+        setter.set_parameter(&params.lfo1_freq, loaded_preset.lfo1_freq);
+        setter.set_parameter(&params.lfo1_phase, loaded_preset.lfo1_phase);
+        setter.set_parameter(&params.lfo1_retrigger, loaded_preset.lfo1_retrigger);
+        setter.set_parameter(&params.lfo1_snap, loaded_preset.lfo1_snap);
+        setter.set_parameter(&params.lfo1_sync, loaded_preset.lfo1_sync);
+        setter.set_parameter(&params.lfo1_waveform, loaded_preset.lfo1_waveform);
+        setter.set_parameter(&params.lfo2_enable, loaded_preset.lfo2_enable);
+        setter.set_parameter(&params.lfo2_freq, loaded_preset.lfo2_freq);
+        setter.set_parameter(&params.lfo2_phase, loaded_preset.lfo2_phase);
+        setter.set_parameter(&params.lfo2_retrigger, loaded_preset.lfo2_retrigger);
+        setter.set_parameter(&params.lfo2_snap, loaded_preset.lfo2_snap);
+        setter.set_parameter(&params.lfo2_sync, loaded_preset.lfo2_sync);
+        setter.set_parameter(&params.lfo2_waveform, loaded_preset.lfo2_waveform);
+        setter.set_parameter(&params.lfo3_enable, loaded_preset.lfo3_enable);
+        setter.set_parameter(&params.lfo3_freq, loaded_preset.lfo3_freq);
+        setter.set_parameter(&params.lfo3_phase, loaded_preset.lfo3_phase);
+        setter.set_parameter(&params.lfo3_retrigger, loaded_preset.lfo3_retrigger);
+        setter.set_parameter(&params.lfo3_snap, loaded_preset.lfo3_snap);
+        setter.set_parameter(&params.lfo3_sync, loaded_preset.lfo3_sync);
+        setter.set_parameter(&params.lfo3_waveform, loaded_preset.lfo3_waveform);
+
+        setter.set_parameter(&params.mod_amount_knob_1, loaded_preset.mod_amount_1);
+        setter.set_parameter(&params.mod_destination_1, loaded_preset.mod_dest_1.clone());
+        setter.set_parameter(&params.mod_source_1, loaded_preset.mod_source_1.clone());
+        setter.set_parameter(&params.mod_amount_knob_2, loaded_preset.mod_amount_2);
+        setter.set_parameter(&params.mod_destination_2, loaded_preset.mod_dest_2.clone());
+        setter.set_parameter(&params.mod_source_2, loaded_preset.mod_source_2.clone());
+        setter.set_parameter(&params.mod_amount_knob_3, loaded_preset.mod_amount_3);
+        setter.set_parameter(&params.mod_destination_3, loaded_preset.mod_dest_3.clone());
+        setter.set_parameter(&params.mod_source_3, loaded_preset.mod_source_3.clone());
+        setter.set_parameter(&params.mod_amount_knob_4, loaded_preset.mod_amount_4);
+        setter.set_parameter(&params.mod_destination_4, loaded_preset.mod_dest_4.clone());
+        setter.set_parameter(&params.mod_source_4, loaded_preset.mod_source_4.clone());
+
         setter.set_parameter(&params.filter_wet, loaded_preset.filter_wet);
         setter.set_parameter(&params.filter_cutoff, loaded_preset.filter_cutoff);
         setter.set_parameter(&params.filter_resonance, loaded_preset.filter_resonance);
@@ -4721,6 +5489,8 @@ impl Actuate {
         right_input_filter1: f32,
         left_output: &mut f32,
         right_output: &mut f32,
+        filter_cutoff_mod: f32,
+        filter_resonance_mod: f32,
     ) {
         // Filter 1 Processing
         ///////////////////////////////////////////////////////////////
@@ -4746,12 +5516,14 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_1.reset(
-                    self.params.filter_cutoff.value()
+                    (self.params.filter_cutoff.value() + filter_cutoff_mod)
                         * (self.params.filter_env_sustain.value() / 999.9),
                 );
                 // Move release to the cutoff to end
-                self.filter_rel_smoother_1
-                    .set_target(self.sample_rate, self.params.filter_cutoff.value());
+                self.filter_rel_smoother_1.set_target(
+                    self.sample_rate,
+                    self.params.filter_cutoff.value() + filter_cutoff_mod,
+                );
             }
             // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
             if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
@@ -4771,12 +5543,14 @@ impl Actuate {
                 };
                 // Reset our attack to start from the filter cutoff
                 self.filter_atk_smoother_1
-                    .reset(self.params.filter_cutoff.value());
+                    .reset(self.params.filter_cutoff.value() + filter_cutoff_mod);
                 // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
                 self.filter_atk_smoother_1.set_target(
                     self.sample_rate,
-                    (self.params.filter_cutoff.value() + self.params.filter_env_peak.value())
-                        .clamp(20.0, 16000.0),
+                    (self.params.filter_cutoff.value()
+                        + filter_cutoff_mod
+                        + self.params.filter_env_peak.value())
+                    .clamp(20.0, 16000.0),
                 );
             }
             // If our attack has finished
@@ -4797,13 +5571,15 @@ impl Actuate {
                 };
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_1.reset(
-                    (self.params.filter_cutoff.value() + self.params.filter_env_peak.value())
-                        .clamp(20.0, 16000.0),
+                    (self.params.filter_cutoff.value()
+                        + filter_cutoff_mod
+                        + self.params.filter_env_peak.value())
+                    .clamp(20.0, 16000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_1.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff.value()
+                    (self.params.filter_cutoff.value() + filter_cutoff_mod)
                         * (self.params.filter_env_sustain.value() / 999.9),
                 );
             }
@@ -4819,12 +5595,12 @@ impl Actuate {
                 OscState::Decaying | OscState::Sustaining => self.filter_dec_smoother_1.next(),
                 OscState::Releasing => self.filter_rel_smoother_1.next(),
                 // I don't expect this to be used
-                _ => self.params.filter_cutoff.value(),
+                _ => self.params.filter_cutoff.value() + filter_cutoff_mod,
             };
             // Filtering before output
             self.filter_l_1.update(
                 next_filter_step,
-                self.params.filter_resonance.value(),
+                self.params.filter_resonance.value() + filter_resonance_mod,
                 self.sample_rate,
                 self.params.filter_res_type.value(),
             );
@@ -4867,6 +5643,8 @@ impl Actuate {
         right_input_filter2: f32,
         left_output: &mut f32,
         right_output: &mut f32,
+        filter_cutoff_mod: f32,
+        filter_resonance_mod: f32,
     ) {
         // Filter 2 Processing
         ///////////////////////////////////////////////////////////////
@@ -4892,12 +5670,14 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_2.reset(
-                    self.params.filter_cutoff_2.value()
+                    (self.params.filter_cutoff_2.value() + filter_cutoff_mod)
                         * (self.params.filter_env_sustain_2.value() / 999.9),
                 );
                 // Move release to the cutoff to end
-                self.filter_rel_smoother_2
-                    .set_target(self.sample_rate, self.params.filter_cutoff_2.value());
+                self.filter_rel_smoother_2.set_target(
+                    self.sample_rate,
+                    self.params.filter_cutoff_2.value() + filter_cutoff_mod,
+                );
             }
             // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
             if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
@@ -4917,12 +5697,14 @@ impl Actuate {
                 };
                 // Reset our attack to start from the filter cutoff
                 self.filter_atk_smoother_2
-                    .reset(self.params.filter_cutoff_2.value());
+                    .reset(self.params.filter_cutoff_2.value() + filter_cutoff_mod);
                 // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
                 self.filter_atk_smoother_2.set_target(
                     self.sample_rate,
-                    (self.params.filter_cutoff_2.value() + self.params.filter_env_peak_2.value())
-                        .clamp(20.0, 16000.0),
+                    (self.params.filter_cutoff_2.value()
+                        + filter_cutoff_mod
+                        + self.params.filter_env_peak_2.value())
+                    .clamp(20.0, 16000.0),
                 );
             }
             // If our attack has finished
@@ -4943,13 +5725,15 @@ impl Actuate {
                 };
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_2.reset(
-                    (self.params.filter_cutoff_2.value() + self.params.filter_env_peak_2.value())
-                        .clamp(20.0, 16000.0),
+                    (self.params.filter_cutoff_2.value()
+                        + filter_cutoff_mod
+                        + self.params.filter_env_peak_2.value())
+                    .clamp(20.0, 16000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_2.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff_2.value()
+                    (self.params.filter_cutoff_2.value() + filter_cutoff_mod)
                         * (self.params.filter_env_sustain_2.value() / 999.9),
                 );
             }
@@ -4965,7 +5749,7 @@ impl Actuate {
                 OscState::Decaying | OscState::Sustaining => self.filter_dec_smoother_2.next(),
                 OscState::Releasing => self.filter_rel_smoother_2.next(),
                 // I don't expect this to be used
-                _ => self.params.filter_cutoff_2.value(),
+                _ => self.params.filter_cutoff_2.value() + filter_cutoff_mod,
             };
             // Filtering before output
             self.filter_l_2.update(
@@ -4976,7 +5760,7 @@ impl Actuate {
             );
             self.filter_r_2.update(
                 next_filter_step,
-                self.params.filter_resonance_2.value(),
+                self.params.filter_resonance_2.value() + filter_resonance_mod,
                 self.sample_rate,
                 self.params.filter_res_type_2.value(),
             );

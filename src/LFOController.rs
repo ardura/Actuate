@@ -18,6 +18,12 @@ pub enum LFORetrigger {
 
 #[derive(Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum LFOSnapValues {
+    Quad,
+    QuadD,
+    QuadT,
+    Double,
+    DoubleD,
+    DoubleT,
     Whole,
     WholeD,
     WholeT,
@@ -33,6 +39,9 @@ pub enum LFOSnapValues {
     Sixteen,
     SixteenD,
     SixteenT,
+    ThirtySecond,
+    ThirtySecondD,
+    ThirtySecondT,
 }
 
 #[derive(Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -60,10 +69,6 @@ impl LFOController {
         self.frequency = frequency;
     }
 
-    pub fn set_amplitude(&mut self, amplitude: f32) {
-        self.amplitude = amplitude;
-    }
-
     pub fn set_waveform(&mut self, waveform: Waveform) {
         self.waveform = waveform;
     }
@@ -72,16 +77,12 @@ impl LFOController {
         self.phase = phase;
     }
 
-    pub fn get_frequency(&mut self) -> f32{
+    pub fn get_frequency(&mut self) -> f32 {
         self.frequency
     }
 
     pub fn get_waveform(&mut self) -> Waveform {
         self.waveform
-    }
-
-    pub fn get_phase(&mut self) -> f32{
-        self.phase
     }
 
     pub fn next_sample(&mut self, sample_rate: f32) -> f32 {

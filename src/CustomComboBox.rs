@@ -57,35 +57,6 @@ impl ComboBox {
         }
     }
 
-    /// Label shown next to the combo box
-    pub fn from_label(label: impl Into<WidgetText>, num_options: u16) -> Self {
-        let label = label.into();
-        Self {
-            id_source: Id::new(label.text()),
-            label: Some(label),
-            selected_text: Default::default(),
-            width: None,
-            icon: None,
-            display_above: false,
-            num_options: num_options,
-            show_label: true,
-        }
-    }
-
-    /// Without label.
-    pub fn from_id_source(id_source: impl std::hash::Hash, num_options: u16) -> Self {
-        Self {
-            id_source: Id::new(id_source),
-            label: Default::default(),
-            selected_text: Default::default(),
-            width: None,
-            icon: None,
-            display_above: false,
-            num_options: num_options,
-            show_label: false,
-        }
-    }
-
     /// Set the width of the button and menu
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
@@ -95,41 +66,6 @@ impl ComboBox {
     /// What we show as the currently selected value
     pub fn selected_text(mut self, selected_text: impl Into<WidgetText>) -> Self {
         self.selected_text = selected_text.into();
-        self
-    }
-
-    /// Use the provided function to render a different [`ComboBox`] icon.
-    /// Defaults to a triangle that expands when the cursor is hovering over the [`ComboBox`].
-    ///
-    /// For example:
-    /// ```
-    /// # egui::__run_test_ui(|ui| {
-    /// # let text = "Selected text";
-    /// pub fn filled_triangle(
-    ///     ui: &egui::Ui,
-    ///     rect: egui::Rect,
-    ///     visuals: &egui::style::WidgetVisuals,
-    ///     _is_open: bool,
-    /// ) {
-    ///     let rect = egui::Rect::from_center_size(
-    ///         rect.center(),
-    ///         egui::vec2(rect.width() * 0.6, rect.height() * 0.4),
-    ///     );
-    ///     ui.painter().add(egui::Shape::convex_polygon(
-    ///         vec![rect.left_top(), rect.right_top(), rect.center_bottom()],
-    ///         visuals.fg_stroke.color,
-    ///         visuals.fg_stroke,
-    ///     ));
-    /// }
-    ///
-    /// egui::ComboBox::from_id_source("my-combobox")
-    ///     .selected_text(text)
-    ///     .icon(filled_triangle)
-    ///     .show_ui(ui, |_ui| {});
-    /// # });
-    /// ```
-    pub fn icon(mut self, icon_fn: impl FnOnce(&Ui, Rect, &WidgetVisuals, bool) + 'static) -> Self {
-        self.icon = Some(Box::new(icon_fn));
         self
     }
 
@@ -144,6 +80,7 @@ impl ComboBox {
         self.show_ui_dyn(ui, Box::new(menu_contents))
     }
 
+    #[allow(unused_variables)]
     fn show_ui_dyn<'c, R>(
         self,
         ui: &mut Ui,
@@ -188,52 +125,6 @@ impl ComboBox {
             ir
         })
         .inner
-    }
-
-    /// Show a list of items with the given selected index.
-    ///
-    ///
-    /// ```
-    /// # #[derive(Debug, PartialEq)]
-    /// # enum Enum { First, Second, Third }
-    /// # let mut selected = Enum::First;
-    /// # egui::__run_test_ui(|ui| {
-    /// let alternatives = ["a", "b", "c", "d"];
-    /// let mut selected = 2;
-    /// egui::ComboBox::from_label("Select one!").show_index(
-    ///     ui,
-    ///     &mut selected,
-    ///     alternatives.len(),
-    ///     |i| alternatives[i].to_owned()
-    /// );
-    /// # });
-    /// ```
-    pub fn show_index(
-        self,
-        ui: &mut Ui,
-        selected: &mut usize,
-        len: usize,
-        get: impl Fn(usize) -> String,
-    ) -> Response {
-        let slf = self.selected_text(get(*selected));
-
-        let mut changed = false;
-
-        let mut response = slf
-            .show_ui(ui, |ui| {
-                for i in 0..len {
-                    if ui.selectable_label(i == *selected, get(i)).clicked() {
-                        *selected = i;
-                        changed = true;
-                    }
-                }
-            })
-            .response;
-
-        if changed {
-            response.mark_changed();
-        }
-        response
     }
 }
 
