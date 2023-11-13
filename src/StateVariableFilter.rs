@@ -2,7 +2,7 @@ use nih_plug::prelude::Enum;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 
-// Modified implementation from https://www.musicdsp.org/en/latest/Filters/23-state-variable.html and A
+// Modified implementation from https://www.musicdsp.org/en/latest/Filters/23-state-variable.html and some tweaks
 // Adapted to rust by Ardura
 
 #[derive(Enum, PartialEq, Eq, Clone, Serialize, Deserialize)]

@@ -1,3 +1,5 @@
+// This is a supporting file that I needed for the CustomComboBox to work with this version of egui and Nih-Plug
+
 //! Show popup windows, tooltips, context menus etc.
 
 use nih_plug_egui::egui::{Align, Area, Frame, Id, Key, Layout, Order, Pos2, Response, Ui};

@@ -1,3 +1,6 @@
+// Modified combo box to support Actuate's UI  - Ardura
+// I don't really know how this works at low level but I managed to make it work.
+
 use crate::{egui::style::WidgetVisuals, CustomPopupComboBox::popup_below_widget, *};
 use epaint::Shape;
 use nih_plug_egui::egui::{

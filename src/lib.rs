@@ -17,6 +17,10 @@ If not, see https://www.gnu.org/licenses/.
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
 
 #####################################
+
+This is the first synth I've ever written and first large Rust project. Thanks for checking it out and have fun!
+
+#####################################
 */
 #![allow(non_snake_case)]
 
@@ -68,15 +72,17 @@ mod audio_module;
 mod toggle_switch;
 mod ui_knob;
 
+// This holds our current sample/granulizer sample (L,R) per sample
 pub struct LoadedSample(Vec<Vec<f32>>);
 
 // Plugin sizing
 const WIDTH: u32 = 920;
 const HEIGHT: u32 = 656;
 
+// Until we have a real preset editor and browser it's better to keep the preset bank smaller
 const PRESET_BANK_SIZE: usize = 32;
 
-// File Open Buffer Timer
+// File Open Buffer Timer - fixes sync issues from load/save to the gui
 const FILE_OPEN_BUFFER_MAX: u32 = 1;
 
 // GUI values to refer to
@@ -94,12 +100,14 @@ pub static GUI_VALS: phf::Map<&'static str, Color32> = phf_map! {
     "FONT_COLOR" => Color32::from_rgb(10,103,210),
 };
 
+// Gui for which filter to display on bottom
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 enum FilterSelect {
     Filter1,
     Filter2,
 }
 
+// Gui for which panel to display in bottom right
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 enum LFOSelect {
     LFO1,
@@ -108,6 +116,7 @@ enum LFOSelect {
     Modulation,
 }
 
+// Sources that can modulate a value
 #[derive(Debug, PartialEq, Enum, Clone, Copy, Serialize, Deserialize)]
 pub enum ModulationSource {
     None,
@@ -118,6 +127,7 @@ pub enum ModulationSource {
     UnsetModulation,
 }
 
+// Destinations modulations can go
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, Enum, Clone, Copy, Serialize, Deserialize)]
 pub enum ModulationDestination {
@@ -141,7 +151,7 @@ pub enum ModulationDestination {
     UnsetModulation,
 }
 
-// Values for Audio Module Routing
+// Values for Audio Module Routing to filters
 #[derive(Enum, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum AMFilterRouting {
     Bypass,
@@ -150,6 +160,7 @@ pub enum AMFilterRouting {
     Both,
 }
 
+// These let us output ToString for the ComboBox stuff + Nih-Plug
 impl fmt::Display for ModulationSource {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -158,6 +169,7 @@ impl fmt::Display for ModulationSource {
     }
 }
 
+// These let us output ToString for the ComboBox stuff + Nih-Plug
 impl fmt::Display for ModulationDestination {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -374,6 +386,7 @@ struct ActuatePreset {
     mod_amount_4: f32,
 }
 
+// This is the struct of the actual plugin object that tracks everything
 #[derive(Clone)]
 pub struct Actuate {
     pub params: Arc<ActuateParams>,
@@ -1032,6 +1045,7 @@ pub struct ActuateParams {
     pub loading: BoolParam,
 }
 
+// This is where parameters are established and defined as well as the callbacks to share gui/audio process info
 impl ActuateParams {
     fn new(
         update_something: Arc<AtomicBool>,
@@ -2808,7 +2822,6 @@ impl Plugin for Actuate {
                                     ////////////////////////////////////////////////////////////
                                     // ADSR FOR FILTER
                                     const VERT_BAR_HEIGHT: f32 = 106.0;
-                                    //let VERT_BAR_HEIGHT_SHORTENED: f32 = VERT_BAR_HEIGHT - ui.spacing().interact_size.y;
                                     const VERT_BAR_WIDTH: f32 = 14.0;
                                     const HCURVE_WIDTH: f32 = 120.0;
                                     const HCURVE_BWIDTH: f32 = 28.0;
@@ -3186,25 +3199,7 @@ impl Plugin for Actuate {
                                                 });
                                             },
                                             LFOSelect::Modulation => {
-                                                /*
-                                                This area links modulations to parameters
-                                                pub enum ModulationSource {
-                                                    None,
-                                                    Velocity,
-                                                    LFO1,
-                                                    LFO2,
-                                                    LFO3,
-                                                }
-
-                                                pub enum ModulationDestination {
-                                                    None,
-                                                    FilterCutoff,
-                                                    FilterResonance,
-                                                    Detune,
-                                                    UnisonDetune,
-                                                }
-                                                */
-                                                // This is my creative "combobox" to use an enumparam
+                                                // This is my creative "combobox" to use an enumparam with Nih-Plug
                                                 ui.vertical(|ui|{
                                                     // Modulator section 1
                                                     //////////////////////////////////////////////////////////////////////////////////
@@ -3549,6 +3544,7 @@ impl Plugin for Actuate {
         return true;
     }
 
+    // Main processing thread that happens before the midi processing per-sample
     fn process(
         &mut self,
         buffer: &mut Buffer,
@@ -3556,6 +3552,7 @@ impl Plugin for Actuate {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         // Clear any voices on change of module type (especially during play)
+        // This fixes panics and other broken things attempting to play during preset change/load
         if self.clear_voices.clone().load(Ordering::Relaxed) {
             self.audio_module_1.as_ref().lock().unwrap().clear_voices();
             self.audio_module_2.as_ref().lock().unwrap().clear_voices();
@@ -3870,8 +3867,8 @@ impl Actuate {
             {
                 // Create clones here
                 let AM1 = self.audio_module_1.clone();
-                let AM2 = self.audio_module_1.clone();
-                let AM3 = self.audio_module_1.clone();
+                let AM2 = self.audio_module_2.clone();
+                let AM3 = self.audio_module_3.clone();
 
                 // For some reason this format works vs doing lock and storing it earlier
                 AM1.lock().unwrap().set_playing(false);
@@ -3943,12 +3940,14 @@ impl Actuate {
             let mod_value_3: f32;
             let mod_value_4: f32;
 
+            // If no modulations this = -2.0
             mod_value_1 = match self.params.mod_source_1.value() {
                 ModulationSource::None | ModulationSource::UnsetModulation => -2.0,
                 ModulationSource::LFO1 => lfo_1_current * self.params.mod_amount_knob_1.value(),
                 ModulationSource::LFO2 => lfo_2_current * self.params.mod_amount_knob_1.value(),
                 ModulationSource::LFO3 => lfo_3_current * self.params.mod_amount_knob_1.value(),
                 ModulationSource::Velocity => {
+                    // This is to allow invalid midi events to not break this logic since we only want NoteOn
                     match midi_event.clone().unwrap_or(NoteEvent::Choke {
                         timing: 0_u32,
                         voice_id: Some(0_i32),
@@ -4063,6 +4062,10 @@ impl Actuate {
             let mut modulations_2: ModulationStruct;
             let mut modulations_3: ModulationStruct;
             let mut modulations_4: ModulationStruct;
+
+            // In this modulation section the velocity stuff is all weird since we need to pass velocity mod
+            // But this happens before we process the note values hence storing/passing it
+
             if mod_value_1 != -2.0 {
                 match self.params.mod_destination_1.value() {
                     ModulationDestination::None | ModulationDestination::UnsetModulation => {}
@@ -4728,6 +4731,8 @@ impl Actuate {
             let mut vel_cutoff_2: f32 = 0.0;
             let mut vel_resonance_1: f32 = 0.0;
             let mut vel_resonance_2: f32 = 0.0;
+
+            // Calculate our mod source/destination values when VELOCITY is involved
             if self.params.mod_source_1.value() == ModulationSource::Velocity {
                 match self.params.mod_destination_1.value() {
                     ModulationDestination::Cutoff_1 => {
@@ -4805,6 +4810,8 @@ impl Actuate {
                 }
             }
 
+            // I ended up doing a passthrough/sum of modulations so they can stack if that's what user desires
+            // without breaking things when they are unset
             match self.params.filter_routing.value() {
                 FilterRouting::Parallel => {
                     self.filter_process_1(
@@ -4955,6 +4962,7 @@ impl Actuate {
             // DC Offset Removal
             ////////////////////////////////////////////////////////////////////////////////////////
 
+            // There were several filter settings that caused massive DC spikes so I added this here
             if !self.file_dialog.load(Ordering::Relaxed) {
                 // Remove DC Offsets with our SVF
                 self.dc_filter_l
@@ -4974,7 +4982,7 @@ impl Actuate {
         }
     }
 
-    // Load presets
+    // Load presets uses message packing with serde
     fn load_preset_bank() -> (String, Vec<ActuatePreset>) {
         let loading_bank = FileDialog::new()
             .add_filter("bin", &["bin"]) // Use the same filter as in save_preset_bank
@@ -5174,6 +5182,7 @@ impl Actuate {
         return (String::from("Error"), Vec::new());
     }
 
+    // This gets triggered to force a load/change and to recalculate sample dependent notes
     fn reload_entire_preset(
         setter: &ParamSetter,
         params: Arc<ActuateParams>,
@@ -6006,6 +6015,7 @@ impl Vst3Plugin for Actuate {
 nih_export_clap!(Actuate);
 nih_export_vst3!(Actuate);
 
+// I use this when I want to remove label and unit from a param in gui
 pub fn format_nothing() -> Arc<dyn Fn(f32) -> String + Send + Sync> {
     Arc::new(move |_| String::new())
 }

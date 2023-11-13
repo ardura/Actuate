@@ -237,6 +237,7 @@ pub fn get_tri(phase: f32) -> f32 {
     return TRI_TABLE[index];
 }
 
+// Bard helped me out on this one
 #[derive(Clone)]
 pub struct DeterministicWhiteNoiseGenerator {
     seed: u64,

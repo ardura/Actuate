@@ -1,3 +1,6 @@
+// Calculate and LFO and move phase similar to Oscillator.rs
+// Ardura
+
 extern crate num_traits;
 use nih_plug::prelude::Enum;
 use serde::{Deserialize, Serialize};
