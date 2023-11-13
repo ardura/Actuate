@@ -2,8 +2,9 @@
 A Synthesizer, Sampler, and Granulizer built in Rust + Nih-Plug
 Written by Ardura
 
-![actuate_gui](https://github.com/ardura/Actuate/assets/31751444/a6494f45-9808-4c6e-ac4e-a30a7d5b6537)
-![actuate_gui_2](https://github.com/ardura/Actuate/assets/31751444/15610d24-e5c0-4cbf-ac45-f0052787c554)
+![actuate_gui](https://github.com/ardura/Actuate/assets/31751444/be396ad9-b67a-4a67-b457-c8a9911414e5)
+![actuate_gui_2](https://github.com/ardura/Actuate/assets/31751444/4be89297-8833-4463-bcd5-ce30ef197450)
+
 
 ## Features
 - Two SVF Filters that can be parallel, serial, or bypassed with ADSR Envelopes
@@ -18,7 +19,7 @@ Written by Ardura
 - Stereo width and ultra wide controls
 
 ## Signal Path
-![actuate](https://github.com/ardura/Actuate/assets/31751444/f0c42227-ae31-4f96-815d-d55ddd92f20a)
+![actuate](https://github.com/ardura/Actuate/assets/31751444/9066cf62-5077-41be-ade3-da4a51dc46e8)
 
 ## Known Issues
 - Saving and loading happens twice
