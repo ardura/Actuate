@@ -2235,9 +2235,10 @@ impl Plugin for Actuate {
 
                         // Reset our buttons
                         if params.param_next_preset.value() {
-                            loading.store(true, Ordering::Relaxed);
-                            setter.set_parameter(&params.loading, true);
-                            if current_preset_index < 31 {
+                            if current_preset_index < (PRESET_BANK_SIZE - 1) as u32 {
+                                loading.store(true, Ordering::Relaxed);
+                                setter.set_parameter(&params.loading, true);
+
                                 current_preset.store(current_preset_index + 1, Ordering::Relaxed);
 
                                 setter.set_parameter(&params.param_next_preset, false);
@@ -2280,9 +2281,10 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.loading, false);
                         }
                         if params.param_prev_preset.value() {
-                            loading.store(true, Ordering::Relaxed);
-                            setter.set_parameter(&params.loading, true);
                             if current_preset_index > 0 {
+                                loading.store(true, Ordering::Relaxed);
+                                setter.set_parameter(&params.loading, true);
+
                                 current_preset.store(current_preset_index - 1, Ordering::Relaxed);
 
                                 setter.set_parameter(&params.param_prev_preset, false);
