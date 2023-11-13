@@ -2913,8 +2913,9 @@ impl AudioModule {
                     unison_voice.amp_current = temp_osc_gain_multiplier;
 
                     if unison_voice.vel_mod_amount == 0.0 {
-                        let base_note =
-                            unison_voice.note as f32 + unison_voice._unison_detune_value + uni_detune_mod;
+                        let base_note = unison_voice.note as f32
+                            + unison_voice._unison_detune_value
+                            + uni_detune_mod;
                         unison_voice.phase_delta =
                             util::f32_midi_note_to_freq(base_note) / self.sample_rate;
                     } else {

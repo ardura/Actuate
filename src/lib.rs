@@ -94,13 +94,13 @@ pub static GUI_VALS: phf::Map<&'static str, Color32> = phf_map! {
     "FONT_COLOR" => Color32::from_rgb(10,103,210),
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 enum FilterSelect {
     Filter1,
     Filter2,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 enum LFOSelect {
     LFO1,
     LFO2,
@@ -108,17 +108,18 @@ enum LFOSelect {
     Modulation,
 }
 
-#[derive(Debug, PartialEq, Enum, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Enum, Clone, Copy, Serialize, Deserialize)]
 pub enum ModulationSource {
     None,
     Velocity,
     LFO1,
     LFO2,
     LFO3,
+    UnsetModulation,
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, Enum, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Enum, Clone, Copy, Serialize, Deserialize)]
 pub enum ModulationDestination {
     None,
     Cutoff_1,
@@ -137,6 +138,7 @@ pub enum ModulationDestination {
     Osc1UniDetune,
     Osc2UniDetune,
     Osc3UniDetune,
+    UnsetModulation,
 }
 
 // Values for Audio Module Routing
@@ -417,6 +419,16 @@ pub struct Actuate {
     lfo_2: LFOController::LFOController,
     lfo_3: LFOController::LFOController,
 
+    // Modulation overrides for preset loading
+    mod_override_source_1: Arc<Mutex<ModulationSource>>,
+    mod_override_source_2: Arc<Mutex<ModulationSource>>,
+    mod_override_source_3: Arc<Mutex<ModulationSource>>,
+    mod_override_source_4: Arc<Mutex<ModulationSource>>,
+    mod_override_dest_1: Arc<Mutex<ModulationDestination>>,
+    mod_override_dest_2: Arc<Mutex<ModulationDestination>>,
+    mod_override_dest_3: Arc<Mutex<ModulationDestination>>,
+    mod_override_dest_4: Arc<Mutex<ModulationDestination>>,
+
     // Preset Lib Default
     preset_lib_name: String,
     preset_lib: Arc<Mutex<Vec<ActuatePreset>>>,
@@ -490,6 +502,16 @@ impl Default for Actuate {
             lfo_1: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
             lfo_2: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
             lfo_3: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
+
+            // Modulation Overrides
+            mod_override_source_1: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
+            mod_override_source_2: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
+            mod_override_source_3: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
+            mod_override_source_4: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
+            mod_override_dest_1: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
+            mod_override_dest_2: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
+            mod_override_dest_3: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
+            mod_override_dest_4: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
 
             // Preset Library DEFAULT
             preset_lib_name: String::from("Default"),
@@ -2149,29 +2171,47 @@ impl Plugin for Actuate {
     // This draws our GUI with egui library
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = self.params.clone();
-        let arc_preset = Arc::clone(&self.preset_lib); //Arc<Mutex<Vec<ActuatePreset>>>
-        let clear_voices = Arc::clone(&self.clear_voices);
-        let reload_entire_preset = Arc::clone(&self.reload_entire_preset);
-        let current_preset = Arc::clone(&self.current_preset);
-        let AM1 = Arc::clone(&self.audio_module_1);
-        let AM2 = Arc::clone(&self.audio_module_2);
-        let AM3 = Arc::clone(&self.audio_module_3);
+        let arc_preset: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib); //Arc<Mutex<Vec<ActuatePreset>>>
+        let clear_voices: Arc<AtomicBool> = Arc::clone(&self.clear_voices);
+        let reload_entire_preset: Arc<AtomicBool> = Arc::clone(&self.reload_entire_preset);
+        let current_preset: Arc<AtomicU32> = Arc::clone(&self.current_preset);
+        let AM1: Arc<Mutex<AudioModule>> = Arc::clone(&self.audio_module_1);
+        let AM2: Arc<Mutex<AudioModule>> = Arc::clone(&self.audio_module_2);
+        let AM3: Arc<Mutex<AudioModule>> = Arc::clone(&self.audio_module_3);
 
-        let update_current_preset = Arc::clone(&self.update_current_preset);
-        let load_bank = Arc::clone(&self.load_bank);
-        let save_bank = Arc::clone(&self.save_bank);
+        let update_current_preset: Arc<AtomicBool> = Arc::clone(&self.update_current_preset);
+        let load_bank: Arc<AtomicBool> = Arc::clone(&self.load_bank);
+        let save_bank: Arc<AtomicBool> = Arc::clone(&self.save_bank);
 
-        let loading = Arc::clone(&self.file_dialog);
-        let filter_select_outside = Arc::new(Mutex::new(FilterSelect::Filter1));
-        let lfo_select_outside = Arc::new(Mutex::new(LFOSelect::LFO1));
-        let mod_source_1_tracker_outside = Arc::new(Mutex::new(ModulationSource::None));
-        let mod_source_2_tracker_outside = Arc::new(Mutex::new(ModulationSource::None));
-        let mod_source_3_tracker_outside = Arc::new(Mutex::new(ModulationSource::None));
-        let mod_source_4_tracker_outside = Arc::new(Mutex::new(ModulationSource::None));
-        let mod_dest_1_tracker_outside = Arc::new(Mutex::new(ModulationDestination::None));
-        let mod_dest_2_tracker_outside = Arc::new(Mutex::new(ModulationDestination::None));
-        let mod_dest_3_tracker_outside = Arc::new(Mutex::new(ModulationDestination::None));
-        let mod_dest_4_tracker_outside = Arc::new(Mutex::new(ModulationDestination::None));
+        let loading: Arc<AtomicBool> = Arc::clone(&self.file_dialog);
+        let filter_select_outside: Arc<Mutex<FilterSelect>> =
+            Arc::new(Mutex::new(FilterSelect::Filter1));
+        let lfo_select_outside: Arc<Mutex<LFOSelect>> = Arc::new(Mutex::new(LFOSelect::LFO1));
+        let mod_source_1_tracker_outside: Arc<Mutex<ModulationSource>> =
+            Arc::new(Mutex::new(ModulationSource::None));
+        let mod_source_2_tracker_outside: Arc<Mutex<ModulationSource>> =
+            Arc::new(Mutex::new(ModulationSource::None));
+        let mod_source_3_tracker_outside: Arc<Mutex<ModulationSource>> =
+            Arc::new(Mutex::new(ModulationSource::None));
+        let mod_source_4_tracker_outside: Arc<Mutex<ModulationSource>> =
+            Arc::new(Mutex::new(ModulationSource::None));
+        let mod_dest_1_tracker_outside: Arc<Mutex<ModulationDestination>> =
+            Arc::new(Mutex::new(ModulationDestination::None));
+        let mod_dest_2_tracker_outside: Arc<Mutex<ModulationDestination>> =
+            Arc::new(Mutex::new(ModulationDestination::None));
+        let mod_dest_3_tracker_outside: Arc<Mutex<ModulationDestination>> =
+            Arc::new(Mutex::new(ModulationDestination::None));
+        let mod_dest_4_tracker_outside: Arc<Mutex<ModulationDestination>> =
+            Arc::new(Mutex::new(ModulationDestination::None));
+
+        let mod_source_override_1 = self.mod_override_source_1.clone();
+        let mod_source_override_2 = self.mod_override_source_2.clone();
+        let mod_source_override_3 = self.mod_override_source_3.clone();
+        let mod_source_override_4 = self.mod_override_source_4.clone();
+        let mod_dest_override_1 = self.mod_override_dest_1.clone();
+        let mod_dest_override_2 = self.mod_override_dest_2.clone();
+        let mod_dest_override_3 = self.mod_override_dest_3.clone();
+        let mod_dest_override_4 = self.mod_override_dest_4.clone();
 
         // Do our GUI stuff
         create_egui_editor(
@@ -2216,7 +2256,23 @@ impl Plugin for Actuate {
                                 ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
 
                                 // GUI thread misses this without this call here for some reason
-                                Actuate::reload_entire_preset(setter, params.clone(), (current_preset_index + 1) as usize, arc_preset.clone(), AM1.clone(), AM2.clone(), AM3.clone());
+                                (
+                                    *mod_source_override_1.lock().unwrap(),
+                                    *mod_source_override_2.lock().unwrap(),
+                                    *mod_source_override_3.lock().unwrap(),
+                                    *mod_source_override_4.lock().unwrap(),
+                                    *mod_dest_override_1.lock().unwrap(),
+                                    *mod_dest_override_2.lock().unwrap(),
+                                    *mod_dest_override_3.lock().unwrap(),
+                                    *mod_dest_override_4.lock().unwrap(),
+                                ) = Actuate::reload_entire_preset(
+                                    setter,
+                                    params.clone(),
+                                    (current_preset_index + 1) as usize,
+                                    arc_preset.clone(),
+                                    AM1.clone(),
+                                    AM2.clone(),
+                                    AM3.clone(),);
 
                                 // This is set for the process thread
                                 reload_entire_preset.store(true, Ordering::Relaxed);
@@ -2245,7 +2301,23 @@ impl Plugin for Actuate {
                                 ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
 
                                 // GUI thread misses this without this call here for some reason
-                                Actuate::reload_entire_preset(setter, params.clone(), (current_preset_index - 1) as usize, arc_preset.clone(), AM1.clone(), AM2.clone(), AM3.clone());
+                                (
+                                    *mod_source_override_1.lock().unwrap(),
+                                    *mod_source_override_2.lock().unwrap(),
+                                    *mod_source_override_3.lock().unwrap(),
+                                    *mod_source_override_4.lock().unwrap(),
+                                    *mod_dest_override_1.lock().unwrap(),
+                                    *mod_dest_override_2.lock().unwrap(),
+                                    *mod_dest_override_3.lock().unwrap(),
+                                    *mod_dest_override_4.lock().unwrap(),
+                                ) = Actuate::reload_entire_preset(
+                                    setter,
+                                    params.clone(),
+                                    (current_preset_index - 1) as usize,
+                                    arc_preset.clone(),
+                                    AM1.clone(),
+                                    AM2.clone(),
+                                    AM3.clone(),);
 
                                 // This is set for the process thread
                                 reload_entire_preset.store(true, Ordering::Relaxed);
@@ -2269,7 +2341,23 @@ impl Plugin for Actuate {
                             ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
                             ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
 
-                            Actuate::reload_entire_preset(setter, params.clone(), current_preset_index as usize, arc_preset.clone(), AM1.clone(), AM2.clone(), AM3.clone());
+                            (
+                                *mod_source_override_1.lock().unwrap(),
+                                *mod_source_override_2.lock().unwrap(),
+                                *mod_source_override_3.lock().unwrap(),
+                                *mod_source_override_4.lock().unwrap(),
+                                *mod_dest_override_1.lock().unwrap(),
+                                *mod_dest_override_2.lock().unwrap(),
+                                *mod_dest_override_3.lock().unwrap(),
+                                *mod_dest_override_4.lock().unwrap(),
+                            ) = Actuate::reload_entire_preset(
+                                setter,
+                                params.clone(),
+                                current_preset_index as usize,
+                                arc_preset.clone(),
+                                AM1.clone(),
+                                AM2.clone(),
+                                AM3.clone(),);
                             setter.set_parameter(&params.param_load_bank, false);
                             load_bank.store(false, Ordering::Relaxed);
                             reload_entire_preset.store(false, Ordering::Relaxed);
@@ -3139,9 +3227,17 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
                                                                 ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
                                                             });
-                                                        if *mod_source_1_tracker.lock().unwrap() != params.mod_source_1.value() {
-                                                            setter.set_parameter( &params.mod_source_1, mod_source_1_tracker.lock().unwrap().clone());
-                                                        }
+                                                            // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                            if *mod_source_override_1.lock().unwrap() != ModulationSource::UnsetModulation {
+                                                                // This happens on plugin preset load
+                                                                *mod_source_1_tracker.lock().unwrap() = *mod_source_override_1.lock().unwrap();
+                                                                setter.set_parameter( &params.mod_source_1, mod_source_1_tracker.lock().unwrap().clone());
+                                                                *mod_source_override_1.lock().unwrap() = ModulationSource::UnsetModulation;
+                                                            } else {
+                                                                if *mod_source_1_tracker.lock().unwrap() != params.mod_source_1.value() {
+                                                                    setter.set_parameter( &params.mod_source_1, mod_source_1_tracker.lock().unwrap().clone());
+                                                                }
+                                                            }
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT)
                                                             .color(Color32::BLACK));
@@ -3167,8 +3263,16 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
                                                             });
-                                                        if *mod_dest_1_tracker.lock().unwrap() != params.mod_destination_1.value() {
+                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                        if *mod_dest_override_1.lock().unwrap() != ModulationDestination::UnsetModulation {
+                                                            // This happens on plugin preset load
+                                                            *mod_dest_1_tracker.lock().unwrap() = *mod_dest_override_1.lock().unwrap();
                                                             setter.set_parameter( &params.mod_destination_1, mod_dest_1_tracker.lock().unwrap().clone());
+                                                            *mod_dest_override_1.lock().unwrap() = ModulationDestination::UnsetModulation;
+                                                        } else {
+                                                            if *mod_dest_1_tracker.lock().unwrap() != params.mod_destination_1.value() {
+                                                                setter.set_parameter( &params.mod_destination_1, mod_dest_1_tracker.lock().unwrap().clone());
+                                                            }
                                                         }
                                                     });
                                                     ui.separator();
@@ -3196,8 +3300,16 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
                                                                 ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
                                                             });
-                                                        if *mod_source_2_tracker.lock().unwrap() != params.mod_source_2.value() {
+                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                        if *mod_source_override_2.lock().unwrap() != ModulationSource::UnsetModulation {
+                                                            // This happens on plugin preset load
+                                                            *mod_source_2_tracker.lock().unwrap() = *mod_source_override_2.lock().unwrap();
                                                             setter.set_parameter( &params.mod_source_2, mod_source_2_tracker.lock().unwrap().clone());
+                                                            *mod_source_override_2.lock().unwrap() = ModulationSource::UnsetModulation;
+                                                        } else {
+                                                            if *mod_source_2_tracker.lock().unwrap() != params.mod_source_2.value() {
+                                                                setter.set_parameter( &params.mod_source_2, mod_source_2_tracker.lock().unwrap().clone());
+                                                            }
                                                         }
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT)
@@ -3224,8 +3336,16 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
                                                             });
-                                                        if *mod_dest_2_tracker.lock().unwrap() != params.mod_destination_2.value() {
+                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                        if *mod_dest_override_2.lock().unwrap() != ModulationDestination::UnsetModulation {
+                                                            // This happens on plugin preset load
+                                                            *mod_dest_2_tracker.lock().unwrap() = *mod_dest_override_2.lock().unwrap();
                                                             setter.set_parameter( &params.mod_destination_2, mod_dest_2_tracker.lock().unwrap().clone());
+                                                            *mod_dest_override_2.lock().unwrap() = ModulationDestination::UnsetModulation;
+                                                        } else {
+                                                            if *mod_dest_2_tracker.lock().unwrap() != params.mod_destination_2.value() {
+                                                                setter.set_parameter( &params.mod_destination_2, mod_dest_2_tracker.lock().unwrap().clone());
+                                                            }
                                                         }
                                                     });
                                                     ui.separator();
@@ -3253,8 +3373,16 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
                                                                 ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
                                                             });
-                                                        if *mod_source_3_tracker.lock().unwrap() != params.mod_source_3.value() {
+                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                        if *mod_source_override_3.lock().unwrap() != ModulationSource::UnsetModulation {
+                                                            // This happens on plugin preset load
+                                                            *mod_source_3_tracker.lock().unwrap() = *mod_source_override_3.lock().unwrap();
                                                             setter.set_parameter( &params.mod_source_3, mod_source_3_tracker.lock().unwrap().clone());
+                                                            *mod_source_override_3.lock().unwrap() = ModulationSource::UnsetModulation;
+                                                        } else {
+                                                            if *mod_source_3_tracker.lock().unwrap() != params.mod_source_3.value() {
+                                                                setter.set_parameter( &params.mod_source_3, mod_source_3_tracker.lock().unwrap().clone());
+                                                            }
                                                         }
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT)
@@ -3281,8 +3409,16 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
                                                                 ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
                                                             });
-                                                        if *mod_dest_3_tracker.lock().unwrap() != params.mod_destination_3.value() {
+                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                        if *mod_dest_override_3.lock().unwrap() != ModulationDestination::UnsetModulation {
+                                                            // This happens on plugin preset load
+                                                            *mod_dest_3_tracker.lock().unwrap() = *mod_dest_override_3.lock().unwrap();
                                                             setter.set_parameter( &params.mod_destination_3, mod_dest_3_tracker.lock().unwrap().clone());
+                                                            *mod_dest_override_3.lock().unwrap() = ModulationDestination::UnsetModulation;
+                                                        } else {
+                                                            if *mod_dest_3_tracker.lock().unwrap() != params.mod_destination_3.value() {
+                                                                setter.set_parameter( &params.mod_destination_3, mod_dest_3_tracker.lock().unwrap().clone());
+                                                            }
                                                         }
                                                     });
                                                     ui.separator();
@@ -3310,8 +3446,16 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
                                                                 ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
                                                             });
-                                                        if *mod_source_4_tracker.lock().unwrap() != params.mod_source_4.value() {
+                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                        if *mod_source_override_4.lock().unwrap() != ModulationSource::UnsetModulation {
+                                                            // This happens on plugin preset load
+                                                            *mod_source_4_tracker.lock().unwrap() = *mod_source_override_4.lock().unwrap();
                                                             setter.set_parameter( &params.mod_source_4, mod_source_4_tracker.lock().unwrap().clone());
+                                                            *mod_source_override_4.lock().unwrap() = ModulationSource::UnsetModulation;
+                                                        } else {
+                                                            if *mod_source_4_tracker.lock().unwrap() != params.mod_source_4.value() {
+                                                                setter.set_parameter( &params.mod_source_4, mod_source_4_tracker.lock().unwrap().clone());
+                                                            }
                                                         }
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT)
@@ -3338,8 +3482,16 @@ impl Plugin for Actuate {
                                                             ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
                                                             ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
                                                         });
-                                                        if *mod_dest_4_tracker.lock().unwrap() != params.mod_destination_4.value() {
+                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                        if *mod_dest_override_4.lock().unwrap() != ModulationDestination::UnsetModulation {
+                                                            // This happens on plugin preset load
+                                                            *mod_dest_4_tracker.lock().unwrap() = *mod_dest_override_4.lock().unwrap();
                                                             setter.set_parameter( &params.mod_destination_4, mod_dest_4_tracker.lock().unwrap().clone());
+                                                            *mod_dest_override_4.lock().unwrap() = ModulationDestination::UnsetModulation;
+                                                        } else {
+                                                            if *mod_dest_4_tracker.lock().unwrap() != params.mod_destination_4.value() {
+                                                                setter.set_parameter( &params.mod_destination_4, mod_dest_4_tracker.lock().unwrap().clone());
+                                                            }
                                                         }
                                                     });
                                                     ui.separator();
@@ -3790,7 +3942,7 @@ impl Actuate {
             let mod_value_4: f32;
 
             mod_value_1 = match self.params.mod_source_1.value() {
-                ModulationSource::None => -2.0,
+                ModulationSource::None | ModulationSource::UnsetModulation => -2.0,
                 ModulationSource::LFO1 => lfo_1_current * self.params.mod_amount_knob_1.value(),
                 ModulationSource::LFO2 => lfo_2_current * self.params.mod_amount_knob_1.value(),
                 ModulationSource::LFO3 => lfo_3_current * self.params.mod_amount_knob_1.value(),
@@ -3814,7 +3966,7 @@ impl Actuate {
             };
 
             mod_value_2 = match self.params.mod_source_2.value() {
-                ModulationSource::None => -2.0,
+                ModulationSource::None | ModulationSource::UnsetModulation => -2.0,
                 ModulationSource::LFO1 => lfo_1_current * self.params.mod_amount_knob_2.value(),
                 ModulationSource::LFO2 => lfo_2_current * self.params.mod_amount_knob_2.value(),
                 ModulationSource::LFO3 => lfo_3_current * self.params.mod_amount_knob_2.value(),
@@ -3838,7 +3990,7 @@ impl Actuate {
             };
 
             mod_value_3 = match self.params.mod_source_3.value() {
-                ModulationSource::None => -2.0,
+                ModulationSource::None | ModulationSource::UnsetModulation => -2.0,
                 ModulationSource::LFO1 => lfo_1_current * self.params.mod_amount_knob_3.value(),
                 ModulationSource::LFO2 => lfo_2_current * self.params.mod_amount_knob_3.value(),
                 ModulationSource::LFO3 => lfo_3_current * self.params.mod_amount_knob_3.value(),
@@ -3862,7 +4014,7 @@ impl Actuate {
             };
 
             mod_value_4 = match self.params.mod_source_4.value() {
-                ModulationSource::None => -2.0,
+                ModulationSource::None | ModulationSource::UnsetModulation => -2.0,
                 ModulationSource::LFO1 => lfo_1_current * self.params.mod_amount_knob_4.value(),
                 ModulationSource::LFO2 => lfo_2_current * self.params.mod_amount_knob_4.value(),
                 ModulationSource::LFO3 => lfo_3_current * self.params.mod_amount_knob_4.value(),
@@ -3911,7 +4063,7 @@ impl Actuate {
             let mut modulations_4: ModulationStruct;
             if mod_value_1 != -2.0 {
                 match self.params.mod_destination_1.value() {
-                    ModulationDestination::None => {}
+                    ModulationDestination::None | ModulationDestination::UnsetModulation => {}
                     ModulationDestination::Cutoff_1 => {
                         temp_mod_cutoff_1 += 5000.0 * mod_value_1;
                     }
@@ -4012,7 +4164,7 @@ impl Actuate {
             }
             if mod_value_2 != -2.0 {
                 match self.params.mod_destination_2.value() {
-                    ModulationDestination::None => {}
+                    ModulationDestination::None | ModulationDestination::UnsetModulation => {}
                     ModulationDestination::Cutoff_1 => {
                         temp_mod_cutoff_1 += 5000.0 * mod_value_2;
                     }
@@ -4113,7 +4265,7 @@ impl Actuate {
             }
             if mod_value_3 != -2.0 {
                 match self.params.mod_destination_3.value() {
-                    ModulationDestination::None => {}
+                    ModulationDestination::None | ModulationDestination::UnsetModulation => {}
                     ModulationDestination::Cutoff_1 => {
                         temp_mod_cutoff_1 += 5000.0 * mod_value_3;
                     }
@@ -4213,8 +4365,8 @@ impl Actuate {
                 }
             }
             if mod_value_4 != -2.0 {
-                match self.params.mod_destination_1.value() {
-                    ModulationDestination::None => {}
+                match self.params.mod_destination_4.value() {
+                    ModulationDestination::None | ModulationDestination::UnsetModulation => {}
                     ModulationDestination::Cutoff_1 => {
                         temp_mod_cutoff_1 += 5000.0 * mod_value_4;
                     }
@@ -5028,7 +5180,8 @@ impl Actuate {
         AMod1: Arc<Mutex<AudioModule>>,
         AMod2: Arc<Mutex<AudioModule>>,
         AMod3: Arc<Mutex<AudioModule>>,
-    ) {
+    ) -> (ModulationSource, ModulationSource, ModulationSource, ModulationSource, 
+          ModulationDestination, ModulationDestination, ModulationDestination, ModulationDestination) {
         // Create mutex locks for AudioModule
         let mut AMod1 = AMod1.as_ref().lock().unwrap();
         let mut AMod2 = AMod2.as_ref().lock().unwrap();
@@ -5184,6 +5337,14 @@ impl Actuate {
         setter.set_parameter(&params.mod_amount_knob_4, loaded_preset.mod_amount_4);
         setter.set_parameter(&params.mod_destination_4, loaded_preset.mod_dest_4.clone());
         setter.set_parameter(&params.mod_source_4, loaded_preset.mod_source_4.clone());
+        let mod_source_1_override = loaded_preset.mod_source_1.clone();
+        let mod_source_2_override = loaded_preset.mod_source_2.clone();
+        let mod_source_3_override = loaded_preset.mod_source_3.clone();
+        let mod_source_4_override = loaded_preset.mod_source_4.clone();
+        let mod_dest_1_override = loaded_preset.mod_dest_1.clone();
+        let mod_dest_2_override = loaded_preset.mod_dest_2.clone();
+        let mod_dest_3_override = loaded_preset.mod_dest_3.clone();
+        let mod_dest_4_override = loaded_preset.mod_dest_4.clone();
 
         setter.set_parameter(&params.filter_wet, loaded_preset.filter_wet);
         setter.set_parameter(&params.filter_cutoff, loaded_preset.filter_cutoff);
@@ -5210,23 +5371,58 @@ impl Actuate {
             loaded_preset.filter_env_rel_curve,
         );
 
+        setter.set_parameter(&params.filter_wet_2, loaded_preset.filter_wet_2);
+        setter.set_parameter(&params.filter_cutoff_2, loaded_preset.filter_cutoff_2);
+        setter.set_parameter(&params.filter_resonance_2, loaded_preset.filter_resonance_2);
+        setter.set_parameter(
+            &params.filter_res_type_2,
+            loaded_preset.filter_res_type_2.clone(),
+        );
+        setter.set_parameter(&params.filter_lp_amount_2, loaded_preset.filter_lp_amount_2);
+        setter.set_parameter(&params.filter_hp_amount_2, loaded_preset.filter_hp_amount_2);
+        setter.set_parameter(&params.filter_bp_amount_2, loaded_preset.filter_bp_amount_2);
+        setter.set_parameter(&params.filter_env_peak_2, loaded_preset.filter_env_peak_2);
+        setter.set_parameter(&params.filter_env_decay_2, loaded_preset.filter_env_decay_2);
+        setter.set_parameter(
+            &params.filter_env_atk_curve_2,
+            loaded_preset.filter_env_atk_curve_2,
+        );
+        setter.set_parameter(
+            &params.filter_env_dec_curve_2,
+            loaded_preset.filter_env_dec_curve_2,
+        );
+        setter.set_parameter(
+            &params.filter_env_rel_curve_2,
+            loaded_preset.filter_env_rel_curve_2,
+        );
+
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
         AMod1.restretch = loaded_preset.mod1_restretch;
 
-        AMod2.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
-        AMod2.sample_lib = loaded_preset.mod1_sample_lib.clone();
-        AMod2.restretch = loaded_preset.mod1_restretch;
+        AMod2.loaded_sample = loaded_preset.mod2_loaded_sample.clone();
+        AMod2.sample_lib = loaded_preset.mod2_sample_lib.clone();
+        AMod2.restretch = loaded_preset.mod2_restretch;
 
-        AMod3.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
-        AMod3.sample_lib = loaded_preset.mod1_sample_lib.clone();
-        AMod3.restretch = loaded_preset.mod1_restretch;
+        AMod3.loaded_sample = loaded_preset.mod3_loaded_sample.clone();
+        AMod3.sample_lib = loaded_preset.mod3_sample_lib.clone();
+        AMod3.restretch = loaded_preset.mod3_restretch;
 
         // Note audio module type from the module is used here instead of from the main self type
         // This is because preset loading has changed it here first!
         AMod1.regenerate_samples();
         AMod2.regenerate_samples();
         AMod3.regenerate_samples();
+
+        (
+            mod_source_1_override,
+            mod_source_2_override,
+            mod_source_3_override,
+            mod_source_4_override,
+            mod_dest_1_override,
+            mod_dest_2_override,
+            mod_dest_3_override,
+            mod_dest_4_override,)
     }
 
     fn save_preset_bank(&mut self) {
