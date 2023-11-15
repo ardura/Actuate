@@ -22,11 +22,10 @@ lazy_static = "1.4.0"
 
 # Uncomment the below line to disable the on-by-default VST3 feature to remove
 # the GPL compatibility requirement
-#nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", default_features = false, features = ["assert_process_allocs", "standalone"] }
 
+nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "252ab3c5becabcd7d2a7a75a8ef04de37d5f8418", features = ["assert_process_allocs"] }
+nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "252ab3c5becabcd7d2a7a75a8ef04de37d5f8418"}
 
-nih_plug = { path = "../../nih-plug-master/nih-plug-master/", features = ["assert_process_allocs"]}
-nih_plug_egui = { path = "../../nih-plug-master/nih-plug-master/nih_plug_egui" }
 num-traits = "0.2.17"
 once_cell = "1.18.0"
 parking_lot = "0.12.1"
