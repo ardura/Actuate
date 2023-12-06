@@ -3602,37 +3602,40 @@ impl Actuate {
         // Update our LFOs per each sample
         /////////////////////////////////////////////////////////////////////////////////////////////
         let bpm = context.transport().tempo.unwrap_or(1.0) as f32;
+        if bpm == 1.0 {
+            // This means we are not getting proper tempo so LFO can't sync
+            return;
+        }
         if self.params.lfo1_enable.value() {
             // Update LFO Frequency
             if self.params.lfo1_sync.value() {
-                let multiplier = match self.params.lfo1_snap.value() {
-                    LFOController::LFOSnapValues::Quad => 0.5 / 3.0,
-                    LFOController::LFOSnapValues::QuadD => (0.5 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::QuadT => 0.5 / 4.5,
-                    LFOController::LFOSnapValues::Double => 1.0 / 3.0,
-                    LFOController::LFOSnapValues::DoubleD => (1.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::DoubleT => 1.0 / 4.5,
-                    LFOController::LFOSnapValues::Whole => 2.0 / 3.0,
-                    LFOController::LFOSnapValues::WholeD => (2.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::WholeT => 2.0 / 4.5,
-                    LFOController::LFOSnapValues::Half => 4.0 / 3.0,
-                    LFOController::LFOSnapValues::HalfD => (4.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::HalfT => 4.0 / 4.5,
-                    LFOController::LFOSnapValues::Quarter => 8.0 / 3.0,
-                    LFOController::LFOSnapValues::QuarterD => (8.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::QuarterT => 8.0 / 4.5,
-                    LFOController::LFOSnapValues::Eighth => 16.0 / 3.0,
-                    LFOController::LFOSnapValues::EighthD => (16.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::EighthT => 16.0 / 4.5,
-                    LFOController::LFOSnapValues::Sixteen => 32.0 / 3.0,
-                    LFOController::LFOSnapValues::SixteenD => (32.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::SixteenT => 32.0 / 4.5,
-                    LFOController::LFOSnapValues::ThirtySecond => 64.0 / 3.0,
-                    LFOController::LFOSnapValues::ThirtySecondD => (64.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::ThirtySecondT => 64.0 / 4.5,
+                let divisor = match self.params.lfo1_snap.value() {
+                    LFOController::LFOSnapValues::Quad => 16.0,
+                    LFOController::LFOSnapValues::QuadD => 16.0 * 1.5,
+                    LFOController::LFOSnapValues::QuadT => 16.0 / 3.0,
+                    LFOController::LFOSnapValues::Double => 8.0,
+                    LFOController::LFOSnapValues::DoubleD => 8.0 * 1.5,
+                    LFOController::LFOSnapValues::DoubleT => 8.0 / 3.0,
+                    LFOController::LFOSnapValues::Whole => 4.0,
+                    LFOController::LFOSnapValues::WholeD => 4.0 * 1.5,
+                    LFOController::LFOSnapValues::WholeT => 4.0 / 3.0,
+                    LFOController::LFOSnapValues::Half => 2.0,
+                    LFOController::LFOSnapValues::HalfD => 2.0 * 1.5,
+                    LFOController::LFOSnapValues::HalfT => 2.0 / 3.0,
+                    LFOController::LFOSnapValues::Quarter => 1.0,
+                    LFOController::LFOSnapValues::QuarterD => 1.0 * 1.5,
+                    LFOController::LFOSnapValues::QuarterT => 1.0 / 3.0,
+                    LFOController::LFOSnapValues::Eighth => 0.5,
+                    LFOController::LFOSnapValues::EighthD => 0.5 * 1.5,
+                    LFOController::LFOSnapValues::EighthT => 0.5 / 3.0,
+                    LFOController::LFOSnapValues::Sixteen => 0.25,
+                    LFOController::LFOSnapValues::SixteenD => 0.25 * 1.5,
+                    LFOController::LFOSnapValues::SixteenT => 0.25 / 3.0,
+                    LFOController::LFOSnapValues::ThirtySecond => 0.125,
+                    LFOController::LFOSnapValues::ThirtySecondD => 0.125 * 1.5,
+                    LFOController::LFOSnapValues::ThirtySecondT => 0.125 / 3.0,
                 };
-                let duration = 1.0 / (bpm * multiplier);
-                let freq_snap = 1.0 / duration;
+                let freq_snap = (bpm / divisor) / 60.0;
                 if self.params.lfo1_freq.value() != freq_snap {
                     self.lfo_1.set_frequency(freq_snap);
                 }
