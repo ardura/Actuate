@@ -2058,15 +2058,21 @@ impl AudioModule {
                                     }
                                     AudioModuleType::Sampler => {
                                         let mut rng = rand::thread_rng();
-                                        new_phase = rng.gen_range(
-                                            0.0..self.sample_lib[note as usize][0].len() as f32,
-                                        );
+                                        // Prevent panic when no sample loaded yet
+                                        if self.sample_lib.len() > 1 {
+                                            new_phase = rng.gen_range(
+                                                0.0..self.sample_lib[note as usize][0].len() as f32,
+                                            );
+                                        }
                                     }
                                     AudioModuleType::Granulizer => {
                                         let mut rng = rand::thread_rng();
-                                        new_phase = rng.gen_range(
-                                            0.0..self.sample_lib[note as usize][0].len() as f32,
-                                        );
+                                        // Prevent panic when no sample loaded yet
+                                        if self.sample_lib.len() > 1 {
+                                            new_phase = rng.gen_range(
+                                                0.0..self.sample_lib[note as usize][0].len() as f32,
+                                            );
+                                        }
                                     }
                                     _ => {}
                                 }

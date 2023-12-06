@@ -345,6 +345,8 @@ struct ActuatePreset {
     filter_env_dec_curve_2: Oscillator::SmoothStyle,
     filter_env_rel_curve_2: Oscillator::SmoothStyle,
 
+    filter_routing: FilterRouting,
+
     // LFOs
     lfo1_enable: bool,
     lfo2_enable: bool,
@@ -633,11 +635,11 @@ impl Default for Actuate {
                     filter_env_dec_curve: SmoothStyle::Linear,
                     filter_env_rel_curve: SmoothStyle::Linear,
 
-                    filter_wet_2: 0.0,
+                    filter_wet_2: 1.0,
                     filter_cutoff_2: 4000.0,
                     filter_resonance_2: 1.0,
                     filter_res_type_2: ResonanceType::Default,
-                    filter_lp_amount_2: 0.0,
+                    filter_lp_amount_2: 1.0,
                     filter_hp_amount_2: 0.0,
                     filter_bp_amount_2: 0.0,
                     filter_env_peak_2: 0.0,
@@ -648,6 +650,8 @@ impl Default for Actuate {
                     filter_env_atk_curve_2: SmoothStyle::Linear,
                     filter_env_dec_curve_2: SmoothStyle::Linear,
                     filter_env_rel_curve_2: SmoothStyle::Linear,
+
+                    filter_routing: FilterRouting::Parallel,
 
                     // LFOs
                     lfo1_enable: false,
@@ -1515,15 +1519,18 @@ impl ActuateParams {
             load_sample_1: BoolParam::new("Load Sample", false).with_callback({
                 let file_dialog = file_dialog.clone();
                 Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
-            }),
+            })
+                .hide(),
             load_sample_2: BoolParam::new("Load Sample", false).with_callback({
                 let file_dialog = file_dialog.clone();
                 Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
-            }),
+            })
+                .hide(),
             load_sample_3: BoolParam::new("Load Sample", false).with_callback({
                 let file_dialog = file_dialog.clone();
                 Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
-            }),
+            })
+                .hide(),
             // To loop the sampler/granulizer
             loop_sample_1: BoolParam::new("Loop Sample", false).with_callback({
                 let update_something = update_something.clone();
@@ -1883,7 +1890,7 @@ impl ActuateParams {
             filter_resonance_2: FloatParam::new(
                 "Bandwidth",
                 1.0,
-                FloatRange::Linear { min: 0.1, max: 1.0 },
+                FloatRange::Reversed(&FloatRange::Linear { min: 0.1, max: 1.0 }),
             )
             .with_unit("%")
             .with_value_to_string(formatters::v2s_f32_percentage(0)),
@@ -2137,24 +2144,30 @@ impl ActuateParams {
             param_load_bank: BoolParam::new("Load Bank", false).with_callback({
                 let load_bank = load_bank.clone();
                 Arc::new(move |_| load_bank.store(true, Ordering::Relaxed))
-            }),
+            })
+                .hide(),
             param_save_bank: BoolParam::new("Save Bank", false).with_callback({
                 let save_bank = save_bank.clone();
                 Arc::new(move |_| save_bank.store(true, Ordering::Relaxed))
-            }),
+            })
+                .hide(),
 
             // For some reason the callback doesn't work right here so I went by validating params for previous and next
-            param_next_preset: BoolParam::new("->", false),
-            param_prev_preset: BoolParam::new("<-", false),
+            param_next_preset: BoolParam::new("->", false)
+                .hide(),
+            param_prev_preset: BoolParam::new("<-", false)
+                .hide(),
 
             param_update_current_preset: BoolParam::new("Update Current Preset", false)
                 .with_callback({
                     let update_current_preset = update_current_preset.clone();
                     Arc::new(move |_| update_current_preset.store(true, Ordering::Relaxed))
-                }),
+                })
+                .hide(),
 
             // Not a param
-            loading: BoolParam::new("loading_mod", false),
+            loading: BoolParam::new("loading_mod", false)
+                .hide(),
         }
     }
 }
@@ -5043,7 +5056,7 @@ impl Actuate {
                         mod1_osc_unison: 1,
                         mod1_osc_unison_detune: 0.0,
                         mod1_osc_stereo: 0.0,
-
+    
                         mod2_audio_module_type: AudioModuleType::Off,
                         mod2_audio_module_level: 1.0,
                         mod2_loaded_sample: vec![vec![0.0, 0.0]],
@@ -5072,7 +5085,7 @@ impl Actuate {
                         mod2_osc_unison: 1,
                         mod2_osc_unison_detune: 0.0,
                         mod2_osc_stereo: 0.0,
-
+    
                         mod3_audio_module_type: AudioModuleType::Off,
                         mod3_audio_module_level: 1.0,
                         mod3_loaded_sample: vec![vec![0.0, 0.0]],
@@ -5101,7 +5114,7 @@ impl Actuate {
                         mod3_osc_unison: 1,
                         mod3_osc_unison_detune: 0.0,
                         mod3_osc_stereo: 0.0,
-
+    
                         filter_wet: 1.0,
                         filter_cutoff: 4000.0,
                         filter_resonance: 1.0,
@@ -5110,15 +5123,15 @@ impl Actuate {
                         filter_hp_amount: 0.0,
                         filter_bp_amount: 0.0,
                         filter_env_peak: 0.0,
-                        filter_env_attack: 0.0001,
+                        filter_env_attack: 0.0,
                         filter_env_decay: 250.0,
                         filter_env_sustain: 999.9,
-                        filter_env_release: 0.0001,
+                        filter_env_release: 100.0,
                         filter_env_atk_curve: SmoothStyle::Linear,
                         filter_env_dec_curve: SmoothStyle::Linear,
                         filter_env_rel_curve: SmoothStyle::Linear,
-
-                        filter_wet_2: 0.0,
+    
+                        filter_wet_2: 1.0,
                         filter_cutoff_2: 4000.0,
                         filter_resonance_2: 1.0,
                         filter_res_type_2: ResonanceType::Default,
@@ -5126,40 +5139,42 @@ impl Actuate {
                         filter_hp_amount_2: 0.0,
                         filter_bp_amount_2: 0.0,
                         filter_env_peak_2: 0.0,
-                        filter_env_attack_2: 0.0001,
+                        filter_env_attack_2: 0.0,
                         filter_env_decay_2: 250.0,
                         filter_env_sustain_2: 999.9,
-                        filter_env_release_2: 0.0001,
+                        filter_env_release_2: 100.0,
                         filter_env_atk_curve_2: SmoothStyle::Linear,
                         filter_env_dec_curve_2: SmoothStyle::Linear,
                         filter_env_rel_curve_2: SmoothStyle::Linear,
-
+    
+                        filter_routing: FilterRouting::Parallel,
+    
                         // LFOs
                         lfo1_enable: false,
                         lfo2_enable: false,
                         lfo3_enable: false,
-
+    
                         lfo1_freq: 2.0,
                         lfo1_retrigger: LFOController::LFORetrigger::None,
                         lfo1_sync: true,
                         lfo1_snap: LFOController::LFOSnapValues::Half,
                         lfo1_waveform: LFOController::Waveform::Sine,
                         lfo1_phase: 0.0,
-
+    
                         lfo2_freq: 2.0,
                         lfo2_retrigger: LFOController::LFORetrigger::None,
                         lfo2_sync: true,
                         lfo2_snap: LFOController::LFOSnapValues::Half,
                         lfo2_waveform: LFOController::Waveform::Sine,
                         lfo2_phase: 0.0,
-
+    
                         lfo3_freq: 2.0,
                         lfo3_retrigger: LFOController::LFORetrigger::None,
                         lfo3_sync: true,
                         lfo3_snap: LFOController::LFOSnapValues::Half,
                         lfo3_waveform: LFOController::Waveform::Sine,
                         lfo3_phase: 0.0,
-
+    
                         // Modulations
                         mod_source_1: ModulationSource::None,
                         mod_source_2: ModulationSource::None,
@@ -5643,6 +5658,8 @@ impl Actuate {
                 filter_env_atk_curve_2: self.params.filter_env_atk_curve_2.value(),
                 filter_env_dec_curve_2: self.params.filter_env_dec_curve_2.value(),
                 filter_env_rel_curve_2: self.params.filter_env_rel_curve_2.value(),
+
+                filter_routing: self.params.filter_routing.value(),
 
                 lfo1_enable: self.params.lfo1_enable.value(),
                 lfo2_enable: self.params.lfo2_enable.value(),
