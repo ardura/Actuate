@@ -23,6 +23,7 @@ This is intended to be a building block used by other files in the Actuate synth
 */
 use lazy_static::lazy_static;
 use nih_plug::params::enums::Enum;
+use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::f32::consts::{self, FRAC_2_PI, PI};
 
@@ -45,6 +46,116 @@ lazy_static! {
             // Calculate the sawtooth waveform directly
             table[i] = -1.0 + 2.0 * phase;
         }
+        table
+    };
+    // These are for creating an "analog saw" by rotating at random between WSAW tables
+    static ref WSAW_TABLE_1: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        let mut rng = StdRng::seed_from_u64(38);  // Use a fixed seed
+
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+
+            // Introduce deterministic randomness to the waveform
+            let randomness = rng.gen_range(-0.1..0.1);  // Adjust the range of randomness
+            table[i] = -1.0 + 2.0 * (phase + randomness);
+        }
+        table
+    };
+    static ref WSAW_TABLE_2: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        let mut rng = StdRng::seed_from_u64(57);  // Use a fixed seed
+
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+
+            // Introduce deterministic randomness to the waveform
+            let randomness = rng.gen_range(-0.1..0.1);  // Adjust the range of randomness
+            table[i] = -1.0 + 2.0 * (phase + randomness);
+        }
+        table
+    };
+    // These are for creating an "analog saw" by rotating at random between WSAW tables
+    static ref SSAW_TABLE_1: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        let mut rng = StdRng::seed_from_u64(22);  // Use a fixed seed
+
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+
+            // Introduce deterministic randomness to the waveform
+            let randomness = rng.gen_range(-0.01..0.01);  // Adjust the range of randomness
+            table[i] = -1.0 + 2.0 * (phase + randomness);
+        }
+        table
+    };
+    static ref SSAW_TABLE_2: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        let mut rng = StdRng::seed_from_u64(17);  // Use a fixed seed
+
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+
+            // Introduce deterministic randomness to the waveform
+            let randomness = rng.gen_range(-0.01..0.01);  // Adjust the range of randomness
+            table[i] = -1.0 + 2.0 * (phase + randomness);
+        }
+        table
+    };
+    // Combine the SSAW technique with the RSAW function
+    // "A for Analog"
+    static ref ASAW_TABLE_1: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        let mut rng = StdRng::seed_from_u64(44);  // Use a fixed seed
+        let rounding_amount: i32 = 30; // Adjust the rounding amount as needed
+
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+            // Introduce deterministic randomness to the waveform
+            let randomness = rng.gen_range(-0.009..0.009);  // Adjust the range of randomness
+
+            let scaled_phase = -1.0 + 2.0 * (phase + randomness);
+
+            // Calculate the rounded sawtooth waveform directly
+            table[i] = scaled_phase * (1.0 - scaled_phase.powi(2 * rounding_amount));
+        }
+
+        table
+    };
+    static ref ASAW_TABLE_2: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        let mut rng = StdRng::seed_from_u64(44);  // Use a fixed seed
+        let rounding_amount: i32 = 30; // Adjust the rounding amount as needed
+
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+            // Introduce deterministic randomness to the waveform
+            let randomness = rng.gen_range(-0.008..0.008);  // Adjust the range of randomness
+
+            let scaled_phase = -1.0 + 2.0 * (phase + randomness);
+
+            // Calculate the rounded sawtooth waveform directly
+            table[i] = scaled_phase * (1.0 - scaled_phase.powi(2 * rounding_amount));
+        }
+
+        table
+    };
+    static ref ASAW_TABLE_3: [f32; TABLE_SIZE] = {
+        let mut table = [0.0; TABLE_SIZE];
+        let mut rng = StdRng::seed_from_u64(44);  // Use a fixed seed
+        let rounding_amount: i32 = 32; // Adjust the rounding amount as needed
+
+        for i in 0..TABLE_SIZE {
+            let phase = i as f32 / (TABLE_SIZE - 1) as f32;
+            // Introduce deterministic randomness to the waveform
+            let randomness = rng.gen_range(-0.01..0.01);  // Adjust the range of randomness
+
+            let scaled_phase = -1.0 + 2.0 * (phase + randomness);
+
+            // Calculate the rounded sawtooth waveform directly
+            table[i] = scaled_phase * (1.0 - scaled_phase.powi(2 * rounding_amount));
+        }
+
         table
     };
     static ref RSAW_TABLE: [f32; TABLE_SIZE] = {
@@ -146,6 +257,9 @@ pub enum VoiceType {
     Tri,
     Saw,
     RSaw,
+    WSaw,
+    SSaw,
+    RASaw,
     Ramp,
     Square,
     RSquare,
@@ -203,10 +317,58 @@ pub fn get_rsaw(phase: f32) -> f32 {
     return RSAW_TABLE[index];
 }
 
+// Rounded Saw Wave with analog-ey modification
+pub fn get_rasaw(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    let mut rng = rand::thread_rng();
+    let random_int: u32 = rng.gen_range(0..=2);
+    // Based on our int, use the three seed-noise tables
+    match random_int {
+        0 => {
+            return ASAW_TABLE_1[index];
+        }
+        1 => {
+            return ASAW_TABLE_2[index];
+        }
+        2 => {
+            return ASAW_TABLE_3[index];
+        }
+        _ => {
+            return 0.0;
+        }
+    }
+}
+
 // Saw Wave
 pub fn get_saw(phase: f32) -> f32 {
     let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
     return SAW_TABLE[index];
+}
+
+// "Analog" inspired "whiter" Saw wave
+pub fn get_wsaw(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    let mut rng = rand::thread_rng();
+    let random_bool: bool = rng.gen();
+    // Based on our random bool, obtain the Saw waveforms with seed-introduced randomness waveform tables
+    if random_bool {
+        return WSAW_TABLE_1[index];
+    } else {
+        return WSAW_TABLE_2[index];
+    }
+}
+
+// "Analog" inspired "subtle warm" Saw wave
+pub fn get_ssaw(phase: f32) -> f32 {
+    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+    let mut rng = rand::thread_rng();
+    let random_bool: bool = rng.gen();
+    // Based on our random bool, obtain the Saw waveforms with seed-introduced randomness waveform tables
+    if random_bool {
+        return SSAW_TABLE_1[index];
+    } else {
+        return SSAW_TABLE_2[index];
+    }
 }
 
 // Ramp Wave

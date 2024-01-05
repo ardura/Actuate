@@ -2,6 +2,10 @@
 //  this ui_knob.rs is built off a2aaron's knob base as part of nyasynth and Robbert's ParamSlider code
 // https://github.com/a2aaron/nyasynth/blob/canon/src/ui_knob.rs
 
+// This is the older style of ui_knob code for older nih_plug + egui with some updates added in
+// If you want the latest, egui version for nih-plug check Interleaf's version!
+// https://github.com/ardura/Interleaf/blob/main/src/ui_knob.rs
+
 use std::{
     f32::consts::TAU,
     ops::{Add, Mul, Sub},
@@ -100,6 +104,8 @@ pub struct ArcKnob<'a, P: Param> {
     outline: bool,
     padding: f32,
     show_label: bool,
+    swap_label_and_value: bool,
+    text_color_override: Color32,
 }
 
 #[allow(dead_code)]
@@ -135,7 +141,20 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             outline: false,
             padding: 10.0,
             show_label: true,
+            swap_label_and_value: true,
+            text_color_override: Color32::TEMPORARY_COLOR,
         }
+    }
+
+    pub fn override_text_color(mut self, text_color: Color32) -> Self {
+        self.text_color_override = text_color;
+        self
+    }
+
+    // Undo newer swap label and value
+    pub fn set_swap_label_and_value(mut self, use_old: bool) -> Self {
+        self.swap_label_and_value = use_old;
+        self
     }
 
     // Specify outline drawing
@@ -340,25 +359,46 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 self.padding * 2.0
             };
             if self.show_label {
-                let label_pos = Pos2::new(
-                    response.rect.center_bottom().x,
-                    response.rect.center_bottom().y - label_y,
-                );
-                let value_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
+                let value_pos: Pos2;
+                let label_pos: Pos2;
+                if self.swap_label_and_value {
+                    // Newer rearranged positions to put value at bottom of knob
+                    value_pos = Pos2::new(
+                        response.rect.center_bottom().x,
+                        response.rect.center_bottom().y - label_y,
+                    );
+                    label_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
+                } else {
+                    // The old value and label positions
+                    label_pos = Pos2::new(
+                        response.rect.center_bottom().x,
+                        response.rect.center_bottom().y - label_y,
+                    );
+                    value_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
+                }
+                
+                let text_color: Color32;
+                // Setting text color
+                if self.text_color_override != Color32::TEMPORARY_COLOR {
+                    text_color = self.text_color_override;
+                } else {
+                    text_color = self.line_color;
+                }
+
                 if self.label_text.is_empty() {
                     painter.text(
                         value_pos,
                         Align2::CENTER_CENTER,
                         self.slider_region.get_string(),
                         FontId::proportional(self.text_size),
-                        self.line_color,
+                        text_color,
                     );
                     painter.text(
                         label_pos,
                         Align2::CENTER_CENTER,
                         self.slider_region.param.name(),
                         FontId::proportional(self.text_size),
-                        self.line_color,
+                        text_color,
                     );
                 } else {
                     painter.text(
@@ -366,14 +406,14 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                         Align2::CENTER_CENTER,
                         self.label_text,
                         FontId::proportional(self.text_size),
-                        self.line_color,
+                        text_color,
                     );
                     painter.text(
                         label_pos,
                         Align2::CENTER_CENTER,
                         self.slider_region.param.name(),
                         FontId::proportional(self.text_size),
-                        self.line_color,
+                        text_color,
                     );
                 }
             }

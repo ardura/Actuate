@@ -15,6 +15,12 @@ pub enum ResonanceType {
     TB,
     // Allegedly an approximation of an Arp 2600 further modified
     Arp,
+    // I made this up - kind of a hyper resonance while still being gentle
+    Res,
+    // I made this up - Gentle bump - kind of Arp-ey
+    Bump,
+    // I made this up - Curve based on powf behavior
+    Powf,
 }
 
 #[derive(Clone)]
@@ -69,35 +75,19 @@ impl StateVariableFilter {
         if resonance_mode != self.res_mode {
             self.res_mode = resonance_mode;
         }
-        // Prevent speaker/ear destruction
-        //if self.q < 0.15 && self.res_mode != ResonanceType::Default {
-        //    self.q = 0.15;
-        //}
     }
 
     pub fn process(&mut self, input: f32) -> (f32, f32, f32) {
-        // Prevent large DC spikes by changing freq range
-        /*
-        match self.res_mode {
-            ResonanceType::Moog => {
-                self.frequency = self.frequency.clamp(1100.0, 16000.0);
-            }
-            ResonanceType::TB => {
-                self.frequency = self.frequency.clamp(1100.0, 16000.0);
-            }
-            ResonanceType::Arp => {
-                self.frequency = self.frequency.clamp(1100.0, 16000.0);
-            }
-            _ => {}
-        }
-        */
-
         // Calculate our normalized freq for filtering
         let normalized_freq: f32 = match self.res_mode {
             ResonanceType::Default => (2.0 * PI * self.frequency) / (self.sample_rate * 4.0),
             ResonanceType::Moog => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
             ResonanceType::TB => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
             ResonanceType::Arp => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
+            // Actuate v1.0.2 additions
+            ResonanceType::Res => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
+            ResonanceType::Bump => (2.0 * PI * self.frequency) / (self.sample_rate * 4.0),
+            ResonanceType::Powf => (2.0 * PI * self.frequency) / (self.sample_rate * 4.0),
         };
 
         // Calculate our resonance coefficient
@@ -106,13 +96,32 @@ impl StateVariableFilter {
             ResonanceType::Default => (normalized_freq / (2.0 * self.q)).sin(),
             // These are all approximations I found then modified - I'm not claiming any accuracy - more like inspiration
             ResonanceType::Moog => {
-                (16.0 * PI * self.q - 2.0) * (2.0 * PI * normalized_freq / self.sample_rate)
+                let resonance_exp = 16.0 * PI * self.q - 2.0;
+                resonance_exp * (2.0 * PI * normalized_freq / self.sample_rate)
             }
             ResonanceType::TB => {
-                (8.0 * PI * self.q) * (PI * normalized_freq / self.sample_rate).tan()
+                let resonance_exp = 8.0 * PI * self.q;
+                resonance_exp * (PI * normalized_freq / self.sample_rate).tan()
             }
             ResonanceType::Arp => {
-                (2.0 * PI * self.q + 0.3) * (2.0 * PI * normalized_freq / self.sample_rate)
+                let resonance_exp = 2.0 * PI * self.q + 0.3;
+                resonance_exp * (2.0 * PI * normalized_freq / self.sample_rate)
+            }
+            // Actuate v1.0.2 additions
+            // These ones I have made based off other ideas
+            ResonanceType::Res => {
+                let resonance_exp = (2.0 * PI * self.q).powf(0.9);
+                resonance_exp * (2.0 * PI * normalized_freq / self.sample_rate).tan()
+            }
+            ResonanceType::Bump => {
+                let resonance_exp = self.q * (normalized_freq / (2.0 * self.q)).sin();
+                resonance_exp
+                    * (normalized_freq / (2.0 * (self.q + 0.001))).asinh()
+                    * (self.q + 0.001).sin()
+            }
+            ResonanceType::Powf => {
+                let resonance_exp = (2.0 * PI * self.q).powf(0.4) + 0.001;
+                (resonance_exp * (2.0 * PI * normalized_freq / (2.0 * resonance_exp)).sin()).tanh()
             }
         };
 

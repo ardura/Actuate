@@ -15,6 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
+Version 1.1
 
 #####################################
 
@@ -22,15 +23,14 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 
 #####################################
 */
-#![allow(non_snake_case)]
 
+#![allow(non_snake_case)]
 use nih_plug_egui::{
     create_egui_editor,
-    egui::{self, Align2, Color32, FontId, Id, Pos2, Rect, RichText, Rounding, Vec2},
+    egui::{self, Align2, Color32, FontId, Id, Pos2, Rect, RichText, Rounding, Vec2, ScrollArea},
     widgets::ParamSlider,
     EguiState,
 };
-// Imports
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
@@ -39,7 +39,7 @@ use phf::phf_map;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::{
-    fmt::{self, Debug},
+    fmt::self,
     io::Read,
 };
 use std::{
@@ -51,26 +51,40 @@ use std::{
         Arc, Mutex,
     },
 };
+use tinyfiledialogs;
 
 // My Files/crates
-use crate::audio_module::Oscillator::VoiceType;
 use audio_module::{
     AudioModule, AudioModuleType,
-    Oscillator::{self, OscState, RetriggerStyle, SmoothStyle},
+    Oscillator::{self, OscState, RetriggerStyle, SmoothStyle, VoiceType},
 };
-use CustomParamSlider::ParamSlider as HorizontalParamSlider;
-use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
-use StateVariableFilter::ResonanceType;
-mod BoolButton;
-mod CustomComboBox;
-mod CustomParamSlider;
-mod CustomPopupComboBox;
-mod CustomVerticalSlider;
+use CustomWidgets::{
+    CustomParamSlider,
+    CustomParamSlider::ParamSlider as HorizontalParamSlider,
+    CustomVerticalSlider::ParamSlider as VerticalParamSlider,
+    CustomPopupComboBox,
+    CustomComboBox,
+    BoolButton,
+    toggle_switch,
+    ui_knob
+};
+use FX::{
+    StateVariableFilter::{ResonanceType, StateVariableFilter},
+    compressor::Compressor,
+    delay::{Delay, DelayType, DelaySnapValues},
+    reverb::StereoReverb,
+    biquad_filters::{FilterType, self},
+    saturation::{Saturation, SaturationType},
+    phaser::StereoPhaser,
+    buffermodulator::BufferModulator,
+    flanger::StereoFlanger,
+    limiter::StereoLimiter,
+};
+
 mod LFOController;
-mod StateVariableFilter;
+mod CustomWidgets;
 mod audio_module;
-mod toggle_switch;
-mod ui_knob;
+mod FX;
 
 // This holds our current sample/granulizer sample (L,R) per sample
 pub struct LoadedSample(Vec<Vec<f32>>);
@@ -110,10 +124,12 @@ enum FilterSelect {
 // Gui for which panel to display in bottom right
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 enum LFOSelect {
+    INFO,
     LFO1,
     LFO2,
     LFO3,
     Modulation,
+    FX,
 }
 
 // Sources that can modulate a value
@@ -210,6 +226,10 @@ pub struct ModulationStruct {
 /// This is the structure that represents a storable preset value
 #[derive(Serialize, Deserialize, Clone)]
 struct ActuatePreset {
+    // Information
+    preset_name: String,
+    preset_info: String,
+
     // Modules 1
     ///////////////////////////////////////////////////////////
     mod1_audio_module_type: AudioModuleType,
@@ -386,6 +406,62 @@ struct ActuatePreset {
     mod_amount_2: f32,
     mod_amount_3: f32,
     mod_amount_4: f32,
+
+    // EQ
+    use_eq: bool,
+    low_freq: f32,
+    mid_freq: f32,
+    high_freq: f32,
+    low_gain: f32,
+    mid_gain: f32,
+    high_gain: f32,
+
+    // FX
+    use_fx: bool,
+
+    use_compressor: bool,
+    comp_amt: f32,
+    comp_atk: f32,
+    comp_rel: f32,
+    comp_drive: f32,
+
+    use_saturation: bool,
+    sat_amount: f32,
+    sat_type: SaturationType,
+
+    use_delay: bool,
+    delay_amount: f32,
+    delay_time: DelaySnapValues,
+    delay_decay: f32,
+    delay_type: DelayType,
+
+    use_reverb: bool,
+    reverb_amount: f32,
+    reverb_size: f32,
+    reverb_feedback: f32,
+
+    use_phaser: bool,
+    phaser_amount: f32,
+    phaser_depth: f32,
+    phaser_rate: f32,
+    phaser_feedback: f32,
+
+    use_buffermod: bool,
+    buffermod_amount: f32,
+    buffermod_depth: f32,
+    buffermod_rate: f32,
+    buffermod_spread: f32,
+    buffermod_timing: f32,
+
+    use_flanger: bool,
+    flanger_amount: f32,
+    flanger_depth: f32,
+    flanger_rate: f32,
+    flanger_feedback: f32,
+
+    use_limiter: bool,
+    limiter_threshold: f32,
+    limiter_knee: f32,
 }
 
 // This is the struct of the actual plugin object that tracks everything
@@ -400,6 +476,7 @@ pub struct Actuate {
     reload_entire_preset: Arc<AtomicBool>,
     file_dialog: Arc<AtomicBool>,
     file_open_buffer_timer: Arc<AtomicU32>,
+    // Using this like a state: 0 = Closed, 1 = Opening, 2 = Open
     current_preset: Arc<AtomicU32>,
 
     update_current_preset: Arc<AtomicBool>,
@@ -415,15 +492,15 @@ pub struct Actuate {
     _audio_module_3_type: AudioModuleType,
 
     // Filters
-    filter_l_1: StateVariableFilter::StateVariableFilter,
-    filter_r_1: StateVariableFilter::StateVariableFilter,
+    filter_l_1: StateVariableFilter,
+    filter_r_1: StateVariableFilter,
     filter_state_1: OscState,
     filter_atk_smoother_1: Smoother<f32>,
     filter_dec_smoother_1: Smoother<f32>,
     filter_rel_smoother_1: Smoother<f32>,
 
-    filter_l_2: StateVariableFilter::StateVariableFilter,
-    filter_r_2: StateVariableFilter::StateVariableFilter,
+    filter_l_2: StateVariableFilter,
+    filter_r_2: StateVariableFilter,
     filter_state_2: OscState,
     filter_atk_smoother_2: Smoother<f32>,
     filter_dec_smoother_2: Smoother<f32>,
@@ -446,11 +523,42 @@ pub struct Actuate {
 
     // Preset Lib Default
     preset_lib_name: String,
+    preset_name: Arc<Mutex<String>>,
+    preset_info: Arc<Mutex<String>>,
     preset_lib: Arc<Mutex<Vec<ActuatePreset>>>,
 
     // Used for DC Offset calculations
-    dc_filter_l: StateVariableFilter::StateVariableFilter,
-    dc_filter_r: StateVariableFilter::StateVariableFilter,
+    dc_filter_l: StateVariableFilter,
+    dc_filter_r: StateVariableFilter,
+
+    // EQ Structs
+    // I'm not using the Interleaved ones since in Interleaf
+    // People thought the quirks of interleaving were bugs
+    bands: Arc<Mutex<[biquad_filters::Biquad; 3]>>,
+
+    // Compressor
+    compressor: Compressor,
+
+    // Saturation
+    saturator: Saturation,
+
+    // Delay
+    delay: Delay,
+
+    // Reverb
+    reverb: [StereoReverb; 6],
+
+    // Phaser
+    phaser: StereoPhaser,
+
+    // Buffer Modulation
+    buffermod: BufferModulator,
+
+    // Flanger
+    flanger: StereoFlanger,
+
+    // Limiter
+    limiter: StereoLimiter,
 }
 
 impl Default for Actuate {
@@ -499,15 +607,15 @@ impl Default for Actuate {
             _audio_module_3_type: AudioModuleType::Off,
 
             // Filters
-            filter_l_2: StateVariableFilter::StateVariableFilter::default().set_oversample(4),
-            filter_r_2: StateVariableFilter::StateVariableFilter::default().set_oversample(4),
+            filter_l_2: StateVariableFilter::default().set_oversample(4),
+            filter_r_2: StateVariableFilter::default().set_oversample(4),
             filter_state_2: OscState::Off,
             filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_rel_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
 
-            filter_l_1: StateVariableFilter::StateVariableFilter::default().set_oversample(4),
-            filter_r_1: StateVariableFilter::StateVariableFilter::default().set_oversample(4),
+            filter_l_1: StateVariableFilter::default().set_oversample(4),
+            filter_r_1: StateVariableFilter::default().set_oversample(4),
             filter_state_1: OscState::Off,
             filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -530,8 +638,12 @@ impl Default for Actuate {
 
             // Preset Library DEFAULT
             preset_lib_name: String::from("Default"),
+            preset_name: Arc::new(Mutex::new(String::new())),
+            preset_info: Arc::new(Mutex::new(String::new())),
             preset_lib: Arc::new(Mutex::new(vec![
                 ActuatePreset {
+                    preset_name: "Default".to_string(),
+                    preset_info: "Info".to_string(),
                     mod1_audio_module_type: AudioModuleType::Osc,
                     mod1_audio_module_level: 1.0,
                     mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -620,7 +732,7 @@ impl Default for Actuate {
                     mod3_osc_stereo: 0.0,
 
                     filter_wet: 1.0,
-                    filter_cutoff: 4000.0,
+                    filter_cutoff: 16000.0,
                     filter_resonance: 1.0,
                     filter_res_type: ResonanceType::Default,
                     filter_lp_amount: 1.0,
@@ -628,15 +740,15 @@ impl Default for Actuate {
                     filter_bp_amount: 0.0,
                     filter_env_peak: 0.0,
                     filter_env_attack: 0.0,
-                    filter_env_decay: 250.0,
+                    filter_env_decay: 0.0001,
                     filter_env_sustain: 999.9,
-                    filter_env_release: 100.0,
+                    filter_env_release: 5.0,
                     filter_env_atk_curve: SmoothStyle::Linear,
                     filter_env_dec_curve: SmoothStyle::Linear,
                     filter_env_rel_curve: SmoothStyle::Linear,
 
                     filter_wet_2: 1.0,
-                    filter_cutoff_2: 4000.0,
+                    filter_cutoff_2: 16000.0,
                     filter_resonance_2: 1.0,
                     filter_res_type_2: ResonanceType::Default,
                     filter_lp_amount_2: 1.0,
@@ -644,9 +756,9 @@ impl Default for Actuate {
                     filter_bp_amount_2: 0.0,
                     filter_env_peak_2: 0.0,
                     filter_env_attack_2: 0.0,
-                    filter_env_decay_2: 250.0,
+                    filter_env_decay_2: 0.0001,
                     filter_env_sustain_2: 999.9,
-                    filter_env_release_2: 100.0,
+                    filter_env_release_2: 5.0,
                     filter_env_atk_curve_2: SmoothStyle::Linear,
                     filter_env_dec_curve_2: SmoothStyle::Linear,
                     filter_env_rel_curve_2: SmoothStyle::Linear,
@@ -692,12 +804,106 @@ impl Default for Actuate {
                     mod_amount_2: 0.0,
                     mod_amount_3: 0.0,
                     mod_amount_4: 0.0,
+
+                    // EQ
+                    use_eq: false,
+                    low_freq: 800.0,
+                    mid_freq: 2000.0,
+                    high_freq: 8000.0,
+                    low_gain: 0.0,
+                    mid_gain: 0.0,
+                    high_gain: 0.0,
+
+                    //FX
+                    use_fx: true,
+
+                    use_compressor: false,
+
+                    comp_amt: 0.5,
+                    comp_atk: 0.5,
+                    comp_rel: 0.5,
+                    comp_drive: 0.5,
+
+                    use_saturation: false,
+                    sat_amount: 0.0,
+                    sat_type: SaturationType::Tape,
+
+                    use_delay: false,
+                    delay_amount: 0.0,
+                    delay_time: DelaySnapValues::Quarter,
+                    delay_decay: 0.0,
+                    delay_type: DelayType::Stereo,
+
+                    use_reverb: false,
+                    reverb_amount: 0.5,
+                    reverb_size: 0.5,
+                    reverb_feedback: 0.5,
+
+                    use_phaser: false,
+                    phaser_amount: 0.5,
+                    phaser_depth: 0.5,
+                    phaser_rate: 0.5,
+                    phaser_feedback: 0.5,
+
+                    use_buffermod: false,
+                    buffermod_amount: 0.5,
+                    buffermod_depth: 0.5,
+                    buffermod_rate: 0.5,
+                    buffermod_spread: 0.0,
+                    buffermod_timing: 620.0,
+
+                    use_flanger: false,
+                    flanger_amount: 0.5,
+                    flanger_depth: 0.5,
+                    flanger_rate: 0.5,
+                    flanger_feedback: 0.5,
+
+                    use_limiter: false,
+                    limiter_threshold: 0.5,
+                    limiter_knee: 0.5,
                 };
                 PRESET_BANK_SIZE
             ])),
 
-            dc_filter_l: StateVariableFilter::StateVariableFilter::default().set_oversample(2),
-            dc_filter_r: StateVariableFilter::StateVariableFilter::default().set_oversample(2),
+            dc_filter_l: StateVariableFilter::default().set_oversample(2),
+            dc_filter_r: StateVariableFilter::default().set_oversample(2),
+
+            // EQ Structs
+            bands: Arc::new(Mutex::new([
+                biquad_filters::Biquad::new(44100.0, 800.0, 0.0, 0.93, FilterType::LowShelf),
+                biquad_filters::Biquad::new(44100.0, 3000.0, 0.0, 0.93, FilterType::Peak),
+                biquad_filters::Biquad::new(44100.0, 10000.0, 0.0, 0.93, FilterType::HighShelf),
+            ])),
+
+            // Compressor
+            compressor: Compressor::new(44100.0, 0.5, 0.5, 0.5, 0.5),
+
+            // Saturation
+            saturator: Saturation::new(),
+
+            // Delay
+            delay: Delay::new(44100.0, 138.0, DelaySnapValues::Quarter, 0.5),
+
+            // Reverb
+            reverb: [
+                StereoReverb::new(44100.0, 0.5, 0.5),
+                StereoReverb::new(44100.0, 0.5, 0.5),
+                StereoReverb::new(44100.0, 0.5, 0.5),
+                StereoReverb::new(44100.0, 0.5, 0.5),
+                StereoReverb::new(44100.0, 0.5, 0.5),
+                StereoReverb::new(44100.0, 0.5, 0.5),],
+
+            // Buffer Modulator
+            buffermod: BufferModulator::new(44100.0, 0.5, 10.0),
+
+            // Flanger initialized to use delay range of 50, for 100 samples
+            flanger: StereoFlanger::new(44100.0, 0.5, 0.5, 10.0, 0.5, 20),
+
+            // Phaser
+            phaser: StereoPhaser::new(),
+
+            // Limiter
+            limiter: StereoLimiter::new(0.5,0.5),
         }
     }
 }
@@ -1032,6 +1238,108 @@ pub struct ActuateParams {
     #[id = "mod_destination_4"]
     pub mod_destination_4: EnumParam<ModulationDestination>,
 
+    // EQ Params
+    #[id = "use_eq"]
+    pub use_eq: BoolParam,
+
+    #[id = "low_freq"]
+    pub low_freq: FloatParam,
+    #[id = "mid_freq"]
+    pub mid_freq: FloatParam,
+    #[id = "high_freq"]
+    pub high_freq: FloatParam,
+
+    #[id = "low_gain"]
+    pub low_gain: FloatParam,
+    #[id = "mid_gain"]
+    pub mid_gain: FloatParam,
+    #[id = "high_gain"]
+    pub high_gain: FloatParam,
+
+    // FX
+    #[id = "use_fx"]
+    pub use_fx: BoolParam,
+    
+    #[id = "use_compressor"]
+    pub use_compressor: BoolParam,
+    #[id = "comp_amt"]
+    pub comp_amt: FloatParam,
+    #[id = "comp_atk"]
+    pub comp_atk: FloatParam,
+    #[id = "comp_rel"]
+    pub comp_rel: FloatParam,
+    #[id = "comp_drive"]
+    pub comp_drive: FloatParam,
+
+    #[id = "use_saturation"]
+    pub use_saturation: BoolParam,
+    #[id = "sat_amt"]
+    pub sat_amt: FloatParam,
+    #[id = "sat_type"]
+    pub sat_type: EnumParam<SaturationType>,
+
+    #[id = "use_delay"]
+    pub use_delay: BoolParam,
+    #[id = "delay_amount"]
+    pub delay_amount: FloatParam,
+    #[id = "delay_time"]
+    pub delay_time: EnumParam<DelaySnapValues>,
+    #[id = "delay_decay"]
+    pub delay_decay: FloatParam,
+    #[id = "delay_type"]
+    pub delay_type: EnumParam<DelayType>,
+
+    #[id = "use_reverb"]
+    pub use_reverb: BoolParam,
+    #[id = "reverb_amount"]
+    pub reverb_amount: FloatParam,
+    #[id = "reverb_size"]
+    pub reverb_size: FloatParam,
+    #[id = "reverb_feedback"]
+    pub reverb_feedback: FloatParam,
+
+    #[id = "use_phaser"]
+    pub use_phaser: BoolParam,
+    #[id = "phaser_amount"]
+    pub phaser_amount: FloatParam,
+    #[id = "phaser_depth"]
+    pub phaser_depth: FloatParam,
+    #[id = "phaser_rate"]
+    pub phaser_rate: FloatParam,
+    #[id = "phaser_feedback"]
+    pub phaser_feedback: FloatParam,
+
+    #[id = "use_buffermod"]
+    pub use_buffermod: BoolParam,
+    #[id = "buffermod_amount"]
+    pub buffermod_amount: FloatParam,
+    #[id = "buffermod_depth"]
+    pub buffermod_depth: FloatParam,
+    #[id = "buffermod_rate"]
+    pub buffermod_rate: FloatParam,
+    #[id = "buffermod_spread"]
+    pub buffermod_spread: FloatParam,
+    #[id = "buffermod_timing"]
+    pub buffermod_timing: FloatParam,
+
+    #[id = "use_flanger"]
+    pub use_flanger: BoolParam,
+    #[id = "flanger_amount"]
+    pub flanger_amount: FloatParam,
+    #[id = "flanger_depth"]
+    pub flanger_depth: FloatParam,
+    #[id = "flanger_rate"]
+    pub flanger_rate: FloatParam,
+    #[id = "flanger_feedback"]
+    pub flanger_feedback: FloatParam,
+
+    #[id = "use_limiter"]
+    pub use_limiter: BoolParam,
+    #[id = "limiter_threshold"]
+    pub limiter_threshold: FloatParam,
+    #[id = "limiter_knee"]
+    pub limiter_knee: FloatParam,
+
     // UI Non-param Params
     #[id = "param_load_bank"]
     pub param_load_bank: BoolParam,
@@ -1240,7 +1548,7 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+            osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_rounded(2))
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
@@ -1374,7 +1682,7 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+            osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_rounded(2))
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
@@ -1508,7 +1816,7 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+            osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_rounded(2))
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
@@ -1516,20 +1824,23 @@ impl ActuateParams {
 
             // Granulizer/Sampler
             ////////////////////////////////////////////////////////////////////////////////////
-            load_sample_1: BoolParam::new("Load Sample", false).with_callback({
-                let file_dialog = file_dialog.clone();
-                Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
-            })
+            load_sample_1: BoolParam::new("Load Sample", false)
+                .with_callback({
+                    let file_dialog = file_dialog.clone();
+                    Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
+                })
                 .hide(),
-            load_sample_2: BoolParam::new("Load Sample", false).with_callback({
-                let file_dialog = file_dialog.clone();
-                Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
-            })
+            load_sample_2: BoolParam::new("Load Sample", false)
+                .with_callback({
+                    let file_dialog = file_dialog.clone();
+                    Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
+                })
                 .hide(),
-            load_sample_3: BoolParam::new("Load Sample", false).with_callback({
-                let file_dialog = file_dialog.clone();
-                Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
-            })
+            load_sample_3: BoolParam::new("Load Sample", false)
+                .with_callback({
+                    let file_dialog = file_dialog.clone();
+                    Arc::new(move |_| file_dialog.store(true, Ordering::Relaxed))
+                })
                 .hide(),
             // To loop the sampler/granulizer
             loop_sample_1: BoolParam::new("Loop Sample", false).with_callback({
@@ -2139,26 +2450,136 @@ impl ActuateParams {
             mod_destination_3: EnumParam::new("Dest 3", ModulationDestination::None),
             mod_destination_4: EnumParam::new("Dest 4", ModulationDestination::None),
 
+            // EQ
+            use_eq: BoolParam::new("EQ", false),
+            low_freq: FloatParam::new(
+                "Low",
+                800.0,
+                FloatRange::Linear {
+                    min: 100.0,
+                    max: 2000.0,
+                },
+            )
+            .with_step_size(1.0)
+            .with_smoother(SmoothingStyle::Linear(5.0))
+            .with_value_to_string(formatters::v2s_f32_hz_then_khz(0)),
+            mid_freq: FloatParam::new(
+                "Mid",
+                3000.0,
+                FloatRange::Linear {
+                    min: 1000.0,
+                    max: 8000.0,
+                },
+            )
+            .with_step_size(1.0)
+            .with_smoother(SmoothingStyle::Linear(5.0))
+            .with_value_to_string(formatters::v2s_f32_hz_then_khz(0)),
+            high_freq: FloatParam::new(
+                "High",
+                10000.0,
+                FloatRange::Linear {
+                    min: 3000.0,
+                    max: 16000.0,
+                },
+            )
+            .with_step_size(1.0)
+            .with_smoother(SmoothingStyle::Linear(5.0))
+            .with_value_to_string(formatters::v2s_f32_hz_then_khz(0)),
+            low_gain: FloatParam::new(
+                "Low Gain",
+                0.0,
+                FloatRange::Linear {
+                    min: -12.0,
+                    max: 12.0,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(1)),
+            mid_gain: FloatParam::new(
+                "Mid Gain",
+                0.0,
+                FloatRange::Linear {
+                    min: -12.0,
+                    max: 12.0,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(1)),
+            high_gain: FloatParam::new(
+                "High Gain",
+                0.0,
+                FloatRange::Linear {
+                    min: -12.0,
+                    max: 12.0,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(1)),
+
+            // FX
+            use_fx: BoolParam::new("FX", true),
+            
+            use_compressor: BoolParam::new("Compressor", false),
+            comp_amt: FloatParam::new("Amount", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            comp_atk: FloatParam::new("Attack", 0.8, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            comp_rel: FloatParam::new("Release", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            comp_drive: FloatParam::new("Drive", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            
+            use_saturation: BoolParam::new("Saturation", false),
+            sat_amt: FloatParam::new("Amount", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            sat_type: EnumParam::new("Type", SaturationType::Tape),
+            
+            use_delay: BoolParam::new("Delay", false),
+            delay_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            delay_time: EnumParam::new("Time", DelaySnapValues::Quarter),
+            delay_decay: FloatParam::new("Decay", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            delay_type: EnumParam::new("Type", DelayType::Stereo),
+            
+            use_reverb: BoolParam::new("Reverb", false),
+            reverb_amount: FloatParam::new("Amount", 0.85, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            reverb_size: FloatParam::new("Size", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            reverb_feedback: FloatParam::new("Feedback", 0.28, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            
+            use_phaser: BoolParam::new("Phaser", false),
+            phaser_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            phaser_depth: FloatParam::new("Depth", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            phaser_rate: FloatParam::new("Rate", 1.0, FloatRange::Linear { min: 0.1, max: 100.0 }).with_step_size(0.1).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            phaser_feedback: FloatParam::new("Feedback", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            
+            use_buffermod: BoolParam::new("Buffer Modulator", false),
+            buffermod_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            buffermod_depth: FloatParam::new("Depth", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            buffermod_spread: FloatParam::new("Spread", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.5 }).with_step_size(0.001).with_value_to_string(formatters::v2s_f32_rounded(3)),
+            buffermod_rate: FloatParam::new("Rate", 0.01, FloatRange::Skewed { min: 0.01, max: 3.0, factor: 0.5 }).with_step_size(0.001).with_value_to_string(formatters::v2s_f32_rounded(3)),
+            buffermod_timing: FloatParam::new("Buffer", 620.0, FloatRange::Skewed { min: 1.0, max: 2700.0, factor: 0.5 }).with_step_size(1.0).with_value_to_string(formatters::v2s_f32_rounded(0)),
+
+            use_flanger: BoolParam::new("Flanger", false),
+            flanger_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            flanger_depth: FloatParam::new("Depth", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            flanger_rate: FloatParam::new("Rate", 5.0, FloatRange::Linear { min: 0.01, max: 24.0 }).with_step_size(0.01).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            flanger_feedback: FloatParam::new("Feedback", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+
+            use_limiter: BoolParam::new("Limiter", false),
+            limiter_threshold: FloatParam::new("Threshold", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            limiter_knee: FloatParam::new("Knee", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+
             // UI Non-Param Params
             ////////////////////////////////////////////////////////////////////////////////////
-            param_load_bank: BoolParam::new("Load Bank", false).with_callback({
-                let load_bank = load_bank.clone();
-                Arc::new(move |_| load_bank.store(true, Ordering::Relaxed))
-            })
+            param_load_bank: BoolParam::new("Load Bank", false)
+                .with_callback({
+                    let load_bank = load_bank.clone();
+                    Arc::new(move |_| load_bank.store(true, Ordering::Relaxed))
+                })
                 .hide(),
-            param_save_bank: BoolParam::new("Save Bank", false).with_callback({
-                let save_bank = save_bank.clone();
-                Arc::new(move |_| save_bank.store(true, Ordering::Relaxed))
-            })
+            param_save_bank: BoolParam::new("Save Bank", false)
+                .with_callback({
+                    let save_bank = save_bank.clone();
+                    Arc::new(move |_| save_bank.store(true, Ordering::Relaxed))
+                })
                 .hide(),
 
             // For some reason the callback doesn't work right here so I went by validating params for previous and next
-            param_next_preset: BoolParam::new("->", false)
-                .hide(),
-            param_prev_preset: BoolParam::new("<-", false)
-                .hide(),
+            param_next_preset: BoolParam::new("->", false).hide(),
+            param_prev_preset: BoolParam::new("<-", false).hide(),
 
-            param_update_current_preset: BoolParam::new("Update Current Preset", false)
+            param_update_current_preset: BoolParam::new("Update Preset", false)
                 .with_callback({
                     let update_current_preset = update_current_preset.clone();
                     Arc::new(move |_| update_current_preset.store(true, Ordering::Relaxed))
@@ -2166,8 +2587,7 @@ impl ActuateParams {
                 .hide(),
 
             // Not a param
-            loading: BoolParam::new("loading_mod", false)
-                .hide(),
+            loading: BoolParam::new("loading_mod", false).hide(),
         }
     }
 }
@@ -2199,6 +2619,8 @@ impl Plugin for Actuate {
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = self.params.clone();
         let arc_preset: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib); //Arc<Mutex<Vec<ActuatePreset>>>
+        let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&self.preset_name);
+        let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&self.preset_info);
         let clear_voices: Arc<AtomicBool> = Arc::clone(&self.clear_voices);
         let reload_entire_preset: Arc<AtomicBool> = Arc::clone(&self.reload_entire_preset);
         let current_preset: Arc<AtomicU32> = Arc::clone(&self.current_preset);
@@ -2213,7 +2635,7 @@ impl Plugin for Actuate {
         let loading: Arc<AtomicBool> = Arc::clone(&self.file_dialog);
         let filter_select_outside: Arc<Mutex<FilterSelect>> =
             Arc::new(Mutex::new(FilterSelect::Filter1));
-        let lfo_select_outside: Arc<Mutex<LFOSelect>> = Arc::new(Mutex::new(LFOSelect::LFO1));
+        let lfo_select_outside: Arc<Mutex<LFOSelect>> = Arc::new(Mutex::new(LFOSelect::INFO));
         let mod_source_1_tracker_outside: Arc<Mutex<ModulationSource>> =
             Arc::new(Mutex::new(ModulationSource::None));
         let mod_source_2_tracker_outside: Arc<Mutex<ModulationSource>> =
@@ -2240,7 +2662,7 @@ impl Plugin for Actuate {
         let mod_dest_override_3 = self.mod_override_dest_3.clone();
         let mod_dest_override_4 = self.mod_override_dest_4.clone();
 
-        // Do our GUI stuff
+        // Do our GUI stuff. Store this to later get parent window handle from it
         create_egui_editor(
             self.params.editor_state.clone(),
             (),
@@ -2270,6 +2692,14 @@ impl Plugin for Actuate {
 
                                 setter.set_parameter(&params.param_next_preset, false);
                                 clear_voices.store(true, Ordering::Relaxed);
+
+                                // Move to info tab on preset change
+                                *lfo_select.lock().unwrap() = LFOSelect::INFO;
+
+                                // Update our displayed info
+                                let temp_current_preset = arc_preset.lock().unwrap()[current_preset_index as usize + 1].clone();
+                                *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
+                                *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
 
                                 // This is manually here to make sure it appears for long loads from different threads
                                 // Create the loading popup here.
@@ -2317,6 +2747,14 @@ impl Plugin for Actuate {
                                 setter.set_parameter(&params.param_prev_preset, false);
                                 clear_voices.store(true, Ordering::Relaxed);
 
+                                // Move to info tab on preset change
+                                *lfo_select.lock().unwrap() = LFOSelect::INFO;
+
+                                // Update our displayed info
+                                let temp_current_preset = arc_preset.lock().unwrap()[current_preset_index as usize - 1].clone();
+                                *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
+                                *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
+
                                 // This is manually here to make sure it appears for long loads from different threads
                                 // Create the loading popup here.
                                 let screen_size = Rect::from_x_y_ranges(
@@ -2357,6 +2795,9 @@ impl Plugin for Actuate {
                             setter.set_parameter(&params.loading, true);
                             reload_entire_preset.store(true, Ordering::Relaxed);
                             loading.store(true, Ordering::Relaxed);
+
+                            // Move to info tab on preset change
+                            *lfo_select.lock().unwrap() = LFOSelect::INFO;
 
                             // This is manually here to make sure it appears for long loads from different threads
                             // Create the loading popup here.
@@ -2497,7 +2938,16 @@ impl Plugin for Actuate {
                                         .set_label_width(84.0)
                                         .with_width(30.0));
                                     ui.separator();
-                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 8.0, 0.9, SMALLER_FONT)
+                                    ui.label(RichText::new("FX")
+                                        .font(FONT)
+                                        .background_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
+                                        .color(*GUI_VALS.get("FONT_COLOR").unwrap())
+                                    )
+                                        .on_hover_text("Process FX");
+                                    let use_fx_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_fx, setter);
+                                    ui.add(use_fx_toggle);
+                                    ui.separator();
+                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 0.9, SMALLER_FONT)
                                         .with_background_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap());
                                     ui.add(update_current_preset);
                                     let load_bank_button = BoolButton::BoolButton::for_param(&params.param_load_bank, setter, 3.5, 0.9, SMALLER_FONT)
@@ -3040,15 +3490,35 @@ impl Plugin for Actuate {
                                                 *GUI_VALS.get("LIGHTER_PURPLE").unwrap()
                                             );
                                         }
+                                        LFOSelect::INFO => {
+                                            ui.painter().rect_filled(
+                                                Rect::from_x_y_ranges(
+                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
+                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
+                                                Rounding::from(16.0),
+                                                *GUI_VALS.get("SYNTH_SOFT_BLUE2").unwrap()
+                                            );
+                                        }
+                                        LFOSelect::FX => {
+                                            ui.painter().rect_filled(
+                                                Rect::from_x_y_ranges(
+                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
+                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
+                                                Rounding::from(16.0),
+                                                *GUI_VALS.get("FONT_COLOR").unwrap()
+                                            );
+                                        }
                                     }
 
                                     // LFO Box
                                     ui.vertical(|ui|{
                                         ui.horizontal(|ui| {
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").color(Color32::BLACK));
                                             ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").color(Color32::BLACK));
                                             ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").color(Color32::BLACK));
                                             ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Modulation").color(Color32::BLACK));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Mods").color(Color32::BLACK));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").color(Color32::BLACK));
                                         });
                                         ui.separator();
                                         match *lfo_select.lock().unwrap() {
@@ -3506,6 +3976,350 @@ impl Plugin for Actuate {
                                                     });
                                                     ui.separator();
                                                 });
+                                            },
+                                            LFOSelect::INFO => {
+                                                let text_response = ui.add(
+                                                    egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
+                                                        .interactive(true)
+                                                        .hint_text("Preset Name")
+                                                        .desired_width(270.0));
+                                                if text_response.clicked() {
+                                                    let mut temp_lock = arc_preset_name.lock().unwrap();
+
+                                                    //TFD
+                                                    match tinyfiledialogs::input_box("Rename preset", "Preset name:", &*temp_lock) {
+                                                        Some(input) => *temp_lock = input,
+                                                        None => {},
+                                                    }
+                                                }
+                                                let text_info_response = ui.add(
+                                                    egui::TextEdit::multiline(&mut *arc_preset_info.lock().unwrap())
+                                                        .interactive(true)
+                                                        .hint_text("Preset Info")
+                                                        .desired_width(270.0)
+                                                        .desired_rows(4)
+                                                        .lock_focus(true));
+                                                if text_info_response.clicked() {
+                                                    let mut temp_lock = arc_preset_info.lock().unwrap();
+
+                                                    //TFD
+                                                    match tinyfiledialogs::input_box("Update preset description", "Preset description:", &*temp_lock) {
+                                                        Some(input) => *temp_lock = input,
+                                                        None => {},
+                                                    }
+                                                }
+                                            },
+                                            LFOSelect::FX => {
+                                                ScrollArea::vertical()
+                                                    .max_height(200.0)
+                                                    .max_width(270.0)
+                                                    .always_show_scroll(true)
+                                                    .show(ui, |ui|{
+                                                        ui.vertical(|ui|{
+                                                            // Equalizer
+                                                            ui.horizontal(|ui|{
+                                                                ui.vertical(|ui|{
+                                                                    ui.label(RichText::new("EQ")
+                                                                        .font(FONT)
+                                                                        .color(Color32::BLACK)
+                                                                    )
+                                                                        .on_hover_text("non interleaved EQ from Interleaf");
+                                                                    let use_eq_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_eq, setter);
+                                                                    ui.add(use_eq_toggle);
+                                                                });
+                                                                ui.vertical(|ui|{
+                                                                    ui.add(
+                                                                        VerticalParamSlider::for_param(&params.low_gain, setter)
+                                                                            .with_width(VERT_BAR_WIDTH * 2.2)
+                                                                            .with_height(VERT_BAR_HEIGHT * 0.6)
+                                                                            .set_reversed(true)
+                                                                            .override_colors(
+                                                                                *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
+                                                                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                                            ),
+                                                                    );
+                                                                    let low_freq_knob = ui_knob::ArcKnob::for_param(
+                                                                        &params.low_freq,
+                                                                        setter,
+                                                                        KNOB_SIZE * 0.6)
+                                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                        .set_text_size(TEXT_SIZE)
+                                                                        .override_text_color(Color32::DARK_GRAY);
+                                                                    ui.add(low_freq_knob);
+                                                                });
+                                                                ui.vertical(|ui|{
+                                                                    ui.add(
+                                                                        VerticalParamSlider::for_param(&params.mid_gain, setter)
+                                                                            .with_width(VERT_BAR_WIDTH * 2.2)
+                                                                            .with_height(VERT_BAR_HEIGHT * 0.6)
+                                                                            .set_reversed(true)
+                                                                            .override_colors(
+                                                                                *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
+                                                                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                                            ),
+                                                                    );
+                                                                    let mid_freq_knob = ui_knob::ArcKnob::for_param(
+                                                                        &params.mid_freq,
+                                                                        setter,
+                                                                        KNOB_SIZE * 0.6)
+                                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                        .set_text_size(TEXT_SIZE)
+                                                                        .override_text_color(Color32::DARK_GRAY);
+                                                                    ui.add(mid_freq_knob);
+                                                                });
+                                                                ui.vertical(|ui|{
+                                                                    ui.add(
+                                                                        VerticalParamSlider::for_param(&params.high_gain, setter)
+                                                                            .with_width(VERT_BAR_WIDTH * 2.2)
+                                                                            .with_height(VERT_BAR_HEIGHT * 0.6)
+                                                                            .set_reversed(true)
+                                                                            .override_colors(
+                                                                                *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
+                                                                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                                            ),
+                                                                    );
+                                                                    let high_freq_knob = ui_knob::ArcKnob::for_param(
+                                                                        &params.high_freq,
+                                                                        setter,
+                                                                        KNOB_SIZE * 0.6)
+                                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                        .set_text_size(TEXT_SIZE)
+                                                                        .override_text_color(Color32::DARK_GRAY);
+                                                                    ui.add(high_freq_knob);
+                                                                });
+                                                                ui.separator();
+                                                            });
+                                                            // Compressor
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("Compressor")
+                                                                    .font(FONT)
+                                                                    .color(Color32::BLACK));
+                                                                let use_comp_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_compressor, setter);
+                                                                ui.add(use_comp_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_amt, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_atk, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_rel, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_drive, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                            });
+                                                            ui.separator();
+                                                            // Saturation
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("Saturation")
+                                                                    .font(FONT)
+                                                                    .color(Color32::BLACK));
+                                                                let use_sat_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_saturation, setter);
+                                                                ui.add(use_sat_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_type, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_amt, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                            });
+                                                            ui.separator();
+                                                            // Phaser
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("Phaser")
+                                                                    .font(FONT)
+                                                                    .color(Color32::BLACK));
+                                                                let use_phaser_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_phaser, setter);
+                                                                ui.add(use_phaser_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_amount, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_depth, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_rate, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                            });
+                                                            ui.separator();
+                                                            // Flanger
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("Flanger")
+                                                                    .font(FONT)
+                                                                    .color(Color32::BLACK));
+                                                                let use_flanger_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_flanger, setter);
+                                                                ui.add(use_flanger_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_amount, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_depth, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_rate, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_feedback, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                            });
+                                                            ui.separator();
+                                                            // Buffer Modulator
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("Buffer Modulator")
+                                                                    .font(FONT)
+                                                                    .color(Color32::BLACK));
+                                                                let use_buffermod_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_buffermod, setter);
+                                                                ui.add(use_buffermod_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_amount, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_depth, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_rate, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_spread, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_timing, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                            });
+                                                            ui.separator();
+                                                            // Delay
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("Delay")
+                                                                    .font(FONT)
+                                                                    .color(Color32::BLACK));
+                                                                let use_delay_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_delay, setter);
+                                                                ui.add(use_delay_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_amount, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_time, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_decay, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_type, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                            });
+                                                            ui.separator();
+                                                            // Reverb
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("Reverb")
+                                                                    .font(FONT)
+                                                                    .color(Color32::BLACK));
+                                                                let use_reverb_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_reverb, setter);
+                                                                ui.add(use_reverb_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_amount, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_size, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_feedback, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                            });
+                                                            ui.separator();
+                                                            // Limiter
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("Limiter")
+                                                                    .font(FONT)
+                                                                    .color(Color32::BLACK));
+                                                                let use_limiter_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_limiter, setter);
+                                                                ui.add(use_limiter_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_threshold, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_knee, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                            });
+                                                        });
+                                                    })
+                                                    .inner;
                                             }
                                         }
                                     });
@@ -3543,6 +4357,7 @@ impl Plugin for Actuate {
                         }
                     });
             },
+            // This is the end of create_egui_editor()
         )
     }
 
@@ -3653,7 +4468,7 @@ impl Actuate {
         if self.params.lfo2_enable.value() {
             // Update LFO Frequency
             if self.params.lfo2_sync.value() {
-                let multiplier = match self.params.lfo2_snap.value() {
+                let divisor = match self.params.lfo2_snap.value() {
                     LFOController::LFOSnapValues::Quad => 0.5 / 3.0,
                     LFOController::LFOSnapValues::QuadD => (0.5 / 3.0) * 1.5,
                     LFOController::LFOSnapValues::QuadT => 0.5 / 4.5,
@@ -3679,8 +4494,7 @@ impl Actuate {
                     LFOController::LFOSnapValues::ThirtySecondD => (64.0 / 3.0) * 1.5,
                     LFOController::LFOSnapValues::ThirtySecondT => 64.0 / 4.5,
                 };
-                let duration = 1.0 / (bpm * multiplier);
-                let freq_snap = 1.0 / duration;
+                let freq_snap = (bpm / divisor) / 60.0;
                 if self.params.lfo2_freq.value() != freq_snap {
                     self.lfo_2.set_frequency(freq_snap);
                 }
@@ -3698,7 +4512,7 @@ impl Actuate {
         if self.params.lfo3_enable.value() {
             // Update LFO Frequency
             if self.params.lfo3_sync.value() {
-                let multiplier = match self.params.lfo3_snap.value() {
+                let divisor = match self.params.lfo3_snap.value() {
                     LFOController::LFOSnapValues::Quad => 0.5 / 3.0,
                     LFOController::LFOSnapValues::QuadD => (0.5 / 3.0) * 1.5,
                     LFOController::LFOSnapValues::QuadT => 0.5 / 4.5,
@@ -3724,8 +4538,7 @@ impl Actuate {
                     LFOController::LFOSnapValues::ThirtySecondD => (64.0 / 3.0) * 1.5,
                     LFOController::LFOSnapValues::ThirtySecondT => 64.0 / 4.5,
                 };
-                let duration = 1.0 / (bpm * multiplier);
-                let freq_snap = 1.0 / duration;
+                let freq_snap = (bpm / divisor) / 60.0;
                 if self.params.lfo3_freq.value() != freq_snap {
                     self.lfo_3.set_frequency(freq_snap);
                 }
@@ -3835,6 +4648,10 @@ impl Actuate {
                 AM1.regenerate_samples();
                 AM2.regenerate_samples();
                 AM3.regenerate_samples();
+
+                let temp_current_preset = locked_lib[self.current_preset.load(Ordering::Relaxed) as usize].clone();
+                *self.preset_name.lock().unwrap() = temp_current_preset.preset_name;
+                *self.preset_info.lock().unwrap() = temp_current_preset.preset_info;
 
                 // This is here again purposefully
                 self.reload_entire_preset.store(true, Ordering::Release);
@@ -4573,8 +5390,9 @@ impl Actuate {
                     temp_mod_gain_1,
                     temp_mod_lfo_gain_1,
                 );
-                wave1_l *= self.params.audio_module_1_level.value();
-                wave1_r *= self.params.audio_module_1_level.value();
+                // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
+                wave1_l *= self.params.audio_module_1_level.value() * 0.33;
+                wave1_r *= self.params.audio_module_1_level.value() * 0.33;
             }
             if !self.file_dialog.load(Ordering::Relaxed)
                 && self.params._audio_module_2_type.value() != AudioModuleType::Off
@@ -4602,8 +5420,8 @@ impl Actuate {
                     temp_mod_gain_2,
                     temp_mod_lfo_gain_2,
                 );
-                wave2_l *= self.params.audio_module_2_level.value();
-                wave2_r *= self.params.audio_module_2_level.value();
+                wave2_l *= self.params.audio_module_2_level.value() * 0.33;
+                wave2_r *= self.params.audio_module_2_level.value() * 0.33;
             }
             if !self.file_dialog.load(Ordering::Relaxed)
                 && self.params._audio_module_3_type.value() != AudioModuleType::Off
@@ -4631,8 +5449,8 @@ impl Actuate {
                     temp_mod_gain_3,
                     temp_mod_lfo_gain_3,
                 );
-                wave3_l *= self.params.audio_module_3_level.value();
-                wave3_r *= self.params.audio_module_3_level.value();
+                wave3_l *= self.params.audio_module_3_level.value() * 0.33;
+                wave3_r *= self.params.audio_module_3_level.value() * 0.33;
             }
 
             // Reassign new current velocity if note on just happened
@@ -4975,9 +5793,126 @@ impl Actuate {
                 }
             }
 
+            // FX
+            ////////////////////////////////////////////////////////////////////////////////////////
+            if self.params.use_fx.value() {
+                // Equalizer use
+                if self.params.use_eq.value() {
+                    let eq_ref = self.bands.clone();
+                    let mut eq = eq_ref.lock().unwrap();
+                    eq[0].set_type(FilterType::LowShelf);
+                    eq[1].set_type(FilterType::Peak);
+                    eq[2].set_type(FilterType::HighShelf);
+                    let q_value: f32 = 0.93;
+                    eq[0].update(
+                        self.sample_rate,
+                        self.params.low_freq.value(),
+                        self.params.low_gain.value(),
+                        q_value,
+                    );
+                    eq[1].update(
+                        self.sample_rate,
+                        self.params.mid_freq.value(),
+                        self.params.mid_gain.value(),
+                        q_value,
+                    );
+                    eq[2].update(
+                        self.sample_rate,
+                        self.params.high_freq.value(),
+                        self.params.high_gain.value(),
+                        q_value,
+                    );
+
+                    let mut temp_l: f32;
+                    let mut temp_r: f32;
+                    // This is the first time we run a filter at all
+                    (temp_l, temp_r) = eq[0].process_sample(left_output, right_output);
+                    (temp_l, temp_r) = eq[1].process_sample(temp_l, temp_r);
+                    (temp_l, temp_r) = eq[2].process_sample(temp_l, temp_r);
+                    // Reassign our new output
+                    left_output = temp_l;
+                    right_output = temp_r;
+                }
+                // Compressor
+                if self.params.use_compressor.value() {
+                    self.compressor.update(
+                        self.sample_rate,
+                        self.params.comp_amt.value(),
+                        self.params.comp_atk.value(),
+                        self.params.comp_rel.value(),
+                        self.params.comp_drive.value());
+                    (left_output, right_output) = self.compressor.process(left_output, right_output);
+                }
+                // Distortion
+                if self.params.use_saturation.value() {
+                    self.saturator.set_type(self.params.sat_type.value());
+                    (left_output, right_output) = self.saturator.process(left_output, right_output, self.params.sat_amt.value());
+                }
+                // Buffer Modulator
+                if self.params.use_buffermod.value() {
+                    self.buffermod.update(
+                        self.sample_rate,
+                        self.params.buffermod_depth.value(),
+                        self.params.buffermod_rate.value(),
+                        self.params.buffermod_spread.value(),
+                        self.params.buffermod_timing.value());
+                    (left_output, right_output) = self.buffermod.process(left_output, right_output, self.params.buffermod_amount.value());
+                }
+                // Phaser
+                if self.params.use_phaser.value() {
+                    self.phaser.set_sample_rate(self.sample_rate);
+                    self.phaser.set_depth(self.params.phaser_depth.value());
+                    self.phaser.set_rate(self.params.phaser_rate.value());
+                    self.phaser.set_feedback(self.params.phaser_feedback.value());
+                    (left_output, right_output) = self.phaser.process(left_output, right_output, self.params.phaser_amount.value());
+                }
+                // Flanger
+                if self.params.use_flanger.value() {
+                    self.flanger.update(
+                        self.sample_rate,
+                        self.params.flanger_depth.value(),
+                        self.params.flanger_rate.value(),
+                        self.params.flanger_feedback.value());
+                    (left_output, right_output) = self.flanger.process(left_output, right_output, self.params.flanger_amount.value());
+                }
+                // Delay
+                if self.params.use_delay.value() {
+                    self.delay.set_sample_rate(self.sample_rate, context.transport().tempo.unwrap_or(1.0) as f32);
+                    self.delay.set_length(self.params.delay_time.value());
+                    self.delay.set_feedback(self.params.delay_decay.value());
+                    self.delay.set_type(self.params.delay_type.value());
+                    (left_output, right_output) = self.delay.process(left_output, right_output, self.params.delay_amount.value());
+                }
+                // Reverb
+                if self.params.use_reverb.value() {
+                    // Stacked TDLs to make reverb
+                    // Full
+                    self.reverb[0].set_size(self.params.reverb_size.value(), self.sample_rate);
+                    // Half
+                    self.reverb[1].set_size(self.params.reverb_size.value() * 0.546, self.sample_rate);
+                    // Third
+                    self.reverb[2].set_size(self.params.reverb_size.value() * 0.251, self.sample_rate);
+                    // Fourth
+                    self.reverb[3].set_size(self.params.reverb_size.value() * 0.735, self.sample_rate);
+                    // Fifth
+                    self.reverb[4].set_size(self.params.reverb_size.value() * 0.669, self.sample_rate);
+                    // 5/8ths
+                    self.reverb[5].set_size(self.params.reverb_size.value() * 0.374, self.sample_rate);
+                    
+                    for verb in self.reverb.iter_mut() {
+                        verb.set_feedback(self.params.reverb_feedback.value());
+                        (left_output, right_output) = verb.process_tdl(left_output, right_output, self.params.reverb_amount.value());
+                    }
+                }
+                // Limiter
+                if self.params.use_limiter.value() {
+                    self.limiter.update(self.params.limiter_knee.value(), self.params.limiter_threshold.value());
+                    (left_output, right_output) = self.limiter.process(left_output, right_output);
+                }
+            }
+
             // DC Offset Removal
             ////////////////////////////////////////////////////////////////////////////////////////
-
             // There were several filter settings that caused massive DC spikes so I added this here
             if !self.file_dialog.load(Ordering::Relaxed) {
                 // Remove DC Offsets with our SVF
@@ -5031,6 +5966,8 @@ impl Actuate {
             let unserialized: Vec<ActuatePreset> = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(vec![
                     ActuatePreset {
+                        preset_name: "Default".to_string(),
+                        preset_info: "Info".to_string(),
                         mod1_audio_module_type: AudioModuleType::Osc,
                         mod1_audio_module_level: 1.0,
                         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -5059,7 +5996,7 @@ impl Actuate {
                         mod1_osc_unison: 1,
                         mod1_osc_unison_detune: 0.0,
                         mod1_osc_stereo: 0.0,
-    
+
                         mod2_audio_module_type: AudioModuleType::Off,
                         mod2_audio_module_level: 1.0,
                         mod2_loaded_sample: vec![vec![0.0, 0.0]],
@@ -5088,7 +6025,7 @@ impl Actuate {
                         mod2_osc_unison: 1,
                         mod2_osc_unison_detune: 0.0,
                         mod2_osc_stereo: 0.0,
-    
+
                         mod3_audio_module_type: AudioModuleType::Off,
                         mod3_audio_module_level: 1.0,
                         mod3_loaded_sample: vec![vec![0.0, 0.0]],
@@ -5117,9 +6054,9 @@ impl Actuate {
                         mod3_osc_unison: 1,
                         mod3_osc_unison_detune: 0.0,
                         mod3_osc_stereo: 0.0,
-    
+
                         filter_wet: 1.0,
-                        filter_cutoff: 4000.0,
+                        filter_cutoff: 16000.0,
                         filter_resonance: 1.0,
                         filter_res_type: ResonanceType::Default,
                         filter_lp_amount: 1.0,
@@ -5127,15 +6064,15 @@ impl Actuate {
                         filter_bp_amount: 0.0,
                         filter_env_peak: 0.0,
                         filter_env_attack: 0.0,
-                        filter_env_decay: 250.0,
+                        filter_env_decay: 0.0001,
                         filter_env_sustain: 999.9,
-                        filter_env_release: 100.0,
+                        filter_env_release: 5.0,
                         filter_env_atk_curve: SmoothStyle::Linear,
                         filter_env_dec_curve: SmoothStyle::Linear,
                         filter_env_rel_curve: SmoothStyle::Linear,
-    
+
                         filter_wet_2: 1.0,
-                        filter_cutoff_2: 4000.0,
+                        filter_cutoff_2: 16000.0,
                         filter_resonance_2: 1.0,
                         filter_res_type_2: ResonanceType::Default,
                         filter_lp_amount_2: 1.0,
@@ -5143,41 +6080,41 @@ impl Actuate {
                         filter_bp_amount_2: 0.0,
                         filter_env_peak_2: 0.0,
                         filter_env_attack_2: 0.0,
-                        filter_env_decay_2: 250.0,
+                        filter_env_decay_2: 0.0001,
                         filter_env_sustain_2: 999.9,
-                        filter_env_release_2: 100.0,
+                        filter_env_release_2: 5.0,
                         filter_env_atk_curve_2: SmoothStyle::Linear,
                         filter_env_dec_curve_2: SmoothStyle::Linear,
                         filter_env_rel_curve_2: SmoothStyle::Linear,
-    
+
                         filter_routing: FilterRouting::Parallel,
-    
+
                         // LFOs
                         lfo1_enable: false,
                         lfo2_enable: false,
                         lfo3_enable: false,
-    
+
                         lfo1_freq: 2.0,
                         lfo1_retrigger: LFOController::LFORetrigger::None,
                         lfo1_sync: true,
                         lfo1_snap: LFOController::LFOSnapValues::Half,
                         lfo1_waveform: LFOController::Waveform::Sine,
                         lfo1_phase: 0.0,
-    
+
                         lfo2_freq: 2.0,
                         lfo2_retrigger: LFOController::LFORetrigger::None,
                         lfo2_sync: true,
                         lfo2_snap: LFOController::LFOSnapValues::Half,
                         lfo2_waveform: LFOController::Waveform::Sine,
                         lfo2_phase: 0.0,
-    
+
                         lfo3_freq: 2.0,
                         lfo3_retrigger: LFOController::LFORetrigger::None,
                         lfo3_sync: true,
                         lfo3_snap: LFOController::LFOSnapValues::Half,
                         lfo3_waveform: LFOController::Waveform::Sine,
                         lfo3_phase: 0.0,
-    
+
                         // Modulations
                         mod_source_1: ModulationSource::None,
                         mod_source_2: ModulationSource::None,
@@ -5191,6 +6128,62 @@ impl Actuate {
                         mod_amount_2: 0.0,
                         mod_amount_3: 0.0,
                         mod_amount_4: 0.0,
+
+                        // EQ
+                        use_eq: false,
+                        low_freq: 800.0,
+                        mid_freq: 3000.0,
+                        high_freq: 10000.0,
+                        low_gain: 0.0,
+                        mid_gain: 0.0,
+                        high_gain: 0.0,
+
+                        // FX
+                        use_fx: true,
+
+                        use_compressor: false,
+                        comp_amt: 0.5,
+                        comp_atk: 0.5,
+                        comp_rel: 0.5,
+                        comp_drive: 0.5,
+
+                        use_saturation: false,
+                        sat_amount: 0.0,
+                        sat_type: SaturationType::Tape,
+
+                        use_delay: false,
+                        delay_amount: 0.0,
+                        delay_time: DelaySnapValues::Quarter,
+                        delay_decay: 0.0,
+                        delay_type: DelayType::Stereo,
+
+                        use_reverb: false,
+                        reverb_amount: 0.5,
+                        reverb_size: 0.5,
+                        reverb_feedback: 0.5,
+
+                        use_phaser: false,
+                        phaser_amount: 0.5,
+                        phaser_depth: 0.5,
+                        phaser_rate: 0.5,
+                        phaser_feedback: 0.5,
+
+                        use_buffermod: false,
+                        buffermod_amount: 0.5,
+                        buffermod_depth: 0.5,
+                        buffermod_rate: 0.5,
+                        buffermod_spread: 0.0,
+                        buffermod_timing: 620.0,
+
+                        use_flanger: false,
+                        flanger_amount: 0.5,
+                        flanger_depth: 0.5,
+                        flanger_rate: 0.5,
+                        flanger_feedback: 0.5,
+
+                        use_limiter: false,
+                        limiter_threshold: 0.5,
+                        limiter_knee: 0.5,
                     };
                     PRESET_BANK_SIZE
                 ]);
@@ -5209,8 +6202,16 @@ impl Actuate {
         AMod1: Arc<Mutex<AudioModule>>,
         AMod2: Arc<Mutex<AudioModule>>,
         AMod3: Arc<Mutex<AudioModule>>,
-    ) -> (ModulationSource, ModulationSource, ModulationSource, ModulationSource, 
-          ModulationDestination, ModulationDestination, ModulationDestination, ModulationDestination) {
+    ) -> (
+        ModulationSource,
+        ModulationSource,
+        ModulationSource,
+        ModulationSource,
+        ModulationDestination,
+        ModulationDestination,
+        ModulationDestination,
+        ModulationDestination,
+    ) {
         // Create mutex locks for AudioModule
         let mut AMod1 = AMod1.as_ref().lock().unwrap();
         let mut AMod2 = AMod2.as_ref().lock().unwrap();
@@ -5218,6 +6219,7 @@ impl Actuate {
 
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset.lock().unwrap()[current_preset_index as usize];
+        
         setter.set_parameter(
             &params._audio_module_1_type,
             loaded_preset.mod1_audio_module_type,
@@ -5375,6 +6377,51 @@ impl Actuate {
         let mod_dest_3_override = loaded_preset.mod_dest_3.clone();
         let mod_dest_4_override = loaded_preset.mod_dest_4.clone();
 
+        setter.set_parameter(&params.use_fx, loaded_preset.use_fx);
+        setter.set_parameter(&params.use_eq, loaded_preset.use_eq);
+        setter.set_parameter(&params.low_freq, loaded_preset.low_freq);
+        setter.set_parameter(&params.mid_freq, loaded_preset.mid_freq);
+        setter.set_parameter(&params.high_freq, loaded_preset.high_freq);
+        setter.set_parameter(&params.low_gain, loaded_preset.low_gain);
+        setter.set_parameter(&params.mid_gain, loaded_preset.mid_gain);
+        setter.set_parameter(&params.high_gain, loaded_preset.high_gain);
+        setter.set_parameter(&params.use_compressor, loaded_preset.use_compressor);
+        setter.set_parameter(&params.comp_amt, loaded_preset.comp_amt);
+        setter.set_parameter(&params.comp_atk, loaded_preset.comp_atk);
+        setter.set_parameter(&params.comp_drive, loaded_preset.comp_drive);
+        setter.set_parameter(&params.comp_rel, loaded_preset.comp_rel);
+        setter.set_parameter(&params.use_saturation, loaded_preset.use_saturation);
+        setter.set_parameter(&params.sat_amt, loaded_preset.sat_amount);
+        setter.set_parameter(&params.sat_type, loaded_preset.sat_type.clone());
+        setter.set_parameter(&params.use_delay, loaded_preset.use_delay);
+        setter.set_parameter(&params.delay_amount, loaded_preset.delay_amount);
+        setter.set_parameter(&params.delay_type, loaded_preset.delay_type.clone());
+        setter.set_parameter(&params.delay_decay, loaded_preset.delay_decay);
+        setter.set_parameter(&params.delay_time, loaded_preset.delay_time.clone());
+        setter.set_parameter(&params.use_reverb, loaded_preset.use_reverb);
+        setter.set_parameter(&params.reverb_size, loaded_preset.reverb_size);
+        setter.set_parameter(&params.reverb_amount, loaded_preset.reverb_amount);
+        setter.set_parameter(&params.reverb_feedback, loaded_preset.reverb_feedback);
+        setter.set_parameter(&params.use_phaser, loaded_preset.use_phaser);
+        setter.set_parameter(&params.phaser_amount, loaded_preset.phaser_amount);
+        setter.set_parameter(&params.phaser_depth, loaded_preset.phaser_depth);
+        setter.set_parameter(&params.phaser_feedback, loaded_preset.phaser_feedback);
+        setter.set_parameter(&params.phaser_rate, loaded_preset.phaser_rate);
+        setter.set_parameter(&params.use_buffermod, loaded_preset.use_buffermod);
+        setter.set_parameter(&params.buffermod_amount, loaded_preset.buffermod_amount);
+        setter.set_parameter(&params.buffermod_depth, loaded_preset.buffermod_depth);
+        setter.set_parameter(&params.buffermod_rate, loaded_preset.buffermod_rate);
+        setter.set_parameter(&params.buffermod_spread, loaded_preset.buffermod_spread);
+        setter.set_parameter(&params.buffermod_timing, loaded_preset.buffermod_timing);
+        setter.set_parameter(&params.use_flanger, loaded_preset.use_flanger);
+        setter.set_parameter(&params.flanger_amount, loaded_preset.flanger_amount);
+        setter.set_parameter(&params.flanger_depth, loaded_preset.flanger_depth);
+        setter.set_parameter(&params.flanger_feedback, loaded_preset.flanger_feedback);
+        setter.set_parameter(&params.flanger_rate, loaded_preset.flanger_rate);
+        setter.set_parameter(&params.use_limiter, loaded_preset.use_limiter);
+        setter.set_parameter(&params.limiter_threshold, loaded_preset.limiter_threshold);
+        setter.set_parameter(&params.limiter_knee, loaded_preset.limiter_knee);
+
         setter.set_parameter(&params.filter_wet, loaded_preset.filter_wet);
         setter.set_parameter(&params.filter_cutoff, loaded_preset.filter_cutoff);
         setter.set_parameter(&params.filter_resonance, loaded_preset.filter_resonance);
@@ -5451,7 +6498,8 @@ impl Actuate {
             mod_dest_1_override,
             mod_dest_2_override,
             mod_dest_3_override,
-            mod_dest_4_override,)
+            mod_dest_4_override,
+        )
     }
 
     fn save_preset_bank(&mut self) {
@@ -5527,6 +6575,8 @@ impl Actuate {
         let AM3 = AM3c.lock().unwrap();
         arc_lib.lock().unwrap()[self.current_preset.load(Ordering::Acquire) as usize] =
             ActuatePreset {
+                preset_name: self.preset_name.lock().unwrap().clone(),
+                preset_info: self.preset_info.lock().unwrap().clone(),
                 // Modules 1
                 ///////////////////////////////////////////////////////////
                 mod1_audio_module_type: self.params._audio_module_1_type.value(),
@@ -5701,6 +6751,52 @@ impl Actuate {
                 mod_amount_2: self.params.mod_amount_knob_2.value(),
                 mod_amount_3: self.params.mod_amount_knob_3.value(),
                 mod_amount_4: self.params.mod_amount_knob_4.value(),
+
+                use_eq: self.params.use_eq.value(),
+                low_freq: self.params.low_freq.value(),
+                mid_freq: self.params.mid_freq.value(),
+                high_freq: self.params.high_freq.value(),
+                low_gain: self.params.low_gain.value(),
+                mid_gain: self.params.mid_gain.value(),
+                high_gain: self.params.high_gain.value(),
+
+                use_fx: self.params.use_fx.value(),
+                use_compressor: self.params.use_compressor.value(),
+                comp_amt: self.params.comp_amt.value(),
+                comp_atk: self.params.comp_atk.value(),
+                comp_rel: self.params.comp_rel.value(),
+                comp_drive: self.params.comp_drive.value(),
+                use_saturation: self.params.use_saturation.value(),
+                sat_amount: self.params.sat_amt.value(),
+                sat_type: self.params.sat_type.value(),
+                use_delay: self.params.use_delay.value(),
+                delay_amount: self.params.delay_amount.value(),
+                delay_time: self.params.delay_time.value(),
+                delay_decay: self.params.delay_decay.value(),
+                delay_type: self.params.delay_type.value(),
+                use_reverb: self.params.use_reverb.value(),
+                reverb_amount: self.params.reverb_amount.value(),
+                reverb_size: self.params.reverb_size.value(),
+                reverb_feedback: self.params.reverb_feedback.value(),
+                use_phaser: self.params.use_phaser.value(),
+                phaser_amount: self.params.phaser_amount.value(),
+                phaser_depth: self.params.phaser_depth.value(),
+                phaser_rate: self.params.phaser_rate.value(),
+                phaser_feedback: self.params.phaser_feedback.value(),
+                use_buffermod: self.params.use_buffermod.value(),
+                buffermod_amount: self.params.buffermod_amount.value(),
+                buffermod_depth: self.params.buffermod_depth.value(),
+                buffermod_rate: self.params.buffermod_rate.value(),
+                buffermod_spread: self.params.buffermod_spread.value(),
+                buffermod_timing: self.params.buffermod_timing.value(),
+                use_flanger: self.params.use_flanger.value(),
+                flanger_amount: self.params.flanger_amount.value(),
+                flanger_depth: self.params.flanger_depth.value(),
+                flanger_rate: self.params.flanger_rate.value(),
+                flanger_feedback: self.params.flanger_feedback.value(),
+                use_limiter: self.params.use_limiter.value(),
+                limiter_threshold: self.params.limiter_threshold.value(),
+                limiter_knee: self.params.limiter_knee.value(),
             };
     }
 

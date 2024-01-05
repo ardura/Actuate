@@ -1,6 +1,6 @@
 [package]
 name = "Actuate"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 authors = ["Ardura <azviscarra@gmail.com>"]
 license = "GPL-3.0-or-later"
@@ -23,6 +23,7 @@ lazy_static = "1.4.0"
 # Uncomment the below line to disable the on-by-default VST3 feature to remove
 # the GPL compatibility requirement
 
+#https://github.com/robbert-vdh/nih-plug/tree/252ab3c5becabcd7d2a7a75a8ef04de37d5f8418
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "252ab3c5becabcd7d2a7a75a8ef04de37d5f8418", features = ["assert_process_allocs"] }
 nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "252ab3c5becabcd7d2a7a75a8ef04de37d5f8418"}
 
@@ -38,6 +39,7 @@ rmp-serde = "1.1.2"
 serde = "1.0.188"
 serde_json = "1.0.107"
 
+tinyfiledialogs = "3.9.1"
 
 [profile.release]
 opt-level = 3

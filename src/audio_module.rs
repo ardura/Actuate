@@ -36,7 +36,7 @@ use std::{collections::VecDeque, f32::consts::SQRT_2, path::PathBuf, sync::Arc};
 pub(crate) mod Oscillator;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
-    toggle_switch, ui_knob, ActuateParams, CustomParamSlider, CustomVerticalSlider, GUI_VALS,
+    toggle_switch, ui_knob, ActuateParams, CustomWidgets::{CustomParamSlider, CustomVerticalSlider}, GUI_VALS,
     SMALLER_FONT,
 };
 use CustomParamSlider::ParamSlider as HorizontalParamSlider;
@@ -2855,6 +2855,15 @@ impl AudioModule {
                             VoiceType::RSaw => {
                                 Oscillator::get_rsaw(voice.phase) * temp_osc_gain_multiplier
                             }
+                            VoiceType::WSaw => {
+                                Oscillator::get_wsaw(voice.phase) * temp_osc_gain_multiplier
+                            }
+                            VoiceType::RASaw => {
+                                Oscillator::get_rasaw(voice.phase) * temp_osc_gain_multiplier
+                            }
+                            VoiceType::SSaw => {
+                                Oscillator::get_ssaw(voice.phase) * temp_osc_gain_multiplier
+                            }
                             VoiceType::Ramp => {
                                 Oscillator::get_ramp(voice.phase) * temp_osc_gain_multiplier
                             }
@@ -2953,6 +2962,18 @@ impl AudioModule {
                                     Oscillator::get_rsaw(unison_voice.phase)
                                         * temp_osc_gain_multiplier
                                 }
+                                VoiceType::WSaw => {
+                                    Oscillator::get_wsaw(unison_voice.phase)
+                                        * temp_osc_gain_multiplier
+                                }
+                                VoiceType::SSaw => {
+                                    Oscillator::get_ssaw(unison_voice.phase)
+                                        * temp_osc_gain_multiplier
+                                }
+                                VoiceType::RASaw => {
+                                    Oscillator::get_rasaw(unison_voice.phase)
+                                        * temp_osc_gain_multiplier
+                                }
                                 VoiceType::Ramp => {
                                     Oscillator::get_ramp(unison_voice.phase)
                                         * temp_osc_gain_multiplier
@@ -2993,8 +3014,9 @@ impl AudioModule {
                 // Sum our voices for output
                 summed_voices_l += center_voices;
                 summed_voices_r += center_voices;
-                summed_voices_l += stereo_voices_l;
-                summed_voices_r += stereo_voices_r;
+                // Scaling of output based on stereo voices and unison
+                summed_voices_l += stereo_voices_l / (self.osc_unison - 1).clamp(1, 9) as f32;
+                summed_voices_r += stereo_voices_r / (self.osc_unison - 1).clamp(1, 9) as f32;
 
                 // Stereo Spreading code
                 let width_coeff = self.osc_stereo * 0.5;
