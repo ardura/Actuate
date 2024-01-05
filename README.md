@@ -10,6 +10,7 @@ Join the discord! https://discord.com/invite/hscQXkTdfz
 
 ## Features
 - Two SVF Filters that can be parallel, serial, or bypassed with ADSR Envelopes
+- 12 Oscillator shapes
 - 7 Filter resonance approximations for different sweeps
 - 9 Different FX for post processing
 - 3 LFO controllers
