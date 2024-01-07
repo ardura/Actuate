@@ -68,7 +68,7 @@ use CustomWidgets::{
     toggle_switch,
     ui_knob
 };
-use FX::{
+use fx::{
     StateVariableFilter::{ResonanceType, StateVariableFilter},
     compressor::Compressor,
     delay::{Delay, DelayType, DelaySnapValues},
@@ -84,7 +84,7 @@ use FX::{
 mod LFOController;
 mod CustomWidgets;
 mod audio_module;
-mod FX;
+mod fx;
 
 // This holds our current sample/granulizer sample (L,R) per sample
 pub struct LoadedSample(Vec<Vec<f32>>);
@@ -2513,7 +2513,7 @@ impl ActuateParams {
             )
             .with_value_to_string(formatters::v2s_f32_rounded(1)),
 
-            // FX
+            // fx
             use_fx: BoolParam::new("FX", true),
             
             use_compressor: BoolParam::new("Compressor", false),
