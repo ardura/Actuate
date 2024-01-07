@@ -10,7 +10,9 @@ Join the discord! https://discord.com/invite/hscQXkTdfz
 
 ## Features
 - Two SVF Filters that can be parallel, serial, or bypassed with ADSR Envelopes
-- 4 Filter resonance approximations for different sweeps
+- 12 Oscillator shapes
+- 7 Filter resonance approximations for different sweeps
+- 9 Different FX for post processing
 - 3 LFO controllers
 - 4 Modulators that can be linked to multiple things
 - Sampler with pitch shifting or resample stretching
@@ -25,3 +27,4 @@ Join the discord! https://discord.com/invite/hscQXkTdfz
 
 ## Known Issues
 - Saving and loading happens twice
+- Naming presets and info may be unstable in non-windows environments as I have not tested those sorry
