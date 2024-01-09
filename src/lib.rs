@@ -79,6 +79,7 @@ use fx::{
     buffermodulator::BufferModulator,
     flanger::StereoFlanger,
     limiter::StereoLimiter,
+    fir_filter::FirFilter,
 };
 
 mod LFOController;
@@ -174,6 +175,13 @@ pub enum AMFilterRouting {
     Filter1,
     Filter2,
     Both,
+}
+
+// Filter implementations
+#[derive(Enum, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum FilterAlgorithms {
+    SVF,
+    FIR
 }
 
 // These let us output ToString for the ComboBox stuff + Nih-Plug
@@ -348,6 +356,7 @@ struct ActuatePreset {
     filter_env_atk_curve: Oscillator::SmoothStyle,
     filter_env_dec_curve: Oscillator::SmoothStyle,
     filter_env_rel_curve: Oscillator::SmoothStyle,
+    filter_alg_type: FilterAlgorithms,
 
     filter_wet_2: f32,
     filter_cutoff_2: f32,
@@ -364,6 +373,7 @@ struct ActuatePreset {
     filter_env_atk_curve_2: Oscillator::SmoothStyle,
     filter_env_dec_curve_2: Oscillator::SmoothStyle,
     filter_env_rel_curve_2: Oscillator::SmoothStyle,
+    filter_alg_type_2: FilterAlgorithms,
 
     filter_routing: FilterRouting,
 
@@ -465,7 +475,7 @@ struct ActuatePreset {
 }
 
 // This is the struct of the actual plugin object that tracks everything
-#[derive(Clone)]
+//#[derive(Clone)]
 pub struct Actuate {
     pub params: Arc<ActuateParams>,
     pub sample_rate: f32,
@@ -491,16 +501,23 @@ pub struct Actuate {
     audio_module_3: Arc<Mutex<AudioModule>>,
     _audio_module_3_type: AudioModuleType,
 
-    // Filters
+    // SVF Filters
     filter_l_1: StateVariableFilter,
     filter_r_1: StateVariableFilter,
+    // FIR Filters
+    fir_filter_1: FirFilter,
+    // Filter state variables
     filter_state_1: OscState,
     filter_atk_smoother_1: Smoother<f32>,
     filter_dec_smoother_1: Smoother<f32>,
     filter_rel_smoother_1: Smoother<f32>,
 
+    // SVF Filters
     filter_l_2: StateVariableFilter,
     filter_r_2: StateVariableFilter,
+    // FIR Filters
+    fir_filter_2: FirFilter,
+    // Filter state variables
     filter_state_2: OscState,
     filter_atk_smoother_2: Smoother<f32>,
     filter_dec_smoother_2: Smoother<f32>,
@@ -606,16 +623,21 @@ impl Default for Actuate {
             audio_module_3: Arc::new(Mutex::new(AudioModule::default())),
             _audio_module_3_type: AudioModuleType::Off,
 
-            // Filters
+            // SVF Filters
             filter_l_2: StateVariableFilter::default().set_oversample(4),
             filter_r_2: StateVariableFilter::default().set_oversample(4),
+            // FIR Filters
+            fir_filter_2: FirFilter::new(44100.00),
             filter_state_2: OscState::Off,
             filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_rel_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
 
+            // SVF Filters
             filter_l_1: StateVariableFilter::default().set_oversample(4),
             filter_r_1: StateVariableFilter::default().set_oversample(4),
+            // FIR Filters
+            fir_filter_1: FirFilter::new(44100.00),
             filter_state_1: OscState::Off,
             filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -746,6 +768,7 @@ impl Default for Actuate {
                     filter_env_atk_curve: SmoothStyle::Linear,
                     filter_env_dec_curve: SmoothStyle::Linear,
                     filter_env_rel_curve: SmoothStyle::Linear,
+                    filter_alg_type: FilterAlgorithms::SVF,
 
                     filter_wet_2: 1.0,
                     filter_cutoff_2: 16000.0,
@@ -762,6 +785,7 @@ impl Default for Actuate {
                     filter_env_atk_curve_2: SmoothStyle::Linear,
                     filter_env_dec_curve_2: SmoothStyle::Linear,
                     filter_env_rel_curve_2: SmoothStyle::Linear,
+                    filter_alg_type_2: FilterAlgorithms::SVF,
 
                     filter_routing: FilterRouting::Parallel,
 
@@ -1136,6 +1160,8 @@ pub struct ActuateParams {
     pub filter_env_dec_curve: EnumParam<Oscillator::SmoothStyle>,
     #[id = "filter_env_rel_curve"]
     pub filter_env_rel_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "filter_alg_type"]
+    pub filter_alg_type: EnumParam<FilterAlgorithms>,
 
     #[id = "filter_wet_2"]
     pub filter_wet_2: FloatParam,
@@ -1167,6 +1193,8 @@ pub struct ActuateParams {
     pub filter_env_dec_curve_2: EnumParam<Oscillator::SmoothStyle>,
     #[id = "filter_env_rel_curve_2"]
     pub filter_env_rel_curve_2: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "filter_alg_type_2"]
+    pub filter_alg_type_2: EnumParam<FilterAlgorithms>,
 
     // LFOS
     #[id = "lfo1_enable"]
@@ -2065,6 +2093,7 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
+            filter_alg_type: EnumParam::new("Filter 1 Alg", FilterAlgorithms::SVF),
 
             filter_env_peak: FloatParam::new(
                 "Env Peak",
@@ -2225,6 +2254,7 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
+            filter_alg_type_2: EnumParam::new("Filter 2 Alg", FilterAlgorithms::SVF),
 
             filter_env_peak_2: FloatParam::new(
                 "Env Peak",
@@ -3381,6 +3411,7 @@ impl Plugin for Actuate {
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_atk_curve, setter)
                                                     .with_width(HCURVE_BWIDTH)
+                                                    .slimmer(0.7)
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
@@ -3390,6 +3421,7 @@ impl Plugin for Actuate {
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_dec_curve, setter)
                                                     .with_width(HCURVE_BWIDTH)
+                                                    .slimmer(0.7)
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
@@ -3399,6 +3431,7 @@ impl Plugin for Actuate {
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_rel_curve, setter)
                                                     .with_width(HCURVE_BWIDTH)
+                                                    .slimmer(0.7)
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
@@ -3409,6 +3442,7 @@ impl Plugin for Actuate {
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_atk_curve_2, setter)
                                                     .with_width(HCURVE_BWIDTH)
+                                                    .slimmer(0.7)
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
@@ -3418,6 +3452,7 @@ impl Plugin for Actuate {
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_dec_curve_2, setter)
                                                     .with_width(HCURVE_BWIDTH)
+                                                    .slimmer(0.7)
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
@@ -3427,6 +3462,7 @@ impl Plugin for Actuate {
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_rel_curve_2, setter)
                                                     .with_width(HCURVE_BWIDTH)
+                                                    .slimmer(0.7)
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
@@ -3434,14 +3470,28 @@ impl Plugin for Actuate {
                                                         *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()),
                                             );
                                         }
-                                        ui.add_space(32.0);
-                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
-                                                .slimmer(0.5)
+                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type, setter)
+                                                .slimmer(0.4)
                                                 .set_left_sided_label(true)
                                                 .set_label_width(120.0)
+                                                .override_colors(Color32::WHITE, Color32::BLACK)
                                                 .with_width(30.0)
                                             );
-                                        ui.add_space(16.0);
+                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type_2, setter)
+                                                .slimmer(0.4)
+                                                .set_left_sided_label(true)
+                                                .set_label_width(120.0)
+                                                .override_colors(Color32::WHITE, Color32::BLACK)
+                                                .with_width(30.0)
+                                            );
+                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
+                                                .slimmer(0.4)
+                                                .set_left_sided_label(true)
+                                                .set_label_width(120.0)
+                                                .override_colors(Color32::WHITE, Color32::BLACK)
+                                                .with_width(30.0)
+                                            );
+                                        ui.add_space(5.0);
                                         ui.horizontal(|ui|{
                                             ui.horizontal(|ui| {
                                                 ui.selectable_value(&mut *filter_select.lock().unwrap(), FilterSelect::Filter1, RichText::new("Filter 1").color(Color32::BLACK));
@@ -6070,6 +6120,7 @@ impl Actuate {
                         filter_env_atk_curve: SmoothStyle::Linear,
                         filter_env_dec_curve: SmoothStyle::Linear,
                         filter_env_rel_curve: SmoothStyle::Linear,
+                        filter_alg_type: FilterAlgorithms::SVF,
 
                         filter_wet_2: 1.0,
                         filter_cutoff_2: 16000.0,
@@ -6086,6 +6137,7 @@ impl Actuate {
                         filter_env_atk_curve_2: SmoothStyle::Linear,
                         filter_env_dec_curve_2: SmoothStyle::Linear,
                         filter_env_rel_curve_2: SmoothStyle::Linear,
+                        filter_alg_type_2: FilterAlgorithms::SVF,
 
                         filter_routing: FilterRouting::Parallel,
 
@@ -6695,6 +6747,7 @@ impl Actuate {
                 filter_env_atk_curve: self.params.filter_env_atk_curve.value(),
                 filter_env_dec_curve: self.params.filter_env_dec_curve.value(),
                 filter_env_rel_curve: self.params.filter_env_rel_curve.value(),
+                filter_alg_type: self.params.filter_alg_type.value(),
 
                 filter_wet_2: self.params.filter_wet_2.value(),
                 filter_cutoff_2: self.params.filter_cutoff_2.value(),
@@ -6711,6 +6764,7 @@ impl Actuate {
                 filter_env_atk_curve_2: self.params.filter_env_atk_curve_2.value(),
                 filter_env_dec_curve_2: self.params.filter_env_dec_curve_2.value(),
                 filter_env_rel_curve_2: self.params.filter_env_rel_curve_2.value(),
+                filter_alg_type_2: self.params.filter_alg_type_2.value(),
 
                 filter_routing: self.params.filter_routing.value(),
 

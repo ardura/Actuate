@@ -8,3 +8,4 @@ pub(crate) mod phaser;
 pub(crate) mod buffermodulator;
 pub(crate) mod flanger;
 pub(crate) mod limiter;
+pub(crate) mod fir_filter;
