@@ -25,23 +25,20 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 */
 
 #![allow(non_snake_case)]
-use nih_plug_egui::{
-    create_egui_editor,
-    egui::{self, Align2, Color32, FontId, Id, Pos2, Rect, RichText, Rounding, Vec2, ScrollArea},
-    widgets::ParamSlider,
-    EguiState,
-};
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use nih_plug::prelude::*;
+use nih_plug_egui::{
+    create_egui_editor,
+    egui::{self, Align2, Color32, FontId, Id, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2},
+    widgets::ParamSlider,
+    EguiState,
+};
 use phf::phf_map;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::self,
-    io::Read,
-};
+use std::{fmt, io::Read};
 use std::{
     fs::File,
     io::Write,
@@ -58,32 +55,27 @@ use audio_module::{
     AudioModule, AudioModuleType,
     Oscillator::{self, OscState, RetriggerStyle, SmoothStyle, VoiceType},
 };
-use CustomWidgets::{
-    CustomParamSlider,
-    CustomParamSlider::ParamSlider as HorizontalParamSlider,
-    CustomVerticalSlider::ParamSlider as VerticalParamSlider,
-    CustomPopupComboBox,
-    CustomComboBox,
-    BoolButton,
-    toggle_switch,
-    ui_knob
-};
 use fx::{
-    StateVariableFilter::{ResonanceType, StateVariableFilter},
-    compressor::Compressor,
-    delay::{Delay, DelayType, DelaySnapValues},
-    reverb::StereoReverb,
-    biquad_filters::{FilterType, self},
-    saturation::{Saturation, SaturationType},
-    phaser::StereoPhaser,
+    biquad_filters::{self, FilterType},
     buffermodulator::BufferModulator,
+    compressor::Compressor,
+    delay::{Delay, DelaySnapValues, DelayType},
+    fir_filter::{self, FIRTypes, FirFilter},
     flanger::StereoFlanger,
     limiter::StereoLimiter,
-    fir_filter::FirFilter,
+    phaser::StereoPhaser,
+    reverb::StereoReverb,
+    saturation::{Saturation, SaturationType},
+    StateVariableFilter::{ResonanceType, StateVariableFilter},
+};
+use CustomWidgets::{
+    toggle_switch, ui_knob, BoolButton, CustomComboBox, CustomParamSlider,
+    CustomParamSlider::ParamSlider as HorizontalParamSlider, CustomPopupComboBox,
+    CustomVerticalSlider::ParamSlider as VerticalParamSlider,
 };
 
-mod LFOController;
 mod CustomWidgets;
+mod LFOController;
 mod audio_module;
 mod fx;
 
@@ -181,7 +173,7 @@ pub enum AMFilterRouting {
 #[derive(Enum, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum FilterAlgorithms {
     SVF,
-    FIR
+    FIR,
 }
 
 // These let us output ToString for the ComboBox stuff + Nih-Plug
@@ -357,6 +349,7 @@ struct ActuatePreset {
     filter_env_dec_curve: Oscillator::SmoothStyle,
     filter_env_rel_curve: Oscillator::SmoothStyle,
     filter_alg_type: FilterAlgorithms,
+    fir_filter_type: fir_filter::FIRTypes,
 
     filter_wet_2: f32,
     filter_cutoff_2: f32,
@@ -374,6 +367,7 @@ struct ActuatePreset {
     filter_env_dec_curve_2: Oscillator::SmoothStyle,
     filter_env_rel_curve_2: Oscillator::SmoothStyle,
     filter_alg_type_2: FilterAlgorithms,
+    fir_filter_type_2: fir_filter::FIRTypes,
 
     filter_routing: FilterRouting,
 
@@ -505,7 +499,8 @@ pub struct Actuate {
     filter_l_1: StateVariableFilter,
     filter_r_1: StateVariableFilter,
     // FIR Filters
-    fir_filter_1: FirFilter,
+    fir_filter_l_1: FirFilter,
+    fir_filter_r_1: FirFilter,
     // Filter state variables
     filter_state_1: OscState,
     filter_atk_smoother_1: Smoother<f32>,
@@ -516,7 +511,8 @@ pub struct Actuate {
     filter_l_2: StateVariableFilter,
     filter_r_2: StateVariableFilter,
     // FIR Filters
-    fir_filter_2: FirFilter,
+    fir_filter_l_2: FirFilter,
+    fir_filter_r_2: FirFilter,
     // Filter state variables
     filter_state_2: OscState,
     filter_atk_smoother_2: Smoother<f32>,
@@ -627,7 +623,8 @@ impl Default for Actuate {
             filter_l_2: StateVariableFilter::default().set_oversample(4),
             filter_r_2: StateVariableFilter::default().set_oversample(4),
             // FIR Filters
-            fir_filter_2: FirFilter::new(44100.00),
+            fir_filter_l_2: FirFilter::new(44100.00),
+            fir_filter_r_2: FirFilter::new(44100.00),
             filter_state_2: OscState::Off,
             filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -637,7 +634,8 @@ impl Default for Actuate {
             filter_l_1: StateVariableFilter::default().set_oversample(4),
             filter_r_1: StateVariableFilter::default().set_oversample(4),
             // FIR Filters
-            fir_filter_1: FirFilter::new(44100.00),
+            fir_filter_l_1: FirFilter::new(44100.00),
+            fir_filter_r_1: FirFilter::new(44100.00),
             filter_state_1: OscState::Off,
             filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -769,6 +767,7 @@ impl Default for Actuate {
                     filter_env_dec_curve: SmoothStyle::Linear,
                     filter_env_rel_curve: SmoothStyle::Linear,
                     filter_alg_type: FilterAlgorithms::SVF,
+                    fir_filter_type: fir_filter::FIRTypes::Lowpass,
 
                     filter_wet_2: 1.0,
                     filter_cutoff_2: 16000.0,
@@ -786,6 +785,7 @@ impl Default for Actuate {
                     filter_env_dec_curve_2: SmoothStyle::Linear,
                     filter_env_rel_curve_2: SmoothStyle::Linear,
                     filter_alg_type_2: FilterAlgorithms::SVF,
+                    fir_filter_type_2: fir_filter::FIRTypes::Lowpass,
 
                     filter_routing: FilterRouting::Parallel,
 
@@ -915,7 +915,8 @@ impl Default for Actuate {
                 StereoReverb::new(44100.0, 0.5, 0.5),
                 StereoReverb::new(44100.0, 0.5, 0.5),
                 StereoReverb::new(44100.0, 0.5, 0.5),
-                StereoReverb::new(44100.0, 0.5, 0.5),],
+                StereoReverb::new(44100.0, 0.5, 0.5),
+            ],
 
             // Buffer Modulator
             buffermod: BufferModulator::new(44100.0, 0.5, 10.0),
@@ -927,7 +928,7 @@ impl Default for Actuate {
             phaser: StereoPhaser::new(),
 
             // Limiter
-            limiter: StereoLimiter::new(0.5,0.5),
+            limiter: StereoLimiter::new(0.5, 0.5),
         }
     }
 }
@@ -1162,6 +1163,8 @@ pub struct ActuateParams {
     pub filter_env_rel_curve: EnumParam<Oscillator::SmoothStyle>,
     #[id = "filter_alg_type"]
     pub filter_alg_type: EnumParam<FilterAlgorithms>,
+    #[id = "fir_filter_type"]
+    pub fir_filter_type: EnumParam<FIRTypes>,
 
     #[id = "filter_wet_2"]
     pub filter_wet_2: FloatParam,
@@ -1195,6 +1198,8 @@ pub struct ActuateParams {
     pub filter_env_rel_curve_2: EnumParam<Oscillator::SmoothStyle>,
     #[id = "filter_alg_type_2"]
     pub filter_alg_type_2: EnumParam<FilterAlgorithms>,
+    #[id = "fir_filter_type_2"]
+    pub fir_filter_type_2: EnumParam<FIRTypes>,
 
     // LFOS
     #[id = "lfo1_enable"]
@@ -1287,7 +1292,7 @@ pub struct ActuateParams {
     // FX
     #[id = "use_fx"]
     pub use_fx: BoolParam,
-    
+
     #[id = "use_compressor"]
     pub use_compressor: BoolParam,
     #[id = "comp_amt"]
@@ -1576,7 +1581,8 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_rounded(2))
+            osc_1_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2))
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
@@ -1710,7 +1716,8 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_rounded(2))
+            osc_2_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2))
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
@@ -1844,7 +1851,8 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_rounded(2))
+            osc_3_stereo: FloatParam::new("Stereo", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2))
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
@@ -2094,6 +2102,7 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             filter_alg_type: EnumParam::new("Filter 1 Alg", FilterAlgorithms::SVF),
+            fir_filter_type: EnumParam::new("Filter Type", FIRTypes::Lowpass),
 
             filter_env_peak: FloatParam::new(
                 "Env Peak",
@@ -2255,6 +2264,7 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             filter_alg_type_2: EnumParam::new("Filter 2 Alg", FilterAlgorithms::SVF),
+            fir_filter_type_2: EnumParam::new("Filter Type", FIRTypes::Lowpass),
 
             filter_env_peak_2: FloatParam::new(
                 "Env Peak",
@@ -2545,50 +2555,154 @@ impl ActuateParams {
 
             // fx
             use_fx: BoolParam::new("FX", true),
-            
+
             use_compressor: BoolParam::new("Compressor", false),
-            comp_amt: FloatParam::new("Amount", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            comp_atk: FloatParam::new("Attack", 0.8, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            comp_rel: FloatParam::new("Release", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            comp_drive: FloatParam::new("Drive", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            
+            comp_amt: FloatParam::new("Amount", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            comp_atk: FloatParam::new("Attack", 0.8, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            comp_rel: FloatParam::new("Release", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            comp_drive: FloatParam::new("Drive", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+
             use_saturation: BoolParam::new("Saturation", false),
-            sat_amt: FloatParam::new("Amount", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            sat_amt: FloatParam::new("Amount", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
             sat_type: EnumParam::new("Type", SaturationType::Tape),
-            
+
             use_delay: BoolParam::new("Delay", false),
-            delay_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            delay_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
             delay_time: EnumParam::new("Time", DelaySnapValues::Quarter),
-            delay_decay: FloatParam::new("Decay", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            delay_decay: FloatParam::new("Decay", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
             delay_type: EnumParam::new("Type", DelayType::Stereo),
-            
+
             use_reverb: BoolParam::new("Reverb", false),
-            reverb_amount: FloatParam::new("Amount", 0.85, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            reverb_size: FloatParam::new("Size", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            reverb_feedback: FloatParam::new("Feedback", 0.28, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            
+            reverb_amount: FloatParam::new(
+                "Amount",
+                0.85,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            reverb_size: FloatParam::new("Size", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            reverb_feedback: FloatParam::new(
+                "Feedback",
+                0.28,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+
             use_phaser: BoolParam::new("Phaser", false),
-            phaser_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            phaser_depth: FloatParam::new("Depth", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            phaser_rate: FloatParam::new("Rate", 1.0, FloatRange::Linear { min: 0.1, max: 100.0 }).with_step_size(0.1).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            phaser_feedback: FloatParam::new("Feedback", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            
+            phaser_amount: FloatParam::new(
+                "Amount",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            phaser_depth: FloatParam::new("Depth", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            phaser_rate: FloatParam::new(
+                "Rate",
+                1.0,
+                FloatRange::Linear {
+                    min: 0.1,
+                    max: 100.0,
+                },
+            )
+            .with_step_size(0.1)
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            phaser_feedback: FloatParam::new(
+                "Feedback",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+
             use_buffermod: BoolParam::new("Buffer Modulator", false),
-            buffermod_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            buffermod_depth: FloatParam::new("Depth", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            buffermod_spread: FloatParam::new("Spread", 0.0, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.5 }).with_step_size(0.001).with_value_to_string(formatters::v2s_f32_rounded(3)),
-            buffermod_rate: FloatParam::new("Rate", 0.01, FloatRange::Skewed { min: 0.01, max: 3.0, factor: 0.5 }).with_step_size(0.001).with_value_to_string(formatters::v2s_f32_rounded(3)),
-            buffermod_timing: FloatParam::new("Buffer", 620.0, FloatRange::Skewed { min: 1.0, max: 2700.0, factor: 0.5 }).with_step_size(1.0).with_value_to_string(formatters::v2s_f32_rounded(0)),
+            buffermod_amount: FloatParam::new(
+                "Amount",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            buffermod_depth: FloatParam::new(
+                "Depth",
+                1.0,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            buffermod_spread: FloatParam::new(
+                "Spread",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.001)
+            .with_value_to_string(formatters::v2s_f32_rounded(3)),
+            buffermod_rate: FloatParam::new(
+                "Rate",
+                0.01,
+                FloatRange::Skewed {
+                    min: 0.01,
+                    max: 3.0,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(0.001)
+            .with_value_to_string(formatters::v2s_f32_rounded(3)),
+            buffermod_timing: FloatParam::new(
+                "Buffer",
+                620.0,
+                FloatRange::Skewed {
+                    min: 1.0,
+                    max: 2700.0,
+                    factor: 0.5,
+                },
+            )
+            .with_step_size(1.0)
+            .with_value_to_string(formatters::v2s_f32_rounded(0)),
 
             use_flanger: BoolParam::new("Flanger", false),
-            flanger_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            flanger_depth: FloatParam::new("Depth", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            flanger_rate: FloatParam::new("Rate", 5.0, FloatRange::Linear { min: 0.01, max: 24.0 }).with_step_size(0.01).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            flanger_feedback: FloatParam::new("Feedback", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            flanger_amount: FloatParam::new(
+                "Amount",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            flanger_depth: FloatParam::new("Depth", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            flanger_rate: FloatParam::new(
+                "Rate",
+                5.0,
+                FloatRange::Linear {
+                    min: 0.01,
+                    max: 24.0,
+                },
+            )
+            .with_step_size(0.01)
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            flanger_feedback: FloatParam::new(
+                "Feedback",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
 
             use_limiter: BoolParam::new("Limiter", false),
-            limiter_threshold: FloatParam::new("Threshold", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
-            limiter_knee: FloatParam::new("Knee", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 }).with_value_to_string(formatters::v2s_f32_rounded(2)),
+            limiter_threshold: FloatParam::new(
+                "Threshold",
+                0.5,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            limiter_knee: FloatParam::new("Knee", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(2)),
 
             // UI Non-Param Params
             ////////////////////////////////////////////////////////////////////////////////////
@@ -3112,86 +3226,144 @@ impl Plugin for Actuate {
                                     ui.vertical(|ui|{
                                         ui.horizontal(|ui|{
                                             if *filter_select.lock().unwrap() == FilterSelect::Filter1 {
-                                                ui.vertical(|ui|{
-                                                    let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_wet,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_wet_knob);
-                                                    let filter_resonance_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_resonance,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_resonance_knob);
-                                                });
-                                                ui.vertical(|ui|{
-                                                    let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_cutoff,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_cutoff_knob);
-                                                    let filter_res_type_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_res_type,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_res_type_knob);
-                                                });
-                                                ui.vertical(|ui|{
-                                                    let filter_hp_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_hp_amount,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_hp_knob);
-                                                    let filter_env_peak = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_env_peak,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_env_peak);
-                                                });
-                                                ui.vertical(|ui| {
-                                                    let filter_lp_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_lp_amount,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_lp_knob);
-                                                    let filter_bp_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_bp_amount,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_bp_knob);
-                                                });
+                                                match params.filter_alg_type.value() {
+                                                    FilterAlgorithms::SVF => {
+                                                        ui.vertical(|ui|{
+                                                            let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_wet,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_wet_knob);
+                                                            let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_resonance,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_resonance_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_cutoff,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_cutoff_knob);
+                                                            let filter_res_type_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_res_type,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_res_type_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_hp_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_hp_amount,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_hp_knob);
+                                                            let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_env_peak,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_env_peak);
+                                                        });
+                                                        ui.vertical(|ui| {
+                                                            let filter_lp_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_lp_amount,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_lp_knob);
+                                                            let filter_bp_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_bp_amount,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_bp_knob);
+                                                        });
+                                                    },
+                                                    FilterAlgorithms::FIR => {
+                                                        ui.vertical(|ui|{
+                                                            let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_wet,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_wet_knob);
+                                                            let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_resonance,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_resonance_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_cutoff,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_cutoff_knob);
+                                                            let filter_fir_type_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.fir_filter_type,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_fir_type_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_env_peak,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_env_peak);
+                                                        });
+                                                        ui.add_space(KNOB_SIZE*2.0);
+                                                    }
+                                                }
 
                                                 // Middle bottom light section
                                                 ui.painter().rect_filled(
@@ -4699,7 +4871,8 @@ impl Actuate {
                 AM2.regenerate_samples();
                 AM3.regenerate_samples();
 
-                let temp_current_preset = locked_lib[self.current_preset.load(Ordering::Relaxed) as usize].clone();
+                let temp_current_preset =
+                    locked_lib[self.current_preset.load(Ordering::Relaxed) as usize].clone();
                 *self.preset_name.lock().unwrap() = temp_current_preset.preset_name;
                 *self.preset_info.lock().unwrap() = temp_current_preset.preset_info;
 
@@ -5890,13 +6063,19 @@ impl Actuate {
                         self.params.comp_amt.value(),
                         self.params.comp_atk.value(),
                         self.params.comp_rel.value(),
-                        self.params.comp_drive.value());
-                    (left_output, right_output) = self.compressor.process(left_output, right_output);
+                        self.params.comp_drive.value(),
+                    );
+                    (left_output, right_output) =
+                        self.compressor.process(left_output, right_output);
                 }
                 // Distortion
                 if self.params.use_saturation.value() {
                     self.saturator.set_type(self.params.sat_type.value());
-                    (left_output, right_output) = self.saturator.process(left_output, right_output, self.params.sat_amt.value());
+                    (left_output, right_output) = self.saturator.process(
+                        left_output,
+                        right_output,
+                        self.params.sat_amt.value(),
+                    );
                 }
                 // Buffer Modulator
                 if self.params.use_buffermod.value() {
@@ -5905,16 +6084,26 @@ impl Actuate {
                         self.params.buffermod_depth.value(),
                         self.params.buffermod_rate.value(),
                         self.params.buffermod_spread.value(),
-                        self.params.buffermod_timing.value());
-                    (left_output, right_output) = self.buffermod.process(left_output, right_output, self.params.buffermod_amount.value());
+                        self.params.buffermod_timing.value(),
+                    );
+                    (left_output, right_output) = self.buffermod.process(
+                        left_output,
+                        right_output,
+                        self.params.buffermod_amount.value(),
+                    );
                 }
                 // Phaser
                 if self.params.use_phaser.value() {
                     self.phaser.set_sample_rate(self.sample_rate);
                     self.phaser.set_depth(self.params.phaser_depth.value());
                     self.phaser.set_rate(self.params.phaser_rate.value());
-                    self.phaser.set_feedback(self.params.phaser_feedback.value());
-                    (left_output, right_output) = self.phaser.process(left_output, right_output, self.params.phaser_amount.value());
+                    self.phaser
+                        .set_feedback(self.params.phaser_feedback.value());
+                    (left_output, right_output) = self.phaser.process(
+                        left_output,
+                        right_output,
+                        self.params.phaser_amount.value(),
+                    );
                 }
                 // Flanger
                 if self.params.use_flanger.value() {
@@ -5922,16 +6111,28 @@ impl Actuate {
                         self.sample_rate,
                         self.params.flanger_depth.value(),
                         self.params.flanger_rate.value(),
-                        self.params.flanger_feedback.value());
-                    (left_output, right_output) = self.flanger.process(left_output, right_output, self.params.flanger_amount.value());
+                        self.params.flanger_feedback.value(),
+                    );
+                    (left_output, right_output) = self.flanger.process(
+                        left_output,
+                        right_output,
+                        self.params.flanger_amount.value(),
+                    );
                 }
                 // Delay
                 if self.params.use_delay.value() {
-                    self.delay.set_sample_rate(self.sample_rate, context.transport().tempo.unwrap_or(1.0) as f32);
+                    self.delay.set_sample_rate(
+                        self.sample_rate,
+                        context.transport().tempo.unwrap_or(1.0) as f32,
+                    );
                     self.delay.set_length(self.params.delay_time.value());
                     self.delay.set_feedback(self.params.delay_decay.value());
                     self.delay.set_type(self.params.delay_type.value());
-                    (left_output, right_output) = self.delay.process(left_output, right_output, self.params.delay_amount.value());
+                    (left_output, right_output) = self.delay.process(
+                        left_output,
+                        right_output,
+                        self.params.delay_amount.value(),
+                    );
                 }
                 // Reverb
                 if self.params.use_reverb.value() {
@@ -5939,24 +6140,36 @@ impl Actuate {
                     // Full
                     self.reverb[0].set_size(self.params.reverb_size.value(), self.sample_rate);
                     // Half
-                    self.reverb[1].set_size(self.params.reverb_size.value() * 0.546, self.sample_rate);
+                    self.reverb[1]
+                        .set_size(self.params.reverb_size.value() * 0.546, self.sample_rate);
                     // Third
-                    self.reverb[2].set_size(self.params.reverb_size.value() * 0.251, self.sample_rate);
+                    self.reverb[2]
+                        .set_size(self.params.reverb_size.value() * 0.251, self.sample_rate);
                     // Fourth
-                    self.reverb[3].set_size(self.params.reverb_size.value() * 0.735, self.sample_rate);
+                    self.reverb[3]
+                        .set_size(self.params.reverb_size.value() * 0.735, self.sample_rate);
                     // Fifth
-                    self.reverb[4].set_size(self.params.reverb_size.value() * 0.669, self.sample_rate);
+                    self.reverb[4]
+                        .set_size(self.params.reverb_size.value() * 0.669, self.sample_rate);
                     // 5/8ths
-                    self.reverb[5].set_size(self.params.reverb_size.value() * 0.374, self.sample_rate);
-                    
+                    self.reverb[5]
+                        .set_size(self.params.reverb_size.value() * 0.374, self.sample_rate);
+
                     for verb in self.reverb.iter_mut() {
                         verb.set_feedback(self.params.reverb_feedback.value());
-                        (left_output, right_output) = verb.process_tdl(left_output, right_output, self.params.reverb_amount.value());
+                        (left_output, right_output) = verb.process_tdl(
+                            left_output,
+                            right_output,
+                            self.params.reverb_amount.value(),
+                        );
                     }
                 }
                 // Limiter
                 if self.params.use_limiter.value() {
-                    self.limiter.update(self.params.limiter_knee.value(), self.params.limiter_threshold.value());
+                    self.limiter.update(
+                        self.params.limiter_knee.value(),
+                        self.params.limiter_threshold.value(),
+                    );
                     (left_output, right_output) = self.limiter.process(left_output, right_output);
                 }
             }
@@ -6121,6 +6334,7 @@ impl Actuate {
                         filter_env_dec_curve: SmoothStyle::Linear,
                         filter_env_rel_curve: SmoothStyle::Linear,
                         filter_alg_type: FilterAlgorithms::SVF,
+                        fir_filter_type: fir_filter::FIRTypes::Lowpass,
 
                         filter_wet_2: 1.0,
                         filter_cutoff_2: 16000.0,
@@ -6138,6 +6352,7 @@ impl Actuate {
                         filter_env_dec_curve_2: SmoothStyle::Linear,
                         filter_env_rel_curve_2: SmoothStyle::Linear,
                         filter_alg_type_2: FilterAlgorithms::SVF,
+                        fir_filter_type_2: fir_filter::FIRTypes::Lowpass,
 
                         filter_routing: FilterRouting::Parallel,
 
@@ -6271,7 +6486,7 @@ impl Actuate {
 
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset.lock().unwrap()[current_preset_index as usize];
-        
+
         setter.set_parameter(
             &params._audio_module_1_type,
             loaded_preset.mod1_audio_module_type,
@@ -6748,6 +6963,7 @@ impl Actuate {
                 filter_env_dec_curve: self.params.filter_env_dec_curve.value(),
                 filter_env_rel_curve: self.params.filter_env_rel_curve.value(),
                 filter_alg_type: self.params.filter_alg_type.value(),
+                fir_filter_type: self.params.fir_filter_type.value(),
 
                 filter_wet_2: self.params.filter_wet_2.value(),
                 filter_cutoff_2: self.params.filter_cutoff_2.value(),
@@ -6765,6 +6981,7 @@ impl Actuate {
                 filter_env_dec_curve_2: self.params.filter_env_dec_curve_2.value(),
                 filter_env_rel_curve_2: self.params.filter_env_rel_curve_2.value(),
                 filter_alg_type_2: self.params.filter_alg_type_2.value(),
+                fir_filter_type_2: self.params.fir_filter_type_2.value(),
 
                 filter_routing: self.params.filter_routing.value(),
 
@@ -6974,37 +7191,57 @@ impl Actuate {
                 // I don't expect this to be used
                 _ => self.params.filter_cutoff.value() + filter_cutoff_mod,
             };
-            // Filtering before output
-            self.filter_l_1.update(
-                next_filter_step,
-                self.params.filter_resonance.value() + filter_resonance_mod,
-                self.sample_rate,
-                self.params.filter_res_type.value(),
-            );
-            self.filter_r_1.update(
-                next_filter_step,
-                self.params.filter_resonance.value(),
-                self.sample_rate,
-                self.params.filter_res_type.value(),
-            );
-            let low_l: f32;
-            let band_l: f32;
-            let high_l: f32;
-            let low_r: f32;
-            let band_r: f32;
-            let high_r: f32;
-            (low_l, band_l, high_l) = self.filter_l_1.process(left_input_filter1);
-            (low_r, band_r, high_r) = self.filter_r_1.process(right_input_filter1);
-            *left_output += (low_l * self.params.filter_lp_amount.value()
-                + band_l * self.params.filter_bp_amount.value()
-                + high_l * self.params.filter_hp_amount.value())
-                * self.params.filter_wet.value()
-                + *left_output * (1.0 - self.params.filter_wet.value());
-            *right_output += (low_r * self.params.filter_lp_amount.value()
-                + band_r * self.params.filter_bp_amount.value()
-                + high_r * self.params.filter_hp_amount.value())
-                * self.params.filter_wet.value()
-                + *right_output * (1.0 - self.params.filter_wet.value());
+            match self.params.filter_alg_type.value() {
+                FilterAlgorithms::SVF => {
+                    // Filtering before output
+                    self.filter_l_1.update(
+                        next_filter_step,
+                        self.params.filter_resonance.value() + filter_resonance_mod,
+                        self.sample_rate,
+                        self.params.filter_res_type.value(),
+                    );
+                    self.filter_r_1.update(
+                        next_filter_step,
+                        self.params.filter_resonance.value(),
+                        self.sample_rate,
+                        self.params.filter_res_type.value(),
+                    );
+                    let low_l: f32;
+                    let band_l: f32;
+                    let high_l: f32;
+                    let low_r: f32;
+                    let band_r: f32;
+                    let high_r: f32;
+                    (low_l, band_l, high_l) = self.filter_l_1.process(left_input_filter1);
+                    (low_r, band_r, high_r) = self.filter_r_1.process(right_input_filter1);
+                    *left_output += (low_l * self.params.filter_lp_amount.value()
+                        + band_l * self.params.filter_bp_amount.value()
+                        + high_l * self.params.filter_hp_amount.value())
+                        * self.params.filter_wet.value()
+                        + left_input_filter1 * (1.0 - self.params.filter_wet.value());
+                    *right_output += (low_r * self.params.filter_lp_amount.value()
+                        + band_r * self.params.filter_bp_amount.value()
+                        + high_r * self.params.filter_hp_amount.value())
+                        * self.params.filter_wet.value()
+                        + right_input_filter1 * (1.0 - self.params.filter_wet.value());
+                },
+                FilterAlgorithms::FIR => {
+                    self.fir_filter_l_1.update(
+                        self.sample_rate,
+                        self.params.fir_filter_type.value(),
+                        next_filter_step,
+                        self.params.filter_resonance.value());
+                    self.fir_filter_r_1.update(
+                        self.sample_rate,
+                        self.params.fir_filter_type.value(),
+                        next_filter_step,
+                        self.params.filter_resonance.value());
+                    let fir_out_l = self.fir_filter_l_1.process(left_input_filter1);
+                    let fir_out_r = self.fir_filter_r_1.process(right_input_filter1);
+                    *left_output += fir_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
+                    *right_output += fir_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
+                },
+            }
         }
     }
 

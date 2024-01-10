@@ -376,7 +376,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                     );
                     value_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
                 }
-                
+
                 let text_color: Color32;
                 // Setting text color
                 if self.text_color_override != Color32::TEMPORARY_COLOR {

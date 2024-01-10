@@ -13,7 +13,14 @@ pub struct StereoFlanger {
 }
 
 impl StereoFlanger {
-    pub fn new(sample_rate: f32, depth: f32, lfo_rate: f32, delay_range: f32, feedback: f32, max_delay_samples: usize) -> Self {
+    pub fn new(
+        sample_rate: f32,
+        depth: f32,
+        lfo_rate: f32,
+        delay_range: f32,
+        feedback: f32,
+        max_delay_samples: usize,
+    ) -> Self {
         Self {
             sample_rate,
             depth,

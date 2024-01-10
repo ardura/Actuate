@@ -1,6 +1,6 @@
-use std::f32::consts::PI;
 use nih_plug::params::enums::Enum;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::f32::consts::PI;
 
 // FIR Supported Types
 #[derive(Enum, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
@@ -8,10 +8,10 @@ pub enum FIRTypes {
     Highpass,
     Lowpass,
     Bandpass,
-    Notch
+    Notch,
 }
 
-const TAPS: usize = 31;
+const TAPS: usize = 32;
 
 //#[derive(Clone)]
 pub struct FirFilter {
@@ -29,7 +29,8 @@ impl FirFilter {
         // This doesn't matter since it will be updated
         let cutoff_freq = 16000.0;
 
-        let coefficients = FirFilter::calculate_coefficients(FIRTypes::Lowpass, TAPS, sample_rate, cutoff_freq);
+        let coefficients =
+            FirFilter::calculate_coefficients(FIRTypes::Lowpass, TAPS, sample_rate, cutoff_freq);
         let buffer_size = coefficients.len();
         FirFilter {
             sample_rate: sample_rate,
@@ -42,7 +43,13 @@ impl FirFilter {
         }
     }
 
-    pub fn update(&mut self, sample_rate: f32, filter_type: FIRTypes, cutoff_freq: f32, resonance: f32) {
+    pub fn update(
+        &mut self,
+        sample_rate: f32,
+        filter_type: FIRTypes,
+        cutoff_freq: f32,
+        resonance: f32,
+    ) {
         let mut recalc: bool = false;
         if self.sample_rate != sample_rate {
             self.sample_rate = sample_rate;
@@ -61,7 +68,13 @@ impl FirFilter {
             recalc = true;
         }
         if recalc {
-            self.coefficients = Self::calculate_coefficients(self.filter_type, TAPS, self.sample_rate, self.cutoff_freq);
+            self.coefficients = Self::calculate_coefficients(
+                self.filter_type,
+                TAPS,
+                self.sample_rate,
+                self.cutoff_freq,
+            );
+            self.buffer.resize(self.coefficients.len(), 0.0);
         }
     }
 
@@ -78,8 +91,9 @@ impl FirFilter {
             .sum();
 
         // Apply resonance by adding feedback
-        let feedback = self.resonance * (input - output);
-        let filtered_output = output + feedback;
+        //let feedback = self.resonance * (input - output);
+        //let filtered_output = output + feedback;
+        let filtered_output = output;
 
         // Update buffer index
         self.index = (self.index + 1) % self.buffer.len();
@@ -87,7 +101,12 @@ impl FirFilter {
         filtered_output
     }
 
-    pub fn calculate_coefficients(filter_type: FIRTypes, taps: usize, sample_rate: f32, cutoff_freq: f32) -> Vec<f32> {
+    pub fn calculate_coefficients(
+        filter_type: FIRTypes,
+        taps: usize,
+        sample_rate: f32,
+        cutoff_freq: f32,
+    ) -> Vec<f32> {
         // Calculate coefficients based on filter type
         match filter_type {
             FIRTypes::Highpass => Self::highpass(taps, sample_rate, cutoff_freq),
@@ -101,22 +120,22 @@ impl FirFilter {
         // Calculate lowpass filter coefficients using a window function
         let nyquist = 0.5 * sample_rate;
         let normalized_cutoff = cutoff_freq / nyquist;
-
+    
         let coefficients: Vec<f32> = (0..taps)
             .map(|n| {
                 let sinc_val = if n == taps / 2 {
-                    2.0 * normalized_cutoff
+                    1.0
                 } else {
                     (PI * (n as f32 - taps as f32 / 2.0) * normalized_cutoff).sin()
                         / (PI * (n as f32 - taps as f32 / 2.0))
                 };
-
+    
                 0.54 - 0.46 * (2.0 * PI * n as f32 / taps as f32).cos() * sinc_val
             })
             .collect();
-
+    
         coefficients
-    }
+    }    
 
     fn highpass(taps: usize, sample_rate: f32, cutoff_freq: f32) -> Vec<f32> {
         // Calculate highpass filter coefficients by subtracting lowpass coefficients from a dirac impulse
@@ -124,30 +143,37 @@ impl FirFilter {
         let mut dirac_impulse: Vec<f32> = vec![0.0; taps];
         dirac_impulse[taps / 2] = 1.0;
 
-        lowpass_coefficients.iter().zip(dirac_impulse.iter()).map(|(&a, &b)| b - a).collect()
+        lowpass_coefficients
+            .iter()
+            .zip(dirac_impulse.iter())
+            .map(|(&a, &b)| b - a)
+            .collect()
     }
 
-    fn bandpass(taps: usize, sample_rate: f32, center_freq: f32) -> Vec<f32> {
+    fn bandpass(taps: usize, sample_rate: f32, cutoff_freq: f32) -> Vec<f32> {
         // Calculate bandpass filter coefficients using two lowpass filters
-        let low_cutoff = center_freq - 0.5;
-        let high_cutoff = center_freq + 0.5;
+        let low_cutoff = cutoff_freq - 0.5;
+        let high_cutoff = cutoff_freq + 0.5;
 
         let lowpass1 = Self::lowpass(taps, sample_rate, low_cutoff);
         let lowpass2 = Self::lowpass(taps, sample_rate, high_cutoff);
 
-        lowpass2.iter().zip(lowpass1.iter()).map(|(&a, &b)| a - b).collect()
+        lowpass2
+            .iter()
+            .zip(lowpass1.iter())
+            .map(|(&a, &b)| a - b)
+            .collect()
     }
 
-    fn notch(taps: usize, sample_rate: f32, center_freq: f32) -> Vec<f32> {
+    fn notch(taps: usize, sample_rate: f32, cutoff_freq: f32) -> Vec<f32> {
         // Calculate notch filter coefficients by summing highpass and lowpass filter coefficients
-        let highpass = Self::highpass(taps, sample_rate, center_freq);
-        let lowpass = Self::lowpass(taps, sample_rate, center_freq);
+        let highpass = Self::highpass(taps, sample_rate, cutoff_freq);
+        let lowpass = Self::lowpass(taps, sample_rate, cutoff_freq);
 
-        highpass.iter().zip(lowpass.iter()).map(|(&a, &b)| a + b).collect()
-    }
-
-    pub fn calculate_resonance_factor(q: f32) -> f32 {
-        // Calculate resonance factor based on Q factor
-        2.0 * (1.0 - q).min(0.999)
+        highpass
+            .iter()
+            .zip(lowpass.iter())
+            .map(|(&a, &b)| a + b)
+            .collect()
     }
 }
