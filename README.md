@@ -9,7 +9,7 @@ Join the discord! https://discord.com/invite/hscQXkTdfz
 
 
 ## Features
-- Two SVF Filters that can be parallel, serial, or bypassed with ADSR Envelopes
+- Two SVF Filters or Tilt inspired filters that can be parallel, serial, or bypassed with ADSR Envelopes
 - 12 Oscillator shapes
 - 7 Filter resonance approximations for different sweeps
 - 9 Different FX for post processing
@@ -18,7 +18,7 @@ Join the discord! https://discord.com/invite/hscQXkTdfz
 - Sampler with pitch shifting or resample stretching
 - Sampler supports single cycle waveforms for wavetable-like functions
 - Granulizer with ADSR and crossfading between grains
-- Any generator can do to any filter
+- Any generator can go to any filter
 - Samples can be saved into presets
 - Stereo width and ultra wide controls
 
