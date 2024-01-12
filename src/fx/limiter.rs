@@ -6,7 +6,10 @@ pub struct StereoLimiter {
 
 impl StereoLimiter {
     pub fn new(threshold: f32, knee_width: f32) -> Self {
-        StereoLimiter { threshold, knee_width }
+        StereoLimiter {
+            threshold,
+            knee_width,
+        }
     }
 
     pub fn update(&mut self, knee_width: f32, threshold: f32) {

@@ -36,8 +36,9 @@ use std::{collections::VecDeque, f32::consts::SQRT_2, path::PathBuf, sync::Arc};
 pub(crate) mod Oscillator;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
-    toggle_switch, ui_knob, ActuateParams, CustomWidgets::{CustomParamSlider, CustomVerticalSlider}, GUI_VALS,
-    SMALLER_FONT,
+    toggle_switch, ui_knob, ActuateParams,
+    CustomWidgets::{CustomParamSlider, CustomVerticalSlider},
+    GUI_VALS, SMALLER_FONT,
 };
 use CustomParamSlider::ParamSlider as HorizontalParamSlider;
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;

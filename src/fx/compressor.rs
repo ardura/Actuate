@@ -17,7 +17,7 @@ pub(crate) struct Compressor {
 
 impl Compressor {
     pub fn new(sample_rate: f32, amount: f32, attack: f32, release: f32, drive: f32) -> Self {
-        Compressor { 
+        Compressor {
             sample_rate: sample_rate,
             amount: amount,
             attack: attack,
@@ -37,7 +37,7 @@ impl Compressor {
         self.release = (release.powi(5) * 2000000.0 + 20.0) * overallscale;
         self.drive = drive;
     }
-    pub fn process(&mut self, input_l: f32, input_r: f32) -> (f32,f32) {
+    pub fn process(&mut self, input_l: f32, input_r: f32) -> (f32, f32) {
         let threshold = 1.0 - ((1.0 - (1.0 - self.amount).powi(2)) * 0.9);
         let max_release = self.release * 4.0;
         let mu_makeup_gain = (1.0 / threshold).sqrt() * self.drive;
@@ -51,8 +51,8 @@ impl Compressor {
         if output_l.abs() > threshold {
             let variance = threshold / output_l.abs();
             let mu_attack_l = (self.speed_l.abs()).sqrt();
-            self.coefficient_l =
-                self.coefficient_l * (mu_attack_l - 1.0) + if variance < threshold {
+            self.coefficient_l = self.coefficient_l * (mu_attack_l - 1.0)
+                + if variance < threshold {
                     threshold
                 } else {
                     variance
@@ -72,8 +72,8 @@ impl Compressor {
         if output_r.abs() > threshold {
             let variance = threshold / output_r.abs();
             let mu_attack_r = (self.speed_r.abs()).sqrt();
-            self.coefficient_r =
-                self.coefficient_r * (mu_attack_r - 1.0) + if variance < threshold {
+            self.coefficient_r = self.coefficient_r * (mu_attack_r - 1.0)
+                + if variance < threshold {
                     threshold
                 } else {
                     variance

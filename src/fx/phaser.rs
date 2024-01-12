@@ -22,7 +22,6 @@ impl AllpassDelay {
     }
 }
 
-
 #[derive(Clone, Copy)]
 pub struct StereoPhaser {
     alps: [AllpassDelay; 6],
@@ -99,6 +98,9 @@ impl StereoPhaser {
         let output_l = left_out + left_in * self.depth;
         let output_r = right_out + right_in * self.depth;
 
-        (output_l * amount + left_in * (1.0 - amount), output_r * amount + right_in * (1.0 - amount))
+        (
+            output_l * amount + left_in * (1.0 - amount),
+            output_r * amount + right_in * (1.0 - amount),
+        )
     }
 }

@@ -74,6 +74,9 @@ impl BufferModulator {
         let output_right = self.depth * delayed_sample_right * modulation_right;
         self.delay_line_right.push(input_right + output_right);
 
-        (output_left * amount + input_left * (1.0 - amount), output_right * amount + input_right * (1.0 - amount))
+        (
+            output_left * amount + input_left * (1.0 - amount),
+            output_right * amount + input_right * (1.0 - amount),
+        )
     }
 }
