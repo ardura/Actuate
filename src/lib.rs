@@ -60,7 +60,7 @@ use fx::{
     buffermodulator::BufferModulator,
     compressor::Compressor,
     delay::{Delay, DelaySnapValues, DelayType},
-    fir_filter::{self, FIRTypes, FirFilter},
+    ArduraFilter::{self, ResponseType},
     flanger::StereoFlanger,
     limiter::StereoLimiter,
     phaser::StereoPhaser,
@@ -173,7 +173,7 @@ pub enum AMFilterRouting {
 #[derive(Enum, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum FilterAlgorithms {
     SVF,
-    FIR,
+    TILT,
 }
 
 // These let us output ToString for the ComboBox stuff + Nih-Plug
@@ -349,7 +349,7 @@ struct ActuatePreset {
     filter_env_dec_curve: Oscillator::SmoothStyle,
     filter_env_rel_curve: Oscillator::SmoothStyle,
     filter_alg_type: FilterAlgorithms,
-    fir_filter_type: fir_filter::FIRTypes,
+    tilt_filter_type: ArduraFilter::ResponseType,
 
     filter_wet_2: f32,
     filter_cutoff_2: f32,
@@ -367,7 +367,7 @@ struct ActuatePreset {
     filter_env_dec_curve_2: Oscillator::SmoothStyle,
     filter_env_rel_curve_2: Oscillator::SmoothStyle,
     filter_alg_type_2: FilterAlgorithms,
-    fir_filter_type_2: fir_filter::FIRTypes,
+    tilt_filter_type_2: ArduraFilter::ResponseType,
 
     filter_routing: FilterRouting,
 
@@ -498,9 +498,9 @@ pub struct Actuate {
     // SVF Filters
     filter_l_1: StateVariableFilter,
     filter_r_1: StateVariableFilter,
-    // FIR Filters
-    fir_filter_l_1: FirFilter,
-    fir_filter_r_1: FirFilter,
+    // TILT Filters
+    tilt_filter_l_1: ArduraFilter::ArduraFilter,
+    tilt_filter_r_1: ArduraFilter::ArduraFilter,
     // Filter state variables
     filter_state_1: OscState,
     filter_atk_smoother_1: Smoother<f32>,
@@ -510,9 +510,9 @@ pub struct Actuate {
     // SVF Filters
     filter_l_2: StateVariableFilter,
     filter_r_2: StateVariableFilter,
-    // FIR Filters
-    fir_filter_l_2: FirFilter,
-    fir_filter_r_2: FirFilter,
+    // TILT Filters
+    tilt_filter_l_2: ArduraFilter::ArduraFilter,
+    tilt_filter_r_2: ArduraFilter::ArduraFilter,
     // Filter state variables
     filter_state_2: OscState,
     filter_atk_smoother_2: Smoother<f32>,
@@ -622,9 +622,9 @@ impl Default for Actuate {
             // SVF Filters
             filter_l_2: StateVariableFilter::default().set_oversample(4),
             filter_r_2: StateVariableFilter::default().set_oversample(4),
-            // FIR Filters
-            fir_filter_l_2: FirFilter::new(44100.00),
-            fir_filter_r_2: FirFilter::new(44100.00),
+            // TILT Filters
+            tilt_filter_l_2: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
+            tilt_filter_r_2: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
             filter_state_2: OscState::Off,
             filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -633,9 +633,9 @@ impl Default for Actuate {
             // SVF Filters
             filter_l_1: StateVariableFilter::default().set_oversample(4),
             filter_r_1: StateVariableFilter::default().set_oversample(4),
-            // FIR Filters
-            fir_filter_l_1: FirFilter::new(44100.00),
-            fir_filter_r_1: FirFilter::new(44100.00),
+            // TILT Filters
+            tilt_filter_l_1: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
+            tilt_filter_r_1: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
             filter_state_1: OscState::Off,
             filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -752,7 +752,7 @@ impl Default for Actuate {
                     mod3_osc_stereo: 0.0,
 
                     filter_wet: 1.0,
-                    filter_cutoff: 16000.0,
+                    filter_cutoff: 20000.0,
                     filter_resonance: 1.0,
                     filter_res_type: ResonanceType::Default,
                     filter_lp_amount: 1.0,
@@ -767,10 +767,10 @@ impl Default for Actuate {
                     filter_env_dec_curve: SmoothStyle::Linear,
                     filter_env_rel_curve: SmoothStyle::Linear,
                     filter_alg_type: FilterAlgorithms::SVF,
-                    fir_filter_type: fir_filter::FIRTypes::Lowpass,
+                    tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
 
                     filter_wet_2: 1.0,
-                    filter_cutoff_2: 16000.0,
+                    filter_cutoff_2: 20000.0,
                     filter_resonance_2: 1.0,
                     filter_res_type_2: ResonanceType::Default,
                     filter_lp_amount_2: 1.0,
@@ -785,7 +785,7 @@ impl Default for Actuate {
                     filter_env_dec_curve_2: SmoothStyle::Linear,
                     filter_env_rel_curve_2: SmoothStyle::Linear,
                     filter_alg_type_2: FilterAlgorithms::SVF,
-                    fir_filter_type_2: fir_filter::FIRTypes::Lowpass,
+                    tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
 
                     filter_routing: FilterRouting::Parallel,
 
@@ -832,8 +832,8 @@ impl Default for Actuate {
                     // EQ
                     use_eq: false,
                     low_freq: 800.0,
-                    mid_freq: 2000.0,
-                    high_freq: 8000.0,
+                    mid_freq: 3000.0,
+                    high_freq: 10000.0,
                     low_gain: 0.0,
                     mid_gain: 0.0,
                     high_gain: 0.0,
@@ -1163,8 +1163,8 @@ pub struct ActuateParams {
     pub filter_env_rel_curve: EnumParam<Oscillator::SmoothStyle>,
     #[id = "filter_alg_type"]
     pub filter_alg_type: EnumParam<FilterAlgorithms>,
-    #[id = "fir_filter_type"]
-    pub fir_filter_type: EnumParam<FIRTypes>,
+    #[id = "tilt_filter_type"]
+    pub tilt_filter_type: EnumParam<ResponseType>,
 
     #[id = "filter_wet_2"]
     pub filter_wet_2: FloatParam,
@@ -1198,8 +1198,8 @@ pub struct ActuateParams {
     pub filter_env_rel_curve_2: EnumParam<Oscillator::SmoothStyle>,
     #[id = "filter_alg_type_2"]
     pub filter_alg_type_2: EnumParam<FilterAlgorithms>,
-    #[id = "fir_filter_type_2"]
-    pub fir_filter_type_2: EnumParam<FIRTypes>,
+    #[id = "tilt_filter_type_2"]
+    pub tilt_filter_type_2: EnumParam<ResponseType>,
 
     // LFOS
     #[id = "lfo1_enable"]
@@ -2089,10 +2089,10 @@ impl ActuateParams {
             }),
             filter_cutoff: FloatParam::new(
                 "Frequency",
-                16000.0,
+                20000.0,
                 FloatRange::Skewed {
                     min: 20.0,
-                    max: 16000.0,
+                    max: 20000.0,
                     factor: 0.5,
                 },
             )
@@ -2102,14 +2102,14 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             filter_alg_type: EnumParam::new("Filter 1 Alg", FilterAlgorithms::SVF),
-            fir_filter_type: EnumParam::new("Filter Type", FIRTypes::Lowpass),
+            tilt_filter_type: EnumParam::new("Filter Type", ResponseType::Lowpass),
 
             filter_env_peak: FloatParam::new(
                 "Env Peak",
                 0.0,
                 FloatRange::Linear {
-                    min: -5000.0,
-                    max: 5000.0,
+                    min: -18980.0,
+                    max: 18980.0,
                 },
             )
             .with_step_size(1.0)
@@ -2251,10 +2251,10 @@ impl ActuateParams {
             ),
             filter_cutoff_2: FloatParam::new(
                 "Frequency",
-                16000.0,
+                20000.0,
                 FloatRange::Skewed {
                     min: 20.0,
-                    max: 16000.0,
+                    max: 20000.0,
                     factor: 0.5,
                 },
             )
@@ -2264,14 +2264,14 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             filter_alg_type_2: EnumParam::new("Filter 2 Alg", FilterAlgorithms::SVF),
-            fir_filter_type_2: EnumParam::new("Filter Type", FIRTypes::Lowpass),
+            tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass),
 
             filter_env_peak_2: FloatParam::new(
                 "Env Peak",
                 0.0,
                 FloatRange::Linear {
-                    min: -5000.0,
-                    max: 5000.0,
+                    min: -18980.0,
+                    max: 18980.0,
                 },
             )
             .with_step_size(1.0)
@@ -2519,7 +2519,7 @@ impl ActuateParams {
                 10000.0,
                 FloatRange::Linear {
                     min: 3000.0,
-                    max: 16000.0,
+                    max: 20000.0,
                 },
             )
             .with_step_size(1.0)
@@ -3309,7 +3309,7 @@ impl Plugin for Actuate {
                                                             ui.add(filter_bp_knob);
                                                         });
                                                     },
-                                                    FilterAlgorithms::FIR => {
+                                                    FilterAlgorithms::TILT => {
                                                         ui.vertical(|ui|{
                                                             let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                 &params.filter_wet,
@@ -3340,15 +3340,15 @@ impl Plugin for Actuate {
                                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_cutoff_knob);
-                                                            let filter_fir_type_knob = ui_knob::ArcKnob::for_param(
-                                                                &params.fir_filter_type,
+                                                            let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.tilt_filter_type,
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                                 .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
                                                                 .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
                                                                 .set_text_size(TEXT_SIZE);
-                                                            ui.add(filter_fir_type_knob);
+                                                            ui.add(filter_tilt_type_knob);
                                                         });
                                                         ui.vertical(|ui|{
                                                             let filter_env_peak = ui_knob::ArcKnob::for_param(
@@ -3382,88 +3382,146 @@ impl Plugin for Actuate {
                                                     *GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap()
                                                 );
                                             } else {
-                                                ui.vertical(|ui|{
-                                                    let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_wet_2,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_wet_knob);
-
-                                                    let filter_resonance_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_resonance_2,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_resonance_knob);
-                                                });
-                                                ui.vertical(|ui|{
-                                                    let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_cutoff_2,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_cutoff_knob);
-
-                                                    let filter_res_type_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_res_type_2,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_res_type_knob);
-                                                });
-                                                ui.vertical(|ui|{
-                                                    let filter_hp_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_hp_amount_2,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_hp_knob);
-                                                    let filter_env_peak = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_env_peak_2,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_env_peak);
-                                                });
-                                                ui.vertical(|ui| {
-                                                    let filter_lp_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_lp_amount_2,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_lp_knob);
-                                                    let filter_bp_knob = ui_knob::ArcKnob::for_param(
-                                                        &params.filter_bp_amount_2,
-                                                        setter,
-                                                        KNOB_SIZE)
-                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
-                                                        .set_text_size(TEXT_SIZE);
-                                                    ui.add(filter_bp_knob);
-                                                });
+                                                match params.filter_alg_type_2.value() {
+                                                    FilterAlgorithms::SVF => {
+                                                        ui.vertical(|ui|{
+                                                            let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_wet_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_wet_knob);
+        
+                                                            let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_resonance_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_resonance_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_cutoff_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_cutoff_knob);
+        
+                                                            let filter_res_type_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_res_type_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_res_type_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_hp_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_hp_amount_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_hp_knob);
+                                                            let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_env_peak_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_env_peak);
+                                                        });
+                                                        ui.vertical(|ui| {
+                                                            let filter_lp_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_lp_amount_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_lp_knob);
+                                                            let filter_bp_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_bp_amount_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_bp_knob);
+                                                        });
+                                                    },
+                                                    FilterAlgorithms::TILT => {
+                                                        ui.vertical(|ui|{
+                                                            let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_wet_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_wet_knob);
+                                                            let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_resonance_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_resonance_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_cutoff_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_cutoff_knob);
+                                                            let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.tilt_filter_type_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_tilt_type_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_env_peak_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
+                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_env_peak);
+                                                        });
+                                                        ui.add_space(KNOB_SIZE*2.0);
+                                                    }
+                                                }
                                                 // Middle bottom light section
                                                 ui.painter().rect_filled(
                                                     Rect::from_x_y_ranges(
@@ -6319,7 +6377,7 @@ impl Actuate {
                         mod3_osc_stereo: 0.0,
 
                         filter_wet: 1.0,
-                        filter_cutoff: 16000.0,
+                        filter_cutoff: 20000.0,
                         filter_resonance: 1.0,
                         filter_res_type: ResonanceType::Default,
                         filter_lp_amount: 1.0,
@@ -6334,10 +6392,10 @@ impl Actuate {
                         filter_env_dec_curve: SmoothStyle::Linear,
                         filter_env_rel_curve: SmoothStyle::Linear,
                         filter_alg_type: FilterAlgorithms::SVF,
-                        fir_filter_type: fir_filter::FIRTypes::Lowpass,
+                        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
 
                         filter_wet_2: 1.0,
-                        filter_cutoff_2: 16000.0,
+                        filter_cutoff_2: 20000.0,
                         filter_resonance_2: 1.0,
                         filter_res_type_2: ResonanceType::Default,
                         filter_lp_amount_2: 1.0,
@@ -6352,7 +6410,7 @@ impl Actuate {
                         filter_env_dec_curve_2: SmoothStyle::Linear,
                         filter_env_rel_curve_2: SmoothStyle::Linear,
                         filter_alg_type_2: FilterAlgorithms::SVF,
-                        fir_filter_type_2: fir_filter::FIRTypes::Lowpass,
+                        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
 
                         filter_routing: FilterRouting::Parallel,
 
@@ -6696,6 +6754,7 @@ impl Actuate {
             &params.filter_res_type,
             loaded_preset.filter_res_type.clone(),
         );
+        setter.set_parameter(&params.tilt_filter_type, loaded_preset.tilt_filter_type.clone());
         setter.set_parameter(&params.filter_lp_amount, loaded_preset.filter_lp_amount);
         setter.set_parameter(&params.filter_hp_amount, loaded_preset.filter_hp_amount);
         setter.set_parameter(&params.filter_bp_amount, loaded_preset.filter_bp_amount);
@@ -6721,6 +6780,7 @@ impl Actuate {
             &params.filter_res_type_2,
             loaded_preset.filter_res_type_2.clone(),
         );
+        setter.set_parameter(&params.tilt_filter_type_2, loaded_preset.tilt_filter_type_2.clone());
         setter.set_parameter(&params.filter_lp_amount_2, loaded_preset.filter_lp_amount_2);
         setter.set_parameter(&params.filter_hp_amount_2, loaded_preset.filter_hp_amount_2);
         setter.set_parameter(&params.filter_bp_amount_2, loaded_preset.filter_bp_amount_2);
@@ -6963,7 +7023,7 @@ impl Actuate {
                 filter_env_dec_curve: self.params.filter_env_dec_curve.value(),
                 filter_env_rel_curve: self.params.filter_env_rel_curve.value(),
                 filter_alg_type: self.params.filter_alg_type.value(),
-                fir_filter_type: self.params.fir_filter_type.value(),
+                tilt_filter_type: self.params.tilt_filter_type.value(),
 
                 filter_wet_2: self.params.filter_wet_2.value(),
                 filter_cutoff_2: self.params.filter_cutoff_2.value(),
@@ -6981,7 +7041,7 @@ impl Actuate {
                 filter_env_dec_curve_2: self.params.filter_env_dec_curve_2.value(),
                 filter_env_rel_curve_2: self.params.filter_env_rel_curve_2.value(),
                 filter_alg_type_2: self.params.filter_alg_type_2.value(),
-                fir_filter_type_2: self.params.fir_filter_type_2.value(),
+                tilt_filter_type_2: self.params.tilt_filter_type_2.value(),
 
                 filter_routing: self.params.filter_routing.value(),
 
@@ -7144,7 +7204,7 @@ impl Actuate {
                     (self.params.filter_cutoff.value()
                         + filter_cutoff_mod
                         + self.params.filter_env_peak.value())
-                    .clamp(20.0, 16000.0),
+                    .clamp(20.0, 20000.0),
                 );
             }
             // If our attack has finished
@@ -7168,7 +7228,7 @@ impl Actuate {
                     (self.params.filter_cutoff.value()
                         + filter_cutoff_mod
                         + self.params.filter_env_peak.value())
-                    .clamp(20.0, 16000.0),
+                    .clamp(20.0, 20000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_1.set_target(
@@ -7225,21 +7285,21 @@ impl Actuate {
                         * self.params.filter_wet.value()
                         + right_input_filter1 * (1.0 - self.params.filter_wet.value());
                 },
-                FilterAlgorithms::FIR => {
-                    self.fir_filter_l_1.update(
+                FilterAlgorithms::TILT => {
+                    self.tilt_filter_l_1.update(
                         self.sample_rate,
-                        self.params.fir_filter_type.value(),
                         next_filter_step,
-                        self.params.filter_resonance.value());
-                    self.fir_filter_r_1.update(
+                        self.params.filter_resonance.value(),
+                        self.params.tilt_filter_type.value());
+                    self.tilt_filter_r_1.update(
                         self.sample_rate,
-                        self.params.fir_filter_type.value(),
                         next_filter_step,
-                        self.params.filter_resonance.value());
-                    let fir_out_l = self.fir_filter_l_1.process(left_input_filter1);
-                    let fir_out_r = self.fir_filter_r_1.process(right_input_filter1);
-                    *left_output += fir_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += fir_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
+                        self.params.filter_resonance.value(),
+                        self.params.tilt_filter_type.value());
+                    let tilt_out_l = self.tilt_filter_l_1.process(left_input_filter1);
+                    let tilt_out_r = self.tilt_filter_r_1.process(right_input_filter1);
+                    *left_output += tilt_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
+                    *right_output += tilt_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
                 },
             }
         }
@@ -7318,7 +7378,7 @@ impl Actuate {
                     (self.params.filter_cutoff_2.value()
                         + filter_cutoff_mod
                         + self.params.filter_env_peak_2.value())
-                    .clamp(20.0, 16000.0),
+                    .clamp(20.0, 20000.0),
                 );
             }
             // If our attack has finished
@@ -7342,7 +7402,7 @@ impl Actuate {
                     (self.params.filter_cutoff_2.value()
                         + filter_cutoff_mod
                         + self.params.filter_env_peak_2.value())
-                    .clamp(20.0, 16000.0),
+                    .clamp(20.0, 20000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_2.set_target(
@@ -7365,37 +7425,57 @@ impl Actuate {
                 // I don't expect this to be used
                 _ => self.params.filter_cutoff_2.value() + filter_cutoff_mod,
             };
-            // Filtering before output
-            self.filter_l_2.update(
-                next_filter_step,
-                self.params.filter_resonance_2.value(),
-                self.sample_rate,
-                self.params.filter_res_type_2.value(),
-            );
-            self.filter_r_2.update(
-                next_filter_step,
-                self.params.filter_resonance_2.value() + filter_resonance_mod,
-                self.sample_rate,
-                self.params.filter_res_type_2.value(),
-            );
-            let low_l: f32;
-            let band_l: f32;
-            let high_l: f32;
-            let low_r: f32;
-            let band_r: f32;
-            let high_r: f32;
-            (low_l, band_l, high_l) = self.filter_l_2.process(left_input_filter2);
-            (low_r, band_r, high_r) = self.filter_r_2.process(right_input_filter2);
-            *left_output += (low_l * self.params.filter_lp_amount_2.value()
-                + band_l * self.params.filter_bp_amount_2.value()
-                + high_l * self.params.filter_hp_amount_2.value())
-                * self.params.filter_wet_2.value()
-                + *left_output * (1.0 - self.params.filter_wet_2.value());
-            *right_output += (low_r * self.params.filter_lp_amount_2.value()
-                + band_r * self.params.filter_bp_amount_2.value()
-                + high_r * self.params.filter_hp_amount_2.value())
-                * self.params.filter_wet_2.value()
-                + *right_output * (1.0 - self.params.filter_wet_2.value());
+            match self.params.filter_alg_type.value() {
+                FilterAlgorithms::SVF => {
+                    // Filtering before output
+                    self.filter_l_2.update(
+                        next_filter_step,
+                        self.params.filter_resonance_2.value(),
+                        self.sample_rate,
+                        self.params.filter_res_type_2.value(),
+                    );
+                    self.filter_r_2.update(
+                        next_filter_step,
+                        self.params.filter_resonance_2.value() + filter_resonance_mod,
+                        self.sample_rate,
+                        self.params.filter_res_type_2.value(),
+                    );
+                    let low_l: f32;
+                    let band_l: f32;
+                    let high_l: f32;
+                    let low_r: f32;
+                    let band_r: f32;
+                    let high_r: f32;
+                    (low_l, band_l, high_l) = self.filter_l_2.process(left_input_filter2);
+                    (low_r, band_r, high_r) = self.filter_r_2.process(right_input_filter2);
+                    *left_output += (low_l * self.params.filter_lp_amount_2.value()
+                        + band_l * self.params.filter_bp_amount_2.value()
+                        + high_l * self.params.filter_hp_amount_2.value())
+                        * self.params.filter_wet_2.value()
+                        + *left_output * (1.0 - self.params.filter_wet_2.value());
+                    *right_output += (low_r * self.params.filter_lp_amount_2.value()
+                        + band_r * self.params.filter_bp_amount_2.value()
+                        + high_r * self.params.filter_hp_amount_2.value())
+                        * self.params.filter_wet_2.value()
+                        + *right_output * (1.0 - self.params.filter_wet_2.value());
+                },
+                FilterAlgorithms::TILT => {
+                    self.tilt_filter_l_2.update(
+                        self.sample_rate,
+                        next_filter_step,
+                        self.params.filter_resonance.value(),
+                        self.params.tilt_filter_type.value());
+                    self.tilt_filter_r_2.update(
+                        self.sample_rate,
+                        next_filter_step,
+                        self.params.filter_resonance.value(),
+                        self.params.tilt_filter_type.value());
+                    let tilt_out_l = self.tilt_filter_l_2.process(left_input_filter2);
+                    let tilt_out_r = self.tilt_filter_r_2.process(right_input_filter2);
+                    *left_output += tilt_out_l * self.params.filter_wet.value() + left_input_filter2 * (1.0 - self.params.filter_wet.value());
+                    *right_output += tilt_out_r * self.params.filter_wet.value() + right_input_filter2 * (1.0 - self.params.filter_wet.value());
+                },
+            }
         }
     }
 }
