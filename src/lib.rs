@@ -35,7 +35,6 @@ use nih_plug_egui::{
     widgets::ParamSlider,
     EguiState,
 };
-use phf::phf_map;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use std::{fmt, io::Read};
@@ -61,12 +60,13 @@ use fx::{
     compressor::Compressor,
     delay::{Delay, DelaySnapValues, DelayType},
     ArduraFilter::{self, ResponseType},
+    VCFilter::{ResponseType as VCResponseType},
     flanger::StereoFlanger,
     limiter::StereoLimiter,
     phaser::StereoPhaser,
     reverb::StereoReverb,
     saturation::{Saturation, SaturationType},
-    StateVariableFilter::{ResonanceType, StateVariableFilter},
+    StateVariableFilter::{ResonanceType, StateVariableFilter}, abass::a_bass_saturation,
 };
 use CustomWidgets::{
     toggle_switch, ui_knob, BoolButton, CustomComboBox, CustomParamSlider,
@@ -93,19 +93,17 @@ const PRESET_BANK_SIZE: usize = 32;
 const FILE_OPEN_BUFFER_MAX: u32 = 1;
 
 // GUI values to refer to
-pub static GUI_VALS: phf::Map<&'static str, Color32> = phf_map! {
-    "A_KNOB_OUTSIDE_COLOR" => Color32::from_rgb(67,157,148),
-    "DARK_GREY_UI_COLOR" => Color32::from_rgb(49,53,71),
-    "LIGHT_GREY_UI_COLOR" => Color32::from_rgb(99,103,121),
-    "LIGHTER_GREY_UI_COLOR" => Color32::from_rgb(149,153,171),
-    "SYNTH_SOFT_BLUE" => Color32::from_rgb(142,166,201),
-    "SYNTH_SOFT_BLUE2" => Color32::from_rgb(102,126,181),
-    "A_BACKGROUND_COLOR_TOP" => Color32::from_rgb(185,186,198),
-    "SYNTH_BARS_PURPLE" => Color32::from_rgb(45,41,99),
-    "LIGHTER_PURPLE" => Color32::from_rgb(85,81,139),
-    "SYNTH_MIDDLE_BLUE" => Color32::from_rgb(98,145,204),
-    "FONT_COLOR" => Color32::from_rgb(10,103,210),
-};
+pub const A_KNOB_OUTSIDE_COLOR: Color32 = Color32::from_rgb(67,157,148);
+pub const DARK_GREY_UI_COLOR: Color32 = Color32::from_rgb(49,53,71);
+pub const LIGHT_GREY_UI_COLOR: Color32 = Color32::from_rgb(99,103,121);
+pub const LIGHTER_GREY_UI_COLOR: Color32 = Color32::from_rgb(149,153,171);
+pub const SYNTH_SOFT_BLUE: Color32 = Color32::from_rgb(142,166,201);
+pub const SYNTH_SOFT_BLUE2: Color32 = Color32::from_rgb(102,126,181);
+pub const A_BACKGROUND_COLOR_TOP: Color32 = Color32::from_rgb(185,186,198);
+pub const SYNTH_BARS_PURPLE: Color32 = Color32::from_rgb(45,41,99);
+pub const LIGHTER_PURPLE: Color32 = Color32::from_rgb(85,81,139);
+pub const SYNTH_MIDDLE_BLUE: Color32 = Color32::from_rgb(98,145,204);
+pub const FONT_COLOR: Color32 = Color32::from_rgb(10,103,210);
 
 // Gui for which filter to display on bottom
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -174,6 +172,7 @@ pub enum AMFilterRouting {
 pub enum FilterAlgorithms {
     SVF,
     TILT,
+    VCF,
 }
 
 // These let us output ToString for the ComboBox stuff + Nih-Plug
@@ -412,13 +411,13 @@ struct ActuatePreset {
     mod_amount_4: f32,
 
     // EQ
-    use_eq: bool,
-    low_freq: f32,
-    mid_freq: f32,
-    high_freq: f32,
-    low_gain: f32,
-    mid_gain: f32,
-    high_gain: f32,
+    pre_use_eq: bool,
+    pre_low_freq: f32,
+    pre_mid_freq: f32,
+    pre_high_freq: f32,
+    pre_low_gain: f32,
+    pre_mid_gain: f32,
+    pre_high_gain: f32,
 
     // FX
     use_fx: bool,
@@ -428,6 +427,9 @@ struct ActuatePreset {
     comp_atk: f32,
     comp_rel: f32,
     comp_drive: f32,
+
+    use_abass: bool,
+    abass_amount: f32,
 
     use_saturation: bool,
     sat_amount: f32,
@@ -501,6 +503,9 @@ pub struct Actuate {
     // TILT Filters
     tilt_filter_l_1: ArduraFilter::ArduraFilter,
     tilt_filter_r_1: ArduraFilter::ArduraFilter,
+    // VCF Filters
+    vcf_filter_l_1: fx::VCFilter::VCFilter,
+    vcf_filter_r_1: fx::VCFilter::VCFilter,
     // Filter state variables
     filter_state_1: OscState,
     filter_atk_smoother_1: Smoother<f32>,
@@ -513,6 +518,9 @@ pub struct Actuate {
     // TILT Filters
     tilt_filter_l_2: ArduraFilter::ArduraFilter,
     tilt_filter_r_2: ArduraFilter::ArduraFilter,
+    // VCF Filters
+    vcf_filter_l_2: fx::VCFilter::VCFilter,
+    vcf_filter_r_2: fx::VCFilter::VCFilter,
     // Filter state variables
     filter_state_2: OscState,
     filter_atk_smoother_2: Smoother<f32>,
@@ -559,7 +567,7 @@ pub struct Actuate {
     delay: Delay,
 
     // Reverb
-    reverb: [StereoReverb; 6],
+    reverb: [StereoReverb; 8],
 
     // Phaser
     phaser: StereoPhaser,
@@ -625,6 +633,10 @@ impl Default for Actuate {
             // TILT Filters
             tilt_filter_l_2: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
             tilt_filter_r_2: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
+            // VCF Filters
+            vcf_filter_l_1: fx::VCFilter::VCFilter::new(),
+            vcf_filter_r_1: fx::VCFilter::VCFilter::new(),
+
             filter_state_2: OscState::Off,
             filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -636,6 +648,10 @@ impl Default for Actuate {
             // TILT Filters
             tilt_filter_l_1: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
             tilt_filter_r_1: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
+            // VCF Filters
+            vcf_filter_l_2: fx::VCFilter::VCFilter::new(),
+            vcf_filter_r_2: fx::VCFilter::VCFilter::new(),
+
             filter_state_1: OscState::Off,
             filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -830,13 +846,13 @@ impl Default for Actuate {
                     mod_amount_4: 0.0,
 
                     // EQ
-                    use_eq: false,
-                    low_freq: 800.0,
-                    mid_freq: 3000.0,
-                    high_freq: 10000.0,
-                    low_gain: 0.0,
-                    mid_gain: 0.0,
-                    high_gain: 0.0,
+                    pre_use_eq: false,
+                    pre_low_freq: 800.0,
+                    pre_mid_freq: 3000.0,
+                    pre_high_freq: 10000.0,
+                    pre_low_gain: 0.0,
+                    pre_mid_gain: 0.0,
+                    pre_high_gain: 0.0,
 
                     //FX
                     use_fx: true,
@@ -847,6 +863,9 @@ impl Default for Actuate {
                     comp_atk: 0.5,
                     comp_rel: 0.5,
                     comp_drive: 0.5,
+
+                    use_abass: false,
+                    abass_amount: 0.0011,
 
                     use_saturation: false,
                     sat_amount: 0.0,
@@ -910,6 +929,8 @@ impl Default for Actuate {
 
             // Reverb
             reverb: [
+                StereoReverb::new(44100.0, 0.5, 0.5),
+                StereoReverb::new(44100.0, 0.5, 0.5),
                 StereoReverb::new(44100.0, 0.5, 0.5),
                 StereoReverb::new(44100.0, 0.5, 0.5),
                 StereoReverb::new(44100.0, 0.5, 0.5),
@@ -1165,6 +1186,8 @@ pub struct ActuateParams {
     pub filter_alg_type: EnumParam<FilterAlgorithms>,
     #[id = "tilt_filter_type"]
     pub tilt_filter_type: EnumParam<ResponseType>,
+    #[id = "vcf_filter_type"]
+    pub vcf_filter_type: EnumParam<VCResponseType>,
 
     #[id = "filter_wet_2"]
     pub filter_wet_2: FloatParam,
@@ -1200,6 +1223,8 @@ pub struct ActuateParams {
     pub filter_alg_type_2: EnumParam<FilterAlgorithms>,
     #[id = "tilt_filter_type_2"]
     pub tilt_filter_type_2: EnumParam<ResponseType>,
+    #[id = "vcf_filter_type_2"]
+    pub vcf_filter_type_2: EnumParam<VCResponseType>,
 
     // LFOS
     #[id = "lfo1_enable"]
@@ -1272,22 +1297,22 @@ pub struct ActuateParams {
     pub mod_destination_4: EnumParam<ModulationDestination>,
 
     // EQ Params
-    #[id = "use_eq"]
-    pub use_eq: BoolParam,
+    #[id = "pre_use_eq"]
+    pub pre_use_eq: BoolParam,
 
-    #[id = "low_freq"]
-    pub low_freq: FloatParam,
-    #[id = "mid_freq"]
-    pub mid_freq: FloatParam,
-    #[id = "high_freq"]
-    pub high_freq: FloatParam,
+    #[id = "pre_low_freq"]
+    pub pre_low_freq: FloatParam,
+    #[id = "pre_mid_freq"]
+    pub pre_mid_freq: FloatParam,
+    #[id = "pre_high_freq"]
+    pub pre_high_freq: FloatParam,
 
-    #[id = "low_gain"]
-    pub low_gain: FloatParam,
-    #[id = "mid_gain"]
-    pub mid_gain: FloatParam,
-    #[id = "high_gain"]
-    pub high_gain: FloatParam,
+    #[id = "pre_low_gain"]
+    pub pre_low_gain: FloatParam,
+    #[id = "pre_mid_gain"]
+    pub pre_mid_gain: FloatParam,
+    #[id = "pre_high_gain"]
+    pub pre_high_gain: FloatParam,
 
     // FX
     #[id = "use_fx"]
@@ -1303,6 +1328,11 @@ pub struct ActuateParams {
     pub comp_rel: FloatParam,
     #[id = "comp_drive"]
     pub comp_drive: FloatParam,
+
+    #[id = "use_abass"]
+    pub use_abass: BoolParam,
+    #[id = "abass_amount"]
+    pub abass_amount: FloatParam,
 
     #[id = "use_saturation"]
     pub use_saturation: BoolParam,
@@ -2103,13 +2133,14 @@ impl ActuateParams {
             }),
             filter_alg_type: EnumParam::new("Filter 1 Alg", FilterAlgorithms::SVF),
             tilt_filter_type: EnumParam::new("Filter Type", ResponseType::Lowpass),
+            vcf_filter_type: EnumParam::new("Filter Type", VCResponseType::Lowpass),
 
             filter_env_peak: FloatParam::new(
                 "Env Peak",
                 0.0,
                 FloatRange::Linear {
-                    min: -18980.0,
-                    max: 18980.0,
+                    min: -14980.0,
+                    max: 14980.0,
                 },
             )
             .with_step_size(1.0)
@@ -2237,7 +2268,7 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             filter_resonance_2: FloatParam::new(
-                "Bandwidth",
+                "Resonance",
                 1.0,
                 FloatRange::Reversed(&FloatRange::Linear { min: 0.1, max: 1.0 }),
             )
@@ -2265,13 +2296,14 @@ impl ActuateParams {
             }),
             filter_alg_type_2: EnumParam::new("Filter 2 Alg", FilterAlgorithms::SVF),
             tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass),
+            vcf_filter_type_2: EnumParam::new("Filter Type", VCResponseType::Lowpass),
 
             filter_env_peak_2: FloatParam::new(
                 "Env Peak",
                 0.0,
                 FloatRange::Linear {
-                    min: -18980.0,
-                    max: 18980.0,
+                    min: -14980.0,
+                    max: 14980.0,
                 },
             )
             .with_step_size(1.0)
@@ -2491,8 +2523,8 @@ impl ActuateParams {
             mod_destination_4: EnumParam::new("Dest 4", ModulationDestination::None),
 
             // EQ
-            use_eq: BoolParam::new("EQ", false),
-            low_freq: FloatParam::new(
+            pre_use_eq: BoolParam::new("EQ", false),
+            pre_low_freq: FloatParam::new(
                 "Low",
                 800.0,
                 FloatRange::Linear {
@@ -2503,7 +2535,7 @@ impl ActuateParams {
             .with_step_size(1.0)
             .with_smoother(SmoothingStyle::Linear(5.0))
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(0)),
-            mid_freq: FloatParam::new(
+            pre_mid_freq: FloatParam::new(
                 "Mid",
                 3000.0,
                 FloatRange::Linear {
@@ -2514,7 +2546,7 @@ impl ActuateParams {
             .with_step_size(1.0)
             .with_smoother(SmoothingStyle::Linear(5.0))
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(0)),
-            high_freq: FloatParam::new(
+            pre_high_freq: FloatParam::new(
                 "High",
                 10000.0,
                 FloatRange::Linear {
@@ -2525,7 +2557,7 @@ impl ActuateParams {
             .with_step_size(1.0)
             .with_smoother(SmoothingStyle::Linear(5.0))
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(0)),
-            low_gain: FloatParam::new(
+            pre_low_gain: FloatParam::new(
                 "Low Gain",
                 0.0,
                 FloatRange::Linear {
@@ -2534,7 +2566,7 @@ impl ActuateParams {
                 },
             )
             .with_value_to_string(formatters::v2s_f32_rounded(1)),
-            mid_gain: FloatParam::new(
+            pre_mid_gain: FloatParam::new(
                 "Mid Gain",
                 0.0,
                 FloatRange::Linear {
@@ -2543,7 +2575,7 @@ impl ActuateParams {
                 },
             )
             .with_value_to_string(formatters::v2s_f32_rounded(1)),
-            high_gain: FloatParam::new(
+            pre_high_gain: FloatParam::new(
                 "High Gain",
                 0.0,
                 FloatRange::Linear {
@@ -2565,6 +2597,10 @@ impl ActuateParams {
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
             comp_drive: FloatParam::new("Drive", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
+
+            use_abass: BoolParam::new("ABass", false),
+            abass_amount: FloatParam::new("Amount", 0.0011, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.3 })
+                    .with_value_to_string(formatters::v2s_f32_rounded(4)),
 
             use_saturation: BoolParam::new("Saturation", false),
             sat_amt: FloatParam::new("Amount", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
@@ -2987,31 +3023,31 @@ impl Plugin for Actuate {
                         }
 
                         // Assign default colors
-                        ui.style_mut().visuals.widgets.inactive.bg_stroke.color = *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap();
-                        ui.style_mut().visuals.widgets.inactive.bg_fill = *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap();
-                        ui.style_mut().visuals.widgets.active.fg_stroke.color = *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap();
-                        ui.style_mut().visuals.widgets.active.bg_stroke.color = *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap();
-                        ui.style_mut().visuals.widgets.open.fg_stroke.color = *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap();
-                        ui.style_mut().visuals.widgets.open.bg_fill = *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap();
+                        ui.style_mut().visuals.widgets.inactive.bg_stroke.color = A_KNOB_OUTSIDE_COLOR;
+                        ui.style_mut().visuals.widgets.inactive.bg_fill = DARK_GREY_UI_COLOR;
+                        ui.style_mut().visuals.widgets.active.fg_stroke.color = A_KNOB_OUTSIDE_COLOR;
+                        ui.style_mut().visuals.widgets.active.bg_stroke.color = A_KNOB_OUTSIDE_COLOR;
+                        ui.style_mut().visuals.widgets.open.fg_stroke.color = A_KNOB_OUTSIDE_COLOR;
+                        ui.style_mut().visuals.widgets.open.bg_fill = DARK_GREY_UI_COLOR;
                         // Lettering on param sliders
-                        ui.style_mut().visuals.widgets.inactive.fg_stroke.color = *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap();
+                        ui.style_mut().visuals.widgets.inactive.fg_stroke.color = A_KNOB_OUTSIDE_COLOR;
                         // Background of the bar in param sliders
-                        ui.style_mut().visuals.selection.bg_fill = *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap();
-                        ui.style_mut().visuals.selection.stroke.color = *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap();
+                        ui.style_mut().visuals.selection.bg_fill = A_KNOB_OUTSIDE_COLOR;
+                        ui.style_mut().visuals.selection.stroke.color = A_KNOB_OUTSIDE_COLOR;
                         // Unfilled background of the bar
-                        ui.style_mut().visuals.widgets.noninteractive.bg_fill = *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap();
+                        ui.style_mut().visuals.widgets.noninteractive.bg_fill = DARK_GREY_UI_COLOR;
 
                         // Trying to draw background colors as rects
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32),
                                 RangeInclusive::new(0.0, (HEIGHT as f32)*0.72)),
-                            Rounding::from(16.0), *GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap());
+                            Rounding::from(16.0), A_BACKGROUND_COLOR_TOP);
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32),
                                 RangeInclusive::new((HEIGHT as f32)*0.72, HEIGHT as f32)),
-                            Rounding::from(16.0), *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap());
+                            Rounding::from(16.0), DARK_GREY_UI_COLOR);
 
                         //ui.set_style(ui.style_mut());
 
@@ -3023,7 +3059,7 @@ impl Plugin for Actuate {
                                     RangeInclusive::new(0.0, synth_bar_space),
                                     RangeInclusive::new(0.0, HEIGHT as f32)),
                                 Rounding::none(),
-                                *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap()
+                                SYNTH_BARS_PURPLE
                             );
 
                             // Spacers for primary generator knobs
@@ -3033,7 +3069,7 @@ impl Plugin for Actuate {
                                     RangeInclusive::new(synth_bar_space + 4.0, synth_bar_space + generator_separator_length),
                                     RangeInclusive::new(192.0, 194.0)),
                                 Rounding::none(),
-                                *GUI_VALS.get("LIGHTER_GREY_UI_COLOR").unwrap()
+                                LIGHTER_GREY_UI_COLOR
                             );
 
                             // Spacers for primary generator knobs
@@ -3042,7 +3078,7 @@ impl Plugin for Actuate {
                                     RangeInclusive::new(synth_bar_space + 4.0, synth_bar_space + generator_separator_length),
                                     RangeInclusive::new(328.0, 330.0)),
                                 Rounding::none(),
-                                *GUI_VALS.get("LIGHTER_GREY_UI_COLOR").unwrap()
+                                LIGHTER_GREY_UI_COLOR
                             );
 
                             ui.add_space(synth_bar_space);
@@ -3052,22 +3088,22 @@ impl Plugin for Actuate {
                                 ui.horizontal(|ui|{
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
-                                        .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                        .color(FONT_COLOR))
                                         .on_hover_text("by Ardura!");
                                     ui.separator();
                                     let prev_preset_button = BoolButton::BoolButton::for_param(&params.param_prev_preset, setter, 1.5, 0.9, FONT)
-                                        .with_background_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap());
+                                        .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(prev_preset_button);
                                     ui.label(RichText::new("Preset")
-                                        .background_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                                        .color(*GUI_VALS.get("FONT_COLOR").unwrap())
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .color(FONT_COLOR)
                                         .size(16.0));
                                     ui.label(RichText::new(current_preset_index.to_string())
-                                        .background_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                                        .color(*GUI_VALS.get("FONT_COLOR").unwrap())
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .color(FONT_COLOR)
                                         .size(16.0));
                                     let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.5, 0.9, FONT)
-                                        .with_background_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap());
+                                        .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(next_preset_button);
                                     ui.separator();
                                     ui.add(CustomParamSlider::ParamSlider::for_param(&params.master_level, setter)
@@ -3084,21 +3120,21 @@ impl Plugin for Actuate {
                                     ui.separator();
                                     ui.label(RichText::new("FX")
                                         .font(FONT)
-                                        .background_color(*GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap())
-                                        .color(*GUI_VALS.get("FONT_COLOR").unwrap())
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .color(FONT_COLOR)
                                     )
                                         .on_hover_text("Process FX");
                                     let use_fx_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_fx, setter);
                                     ui.add(use_fx_toggle);
                                     ui.separator();
                                     let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 0.9, SMALLER_FONT)
-                                        .with_background_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap());
+                                        .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(update_current_preset);
                                     let load_bank_button = BoolButton::BoolButton::for_param(&params.param_load_bank, setter, 3.5, 0.9, SMALLER_FONT)
-                                        .with_background_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap());
+                                        .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(load_bank_button);
                                     let save_bank_button = BoolButton::BoolButton::for_param(&params.param_save_bank, setter, 3.5, 0.9, SMALLER_FONT)
-                                        .with_background_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap());
+                                        .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(save_bank_button);
                                 });
                                 ui.separator();
@@ -3108,7 +3144,7 @@ impl Plugin for Actuate {
                                     ui.vertical(|ui|{
                                         ui.label(RichText::new("Generators")
                                             .font(FONT)
-                                            .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                            .color(FONT_COLOR))
                                             .on_hover_text("These are the audio modules that create sound on midi events");
                                         // Side knobs for types
                                         ui.horizontal(|ui|{
@@ -3117,8 +3153,8 @@ impl Plugin for Actuate {
                                                 setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_1_knob);
                                             let audio_module_1_level_knob = ui_knob::ArcKnob::for_param(
@@ -3126,8 +3162,8 @@ impl Plugin for Actuate {
                                                 setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_1_level_knob);
                                         });
@@ -3137,8 +3173,8 @@ impl Plugin for Actuate {
                                                 setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_1_filter_routing);
                                         });
@@ -3149,8 +3185,8 @@ impl Plugin for Actuate {
                                                 setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_2_knob);
                                             let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
@@ -3158,8 +3194,8 @@ impl Plugin for Actuate {
                                                 setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_2_level_knob);
                                         });
@@ -3169,8 +3205,8 @@ impl Plugin for Actuate {
                                                 setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_2_filter_routing);
                                         });
@@ -3181,8 +3217,8 @@ impl Plugin for Actuate {
                                                 setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_3_knob);
                                             let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
@@ -3190,8 +3226,8 @@ impl Plugin for Actuate {
                                                 setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_3_level_knob);
                                         });
@@ -3201,8 +3237,8 @@ impl Plugin for Actuate {
                                                 setter,
                                                 KNOB_SIZE)
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(*GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap())
-                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_3_filter_routing);
                                         });
@@ -3212,7 +3248,7 @@ impl Plugin for Actuate {
                                     ui.vertical(|ui|{
                                         ui.label(RichText::new("Generator Controls")
                                             .font(SMALLER_FONT)
-                                            .color(*GUI_VALS.get("FONT_COLOR").unwrap()))
+                                            .color(FONT_COLOR))
                                             .on_hover_text("These are the controls for the active/selected generators");
                                         audio_module::AudioModule::draw_modules(ui, params.clone(), setter);
                                     });
@@ -3234,8 +3270,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_wet_knob);
                                                             let filter_resonance_knob = ui_knob::ArcKnob::for_param(
@@ -3243,8 +3279,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_resonance_knob);
                                                         });
@@ -3254,8 +3290,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_cutoff_knob);
                                                             let filter_res_type_knob = ui_knob::ArcKnob::for_param(
@@ -3263,8 +3299,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_res_type_knob);
                                                         });
@@ -3274,8 +3310,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_hp_knob);
                                                             let filter_env_peak = ui_knob::ArcKnob::for_param(
@@ -3283,8 +3319,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
@@ -3294,8 +3330,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_lp_knob);
                                                             let filter_bp_knob = ui_knob::ArcKnob::for_param(
@@ -3303,8 +3339,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_bp_knob);
                                                         });
@@ -3316,8 +3352,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_wet_knob);
                                                             let filter_resonance_knob = ui_knob::ArcKnob::for_param(
@@ -3325,8 +3361,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_resonance_knob);
                                                         });
@@ -3336,8 +3372,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_cutoff_knob);
                                                             let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
@@ -3345,8 +3381,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_tilt_type_knob);
                                                         });
@@ -3356,13 +3392,67 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
                                                         ui.add_space(KNOB_SIZE*2.0);
-                                                    }
+                                                    },
+                                                    FilterAlgorithms::VCF => {
+                                                        ui.vertical(|ui|{
+                                                            let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_wet,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_wet_knob);
+                                                            let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_resonance,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_resonance_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_cutoff,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_cutoff_knob);
+                                                            let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.vcf_filter_type,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(vcf_filter_type_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_env_peak,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_env_peak);
+                                                        });
+                                                        ui.add_space(KNOB_SIZE*2.0);
+                                                    },
                                                 }
 
                                                 // Middle bottom light section
@@ -3371,7 +3461,7 @@ impl Plugin for Actuate {
                                                         RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
                                                         RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                                     Rounding::from(16.0),
-                                                    *GUI_VALS.get("SYNTH_SOFT_BLUE").unwrap()
+                                                    SYNTH_SOFT_BLUE
                                                 );
                                                 // Middle Bottom Filter select background
                                                 ui.painter().rect_filled(
@@ -3379,7 +3469,7 @@ impl Plugin for Actuate {
                                                         RangeInclusive::new((WIDTH as f32)*0.43, (WIDTH as f32)*0.58),
                                                         RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
                                                     Rounding::from(16.0),
-                                                    *GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap()
+                                                    A_BACKGROUND_COLOR_TOP
                                                 );
                                             } else {
                                                 match params.filter_alg_type_2.value() {
@@ -3390,8 +3480,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_wet_knob);
         
@@ -3400,8 +3490,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_resonance_knob);
                                                         });
@@ -3411,8 +3501,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_cutoff_knob);
         
@@ -3421,8 +3511,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_res_type_knob);
                                                         });
@@ -3432,8 +3522,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_hp_knob);
                                                             let filter_env_peak = ui_knob::ArcKnob::for_param(
@@ -3441,8 +3531,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
@@ -3452,8 +3542,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_lp_knob);
                                                             let filter_bp_knob = ui_knob::ArcKnob::for_param(
@@ -3461,8 +3551,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_bp_knob);
                                                         });
@@ -3474,8 +3564,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_wet_knob);
                                                             let filter_resonance_knob = ui_knob::ArcKnob::for_param(
@@ -3483,8 +3573,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_resonance_knob);
                                                         });
@@ -3494,8 +3584,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_cutoff_knob);
                                                             let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
@@ -3503,8 +3593,8 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_tilt_type_knob);
                                                         });
@@ -3514,13 +3604,67 @@ impl Plugin for Actuate {
                                                                 setter,
                                                                 KNOB_SIZE)
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                .set_line_color(*GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap())
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
                                                         ui.add_space(KNOB_SIZE*2.0);
-                                                    }
+                                                    },
+                                                    FilterAlgorithms::VCF => {
+                                                        ui.vertical(|ui|{
+                                                            let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_wet_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_wet_knob);
+                                                            let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_resonance_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_resonance_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_cutoff_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_cutoff_knob);
+                                                            let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
+                                                                &params.vcf_filter_type_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(vcf_filter_type_knob);
+                                                        });
+                                                        ui.vertical(|ui|{
+                                                            let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                &params.filter_env_peak_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(filter_env_peak);
+                                                        });
+                                                        ui.add_space(KNOB_SIZE*2.0);
+                                                    },
                                                 }
                                                 // Middle bottom light section
                                                 ui.painter().rect_filled(
@@ -3528,7 +3672,7 @@ impl Plugin for Actuate {
                                                         RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
                                                         RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                                     Rounding::from(16.0),
-                                                    *GUI_VALS.get("SYNTH_SOFT_BLUE2").unwrap()
+                                                    SYNTH_SOFT_BLUE2
                                                 );
                                                 // Middle Bottom Filter select background
                                                 ui.painter().rect_filled(
@@ -3536,7 +3680,7 @@ impl Plugin for Actuate {
                                                         RangeInclusive::new((WIDTH as f32)*0.43, (WIDTH as f32)*0.58),
                                                         RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
                                                     Rounding::from(16.0),
-                                                    *GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap()
+                                                    A_BACKGROUND_COLOR_TOP
                                                 );
                                             }
                                         });
@@ -3557,8 +3701,8 @@ impl Plugin for Actuate {
                                                 .with_height(VERT_BAR_HEIGHT)
                                                 .set_reversed(true)
                                                 .override_colors(
-                                                    *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                    *GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap(),
+                                                    SYNTH_BARS_PURPLE,
+                                                    SYNTH_MIDDLE_BLUE,
                                                 ),
                                         );
                                         ui.add(
@@ -3567,8 +3711,8 @@ impl Plugin for Actuate {
                                                 .with_height(VERT_BAR_HEIGHT)
                                                 .set_reversed(true)
                                                 .override_colors(
-                                                    *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                    *GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap(),
+                                                    SYNTH_BARS_PURPLE,
+                                                    SYNTH_MIDDLE_BLUE,
                                                 ),
                                         );
                                         ui.add(
@@ -3577,8 +3721,8 @@ impl Plugin for Actuate {
                                                 .with_height(VERT_BAR_HEIGHT)
                                                 .set_reversed(true)
                                                 .override_colors(
-                                                    *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                    *GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap(),
+                                                    SYNTH_BARS_PURPLE,
+                                                    SYNTH_MIDDLE_BLUE,
                                                 ),
                                         );
                                         ui.add(
@@ -3587,8 +3731,8 @@ impl Plugin for Actuate {
                                                 .with_height(VERT_BAR_HEIGHT)
                                                 .set_reversed(true)
                                                 .override_colors(
-                                                    *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                    *GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap(),
+                                                    SYNTH_BARS_PURPLE,
+                                                    SYNTH_MIDDLE_BLUE,
                                                 ),
                                         );
                                     } else {
@@ -3599,8 +3743,8 @@ impl Plugin for Actuate {
                                                 .with_height(VERT_BAR_HEIGHT)
                                                 .set_reversed(true)
                                                 .override_colors(
-                                                    *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                    SYNTH_BARS_PURPLE,
+                                                    A_KNOB_OUTSIDE_COLOR,
                                                 ),
                                         );
                                         ui.add(
@@ -3609,8 +3753,8 @@ impl Plugin for Actuate {
                                                 .with_height(VERT_BAR_HEIGHT)
                                                 .set_reversed(true)
                                                 .override_colors(
-                                                    *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                    SYNTH_BARS_PURPLE,
+                                                    A_KNOB_OUTSIDE_COLOR,
                                                 ),
                                         );
                                         ui.add(
@@ -3619,8 +3763,8 @@ impl Plugin for Actuate {
                                                 .with_height(VERT_BAR_HEIGHT)
                                                 .set_reversed(true)
                                                 .override_colors(
-                                                    *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                    SYNTH_BARS_PURPLE,
+                                                    A_KNOB_OUTSIDE_COLOR,
                                                 ),
                                         );
                                         ui.add(
@@ -3629,8 +3773,8 @@ impl Plugin for Actuate {
                                                 .with_height(VERT_BAR_HEIGHT)
                                                 .set_reversed(true)
                                                 .override_colors(
-                                                    *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                    *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                    SYNTH_BARS_PURPLE,
+                                                    A_KNOB_OUTSIDE_COLOR,
                                                 ),
                                         );
                                     }
@@ -3645,8 +3789,8 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
-                                                        *GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap()),
+                                                        DARK_GREY_UI_COLOR, 
+                                                        SYNTH_MIDDLE_BLUE),
                                             );
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_dec_curve, setter)
@@ -3655,8 +3799,8 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
-                                                        *GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap()),
+                                                        DARK_GREY_UI_COLOR, 
+                                                        SYNTH_MIDDLE_BLUE),
                                             );
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_rel_curve, setter)
@@ -3665,8 +3809,8 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        *GUI_VALS.get("DARK_GREY_UI_COLOR").unwrap(), 
-                                                        *GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap()),
+                                                        DARK_GREY_UI_COLOR, 
+                                                        SYNTH_MIDDLE_BLUE),
                                             );
                                         } else {
                                             ui.add(
@@ -3676,8 +3820,8 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(), 
-                                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()),
+                                                        SYNTH_BARS_PURPLE, 
+                                                        A_KNOB_OUTSIDE_COLOR),
                                             );
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_dec_curve_2, setter)
@@ -3686,8 +3830,8 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(), 
-                                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()),
+                                                        SYNTH_BARS_PURPLE, 
+                                                        A_KNOB_OUTSIDE_COLOR),
                                             );
                                             ui.add(
                                                 HorizontalParamSlider::for_param(&params.filter_env_rel_curve_2, setter)
@@ -3696,8 +3840,8 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(), 
-                                                        *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap()),
+                                                        SYNTH_BARS_PURPLE, 
+                                                        A_KNOB_OUTSIDE_COLOR),
                                             );
                                         }
                                         ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type, setter)
@@ -3740,7 +3884,7 @@ impl Plugin for Actuate {
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                                 Rounding::from(16.0),
-                                                *GUI_VALS.get("A_BACKGROUND_COLOR_TOP").unwrap()
+                                                A_BACKGROUND_COLOR_TOP
                                             );
                                         }
                                         LFOSelect::LFO2 => {
@@ -3749,7 +3893,7 @@ impl Plugin for Actuate {
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                                 Rounding::from(16.0),
-                                                *GUI_VALS.get("SYNTH_SOFT_BLUE").unwrap()
+                                                SYNTH_SOFT_BLUE
                                             );
                                         }
                                         LFOSelect::LFO3 => {
@@ -3758,7 +3902,7 @@ impl Plugin for Actuate {
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                                 Rounding::from(16.0),
-                                                *GUI_VALS.get("SYNTH_MIDDLE_BLUE").unwrap()
+                                                SYNTH_MIDDLE_BLUE
                                             );
                                         }
                                         LFOSelect::Modulation => {
@@ -3767,7 +3911,7 @@ impl Plugin for Actuate {
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                                 Rounding::from(16.0),
-                                                *GUI_VALS.get("LIGHTER_PURPLE").unwrap()
+                                                LIGHTER_PURPLE
                                             );
                                         }
                                         LFOSelect::INFO => {
@@ -3776,7 +3920,7 @@ impl Plugin for Actuate {
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                                 Rounding::from(16.0),
-                                                *GUI_VALS.get("SYNTH_SOFT_BLUE2").unwrap()
+                                                SYNTH_SOFT_BLUE2
                                             );
                                         }
                                         LFOSelect::FX => {
@@ -3785,7 +3929,7 @@ impl Plugin for Actuate {
                                             RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                                 Rounding::from(16.0),
-                                                *GUI_VALS.get("FONT_COLOR").unwrap()
+                                                FONT_COLOR
                                             );
                                         }
                                     }
@@ -3972,8 +4116,8 @@ impl Plugin for Actuate {
                                                             setter,
                                                             12.0)
                                                             .preset_style(ui_knob::KnobStyle::NewPresets2)
-                                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                            .set_fill_color(SYNTH_BARS_PURPLE)
+                                                            .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                             .set_show_label(false);
                                                         ui.add(mod_1_knob);
                                                         ui.separator();
@@ -4045,8 +4189,8 @@ impl Plugin for Actuate {
                                                             setter,
                                                             12.0)
                                                             .preset_style(ui_knob::KnobStyle::NewPresets2)
-                                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                            .set_fill_color(SYNTH_BARS_PURPLE)
+                                                            .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                             .set_show_label(false);
                                                         ui.add(mod_2_knob);
                                                         ui.separator();
@@ -4118,8 +4262,8 @@ impl Plugin for Actuate {
                                                             setter,
                                                             12.0)
                                                             .preset_style(ui_knob::KnobStyle::NewPresets2)
-                                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                            .set_fill_color(SYNTH_BARS_PURPLE)
+                                                            .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                             .set_show_label(false);
                                                         ui.add(mod_3_knob);
                                                         ui.separator();
@@ -4191,8 +4335,8 @@ impl Plugin for Actuate {
                                                             setter,
                                                             12.0)
                                                             .preset_style(ui_knob::KnobStyle::NewPresets2)
-                                                            .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                            .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                            .set_fill_color(SYNTH_BARS_PURPLE)
+                                                            .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                             .set_show_label(false);
                                                         ui.add(mod_4_knob);
                                                         ui.separator();
@@ -4304,71 +4448,71 @@ impl Plugin for Actuate {
                                                                         .color(Color32::BLACK)
                                                                     )
                                                                         .on_hover_text("non interleaved EQ from Interleaf");
-                                                                    let use_eq_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_eq, setter);
+                                                                    let use_eq_toggle = toggle_switch::ToggleSwitch::for_param(&params.pre_use_eq, setter);
                                                                     ui.add(use_eq_toggle);
                                                                 });
                                                                 ui.vertical(|ui|{
                                                                     ui.add(
-                                                                        VerticalParamSlider::for_param(&params.low_gain, setter)
+                                                                        VerticalParamSlider::for_param(&params.pre_low_gain, setter)
                                                                             .with_width(VERT_BAR_WIDTH * 2.2)
                                                                             .with_height(VERT_BAR_HEIGHT * 0.6)
                                                                             .set_reversed(true)
                                                                             .override_colors(
-                                                                                *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                                                SYNTH_BARS_PURPLE,
+                                                                                A_KNOB_OUTSIDE_COLOR,
                                                                             ),
                                                                     );
                                                                     let low_freq_knob = ui_knob::ArcKnob::for_param(
-                                                                        &params.low_freq,
+                                                                        &params.pre_low_freq,
                                                                         setter,
                                                                         KNOB_SIZE * 0.6)
                                                                         .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                        .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                         .set_text_size(TEXT_SIZE)
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(low_freq_knob);
                                                                 });
                                                                 ui.vertical(|ui|{
                                                                     ui.add(
-                                                                        VerticalParamSlider::for_param(&params.mid_gain, setter)
+                                                                        VerticalParamSlider::for_param(&params.pre_mid_gain, setter)
                                                                             .with_width(VERT_BAR_WIDTH * 2.2)
                                                                             .with_height(VERT_BAR_HEIGHT * 0.6)
                                                                             .set_reversed(true)
                                                                             .override_colors(
-                                                                                *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                                                SYNTH_BARS_PURPLE,
+                                                                                A_KNOB_OUTSIDE_COLOR,
                                                                             ),
                                                                     );
                                                                     let mid_freq_knob = ui_knob::ArcKnob::for_param(
-                                                                        &params.mid_freq,
+                                                                        &params.pre_mid_freq,
                                                                         setter,
                                                                         KNOB_SIZE * 0.6)
                                                                         .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                        .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                         .set_text_size(TEXT_SIZE)
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(mid_freq_knob);
                                                                 });
                                                                 ui.vertical(|ui|{
                                                                     ui.add(
-                                                                        VerticalParamSlider::for_param(&params.high_gain, setter)
+                                                                        VerticalParamSlider::for_param(&params.pre_high_gain, setter)
                                                                             .with_width(VERT_BAR_WIDTH * 2.2)
                                                                             .with_height(VERT_BAR_HEIGHT * 0.6)
                                                                             .set_reversed(true)
                                                                             .override_colors(
-                                                                                *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap(),
-                                                                                *GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap(),
+                                                                                SYNTH_BARS_PURPLE,
+                                                                                A_KNOB_OUTSIDE_COLOR,
                                                                             ),
                                                                     );
                                                                     let high_freq_knob = ui_knob::ArcKnob::for_param(
-                                                                        &params.high_freq,
+                                                                        &params.pre_high_freq,
                                                                         setter,
                                                                         KNOB_SIZE * 0.6)
                                                                         .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                        .set_fill_color(*GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap())
-                                                                        .set_line_color(*GUI_VALS.get("A_KNOB_OUTSIDE_COLOR").unwrap())
+                                                                        .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                         .set_text_size(TEXT_SIZE)
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(high_freq_knob);
@@ -4400,6 +4544,22 @@ impl Plugin for Actuate {
                                                                     .set_label_width(84.0)
                                                                     .with_width(140.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_drive, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(140.0));
+                                                            });
+                                                            ui.separator();
+                                                            // ABass
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("ABass Algorithm")
+                                                                    .font(FONT)
+                                                                    .color(Color32::BLACK));
+                                                                let use_abass_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_abass, setter);
+                                                                ui.add(use_abass_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.abass_amount, setter)
                                                                     .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
@@ -4612,7 +4772,7 @@ impl Plugin for Actuate {
                                     RangeInclusive::new(WIDTH as f32 - synth_bar_space, WIDTH as f32),
                                     RangeInclusive::new(0.0, HEIGHT as f32)),
                                 Rounding::none(),
-                                *GUI_VALS.get("SYNTH_BARS_PURPLE").unwrap()
+                                SYNTH_BARS_PURPLE
                             );
 
                             // Screws for that vintage look
@@ -6078,7 +6238,7 @@ impl Actuate {
             ////////////////////////////////////////////////////////////////////////////////////////
             if self.params.use_fx.value() {
                 // Equalizer use
-                if self.params.use_eq.value() {
+                if self.params.pre_use_eq.value() {
                     let eq_ref = self.bands.clone();
                     let mut eq = eq_ref.lock().unwrap();
                     eq[0].set_type(FilterType::LowShelf);
@@ -6087,20 +6247,20 @@ impl Actuate {
                     let q_value: f32 = 0.93;
                     eq[0].update(
                         self.sample_rate,
-                        self.params.low_freq.value(),
-                        self.params.low_gain.value(),
+                        self.params.pre_low_freq.value(),
+                        self.params.pre_low_gain.value(),
                         q_value,
                     );
                     eq[1].update(
                         self.sample_rate,
-                        self.params.mid_freq.value(),
-                        self.params.mid_gain.value(),
+                        self.params.pre_mid_freq.value(),
+                        self.params.pre_mid_gain.value(),
                         q_value,
                     );
                     eq[2].update(
                         self.sample_rate,
-                        self.params.high_freq.value(),
-                        self.params.high_gain.value(),
+                        self.params.pre_high_freq.value(),
+                        self.params.pre_high_gain.value(),
                         q_value,
                     );
 
@@ -6125,6 +6285,11 @@ impl Actuate {
                     );
                     (left_output, right_output) =
                         self.compressor.process(left_output, right_output);
+                }
+                // ABass Algorithm
+                if self.params.use_abass.value() {
+                    left_output = a_bass_saturation(left_output, self.params.abass_amount.value());
+                    right_output = a_bass_saturation(right_output, self.params.abass_amount.value());
                 }
                 // Distortion
                 if self.params.use_saturation.value() {
@@ -6195,23 +6360,21 @@ impl Actuate {
                 // Reverb
                 if self.params.use_reverb.value() {
                     // Stacked TDLs to make reverb
-                    // Full
                     self.reverb[0].set_size(self.params.reverb_size.value(), self.sample_rate);
-                    // Half
                     self.reverb[1]
                         .set_size(self.params.reverb_size.value() * 0.546, self.sample_rate);
-                    // Third
                     self.reverb[2]
                         .set_size(self.params.reverb_size.value() * 0.251, self.sample_rate);
-                    // Fourth
                     self.reverb[3]
                         .set_size(self.params.reverb_size.value() * 0.735, self.sample_rate);
-                    // Fifth
                     self.reverb[4]
                         .set_size(self.params.reverb_size.value() * 0.669, self.sample_rate);
-                    // 5/8ths
                     self.reverb[5]
                         .set_size(self.params.reverb_size.value() * 0.374, self.sample_rate);
+                    self.reverb[6]
+                        .set_size(self.params.reverb_size.value() * 0.8, self.sample_rate);
+                    self.reverb[7]
+                        .set_size(self.params.reverb_size.value() * 0.4, self.sample_rate);
 
                     for verb in self.reverb.iter_mut() {
                         verb.set_feedback(self.params.reverb_feedback.value());
@@ -6455,13 +6618,13 @@ impl Actuate {
                         mod_amount_4: 0.0,
 
                         // EQ
-                        use_eq: false,
-                        low_freq: 800.0,
-                        mid_freq: 3000.0,
-                        high_freq: 10000.0,
-                        low_gain: 0.0,
-                        mid_gain: 0.0,
-                        high_gain: 0.0,
+                        pre_use_eq: false,
+                        pre_low_freq: 800.0,
+                        pre_mid_freq: 3000.0,
+                        pre_high_freq: 10000.0,
+                        pre_low_gain: 0.0,
+                        pre_mid_gain: 0.0,
+                        pre_high_gain: 0.0,
 
                         // FX
                         use_fx: true,
@@ -6471,6 +6634,9 @@ impl Actuate {
                         comp_atk: 0.5,
                         comp_rel: 0.5,
                         comp_drive: 0.5,
+
+                        use_abass: false,
+                        abass_amount: 0.0011,
 
                         use_saturation: false,
                         sat_amount: 0.0,
@@ -6703,13 +6869,13 @@ impl Actuate {
         let mod_dest_4_override = loaded_preset.mod_dest_4.clone();
 
         setter.set_parameter(&params.use_fx, loaded_preset.use_fx);
-        setter.set_parameter(&params.use_eq, loaded_preset.use_eq);
-        setter.set_parameter(&params.low_freq, loaded_preset.low_freq);
-        setter.set_parameter(&params.mid_freq, loaded_preset.mid_freq);
-        setter.set_parameter(&params.high_freq, loaded_preset.high_freq);
-        setter.set_parameter(&params.low_gain, loaded_preset.low_gain);
-        setter.set_parameter(&params.mid_gain, loaded_preset.mid_gain);
-        setter.set_parameter(&params.high_gain, loaded_preset.high_gain);
+        setter.set_parameter(&params.pre_use_eq, loaded_preset.pre_use_eq);
+        setter.set_parameter(&params.pre_low_freq, loaded_preset.pre_low_freq);
+        setter.set_parameter(&params.pre_mid_freq, loaded_preset.pre_mid_freq);
+        setter.set_parameter(&params.pre_high_freq, loaded_preset.pre_high_freq);
+        setter.set_parameter(&params.pre_low_gain, loaded_preset.pre_low_gain);
+        setter.set_parameter(&params.pre_mid_gain, loaded_preset.pre_mid_gain);
+        setter.set_parameter(&params.pre_high_gain, loaded_preset.pre_high_gain);
         setter.set_parameter(&params.use_compressor, loaded_preset.use_compressor);
         setter.set_parameter(&params.comp_amt, loaded_preset.comp_amt);
         setter.set_parameter(&params.comp_atk, loaded_preset.comp_atk);
@@ -6717,6 +6883,8 @@ impl Actuate {
         setter.set_parameter(&params.comp_rel, loaded_preset.comp_rel);
         setter.set_parameter(&params.use_saturation, loaded_preset.use_saturation);
         setter.set_parameter(&params.sat_amt, loaded_preset.sat_amount);
+        setter.set_parameter(&params.use_abass, loaded_preset.use_abass);
+        setter.set_parameter(&params.abass_amount, loaded_preset.abass_amount);
         setter.set_parameter(&params.sat_type, loaded_preset.sat_type.clone());
         setter.set_parameter(&params.use_delay, loaded_preset.use_delay);
         setter.set_parameter(&params.delay_amount, loaded_preset.delay_amount);
@@ -7083,13 +7251,13 @@ impl Actuate {
                 mod_amount_3: self.params.mod_amount_knob_3.value(),
                 mod_amount_4: self.params.mod_amount_knob_4.value(),
 
-                use_eq: self.params.use_eq.value(),
-                low_freq: self.params.low_freq.value(),
-                mid_freq: self.params.mid_freq.value(),
-                high_freq: self.params.high_freq.value(),
-                low_gain: self.params.low_gain.value(),
-                mid_gain: self.params.mid_gain.value(),
-                high_gain: self.params.high_gain.value(),
+                pre_use_eq: self.params.pre_use_eq.value(),
+                pre_low_freq: self.params.pre_low_freq.value(),
+                pre_mid_freq: self.params.pre_mid_freq.value(),
+                pre_high_freq: self.params.pre_high_freq.value(),
+                pre_low_gain: self.params.pre_low_gain.value(),
+                pre_mid_gain: self.params.pre_mid_gain.value(),
+                pre_high_gain: self.params.pre_high_gain.value(),
 
                 use_fx: self.params.use_fx.value(),
                 use_compressor: self.params.use_compressor.value(),
@@ -7097,6 +7265,8 @@ impl Actuate {
                 comp_atk: self.params.comp_atk.value(),
                 comp_rel: self.params.comp_rel.value(),
                 comp_drive: self.params.comp_drive.value(),
+                use_abass: self.params.use_abass.value(),
+                abass_amount: self.params.abass_amount.value(),
                 use_saturation: self.params.use_saturation.value(),
                 sat_amount: self.params.sat_amt.value(),
                 sat_type: self.params.sat_type.value(),
@@ -7167,6 +7337,9 @@ impl Actuate {
                     SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
                         self.params.filter_env_release.value(),
                     )),
+                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
+                        self.params.filter_env_release.value(),
+                    )),
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_1.reset(
@@ -7194,6 +7367,9 @@ impl Actuate {
                     SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
                         self.params.filter_env_attack.value(),
                     )),
+                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
+                        self.params.filter_env_attack.value(),
+                    )),
                 };
                 // Reset our attack to start from the filter cutoff
                 self.filter_atk_smoother_1
@@ -7203,7 +7379,14 @@ impl Actuate {
                     self.sample_rate,
                     (self.params.filter_cutoff.value()
                         + filter_cutoff_mod
-                        + self.params.filter_env_peak.value())
+                        + (
+                            // This scales the peak env to be much gentler for the TILT filter
+                            match self.params.filter_alg_type.value() {
+                                FilterAlgorithms::SVF => { self.params.filter_env_peak.value() },
+                                FilterAlgorithms::TILT => { adv_scale_value(self.params.filter_env_peak.value(), -19980.0, 19980.0, -5000.0, 5000.0) },
+                                FilterAlgorithms::VCF => { self.params.filter_env_peak.value() },
+                            }
+                        ))
                     .clamp(20.0, 20000.0),
                 );
             }
@@ -7222,12 +7405,22 @@ impl Actuate {
                     SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
                         self.params.filter_env_decay.value(),
                     )),
+                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
+                        self.params.filter_env_decay.value(),
+                    )),
                 };
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_1.reset(
                     (self.params.filter_cutoff.value()
                         + filter_cutoff_mod
-                        + self.params.filter_env_peak.value())
+                        + (
+                            // This scales the peak env to be much gentler for the TILT filter
+                            match self.params.filter_alg_type.value() {
+                                FilterAlgorithms::SVF => { self.params.filter_env_peak.value() },
+                                FilterAlgorithms::TILT => { adv_scale_value(self.params.filter_env_peak.value(), -19980.0, 19980.0, -5000.0, 5000.0) },
+                                FilterAlgorithms::VCF => { self.params.filter_env_peak.value() },
+                            }
+                        ))
                     .clamp(20.0, 20000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
@@ -7301,6 +7494,14 @@ impl Actuate {
                     *left_output += tilt_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
                     *right_output += tilt_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
                 },
+                FilterAlgorithms::VCF => {
+                    self.vcf_filter_l_1.update(next_filter_step, self.params.filter_resonance.value(), self.params.vcf_filter_type.value(), self.sample_rate);
+                    self.vcf_filter_r_1.update(next_filter_step, self.params.filter_resonance.value(), self.params.vcf_filter_type.value(), self.sample_rate);
+                    let vcf_out_l = self.vcf_filter_l_1.process(left_input_filter1);
+                    let vcf_out_r = self.vcf_filter_r_1.process(right_input_filter1);
+                    *left_output += vcf_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
+                    *right_output += vcf_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
+                },
             }
         }
     }
@@ -7341,6 +7542,9 @@ impl Actuate {
                     SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
                         self.params.filter_env_release_2.value(),
                     )),
+                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
+                        self.params.filter_env_release_2.value(),
+                    )),
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_2.reset(
@@ -7368,6 +7572,9 @@ impl Actuate {
                     SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
                         self.params.filter_env_attack_2.value(),
                     )),
+                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
+                        self.params.filter_env_attack_2.value(),
+                    )),
                 };
                 // Reset our attack to start from the filter cutoff
                 self.filter_atk_smoother_2
@@ -7377,7 +7584,14 @@ impl Actuate {
                     self.sample_rate,
                     (self.params.filter_cutoff_2.value()
                         + filter_cutoff_mod
-                        + self.params.filter_env_peak_2.value())
+                        + (
+                            // This scales the peak env to be much gentler for the TILT filter
+                            match self.params.filter_alg_type_2.value() {
+                                FilterAlgorithms::SVF => { self.params.filter_env_peak_2.value() },
+                                FilterAlgorithms::TILT => { adv_scale_value(self.params.filter_env_peak_2.value(), -19980.0, 19980.0, -5000.0, 5000.0) },
+                                FilterAlgorithms::VCF => { self.params.filter_env_peak_2.value() },
+                            }
+                        ))
                     .clamp(20.0, 20000.0),
                 );
             }
@@ -7396,12 +7610,22 @@ impl Actuate {
                     SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
                         self.params.filter_env_decay_2.value(),
                     )),
+                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
+                        self.params.filter_env_decay_2.value(),
+                    )),
                 };
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_2.reset(
                     (self.params.filter_cutoff_2.value()
                         + filter_cutoff_mod
-                        + self.params.filter_env_peak_2.value())
+                        + (
+                            // This scales the peak env to be much gentler for the TILT filter
+                            match self.params.filter_alg_type_2.value() {
+                                FilterAlgorithms::SVF => { self.params.filter_env_peak_2.value() },
+                                FilterAlgorithms::TILT => { adv_scale_value(self.params.filter_env_peak_2.value(), -19980.0, 19980.0, -5000.0, 5000.0) },
+                                FilterAlgorithms::VCF => { self.params.filter_env_peak_2.value() },
+                            }
+                        ))
                     .clamp(20.0, 20000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
@@ -7463,17 +7687,25 @@ impl Actuate {
                     self.tilt_filter_l_2.update(
                         self.sample_rate,
                         next_filter_step,
-                        self.params.filter_resonance.value(),
-                        self.params.tilt_filter_type.value());
+                        self.params.filter_resonance_2.value(),
+                        self.params.tilt_filter_type_2.value());
                     self.tilt_filter_r_2.update(
                         self.sample_rate,
                         next_filter_step,
-                        self.params.filter_resonance.value(),
-                        self.params.tilt_filter_type.value());
+                        self.params.filter_resonance_2.value(),
+                        self.params.tilt_filter_type_2.value());
                     let tilt_out_l = self.tilt_filter_l_2.process(left_input_filter2);
                     let tilt_out_r = self.tilt_filter_r_2.process(right_input_filter2);
-                    *left_output += tilt_out_l * self.params.filter_wet.value() + left_input_filter2 * (1.0 - self.params.filter_wet.value());
-                    *right_output += tilt_out_r * self.params.filter_wet.value() + right_input_filter2 * (1.0 - self.params.filter_wet.value());
+                    *left_output += tilt_out_l * self.params.filter_wet_2.value() + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
+                    *right_output += tilt_out_r * self.params.filter_wet_2.value() + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
+                },
+                FilterAlgorithms::VCF => {
+                    self.vcf_filter_l_2.update(next_filter_step, self.params.filter_resonance_2.value(), self.params.vcf_filter_type_2.value(), self.sample_rate);
+                    self.vcf_filter_r_2.update(next_filter_step, self.params.filter_resonance_2.value(), self.params.vcf_filter_type_2.value(), self.sample_rate);
+                    let vcf_out_l = self.vcf_filter_l_2.process(left_input_filter2);
+                    let vcf_out_r = self.vcf_filter_r_2.process(right_input_filter2);
+                    *left_output += vcf_out_l * self.params.filter_wet_2.value() + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
+                    *right_output += vcf_out_r * self.params.filter_wet_2.value() + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
                 },
             }
         }
@@ -7505,4 +7737,14 @@ nih_export_vst3!(Actuate);
 // I use this when I want to remove label and unit from a param in gui
 pub fn format_nothing() -> Arc<dyn Fn(f32) -> String + Send + Sync> {
     Arc::new(move |_| String::new())
+}
+
+fn adv_scale_value(input: f32, in_min: f32, in_max: f32, out_min: f32, out_max: f32) -> f32 {
+    // Ensure that the input value is within the specified input range
+    let input = input.max(in_min).min(in_max);
+
+    // Calculate the scaled value using linear mapping
+    let scaled_value = (input - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+
+    scaled_value
 }
