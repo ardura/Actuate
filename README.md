@@ -3,8 +3,7 @@ A Synthesizer, Sampler, and Granulizer built in Rust + Nih-Plug
 Written by Ardura
 
 Join the discord! https://discord.com/invite/hscQXkTdfz
-
-![actuate_gui](https://github.com/ardura/Actuate/assets/31751444/be396ad9-b67a-4a67-b457-c8a9911414e5)
+![newer](https://github.com/ardura/Actuate/assets/31751444/37875c34-3385-4d57-9810-bab7ca8baaab)
 ![actuate_gui_2](https://github.com/ardura/Actuate/assets/31751444/4be89297-8833-4463-bcd5-ce30ef197450)
 
 
