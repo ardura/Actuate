@@ -280,6 +280,7 @@ pub enum OscState {
 pub enum SmoothStyle {
     Linear,
     Logarithmic,
+    LogSteep,
     Exponential,
 }
 
