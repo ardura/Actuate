@@ -8,10 +8,10 @@ Join the discord! https://discord.com/invite/hscQXkTdfz
 
 
 ## Features
-- Two SVF Filters or Tilt inspired filters that can be parallel, serial, or bypassed with ADSR Envelopes
+- Two SVF Filters, a VCF inspired filter, and Tilt inspired filters that can be parallel, serial, or bypassed with ADSR Envelopes
 - 12 Oscillator shapes
-- 7 Filter resonance approximations for different sweeps
-- 9 Different FX for post processing
+- 7 Filter resonance approximations for different sweeps in SVF filters
+- 10 Different FX for post processing
 - 3 LFO controllers
 - 4 Modulators that can be linked to multiple things
 - Sampler with pitch shifting or resample stretching
@@ -22,7 +22,8 @@ Join the discord! https://discord.com/invite/hscQXkTdfz
 - Stereo width and ultra wide controls
 
 ## Signal Path
-![actuate](https://github.com/ardura/Actuate/assets/31751444/9066cf62-5077-41be-ade3-da4a51dc46e8)
+![actuate_flow](https://github.com/ardura/Actuate/assets/31751444/45ce1d56-d6c1-47b2-8bae-09633ecbbd2e)
+
 
 ## Known Issues
 - Saving and loading happens twice
