@@ -4909,30 +4909,30 @@ impl Actuate {
             // Update LFO Frequency
             if self.params.lfo2_sync.value() {
                 let divisor = match self.params.lfo2_snap.value() {
-                    LFOController::LFOSnapValues::Quad => 0.5 / 3.0,
-                    LFOController::LFOSnapValues::QuadD => (0.5 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::QuadT => 0.5 / 4.5,
-                    LFOController::LFOSnapValues::Double => 1.0 / 3.0,
-                    LFOController::LFOSnapValues::DoubleD => (1.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::DoubleT => 1.0 / 4.5,
-                    LFOController::LFOSnapValues::Whole => 2.0 / 3.0,
-                    LFOController::LFOSnapValues::WholeD => (2.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::WholeT => 2.0 / 4.5,
-                    LFOController::LFOSnapValues::Half => 4.0 / 3.0,
-                    LFOController::LFOSnapValues::HalfD => (4.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::HalfT => 4.0 / 4.5,
-                    LFOController::LFOSnapValues::Quarter => 8.0 / 3.0,
-                    LFOController::LFOSnapValues::QuarterD => (8.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::QuarterT => 8.0 / 4.5,
-                    LFOController::LFOSnapValues::Eighth => 16.0 / 3.0,
-                    LFOController::LFOSnapValues::EighthD => (16.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::EighthT => 16.0 / 4.5,
-                    LFOController::LFOSnapValues::Sixteen => 32.0 / 3.0,
-                    LFOController::LFOSnapValues::SixteenD => (32.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::SixteenT => 32.0 / 4.5,
-                    LFOController::LFOSnapValues::ThirtySecond => 64.0 / 3.0,
-                    LFOController::LFOSnapValues::ThirtySecondD => (64.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::ThirtySecondT => 64.0 / 4.5,
+                    LFOController::LFOSnapValues::Quad => 16.0,
+                    LFOController::LFOSnapValues::QuadD => 16.0 * 1.5,
+                    LFOController::LFOSnapValues::QuadT => 16.0 / 3.0,
+                    LFOController::LFOSnapValues::Double => 8.0,
+                    LFOController::LFOSnapValues::DoubleD => 8.0 * 1.5,
+                    LFOController::LFOSnapValues::DoubleT => 8.0 / 3.0,
+                    LFOController::LFOSnapValues::Whole => 4.0,
+                    LFOController::LFOSnapValues::WholeD => 4.0 * 1.5,
+                    LFOController::LFOSnapValues::WholeT => 4.0 / 3.0,
+                    LFOController::LFOSnapValues::Half => 2.0,
+                    LFOController::LFOSnapValues::HalfD => 2.0 * 1.5,
+                    LFOController::LFOSnapValues::HalfT => 2.0 / 3.0,
+                    LFOController::LFOSnapValues::Quarter => 1.0,
+                    LFOController::LFOSnapValues::QuarterD => 1.0 * 1.5,
+                    LFOController::LFOSnapValues::QuarterT => 1.0 / 3.0,
+                    LFOController::LFOSnapValues::Eighth => 0.5,
+                    LFOController::LFOSnapValues::EighthD => 0.5 * 1.5,
+                    LFOController::LFOSnapValues::EighthT => 0.5 / 3.0,
+                    LFOController::LFOSnapValues::Sixteen => 0.25,
+                    LFOController::LFOSnapValues::SixteenD => 0.25 * 1.5,
+                    LFOController::LFOSnapValues::SixteenT => 0.25 / 3.0,
+                    LFOController::LFOSnapValues::ThirtySecond => 0.125,
+                    LFOController::LFOSnapValues::ThirtySecondD => 0.125 * 1.5,
+                    LFOController::LFOSnapValues::ThirtySecondT => 0.125 / 3.0,
                 };
                 let freq_snap = (bpm / divisor) / 60.0;
                 if self.params.lfo2_freq.value() != freq_snap {
@@ -4953,30 +4953,30 @@ impl Actuate {
             // Update LFO Frequency
             if self.params.lfo3_sync.value() {
                 let divisor = match self.params.lfo3_snap.value() {
-                    LFOController::LFOSnapValues::Quad => 0.5 / 3.0,
-                    LFOController::LFOSnapValues::QuadD => (0.5 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::QuadT => 0.5 / 4.5,
-                    LFOController::LFOSnapValues::Double => 1.0 / 3.0,
-                    LFOController::LFOSnapValues::DoubleD => (1.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::DoubleT => 1.0 / 4.5,
-                    LFOController::LFOSnapValues::Whole => 2.0 / 3.0,
-                    LFOController::LFOSnapValues::WholeD => (2.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::WholeT => 2.0 / 4.5,
-                    LFOController::LFOSnapValues::Half => 4.0 / 3.0,
-                    LFOController::LFOSnapValues::HalfD => (4.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::HalfT => 4.0 / 4.5,
-                    LFOController::LFOSnapValues::Quarter => 8.0 / 3.0,
-                    LFOController::LFOSnapValues::QuarterD => (8.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::QuarterT => 8.0 / 4.5,
-                    LFOController::LFOSnapValues::Eighth => 16.0 / 3.0,
-                    LFOController::LFOSnapValues::EighthD => (16.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::EighthT => 16.0 / 4.5,
-                    LFOController::LFOSnapValues::Sixteen => 32.0 / 3.0,
-                    LFOController::LFOSnapValues::SixteenD => (32.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::SixteenT => 32.0 / 4.5,
-                    LFOController::LFOSnapValues::ThirtySecond => 64.0 / 3.0,
-                    LFOController::LFOSnapValues::ThirtySecondD => (64.0 / 3.0) * 1.5,
-                    LFOController::LFOSnapValues::ThirtySecondT => 64.0 / 4.5,
+                    LFOController::LFOSnapValues::Quad => 16.0,
+                    LFOController::LFOSnapValues::QuadD => 16.0 * 1.5,
+                    LFOController::LFOSnapValues::QuadT => 16.0 / 3.0,
+                    LFOController::LFOSnapValues::Double => 8.0,
+                    LFOController::LFOSnapValues::DoubleD => 8.0 * 1.5,
+                    LFOController::LFOSnapValues::DoubleT => 8.0 / 3.0,
+                    LFOController::LFOSnapValues::Whole => 4.0,
+                    LFOController::LFOSnapValues::WholeD => 4.0 * 1.5,
+                    LFOController::LFOSnapValues::WholeT => 4.0 / 3.0,
+                    LFOController::LFOSnapValues::Half => 2.0,
+                    LFOController::LFOSnapValues::HalfD => 2.0 * 1.5,
+                    LFOController::LFOSnapValues::HalfT => 2.0 / 3.0,
+                    LFOController::LFOSnapValues::Quarter => 1.0,
+                    LFOController::LFOSnapValues::QuarterD => 1.0 * 1.5,
+                    LFOController::LFOSnapValues::QuarterT => 1.0 / 3.0,
+                    LFOController::LFOSnapValues::Eighth => 0.5,
+                    LFOController::LFOSnapValues::EighthD => 0.5 * 1.5,
+                    LFOController::LFOSnapValues::EighthT => 0.5 / 3.0,
+                    LFOController::LFOSnapValues::Sixteen => 0.25,
+                    LFOController::LFOSnapValues::SixteenD => 0.25 * 1.5,
+                    LFOController::LFOSnapValues::SixteenT => 0.25 / 3.0,
+                    LFOController::LFOSnapValues::ThirtySecond => 0.125,
+                    LFOController::LFOSnapValues::ThirtySecondD => 0.125 * 1.5,
+                    LFOController::LFOSnapValues::ThirtySecondT => 0.125 / 3.0,
                 };
                 let freq_snap = (bpm / divisor) / 60.0;
                 if self.params.lfo3_freq.value() != freq_snap {
@@ -5350,10 +5350,10 @@ impl Actuate {
                         temp_mod_cutoff_2 += 5000.0 * mod_value_1;
                     }
                     ModulationDestination::Resonance_1 => {
-                        temp_mod_resonance_1 += mod_value_1;
+                        temp_mod_resonance_1 -= mod_value_1;
                     }
                     ModulationDestination::Resonance_2 => {
-                        temp_mod_resonance_2 += mod_value_1;
+                        temp_mod_resonance_2 -= mod_value_1;
                     }
                     ModulationDestination::All_Detune => {
                         if self.params.mod_source_1.value() == ModulationSource::Velocity {
@@ -5451,10 +5451,10 @@ impl Actuate {
                         temp_mod_cutoff_2 += 5000.0 * mod_value_2;
                     }
                     ModulationDestination::Resonance_1 => {
-                        temp_mod_resonance_1 += mod_value_2;
+                        temp_mod_resonance_1 -= mod_value_2;
                     }
                     ModulationDestination::Resonance_2 => {
-                        temp_mod_resonance_2 += mod_value_2;
+                        temp_mod_resonance_2 -= mod_value_2;
                     }
                     ModulationDestination::All_Detune => {
                         if self.params.mod_source_2.value() == ModulationSource::Velocity {
@@ -5552,10 +5552,10 @@ impl Actuate {
                         temp_mod_cutoff_2 += 5000.0 * mod_value_3;
                     }
                     ModulationDestination::Resonance_1 => {
-                        temp_mod_resonance_1 += mod_value_3;
+                        temp_mod_resonance_1 -= mod_value_3;
                     }
                     ModulationDestination::Resonance_2 => {
-                        temp_mod_resonance_2 += mod_value_3;
+                        temp_mod_resonance_2 -= mod_value_3;
                     }
                     ModulationDestination::All_Detune => {
                         if self.params.mod_source_3.value() == ModulationSource::Velocity {
@@ -5653,10 +5653,10 @@ impl Actuate {
                         temp_mod_cutoff_2 += 5000.0 * mod_value_4;
                     }
                     ModulationDestination::Resonance_1 => {
-                        temp_mod_resonance_1 += mod_value_4;
+                        temp_mod_resonance_1 -= mod_value_4;
                     }
                     ModulationDestination::Resonance_2 => {
-                        temp_mod_resonance_2 += mod_value_4;
+                        temp_mod_resonance_2 -= mod_value_4;
                     }
                     ModulationDestination::All_Detune => {
                         if self.params.mod_source_4.value() == ModulationSource::Velocity {
@@ -6922,6 +6922,8 @@ impl Actuate {
             &params.filter_res_type,
             loaded_preset.filter_res_type.clone(),
         );
+        setter.set_parameter(&params.filter_alg_type, loaded_preset.filter_alg_type.clone());
+        setter.set_parameter(&params.filter_alg_type_2, loaded_preset.filter_alg_type_2.clone());
         setter.set_parameter(&params.tilt_filter_type, loaded_preset.tilt_filter_type.clone());
         setter.set_parameter(&params.filter_lp_amount, loaded_preset.filter_lp_amount);
         setter.set_parameter(&params.filter_hp_amount, loaded_preset.filter_hp_amount);
@@ -6966,6 +6968,15 @@ impl Actuate {
             &params.filter_env_rel_curve_2,
             loaded_preset.filter_env_rel_curve_2,
         );
+        // Somehow I didn't notice these were missing for the longest time
+        setter.set_parameter(&params.filter_env_attack, loaded_preset.filter_env_attack);
+        setter.set_parameter(&params.filter_env_decay, loaded_preset.filter_env_decay);
+        setter.set_parameter(&params.filter_env_sustain, loaded_preset.filter_env_sustain);
+        setter.set_parameter(&params.filter_env_release, loaded_preset.filter_env_release);
+        setter.set_parameter(&params.filter_env_attack_2, loaded_preset.filter_env_attack_2);
+        setter.set_parameter(&params.filter_env_decay_2, loaded_preset.filter_env_decay_2);
+        setter.set_parameter(&params.filter_env_sustain_2, loaded_preset.filter_env_sustain_2);
+        setter.set_parameter(&params.filter_env_release_2, loaded_preset.filter_env_release_2);
 
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
@@ -7343,13 +7354,12 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_1.reset(
-                    (self.params.filter_cutoff.value() + filter_cutoff_mod)
-                        * (self.params.filter_env_sustain.value() / 999.9),
+                    self.params.filter_cutoff.value() * (self.params.filter_env_sustain.value() / 999.9),
                 );
                 // Move release to the cutoff to end
                 self.filter_rel_smoother_1.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff.value() + filter_cutoff_mod,
+                    self.params.filter_cutoff.value(),
                 );
             }
             // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
@@ -7373,12 +7383,11 @@ impl Actuate {
                 };
                 // Reset our attack to start from the filter cutoff
                 self.filter_atk_smoother_1
-                    .reset(self.params.filter_cutoff.value() + filter_cutoff_mod);
+                    .reset(self.params.filter_cutoff.value());
                 // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
                 self.filter_atk_smoother_1.set_target(
                     self.sample_rate,
                     (self.params.filter_cutoff.value()
-                        + filter_cutoff_mod
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type.value() {
@@ -7412,7 +7421,6 @@ impl Actuate {
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_1.reset(
                     (self.params.filter_cutoff.value()
-                        + filter_cutoff_mod
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type.value() {
@@ -7426,8 +7434,7 @@ impl Actuate {
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_1.set_target(
                     self.sample_rate,
-                    (self.params.filter_cutoff.value() + filter_cutoff_mod)
-                        * (self.params.filter_env_sustain.value() / 999.9),
+                    self.params.filter_cutoff.value() * (self.params.filter_env_sustain.value() / 999.9),
                 );
             }
             // If our decay has finished move to sustain state
@@ -7438,11 +7445,11 @@ impl Actuate {
             }
             // use proper variable now that there are four filters and multiple states
             let next_filter_step = match self.filter_state_1 {
-                OscState::Attacking => self.filter_atk_smoother_1.next(),
-                OscState::Decaying | OscState::Sustaining => self.filter_dec_smoother_1.next(),
-                OscState::Releasing => self.filter_rel_smoother_1.next(),
+                OscState::Attacking => ( self.filter_atk_smoother_1.next() + filter_cutoff_mod ).clamp(20.0, 20000.0),
+                OscState::Decaying | OscState::Sustaining => ( self.filter_dec_smoother_1.next()+ filter_cutoff_mod ).clamp(20.0, 20000.0),
+                OscState::Releasing => ( self.filter_rel_smoother_1.next()+ filter_cutoff_mod ).clamp(20.0, 20000.0),
                 // I don't expect this to be used
-                _ => self.params.filter_cutoff.value() + filter_cutoff_mod,
+                _ => (self.params.filter_cutoff.value() + filter_cutoff_mod).clamp(20.0, 20000.0),
             };
             match self.params.filter_alg_type.value() {
                 FilterAlgorithms::SVF => {
@@ -7548,13 +7555,12 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_2.reset(
-                    (self.params.filter_cutoff_2.value() + filter_cutoff_mod)
-                        * (self.params.filter_env_sustain_2.value() / 999.9),
+                    self.params.filter_cutoff_2.value() * (self.params.filter_env_sustain_2.value() / 999.9),
                 );
                 // Move release to the cutoff to end
                 self.filter_rel_smoother_2.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff_2.value() + filter_cutoff_mod,
+                    self.params.filter_cutoff_2.value(),
                 );
             }
             // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
@@ -7578,12 +7584,11 @@ impl Actuate {
                 };
                 // Reset our attack to start from the filter cutoff
                 self.filter_atk_smoother_2
-                    .reset(self.params.filter_cutoff_2.value() + filter_cutoff_mod);
+                    .reset(self.params.filter_cutoff_2.value());
                 // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
                 self.filter_atk_smoother_2.set_target(
                     self.sample_rate,
                     (self.params.filter_cutoff_2.value()
-                        + filter_cutoff_mod
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
@@ -7617,7 +7622,6 @@ impl Actuate {
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_2.reset(
                     (self.params.filter_cutoff_2.value()
-                        + filter_cutoff_mod
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
@@ -7631,8 +7635,7 @@ impl Actuate {
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_2.set_target(
                     self.sample_rate,
-                    (self.params.filter_cutoff_2.value() + filter_cutoff_mod)
-                        * (self.params.filter_env_sustain_2.value() / 999.9),
+                    self.params.filter_cutoff_2.value() * (self.params.filter_env_sustain_2.value() / 999.9),
                 );
             }
             // If our decay has finished move to sustain state
@@ -7643,9 +7646,9 @@ impl Actuate {
             }
             // use proper variable now that there are four filters and multiple states
             let next_filter_step = match self.filter_state_2 {
-                OscState::Attacking => self.filter_atk_smoother_2.next(),
-                OscState::Decaying | OscState::Sustaining => self.filter_dec_smoother_2.next(),
-                OscState::Releasing => self.filter_rel_smoother_2.next(),
+                OscState::Attacking => ( self.filter_atk_smoother_2.next() + filter_cutoff_mod ).clamp(20.0, 20000.0),
+                OscState::Decaying | OscState::Sustaining => ( self.filter_dec_smoother_2.next()+ filter_cutoff_mod ).clamp(20.0, 20000.0),
+                OscState::Releasing => ( self.filter_rel_smoother_2.next()+ filter_cutoff_mod ).clamp(20.0, 20000.0),
                 // I don't expect this to be used
                 _ => self.params.filter_cutoff_2.value() + filter_cutoff_mod,
             };
