@@ -55,18 +55,19 @@ use audio_module::{
     Oscillator::{self, OscState, RetriggerStyle, SmoothStyle, VoiceType},
 };
 use fx::{
+    abass::a_bass_saturation,
     biquad_filters::{self, FilterType},
     buffermodulator::BufferModulator,
     compressor::Compressor,
     delay::{Delay, DelaySnapValues, DelayType},
-    ArduraFilter::{self, ResponseType},
-    VCFilter::{ResponseType as VCResponseType},
     flanger::StereoFlanger,
     limiter::StereoLimiter,
     phaser::StereoPhaser,
     reverb::StereoReverb,
     saturation::{Saturation, SaturationType},
-    StateVariableFilter::{ResonanceType, StateVariableFilter}, abass::a_bass_saturation,
+    ArduraFilter::{self, ResponseType},
+    StateVariableFilter::{ResonanceType, StateVariableFilter},
+    VCFilter::ResponseType as VCResponseType,
 };
 use CustomWidgets::{
     toggle_switch, ui_knob, BoolButton, CustomComboBox, CustomParamSlider,
@@ -93,17 +94,17 @@ const PRESET_BANK_SIZE: usize = 32;
 const FILE_OPEN_BUFFER_MAX: u32 = 1;
 
 // GUI values to refer to
-pub const A_KNOB_OUTSIDE_COLOR: Color32 = Color32::from_rgb(67,157,148);
-pub const DARK_GREY_UI_COLOR: Color32 = Color32::from_rgb(49,53,71);
-pub const LIGHT_GREY_UI_COLOR: Color32 = Color32::from_rgb(99,103,121);
-pub const LIGHTER_GREY_UI_COLOR: Color32 = Color32::from_rgb(149,153,171);
-pub const SYNTH_SOFT_BLUE: Color32 = Color32::from_rgb(142,166,201);
-pub const SYNTH_SOFT_BLUE2: Color32 = Color32::from_rgb(102,126,181);
-pub const A_BACKGROUND_COLOR_TOP: Color32 = Color32::from_rgb(185,186,198);
-pub const SYNTH_BARS_PURPLE: Color32 = Color32::from_rgb(45,41,99);
-pub const LIGHTER_PURPLE: Color32 = Color32::from_rgb(85,81,139);
-pub const SYNTH_MIDDLE_BLUE: Color32 = Color32::from_rgb(98,145,204);
-pub const FONT_COLOR: Color32 = Color32::from_rgb(10,103,210);
+pub const A_KNOB_OUTSIDE_COLOR: Color32 = Color32::from_rgb(67, 157, 148);
+pub const DARK_GREY_UI_COLOR: Color32 = Color32::from_rgb(49, 53, 71);
+pub const LIGHT_GREY_UI_COLOR: Color32 = Color32::from_rgb(99, 103, 121);
+pub const LIGHTER_GREY_UI_COLOR: Color32 = Color32::from_rgb(149, 153, 171);
+pub const SYNTH_SOFT_BLUE: Color32 = Color32::from_rgb(142, 166, 201);
+pub const SYNTH_SOFT_BLUE2: Color32 = Color32::from_rgb(102, 126, 181);
+pub const A_BACKGROUND_COLOR_TOP: Color32 = Color32::from_rgb(185, 186, 198);
+pub const SYNTH_BARS_PURPLE: Color32 = Color32::from_rgb(45, 41, 99);
+pub const LIGHTER_PURPLE: Color32 = Color32::from_rgb(85, 81, 139);
+pub const SYNTH_MIDDLE_BLUE: Color32 = Color32::from_rgb(98, 145, 204);
+pub const FONT_COLOR: Color32 = Color32::from_rgb(10, 103, 210);
 
 // Gui for which filter to display on bottom
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -489,6 +490,8 @@ pub struct Actuate {
     load_bank: Arc<AtomicBool>,
     save_bank: Arc<AtomicBool>,
 
+    current_note_on_velocity: Arc<AtomicF32>,
+
     // Modules
     audio_module_1: Arc<Mutex<AudioModule>>,
     _audio_module_1_type: AudioModuleType,
@@ -619,6 +622,8 @@ impl Default for Actuate {
             save_bank: save_bank,
             update_current_preset: update_current_preset,
 
+            current_note_on_velocity: Arc::new(AtomicF32::new(0.0)),
+
             // Module 1
             audio_module_1: Arc::new(Mutex::new(AudioModule::default())),
             _audio_module_1_type: AudioModuleType::Osc,
@@ -631,8 +636,18 @@ impl Default for Actuate {
             filter_l_2: StateVariableFilter::default().set_oversample(4),
             filter_r_2: StateVariableFilter::default().set_oversample(4),
             // TILT Filters
-            tilt_filter_l_2: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
-            tilt_filter_r_2: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
+            tilt_filter_l_2: ArduraFilter::ArduraFilter::new(
+                44100.0,
+                20000.0,
+                1.0,
+                ResponseType::Lowpass,
+            ),
+            tilt_filter_r_2: ArduraFilter::ArduraFilter::new(
+                44100.0,
+                20000.0,
+                1.0,
+                ResponseType::Lowpass,
+            ),
             // VCF Filters
             vcf_filter_l_1: fx::VCFilter::VCFilter::new(),
             vcf_filter_r_1: fx::VCFilter::VCFilter::new(),
@@ -646,8 +661,18 @@ impl Default for Actuate {
             filter_l_1: StateVariableFilter::default().set_oversample(4),
             filter_r_1: StateVariableFilter::default().set_oversample(4),
             // TILT Filters
-            tilt_filter_l_1: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
-            tilt_filter_r_1: ArduraFilter::ArduraFilter::new(44100.0, 20000.0, 1.0, ResponseType::Lowpass),
+            tilt_filter_l_1: ArduraFilter::ArduraFilter::new(
+                44100.0,
+                20000.0,
+                1.0,
+                ResponseType::Lowpass,
+            ),
+            tilt_filter_r_1: ArduraFilter::ArduraFilter::new(
+                44100.0,
+                20000.0,
+                1.0,
+                ResponseType::Lowpass,
+            ),
             // VCF Filters
             vcf_filter_l_2: fx::VCFilter::VCFilter::new(),
             vcf_filter_r_2: fx::VCFilter::VCFilter::new(),
@@ -2599,8 +2624,16 @@ impl ActuateParams {
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
 
             use_abass: BoolParam::new("ABass", false),
-            abass_amount: FloatParam::new("Amount", 0.0011, FloatRange::Skewed { min: 0.0, max: 1.0, factor: 0.3 })
-                    .with_value_to_string(formatters::v2s_f32_rounded(4)),
+            abass_amount: FloatParam::new(
+                "Amount",
+                0.0011,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.3,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(4)),
 
             use_saturation: BoolParam::new("Saturation", false),
             sat_amt: FloatParam::new("Amount", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
@@ -3484,7 +3517,7 @@ impl Plugin for Actuate {
                                                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_wet_knob);
-        
+
                                                             let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                 &params.filter_resonance_2,
                                                                 setter,
@@ -3505,7 +3538,7 @@ impl Plugin for Actuate {
                                                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_cutoff_knob);
-        
+
                                                             let filter_res_type_knob = ui_knob::ArcKnob::for_param(
                                                                 &params.filter_res_type_2,
                                                                 setter,
@@ -3789,7 +3822,7 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        DARK_GREY_UI_COLOR, 
+                                                        DARK_GREY_UI_COLOR,
                                                         SYNTH_MIDDLE_BLUE),
                                             );
                                             ui.add(
@@ -3799,7 +3832,7 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        DARK_GREY_UI_COLOR, 
+                                                        DARK_GREY_UI_COLOR,
                                                         SYNTH_MIDDLE_BLUE),
                                             );
                                             ui.add(
@@ -3809,7 +3842,7 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        DARK_GREY_UI_COLOR, 
+                                                        DARK_GREY_UI_COLOR,
                                                         SYNTH_MIDDLE_BLUE),
                                             );
                                         } else {
@@ -3820,7 +3853,7 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        SYNTH_BARS_PURPLE, 
+                                                        SYNTH_BARS_PURPLE,
                                                         A_KNOB_OUTSIDE_COLOR),
                                             );
                                             ui.add(
@@ -3830,7 +3863,7 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        SYNTH_BARS_PURPLE, 
+                                                        SYNTH_BARS_PURPLE,
                                                         A_KNOB_OUTSIDE_COLOR),
                                             );
                                             ui.add(
@@ -3840,7 +3873,7 @@ impl Plugin for Actuate {
                                                     .set_left_sided_label(true)
                                                     .set_label_width(HCURVE_WIDTH)
                                                     .override_colors(
-                                                        SYNTH_BARS_PURPLE, 
+                                                        SYNTH_BARS_PURPLE,
                                                         A_KNOB_OUTSIDE_COLOR),
                                             );
                                         }
@@ -5234,7 +5267,15 @@ impl Actuate {
                             voice_id: _,
                             channel: _,
                             note: _,
-                        } => (velocity * self.params.mod_amount_knob_1.value()).clamp(0.0, 1.0),
+                        } => {
+                            // Store velocity on new note happening
+                            let vel = (velocity * self.params.mod_amount_knob_1.value().abs())
+                                .clamp(0.0, 1.0);
+                            if velocity != -1.0 {
+                                self.current_note_on_velocity.store(vel, Ordering::Relaxed);
+                            }
+                            vel
+                        }
                         _ => -2.0,
                     }
                 }
@@ -5258,7 +5299,13 @@ impl Actuate {
                             voice_id: _,
                             channel: _,
                             note: _,
-                        } => (velocity * self.params.mod_amount_knob_2.value()).clamp(0.0, 1.0),
+                        } => {
+                            if velocity != -1.0 {
+                                self.current_note_on_velocity
+                                    .store(velocity, Ordering::Relaxed);
+                            }
+                            (velocity * self.params.mod_amount_knob_2.value().abs()).clamp(0.0, 1.0)
+                        }
                         _ => -2.0,
                     }
                 }
@@ -5282,7 +5329,13 @@ impl Actuate {
                             voice_id: _,
                             channel: _,
                             note: _,
-                        } => (velocity * self.params.mod_amount_knob_3.value()).clamp(0.0, 1.0),
+                        } => {
+                            if velocity != -1.0 {
+                                self.current_note_on_velocity
+                                    .store(velocity, Ordering::Relaxed);
+                            }
+                            (velocity * self.params.mod_amount_knob_3.value().abs()).clamp(0.0, 1.0)
+                        }
                         _ => -2.0,
                     }
                 }
@@ -5306,16 +5359,34 @@ impl Actuate {
                             voice_id: _,
                             channel: _,
                             note: _,
-                        } => (velocity * self.params.mod_amount_knob_4.value()).clamp(0.0, 1.0),
+                        } => {
+                            if velocity != -1.0 {
+                                self.current_note_on_velocity
+                                    .store(velocity, Ordering::Relaxed);
+                            }
+                            (velocity * self.params.mod_amount_knob_4.value().abs()).clamp(0.0, 1.0)
+                        }
                         _ => -2.0,
                     }
                 }
             };
 
-            let mut temp_mod_cutoff_1: f32 = 0.0;
-            let mut temp_mod_cutoff_2: f32 = 0.0;
-            let mut temp_mod_resonance_1: f32 = 0.0;
-            let mut temp_mod_resonance_2: f32 = 0.0;
+            let mut temp_mod_cutoff_1_source_1: f32 = 0.0;
+            let mut temp_mod_cutoff_1_source_2: f32 = 0.0;
+            let mut temp_mod_cutoff_1_source_3: f32 = 0.0;
+            let mut temp_mod_cutoff_1_source_4: f32 = 0.0;
+            let mut temp_mod_cutoff_2_source_1: f32 = 0.0;
+            let mut temp_mod_cutoff_2_source_2: f32 = 0.0;
+            let mut temp_mod_cutoff_2_source_3: f32 = 0.0;
+            let mut temp_mod_cutoff_2_source_4: f32 = 0.0;
+            let mut temp_mod_resonance_1_source_1: f32 = 0.0;
+            let mut temp_mod_resonance_1_source_2: f32 = 0.0;
+            let mut temp_mod_resonance_1_source_3: f32 = 0.0;
+            let mut temp_mod_resonance_1_source_4: f32 = 0.0;
+            let mut temp_mod_resonance_2_source_1: f32 = 0.0;
+            let mut temp_mod_resonance_2_source_2: f32 = 0.0;
+            let mut temp_mod_resonance_2_source_3: f32 = 0.0;
+            let mut temp_mod_resonance_2_source_4: f32 = 0.0;
             let mut temp_mod_detune_1: f32 = 0.0;
             let mut temp_mod_detune_2: f32 = 0.0;
             let mut temp_mod_detune_3: f32 = 0.0;
@@ -5325,35 +5396,254 @@ impl Actuate {
             // These are used for velocity to detune linkages
             let mut temp_mod_vel_sum: f32 = 0.0;
             let mut temp_mod_uni_vel_sum: f32 = 0.0;
-            let mut temp_mod_gain_1: bool = false;
-            let mut temp_mod_gain_2: bool = false;
-            let mut temp_mod_gain_3: bool = false;
+            let mut temp_mod_gain_1: f32 = -2.0;
+            let mut temp_mod_gain_2: f32 = -2.0;
+            let mut temp_mod_gain_3: f32 = -2.0;
             let mut temp_mod_lfo_gain_1: f32 = 1.0;
             let mut temp_mod_lfo_gain_2: f32 = 1.0;
             let mut temp_mod_lfo_gain_3: f32 = 1.0;
             // Modulation structs to pass things
-            let mut modulations_1: ModulationStruct;
-            let mut modulations_2: ModulationStruct;
-            let mut modulations_3: ModulationStruct;
-            let mut modulations_4: ModulationStruct;
+            let modulations_1: ModulationStruct;
+            let modulations_2: ModulationStruct;
+            let modulations_3: ModulationStruct;
+            let modulations_4: ModulationStruct;
 
             // In this modulation section the velocity stuff is all weird since we need to pass velocity mod
             // But this happens before we process the note values hence storing/passing it
 
+            // This is outside for held notes on specific source -> destinations
+            // This would happen when mod_value_X == 2.0 as a result - hence using the Atomic for velocity
+
+            if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                match self.params.mod_destination_1.value() {
+                    ModulationDestination::Cutoff_1 => {
+                        temp_mod_cutoff_1_source_1 +=
+                            8000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        temp_mod_cutoff_2_source_1 +=
+                            8000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                    }
+                    ModulationDestination::All_Gain => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            let vel = self.current_note_on_velocity.load(Ordering::Relaxed);
+                            temp_mod_gain_1 = vel;
+                            temp_mod_gain_2 = vel;
+                            temp_mod_gain_3 = vel;
+                        }
+                    }
+                    ModulationDestination::Osc1_Gain => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Osc2_Gain => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_gain_2 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Osc3_Gain => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_gain_3 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_1_source_1 +=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_2_source_1 +=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                match self.params.mod_destination_2.value() {
+                    ModulationDestination::Cutoff_1 => {
+                        temp_mod_cutoff_1_source_2 +=
+                            8000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        temp_mod_cutoff_2_source_2 +=
+                            8000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                    }
+                    ModulationDestination::All_Gain => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            let vel = self.current_note_on_velocity.load(Ordering::Relaxed);
+                            temp_mod_gain_1 = vel;
+                            temp_mod_gain_2 = vel;
+                            temp_mod_gain_3 = vel;
+                        }
+                    }
+                    ModulationDestination::Osc1_Gain => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Osc2_Gain => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_gain_2 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Osc3_Gain => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_gain_3 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_1_source_2 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_2_source_2 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                match self.params.mod_destination_3.value() {
+                    ModulationDestination::Cutoff_1 => {
+                        temp_mod_cutoff_1_source_3 +=
+                            8000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        temp_mod_cutoff_2_source_3 +=
+                            8000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                    }
+                    ModulationDestination::All_Gain => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            let vel = self.current_note_on_velocity.load(Ordering::Relaxed);
+                            temp_mod_gain_1 = vel;
+                            temp_mod_gain_2 = vel;
+                            temp_mod_gain_3 = vel;
+                        }
+                    }
+                    ModulationDestination::Osc1_Gain => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Osc2_Gain => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_gain_2 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Osc3_Gain => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_gain_3 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_1_source_3 +=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_2_source_3 +=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                match self.params.mod_destination_4.value() {
+                    ModulationDestination::Cutoff_1 => {
+                        temp_mod_cutoff_1_source_4 +=
+                            8000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                    }
+                    ModulationDestination::Cutoff_2 => {
+                        temp_mod_cutoff_2_source_4 +=
+                            8000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                    }
+                    ModulationDestination::All_Gain => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            let vel = self.current_note_on_velocity.load(Ordering::Relaxed);
+                            temp_mod_gain_1 = vel;
+                            temp_mod_gain_2 = vel;
+                            temp_mod_gain_3 = vel;
+                        }
+                    }
+                    ModulationDestination::Osc1_Gain => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_gain_1 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Osc2_Gain => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_gain_2 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Osc3_Gain => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_gain_3 = self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Resonance_1 => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_1_source_4 +=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    ModulationDestination::Resonance_2 => {
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_2_source_4 +=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            ///////////////////////////////////////////////////////////////
+            // If mod_value is not -2.0 we are in Note ON event or an LFO
             if mod_value_1 != -2.0 {
                 match self.params.mod_destination_1.value() {
                     ModulationDestination::None | ModulationDestination::UnsetModulation => {}
                     ModulationDestination::Cutoff_1 => {
-                        temp_mod_cutoff_1 += 5000.0 * mod_value_1;
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            // I don't think this gets reached in Velocity case because of mod_value_X
+                            temp_mod_cutoff_1_source_1 +=
+                                20000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_cutoff_1_source_1 += 20000.0 * mod_value_1;
+                        }
                     }
                     ModulationDestination::Cutoff_2 => {
-                        temp_mod_cutoff_2 += 5000.0 * mod_value_1;
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_cutoff_2_source_1 +=
+                                20000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_cutoff_2_source_1 += 20000.0 * mod_value_1;
+                        }
                     }
                     ModulationDestination::Resonance_1 => {
-                        temp_mod_resonance_1 -= mod_value_1;
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_1_source_1 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_resonance_1_source_1 -= mod_value_1;
+                        }
                     }
                     ModulationDestination::Resonance_2 => {
-                        temp_mod_resonance_2 -= mod_value_1;
+                        if self.params.mod_source_1.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_2_source_1 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_resonance_2_source_1 -= mod_value_1;
+                        }
                     }
                     ModulationDestination::All_Detune => {
                         if self.params.mod_source_1.value() == ModulationSource::Velocity {
@@ -5409,9 +5699,10 @@ impl Actuate {
                     }
                     ModulationDestination::All_Gain => {
                         if self.params.mod_source_1.value() == ModulationSource::Velocity {
-                            temp_mod_gain_1 = true;
-                            temp_mod_gain_2 = true;
-                            temp_mod_gain_3 = true;
+                            let vel = self.current_note_on_velocity.load(Ordering::Relaxed);
+                            temp_mod_gain_1 = vel;
+                            temp_mod_gain_2 = vel;
+                            temp_mod_gain_3 = vel;
                         } else {
                             temp_mod_lfo_gain_1 = mod_value_1;
                             temp_mod_lfo_gain_2 = mod_value_1;
@@ -5420,21 +5711,21 @@ impl Actuate {
                     }
                     ModulationDestination::Osc1_Gain => {
                         if self.params.mod_source_1.value() == ModulationSource::Velocity {
-                            temp_mod_gain_1 = true;
+                            temp_mod_gain_1 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_1 = mod_value_1;
                         }
                     }
                     ModulationDestination::Osc2_Gain => {
                         if self.params.mod_source_1.value() == ModulationSource::Velocity {
-                            temp_mod_gain_2 = true;
+                            temp_mod_gain_2 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_2 = mod_value_1;
                         }
                     }
                     ModulationDestination::Osc3_Gain => {
                         if self.params.mod_source_1.value() == ModulationSource::Velocity {
-                            temp_mod_gain_3 = true;
+                            temp_mod_gain_3 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_3 = mod_value_1;
                         }
@@ -5445,16 +5736,36 @@ impl Actuate {
                 match self.params.mod_destination_2.value() {
                     ModulationDestination::None | ModulationDestination::UnsetModulation => {}
                     ModulationDestination::Cutoff_1 => {
-                        temp_mod_cutoff_1 += 5000.0 * mod_value_2;
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_cutoff_1_source_2 +=
+                                20000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_cutoff_1_source_2 += 20000.0 * mod_value_2;
+                        }
                     }
                     ModulationDestination::Cutoff_2 => {
-                        temp_mod_cutoff_2 += 5000.0 * mod_value_2;
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_cutoff_2_source_2 +=
+                                20000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_cutoff_2_source_2 += 20000.0 * mod_value_2;
+                        }
                     }
                     ModulationDestination::Resonance_1 => {
-                        temp_mod_resonance_1 -= mod_value_2;
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_1_source_2 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_resonance_1_source_2 -= mod_value_2;
+                        }
                     }
                     ModulationDestination::Resonance_2 => {
-                        temp_mod_resonance_2 -= mod_value_2;
+                        if self.params.mod_source_2.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_2_source_2 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_resonance_2_source_2 -= mod_value_2;
+                        }
                     }
                     ModulationDestination::All_Detune => {
                         if self.params.mod_source_2.value() == ModulationSource::Velocity {
@@ -5510,9 +5821,10 @@ impl Actuate {
                     }
                     ModulationDestination::All_Gain => {
                         if self.params.mod_source_2.value() == ModulationSource::Velocity {
-                            temp_mod_gain_1 = true;
-                            temp_mod_gain_2 = true;
-                            temp_mod_gain_3 = true;
+                            let vel = self.current_note_on_velocity.load(Ordering::Relaxed);
+                            temp_mod_gain_1 = vel;
+                            temp_mod_gain_2 = vel;
+                            temp_mod_gain_3 = vel;
                         } else {
                             temp_mod_lfo_gain_1 = mod_value_2;
                             temp_mod_lfo_gain_2 = mod_value_2;
@@ -5521,21 +5833,21 @@ impl Actuate {
                     }
                     ModulationDestination::Osc1_Gain => {
                         if self.params.mod_source_2.value() == ModulationSource::Velocity {
-                            temp_mod_gain_1 = true;
+                            temp_mod_gain_1 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_1 = mod_value_2;
                         }
                     }
                     ModulationDestination::Osc2_Gain => {
                         if self.params.mod_source_2.value() == ModulationSource::Velocity {
-                            temp_mod_gain_2 = true;
+                            temp_mod_gain_2 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_2 = mod_value_2;
                         }
                     }
                     ModulationDestination::Osc3_Gain => {
                         if self.params.mod_source_2.value() == ModulationSource::Velocity {
-                            temp_mod_gain_3 = true;
+                            temp_mod_gain_3 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_3 = mod_value_2;
                         }
@@ -5546,16 +5858,36 @@ impl Actuate {
                 match self.params.mod_destination_3.value() {
                     ModulationDestination::None | ModulationDestination::UnsetModulation => {}
                     ModulationDestination::Cutoff_1 => {
-                        temp_mod_cutoff_1 += 5000.0 * mod_value_3;
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_cutoff_1_source_3 +=
+                                20000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_cutoff_1_source_3 += 20000.0 * mod_value_3;
+                        }
                     }
                     ModulationDestination::Cutoff_2 => {
-                        temp_mod_cutoff_2 += 5000.0 * mod_value_3;
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_cutoff_2_source_3 +=
+                                20000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_cutoff_2_source_3 += 20000.0 * mod_value_3;
+                        }
                     }
                     ModulationDestination::Resonance_1 => {
-                        temp_mod_resonance_1 -= mod_value_3;
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_1_source_3 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_resonance_1_source_3 -= mod_value_3;
+                        }
                     }
                     ModulationDestination::Resonance_2 => {
-                        temp_mod_resonance_2 -= mod_value_3;
+                        if self.params.mod_source_3.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_2_source_3 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_resonance_2_source_3 -= mod_value_3;
+                        }
                     }
                     ModulationDestination::All_Detune => {
                         if self.params.mod_source_3.value() == ModulationSource::Velocity {
@@ -5611,9 +5943,10 @@ impl Actuate {
                     }
                     ModulationDestination::All_Gain => {
                         if self.params.mod_source_3.value() == ModulationSource::Velocity {
-                            temp_mod_gain_1 = true;
-                            temp_mod_gain_2 = true;
-                            temp_mod_gain_3 = true;
+                            let vel = self.current_note_on_velocity.load(Ordering::Relaxed);
+                            temp_mod_gain_1 = vel;
+                            temp_mod_gain_2 = vel;
+                            temp_mod_gain_3 = vel;
                         } else {
                             temp_mod_lfo_gain_1 = mod_value_3;
                             temp_mod_lfo_gain_2 = mod_value_3;
@@ -5622,21 +5955,21 @@ impl Actuate {
                     }
                     ModulationDestination::Osc1_Gain => {
                         if self.params.mod_source_3.value() == ModulationSource::Velocity {
-                            temp_mod_gain_1 = true;
+                            temp_mod_gain_1 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_1 = mod_value_3;
                         }
                     }
                     ModulationDestination::Osc2_Gain => {
                         if self.params.mod_source_3.value() == ModulationSource::Velocity {
-                            temp_mod_gain_2 = true;
+                            temp_mod_gain_2 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_2 = mod_value_3;
                         }
                     }
                     ModulationDestination::Osc3_Gain => {
                         if self.params.mod_source_3.value() == ModulationSource::Velocity {
-                            temp_mod_gain_3 = true;
+                            temp_mod_gain_3 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_3 = mod_value_3;
                         }
@@ -5647,16 +5980,36 @@ impl Actuate {
                 match self.params.mod_destination_4.value() {
                     ModulationDestination::None | ModulationDestination::UnsetModulation => {}
                     ModulationDestination::Cutoff_1 => {
-                        temp_mod_cutoff_1 += 5000.0 * mod_value_4;
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_cutoff_1_source_4 +=
+                                20000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_cutoff_1_source_4 += 20000.0 * mod_value_4;
+                        }
                     }
                     ModulationDestination::Cutoff_2 => {
-                        temp_mod_cutoff_2 += 5000.0 * mod_value_4;
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_cutoff_2_source_4 +=
+                                20000.0 * self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_cutoff_2_source_4 += 20000.0 * mod_value_4;
+                        }
                     }
                     ModulationDestination::Resonance_1 => {
-                        temp_mod_resonance_1 -= mod_value_4;
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_1_source_4 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_resonance_1_source_4 -= mod_value_4;
+                        }
                     }
                     ModulationDestination::Resonance_2 => {
-                        temp_mod_resonance_2 -= mod_value_4;
+                        if self.params.mod_source_4.value() == ModulationSource::Velocity {
+                            temp_mod_resonance_2_source_4 -=
+                                self.current_note_on_velocity.load(Ordering::Relaxed);
+                        } else {
+                            temp_mod_resonance_2_source_4 -= mod_value_4;
+                        }
                     }
                     ModulationDestination::All_Detune => {
                         if self.params.mod_source_4.value() == ModulationSource::Velocity {
@@ -5712,9 +6065,10 @@ impl Actuate {
                     }
                     ModulationDestination::All_Gain => {
                         if self.params.mod_source_4.value() == ModulationSource::Velocity {
-                            temp_mod_gain_1 = true;
-                            temp_mod_gain_2 = true;
-                            temp_mod_gain_3 = true;
+                            let vel = self.current_note_on_velocity.load(Ordering::Relaxed);
+                            temp_mod_gain_1 = vel;
+                            temp_mod_gain_2 = vel;
+                            temp_mod_gain_3 = vel;
                         } else {
                             temp_mod_lfo_gain_1 = mod_value_4;
                             temp_mod_lfo_gain_2 = mod_value_4;
@@ -5723,21 +6077,21 @@ impl Actuate {
                     }
                     ModulationDestination::Osc1_Gain => {
                         if self.params.mod_source_4.value() == ModulationSource::Velocity {
-                            temp_mod_gain_1 = true;
+                            temp_mod_gain_1 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_1 = mod_value_4;
                         }
                     }
                     ModulationDestination::Osc2_Gain => {
                         if self.params.mod_source_4.value() == ModulationSource::Velocity {
-                            temp_mod_gain_2 = true;
+                            temp_mod_gain_2 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_2 = mod_value_4;
                         }
                     }
                     ModulationDestination::Osc3_Gain => {
                         if self.params.mod_source_4.value() == ModulationSource::Velocity {
-                            temp_mod_gain_3 = true;
+                            temp_mod_gain_3 = self.current_note_on_velocity.load(Ordering::Relaxed);
                         } else {
                             temp_mod_lfo_gain_3 = mod_value_4;
                         }
@@ -5747,10 +6101,10 @@ impl Actuate {
 
             // I think this makes sense to split into structs so each modulation path has its own easily debuggable chain
             modulations_1 = ModulationStruct {
-                temp_mod_cutoff_1: temp_mod_cutoff_1,
-                temp_mod_cutoff_2: temp_mod_cutoff_2,
-                temp_mod_resonance_1: temp_mod_resonance_1,
-                temp_mod_resonance_2: temp_mod_resonance_2,
+                temp_mod_cutoff_1: temp_mod_cutoff_1_source_1,
+                temp_mod_cutoff_2: temp_mod_cutoff_2_source_1,
+                temp_mod_resonance_1: temp_mod_resonance_1_source_1,
+                temp_mod_resonance_2: temp_mod_resonance_2_source_1,
                 temp_mod_detune_1: temp_mod_detune_1,
                 temp_mod_detune_2: temp_mod_detune_2,
                 temp_mod_detune_3: temp_mod_detune_3,
@@ -5760,10 +6114,10 @@ impl Actuate {
                 temp_mod_vel_sum: temp_mod_vel_sum,
             };
             modulations_2 = ModulationStruct {
-                temp_mod_cutoff_1: temp_mod_cutoff_1,
-                temp_mod_cutoff_2: temp_mod_cutoff_2,
-                temp_mod_resonance_1: temp_mod_resonance_1,
-                temp_mod_resonance_2: temp_mod_resonance_2,
+                temp_mod_cutoff_1: temp_mod_cutoff_1_source_2,
+                temp_mod_cutoff_2: temp_mod_cutoff_2_source_2,
+                temp_mod_resonance_1: temp_mod_resonance_1_source_2,
+                temp_mod_resonance_2: temp_mod_resonance_2_source_2,
                 temp_mod_detune_1: temp_mod_detune_1,
                 temp_mod_detune_2: temp_mod_detune_2,
                 temp_mod_detune_3: temp_mod_detune_3,
@@ -5773,10 +6127,10 @@ impl Actuate {
                 temp_mod_vel_sum: temp_mod_vel_sum,
             };
             modulations_3 = ModulationStruct {
-                temp_mod_cutoff_1: temp_mod_cutoff_1,
-                temp_mod_cutoff_2: temp_mod_cutoff_2,
-                temp_mod_resonance_1: temp_mod_resonance_1,
-                temp_mod_resonance_2: temp_mod_resonance_2,
+                temp_mod_cutoff_1: temp_mod_cutoff_1_source_3,
+                temp_mod_cutoff_2: temp_mod_cutoff_2_source_3,
+                temp_mod_resonance_1: temp_mod_resonance_1_source_3,
+                temp_mod_resonance_2: temp_mod_resonance_2_source_3,
                 temp_mod_detune_1: temp_mod_detune_1,
                 temp_mod_detune_2: temp_mod_detune_2,
                 temp_mod_detune_3: temp_mod_detune_3,
@@ -5786,10 +6140,10 @@ impl Actuate {
                 temp_mod_vel_sum: temp_mod_vel_sum,
             };
             modulations_4 = ModulationStruct {
-                temp_mod_cutoff_1: temp_mod_cutoff_1,
-                temp_mod_cutoff_2: temp_mod_cutoff_2,
-                temp_mod_resonance_1: temp_mod_resonance_1,
-                temp_mod_resonance_2: temp_mod_resonance_2,
+                temp_mod_cutoff_1: temp_mod_cutoff_1_source_4,
+                temp_mod_cutoff_2: temp_mod_cutoff_2_source_4,
+                temp_mod_resonance_1: temp_mod_resonance_1_source_4,
+                temp_mod_resonance_2: temp_mod_resonance_2_source_4,
                 temp_mod_detune_1: temp_mod_detune_1,
                 temp_mod_detune_2: temp_mod_detune_2,
                 temp_mod_detune_3: temp_mod_detune_3,
@@ -5802,7 +6156,6 @@ impl Actuate {
             // Audio Module Processing of Audio kicks off here
             /////////////////////////////////////////////////////////////////////////////////////////////////
 
-            let mut current_note_on_velocity: f32 = 0.0;
             // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::Relaxed)
                 && self.params._audio_module_1_type.value() != AudioModuleType::Off
@@ -5813,7 +6166,6 @@ impl Actuate {
                     wave1_r,
                     reset_filter_controller1,
                     note_off_filter_controller1,
-                    current_note_on_velocity,
                 ) = self.audio_module_1.clone().lock().unwrap().process(
                     sample_id,
                     midi_event.clone(),
@@ -5843,7 +6195,6 @@ impl Actuate {
                     wave2_r,
                     reset_filter_controller2,
                     note_off_filter_controller2,
-                    current_note_on_velocity,
                 ) = self.audio_module_2.clone().lock().unwrap().process(
                     sample_id,
                     midi_event.clone(),
@@ -5872,7 +6223,6 @@ impl Actuate {
                     wave3_r,
                     reset_filter_controller3,
                     note_off_filter_controller3,
-                    current_note_on_velocity,
                 ) = self.audio_module_3.clone().lock().unwrap().process(
                     sample_id,
                     midi_event.clone(),
@@ -5893,12 +6243,6 @@ impl Actuate {
                 wave3_l *= self.params.audio_module_3_level.value() * 0.33;
                 wave3_r *= self.params.audio_module_3_level.value() * 0.33;
             }
-
-            // Reassign new current velocity if note on just happened
-            modulations_1.temp_mod_vel_sum = current_note_on_velocity * mod_value_1;
-            modulations_2.temp_mod_vel_sum = current_note_on_velocity * mod_value_2;
-            modulations_3.temp_mod_vel_sum = current_note_on_velocity * mod_value_3;
-            modulations_4.temp_mod_vel_sum = current_note_on_velocity * mod_value_4;
 
             /////////////////////////////////////////////////////////////////////////////////////////////////
             // Audio Module Processing over
@@ -6002,88 +6346,6 @@ impl Actuate {
             let mut filter1_processed_r: f32 = 0.0;
             let mut filter2_processed_l: f32 = 0.0;
             let mut filter2_processed_r: f32 = 0.0;
-            let mut vel_cutoff_1: f32 = 0.0;
-            let mut vel_cutoff_2: f32 = 0.0;
-            let mut vel_resonance_1: f32 = 0.0;
-            let mut vel_resonance_2: f32 = 0.0;
-
-            // Calculate our mod source/destination values when VELOCITY is involved
-            if self.params.mod_source_1.value() == ModulationSource::Velocity {
-                match self.params.mod_destination_1.value() {
-                    ModulationDestination::Cutoff_1 => {
-                        vel_cutoff_1 =
-                            ((modulations_1.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
-                    }
-                    ModulationDestination::Cutoff_2 => {
-                        vel_cutoff_2 =
-                            ((modulations_1.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
-                    }
-                    ModulationDestination::Resonance_1 => {
-                        vel_resonance_1 = (1.0 - (modulations_1.temp_mod_vel_sum)).clamp(0.0, 1.0);
-                    }
-                    ModulationDestination::Resonance_2 => {
-                        vel_resonance_2 = (1.0 - (modulations_1.temp_mod_vel_sum)).clamp(0.0, 1.0);
-                    }
-                    _ => {}
-                }
-            }
-            if self.params.mod_source_2.value() == ModulationSource::Velocity {
-                match self.params.mod_destination_2.value() {
-                    ModulationDestination::Cutoff_1 => {
-                        vel_cutoff_1 =
-                            ((modulations_2.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
-                    }
-                    ModulationDestination::Cutoff_2 => {
-                        vel_cutoff_2 =
-                            ((modulations_2.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
-                    }
-                    ModulationDestination::Resonance_1 => {
-                        vel_resonance_1 = (1.0 - (modulations_2.temp_mod_vel_sum)).clamp(0.0, 1.0);
-                    }
-                    ModulationDestination::Resonance_2 => {
-                        vel_resonance_2 = (1.0 - (modulations_2.temp_mod_vel_sum)).clamp(0.0, 1.0);
-                    }
-                    _ => {}
-                }
-            }
-            if self.params.mod_source_3.value() == ModulationSource::Velocity {
-                match self.params.mod_destination_3.value() {
-                    ModulationDestination::Cutoff_1 => {
-                        vel_cutoff_1 =
-                            ((modulations_3.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
-                    }
-                    ModulationDestination::Cutoff_2 => {
-                        vel_cutoff_2 =
-                            ((modulations_3.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
-                    }
-                    ModulationDestination::Resonance_1 => {
-                        vel_resonance_1 = (1.0 - (modulations_3.temp_mod_vel_sum)).clamp(0.0, 1.0);
-                    }
-                    ModulationDestination::Resonance_2 => {
-                        vel_resonance_2 = (1.0 - (modulations_3.temp_mod_vel_sum)).clamp(0.0, 1.0);
-                    }
-                    _ => {}
-                }
-            }
-            if self.params.mod_source_4.value() == ModulationSource::Velocity {
-                match self.params.mod_destination_4.value() {
-                    ModulationDestination::Cutoff_1 => {
-                        vel_cutoff_1 =
-                            ((modulations_4.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
-                    }
-                    ModulationDestination::Cutoff_2 => {
-                        vel_cutoff_2 =
-                            ((modulations_4.temp_mod_vel_sum + 1.0) / 2.0) * 12000.0 - 6000.0;
-                    }
-                    ModulationDestination::Resonance_1 => {
-                        vel_resonance_1 = (1.0 - (modulations_4.temp_mod_vel_sum)).clamp(0.0, 1.0);
-                    }
-                    ModulationDestination::Resonance_2 => {
-                        vel_resonance_2 = (1.0 - (modulations_4.temp_mod_vel_sum)).clamp(0.0, 1.0);
-                    }
-                    _ => {}
-                }
-            }
 
             // I ended up doing a passthrough/sum of modulations so they can stack if that's what user desires
             // without breaking things when they are unset
@@ -6103,13 +6365,13 @@ impl Actuate {
                         modulations_1.temp_mod_cutoff_1
                             + modulations_2.temp_mod_cutoff_1
                             + modulations_3.temp_mod_cutoff_1
-                            + modulations_4.temp_mod_cutoff_1
-                            + vel_cutoff_1,
+                            + modulations_4.temp_mod_cutoff_1,
+                        //+ vel_cutoff_1,
                         modulations_1.temp_mod_resonance_1
                             + modulations_2.temp_mod_resonance_1
                             + modulations_3.temp_mod_resonance_1
-                            + modulations_4.temp_mod_resonance_1
-                            + vel_resonance_1,
+                            + modulations_4.temp_mod_resonance_1,
+                        //+ vel_resonance_1,
                     );
                     self.filter_process_2(
                         note_off_filter_controller1,
@@ -6125,13 +6387,13 @@ impl Actuate {
                         modulations_1.temp_mod_cutoff_2
                             + modulations_2.temp_mod_cutoff_2
                             + modulations_3.temp_mod_cutoff_2
-                            + modulations_4.temp_mod_cutoff_2
-                            + vel_cutoff_2,
+                            + modulations_4.temp_mod_cutoff_2,
+                        //+ vel_cutoff_2,
                         modulations_1.temp_mod_resonance_2
                             + modulations_2.temp_mod_resonance_2
                             + modulations_3.temp_mod_resonance_2
-                            + modulations_4.temp_mod_resonance_2
-                            + vel_resonance_2,
+                            + modulations_4.temp_mod_resonance_2,
+                        //+ vel_resonance_2,
                     );
                     left_output += filter1_processed_l + filter2_processed_l;
                     right_output += filter1_processed_r + filter2_processed_r;
@@ -6151,13 +6413,13 @@ impl Actuate {
                         modulations_1.temp_mod_cutoff_1
                             + modulations_2.temp_mod_cutoff_1
                             + modulations_3.temp_mod_cutoff_1
-                            + modulations_4.temp_mod_cutoff_1
-                            + vel_cutoff_1,
+                            + modulations_4.temp_mod_cutoff_1,
+                        //+ vel_cutoff_1,
                         modulations_1.temp_mod_resonance_1
                             + modulations_2.temp_mod_resonance_1
                             + modulations_3.temp_mod_resonance_1
-                            + modulations_4.temp_mod_resonance_1
-                            + vel_resonance_1,
+                            + modulations_4.temp_mod_resonance_1,
+                        //+ vel_resonance_1,
                     );
                     self.filter_process_2(
                         note_off_filter_controller1,
@@ -6173,13 +6435,13 @@ impl Actuate {
                         modulations_1.temp_mod_cutoff_2
                             + modulations_2.temp_mod_cutoff_2
                             + modulations_3.temp_mod_cutoff_2
-                            + modulations_4.temp_mod_cutoff_2
-                            + vel_cutoff_2,
+                            + modulations_4.temp_mod_cutoff_2,
+                        //+ vel_cutoff_2,
                         modulations_1.temp_mod_resonance_2
                             + modulations_2.temp_mod_resonance_2
                             + modulations_3.temp_mod_resonance_2
-                            + modulations_4.temp_mod_resonance_2
-                            + vel_resonance_2,
+                            + modulations_4.temp_mod_resonance_2,
+                        //+ vel_resonance_2,
                     );
                     left_output += filter2_processed_l;
                     right_output += filter2_processed_r;
@@ -6199,13 +6461,13 @@ impl Actuate {
                         modulations_1.temp_mod_cutoff_2
                             + modulations_2.temp_mod_cutoff_2
                             + modulations_3.temp_mod_cutoff_2
-                            + modulations_4.temp_mod_cutoff_2
-                            + vel_cutoff_2,
+                            + modulations_4.temp_mod_cutoff_2,
+                        //+ vel_cutoff_2,
                         modulations_1.temp_mod_resonance_2
                             + modulations_2.temp_mod_resonance_2
                             + modulations_3.temp_mod_resonance_2
-                            + modulations_4.temp_mod_resonance_2
-                            + vel_resonance_2,
+                            + modulations_4.temp_mod_resonance_2,
+                        //+ vel_resonance_2,
                     );
                     self.filter_process_1(
                         note_off_filter_controller1,
@@ -6221,13 +6483,13 @@ impl Actuate {
                         modulations_1.temp_mod_cutoff_1
                             + modulations_2.temp_mod_cutoff_1
                             + modulations_3.temp_mod_cutoff_1
-                            + modulations_4.temp_mod_cutoff_1
-                            + vel_cutoff_1,
+                            + modulations_4.temp_mod_cutoff_1,
+                        //+ vel_cutoff_1,
                         modulations_1.temp_mod_resonance_1
                             + modulations_2.temp_mod_resonance_1
                             + modulations_3.temp_mod_resonance_1
-                            + modulations_4.temp_mod_resonance_1
-                            + vel_resonance_1,
+                            + modulations_4.temp_mod_resonance_1,
+                        //+ vel_resonance_1,
                     );
                     left_output += filter1_processed_l;
                     right_output += filter1_processed_r;
@@ -6289,7 +6551,8 @@ impl Actuate {
                 // ABass Algorithm
                 if self.params.use_abass.value() {
                     left_output = a_bass_saturation(left_output, self.params.abass_amount.value());
-                    right_output = a_bass_saturation(right_output, self.params.abass_amount.value());
+                    right_output =
+                        a_bass_saturation(right_output, self.params.abass_amount.value());
                 }
                 // Distortion
                 if self.params.use_saturation.value() {
@@ -6922,9 +7185,18 @@ impl Actuate {
             &params.filter_res_type,
             loaded_preset.filter_res_type.clone(),
         );
-        setter.set_parameter(&params.filter_alg_type, loaded_preset.filter_alg_type.clone());
-        setter.set_parameter(&params.filter_alg_type_2, loaded_preset.filter_alg_type_2.clone());
-        setter.set_parameter(&params.tilt_filter_type, loaded_preset.tilt_filter_type.clone());
+        setter.set_parameter(
+            &params.filter_alg_type,
+            loaded_preset.filter_alg_type.clone(),
+        );
+        setter.set_parameter(
+            &params.filter_alg_type_2,
+            loaded_preset.filter_alg_type_2.clone(),
+        );
+        setter.set_parameter(
+            &params.tilt_filter_type,
+            loaded_preset.tilt_filter_type.clone(),
+        );
         setter.set_parameter(&params.filter_lp_amount, loaded_preset.filter_lp_amount);
         setter.set_parameter(&params.filter_hp_amount, loaded_preset.filter_hp_amount);
         setter.set_parameter(&params.filter_bp_amount, loaded_preset.filter_bp_amount);
@@ -6950,7 +7222,10 @@ impl Actuate {
             &params.filter_res_type_2,
             loaded_preset.filter_res_type_2.clone(),
         );
-        setter.set_parameter(&params.tilt_filter_type_2, loaded_preset.tilt_filter_type_2.clone());
+        setter.set_parameter(
+            &params.tilt_filter_type_2,
+            loaded_preset.tilt_filter_type_2.clone(),
+        );
         setter.set_parameter(&params.filter_lp_amount_2, loaded_preset.filter_lp_amount_2);
         setter.set_parameter(&params.filter_hp_amount_2, loaded_preset.filter_hp_amount_2);
         setter.set_parameter(&params.filter_bp_amount_2, loaded_preset.filter_bp_amount_2);
@@ -6973,10 +7248,19 @@ impl Actuate {
         setter.set_parameter(&params.filter_env_decay, loaded_preset.filter_env_decay);
         setter.set_parameter(&params.filter_env_sustain, loaded_preset.filter_env_sustain);
         setter.set_parameter(&params.filter_env_release, loaded_preset.filter_env_release);
-        setter.set_parameter(&params.filter_env_attack_2, loaded_preset.filter_env_attack_2);
+        setter.set_parameter(
+            &params.filter_env_attack_2,
+            loaded_preset.filter_env_attack_2,
+        );
         setter.set_parameter(&params.filter_env_decay_2, loaded_preset.filter_env_decay_2);
-        setter.set_parameter(&params.filter_env_sustain_2, loaded_preset.filter_env_sustain_2);
-        setter.set_parameter(&params.filter_env_release_2, loaded_preset.filter_env_release_2);
+        setter.set_parameter(
+            &params.filter_env_sustain_2,
+            loaded_preset.filter_env_sustain_2,
+        );
+        setter.set_parameter(
+            &params.filter_env_release_2,
+            loaded_preset.filter_env_release_2,
+        );
 
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
@@ -7354,13 +7638,12 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_1.reset(
-                    self.params.filter_cutoff.value() * (self.params.filter_env_sustain.value() / 999.9),
+                    self.params.filter_cutoff.value()
+                        * (self.params.filter_env_sustain.value() / 999.9),
                 );
                 // Move release to the cutoff to end
-                self.filter_rel_smoother_1.set_target(
-                    self.sample_rate,
-                    self.params.filter_cutoff.value(),
-                );
+                self.filter_rel_smoother_1
+                    .set_target(self.sample_rate, self.params.filter_cutoff.value());
             }
             // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
             if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
@@ -7391,9 +7674,15 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF => { self.params.filter_env_peak.value() },
-                                FilterAlgorithms::TILT => { adv_scale_value(self.params.filter_env_peak.value(), -19980.0, 19980.0, -5000.0, 5000.0) },
-                                FilterAlgorithms::VCF => { self.params.filter_env_peak.value() },
+                                FilterAlgorithms::SVF => self.params.filter_env_peak.value(),
+                                FilterAlgorithms::TILT => adv_scale_value(
+                                    self.params.filter_env_peak.value(),
+                                    -19980.0,
+                                    19980.0,
+                                    -5000.0,
+                                    5000.0,
+                                ),
+                                FilterAlgorithms::VCF => self.params.filter_env_peak.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -7424,9 +7713,15 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF => { self.params.filter_env_peak.value() },
-                                FilterAlgorithms::TILT => { adv_scale_value(self.params.filter_env_peak.value(), -19980.0, 19980.0, -5000.0, 5000.0) },
-                                FilterAlgorithms::VCF => { self.params.filter_env_peak.value() },
+                                FilterAlgorithms::SVF => self.params.filter_env_peak.value(),
+                                FilterAlgorithms::TILT => adv_scale_value(
+                                    self.params.filter_env_peak.value(),
+                                    -19980.0,
+                                    19980.0,
+                                    -5000.0,
+                                    5000.0,
+                                ),
+                                FilterAlgorithms::VCF => self.params.filter_env_peak.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -7434,7 +7729,8 @@ impl Actuate {
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_1.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff.value() * (self.params.filter_env_sustain.value() / 999.9),
+                    self.params.filter_cutoff.value()
+                        * (self.params.filter_env_sustain.value() / 999.9),
                 );
             }
             // If our decay has finished move to sustain state
@@ -7445,9 +7741,15 @@ impl Actuate {
             }
             // use proper variable now that there are four filters and multiple states
             let next_filter_step = match self.filter_state_1 {
-                OscState::Attacking => ( self.filter_atk_smoother_1.next() + filter_cutoff_mod ).clamp(20.0, 20000.0),
-                OscState::Decaying | OscState::Sustaining => ( self.filter_dec_smoother_1.next()+ filter_cutoff_mod ).clamp(20.0, 20000.0),
-                OscState::Releasing => ( self.filter_rel_smoother_1.next()+ filter_cutoff_mod ).clamp(20.0, 20000.0),
+                OscState::Attacking => {
+                    (self.filter_atk_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
+                OscState::Decaying | OscState::Sustaining => {
+                    (self.filter_dec_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
+                OscState::Releasing => {
+                    (self.filter_rel_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
                 // I don't expect this to be used
                 _ => (self.params.filter_cutoff.value() + filter_cutoff_mod).clamp(20.0, 20000.0),
             };
@@ -7456,13 +7758,13 @@ impl Actuate {
                     // Filtering before output
                     self.filter_l_1.update(
                         next_filter_step,
-                        self.params.filter_resonance.value() + filter_resonance_mod,
+                        self.params.filter_resonance.value() - filter_resonance_mod,
                         self.sample_rate,
                         self.params.filter_res_type.value(),
                     );
                     self.filter_r_1.update(
                         next_filter_step,
-                        self.params.filter_resonance.value(),
+                        self.params.filter_resonance.value() - filter_resonance_mod,
                         self.sample_rate,
                         self.params.filter_res_type.value(),
                     );
@@ -7484,31 +7786,47 @@ impl Actuate {
                         + high_r * self.params.filter_hp_amount.value())
                         * self.params.filter_wet.value()
                         + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                },
+                }
                 FilterAlgorithms::TILT => {
                     self.tilt_filter_l_1.update(
                         self.sample_rate,
                         next_filter_step,
-                        self.params.filter_resonance.value(),
-                        self.params.tilt_filter_type.value());
+                        self.params.filter_resonance.value() - filter_resonance_mod,
+                        self.params.tilt_filter_type.value(),
+                    );
                     self.tilt_filter_r_1.update(
                         self.sample_rate,
                         next_filter_step,
-                        self.params.filter_resonance.value(),
-                        self.params.tilt_filter_type.value());
+                        self.params.filter_resonance.value() - filter_resonance_mod,
+                        self.params.tilt_filter_type.value(),
+                    );
                     let tilt_out_l = self.tilt_filter_l_1.process(left_input_filter1);
                     let tilt_out_r = self.tilt_filter_r_1.process(right_input_filter1);
-                    *left_output += tilt_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += tilt_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                },
+                    *left_output += tilt_out_l * self.params.filter_wet.value()
+                        + left_input_filter1 * (1.0 - self.params.filter_wet.value());
+                    *right_output += tilt_out_r * self.params.filter_wet.value()
+                        + right_input_filter1 * (1.0 - self.params.filter_wet.value());
+                }
                 FilterAlgorithms::VCF => {
-                    self.vcf_filter_l_1.update(next_filter_step, self.params.filter_resonance.value(), self.params.vcf_filter_type.value(), self.sample_rate);
-                    self.vcf_filter_r_1.update(next_filter_step, self.params.filter_resonance.value(), self.params.vcf_filter_type.value(), self.sample_rate);
+                    self.vcf_filter_l_1.update(
+                        next_filter_step,
+                        self.params.filter_resonance.value() - filter_resonance_mod,
+                        self.params.vcf_filter_type.value(),
+                        self.sample_rate,
+                    );
+                    self.vcf_filter_r_1.update(
+                        next_filter_step,
+                        self.params.filter_resonance.value() - filter_resonance_mod,
+                        self.params.vcf_filter_type.value(),
+                        self.sample_rate,
+                    );
                     let vcf_out_l = self.vcf_filter_l_1.process(left_input_filter1);
                     let vcf_out_r = self.vcf_filter_r_1.process(right_input_filter1);
-                    *left_output += vcf_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += vcf_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                },
+                    *left_output += vcf_out_l * self.params.filter_wet.value()
+                        + left_input_filter1 * (1.0 - self.params.filter_wet.value());
+                    *right_output += vcf_out_r * self.params.filter_wet.value()
+                        + right_input_filter1 * (1.0 - self.params.filter_wet.value());
+                }
             }
         }
     }
@@ -7555,13 +7873,12 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_2.reset(
-                    self.params.filter_cutoff_2.value() * (self.params.filter_env_sustain_2.value() / 999.9),
+                    self.params.filter_cutoff_2.value()
+                        * (self.params.filter_env_sustain_2.value() / 999.9),
                 );
                 // Move release to the cutoff to end
-                self.filter_rel_smoother_2.set_target(
-                    self.sample_rate,
-                    self.params.filter_cutoff_2.value(),
-                );
+                self.filter_rel_smoother_2
+                    .set_target(self.sample_rate, self.params.filter_cutoff_2.value());
             }
             // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
             if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
@@ -7592,9 +7909,15 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF => { self.params.filter_env_peak_2.value() },
-                                FilterAlgorithms::TILT => { adv_scale_value(self.params.filter_env_peak_2.value(), -19980.0, 19980.0, -5000.0, 5000.0) },
-                                FilterAlgorithms::VCF => { self.params.filter_env_peak_2.value() },
+                                FilterAlgorithms::SVF => self.params.filter_env_peak_2.value(),
+                                FilterAlgorithms::TILT => adv_scale_value(
+                                    self.params.filter_env_peak_2.value(),
+                                    -19980.0,
+                                    19980.0,
+                                    -5000.0,
+                                    5000.0,
+                                ),
+                                FilterAlgorithms::VCF => self.params.filter_env_peak_2.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -7625,9 +7948,15 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF => { self.params.filter_env_peak_2.value() },
-                                FilterAlgorithms::TILT => { adv_scale_value(self.params.filter_env_peak_2.value(), -19980.0, 19980.0, -5000.0, 5000.0) },
-                                FilterAlgorithms::VCF => { self.params.filter_env_peak_2.value() },
+                                FilterAlgorithms::SVF => self.params.filter_env_peak_2.value(),
+                                FilterAlgorithms::TILT => adv_scale_value(
+                                    self.params.filter_env_peak_2.value(),
+                                    -19980.0,
+                                    19980.0,
+                                    -5000.0,
+                                    5000.0,
+                                ),
+                                FilterAlgorithms::VCF => self.params.filter_env_peak_2.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -7635,7 +7964,8 @@ impl Actuate {
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_2.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff_2.value() * (self.params.filter_env_sustain_2.value() / 999.9),
+                    self.params.filter_cutoff_2.value()
+                        * (self.params.filter_env_sustain_2.value() / 999.9),
                 );
             }
             // If our decay has finished move to sustain state
@@ -7646,9 +7976,15 @@ impl Actuate {
             }
             // use proper variable now that there are four filters and multiple states
             let next_filter_step = match self.filter_state_2 {
-                OscState::Attacking => ( self.filter_atk_smoother_2.next() + filter_cutoff_mod ).clamp(20.0, 20000.0),
-                OscState::Decaying | OscState::Sustaining => ( self.filter_dec_smoother_2.next()+ filter_cutoff_mod ).clamp(20.0, 20000.0),
-                OscState::Releasing => ( self.filter_rel_smoother_2.next()+ filter_cutoff_mod ).clamp(20.0, 20000.0),
+                OscState::Attacking => {
+                    (self.filter_atk_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
+                OscState::Decaying | OscState::Sustaining => {
+                    (self.filter_dec_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
+                OscState::Releasing => {
+                    (self.filter_rel_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
                 // I don't expect this to be used
                 _ => self.params.filter_cutoff_2.value() + filter_cutoff_mod,
             };
@@ -7685,31 +8021,47 @@ impl Actuate {
                         + high_r * self.params.filter_hp_amount_2.value())
                         * self.params.filter_wet_2.value()
                         + *right_output * (1.0 - self.params.filter_wet_2.value());
-                },
+                }
                 FilterAlgorithms::TILT => {
                     self.tilt_filter_l_2.update(
                         self.sample_rate,
                         next_filter_step,
                         self.params.filter_resonance_2.value(),
-                        self.params.tilt_filter_type_2.value());
+                        self.params.tilt_filter_type_2.value(),
+                    );
                     self.tilt_filter_r_2.update(
                         self.sample_rate,
                         next_filter_step,
                         self.params.filter_resonance_2.value(),
-                        self.params.tilt_filter_type_2.value());
+                        self.params.tilt_filter_type_2.value(),
+                    );
                     let tilt_out_l = self.tilt_filter_l_2.process(left_input_filter2);
                     let tilt_out_r = self.tilt_filter_r_2.process(right_input_filter2);
-                    *left_output += tilt_out_l * self.params.filter_wet_2.value() + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                    *right_output += tilt_out_r * self.params.filter_wet_2.value() + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                },
+                    *left_output += tilt_out_l * self.params.filter_wet_2.value()
+                        + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
+                    *right_output += tilt_out_r * self.params.filter_wet_2.value()
+                        + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
+                }
                 FilterAlgorithms::VCF => {
-                    self.vcf_filter_l_2.update(next_filter_step, self.params.filter_resonance_2.value(), self.params.vcf_filter_type_2.value(), self.sample_rate);
-                    self.vcf_filter_r_2.update(next_filter_step, self.params.filter_resonance_2.value(), self.params.vcf_filter_type_2.value(), self.sample_rate);
+                    self.vcf_filter_l_2.update(
+                        next_filter_step,
+                        self.params.filter_resonance_2.value(),
+                        self.params.vcf_filter_type_2.value(),
+                        self.sample_rate,
+                    );
+                    self.vcf_filter_r_2.update(
+                        next_filter_step,
+                        self.params.filter_resonance_2.value(),
+                        self.params.vcf_filter_type_2.value(),
+                        self.sample_rate,
+                    );
                     let vcf_out_l = self.vcf_filter_l_2.process(left_input_filter2);
                     let vcf_out_r = self.vcf_filter_r_2.process(right_input_filter2);
-                    *left_output += vcf_out_l * self.params.filter_wet_2.value() + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                    *right_output += vcf_out_r * self.params.filter_wet_2.value() + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                },
+                    *left_output += vcf_out_l * self.params.filter_wet_2.value()
+                        + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
+                    *right_output += vcf_out_r * self.params.filter_wet_2.value()
+                        + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
+                }
             }
         }
     }

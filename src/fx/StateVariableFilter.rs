@@ -71,13 +71,13 @@ impl StateVariableFilter {
             match resonance_mode {
                 ResonanceType::Default | ResonanceType::Bump => {
                     self.q = q.clamp(0.13, 1.0);
-                },
-                ResonanceType::Moog | ResonanceType::TB | ResonanceType::Arp => { 
-                    self.q = q.clamp(0.0, 1.0); 
-                },
-                ResonanceType::Res | ResonanceType::Powf => { 
-                    self.q = q.clamp(0.0, 1.0); 
-                },
+                }
+                ResonanceType::Moog | ResonanceType::TB | ResonanceType::Arp => {
+                    self.q = q.clamp(0.0, 1.0);
+                }
+                ResonanceType::Res | ResonanceType::Powf => {
+                    self.q = q.clamp(0.0, 1.0);
+                }
             }
         }
         if frequency != self.frequency {

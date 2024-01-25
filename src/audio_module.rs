@@ -37,21 +37,23 @@ pub(crate) mod Oscillator;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 #[allow(unused_imports)]
 use crate::{
-    toggle_switch, ui_knob, ActuateParams,
+    toggle_switch,
+    ui_knob,
+    ActuateParams,
     CustomWidgets::{CustomParamSlider, CustomVerticalSlider},
-    SMALLER_FONT,
+    A_BACKGROUND_COLOR_TOP,
     // UI Colors
     A_KNOB_OUTSIDE_COLOR,
     DARK_GREY_UI_COLOR,
-    LIGHT_GREY_UI_COLOR,
+    FONT_COLOR,
     LIGHTER_GREY_UI_COLOR,
+    LIGHTER_PURPLE,
+    LIGHT_GREY_UI_COLOR,
+    SMALLER_FONT,
+    SYNTH_BARS_PURPLE,
+    SYNTH_MIDDLE_BLUE,
     SYNTH_SOFT_BLUE,
     SYNTH_SOFT_BLUE2,
-    A_BACKGROUND_COLOR_TOP,
-    SYNTH_BARS_PURPLE,
-    LIGHTER_PURPLE,
-    SYNTH_MIDDLE_BLUE,
-    FONT_COLOR,
 };
 use CustomParamSlider::ParamSlider as HorizontalParamSlider;
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
@@ -402,40 +404,28 @@ impl AudioModule {
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_1_decay, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_1_sustain, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_1_release, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
 
                         // Curve sliders
@@ -445,30 +435,21 @@ impl AudioModule {
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                         });
                     });
@@ -571,13 +552,13 @@ impl AudioModule {
                         // Curve sliders
                         ui.vertical(|ui| {
                             ui.add(HorizontalParamSlider::for_param(&params.osc_1_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR, 
+                                DARK_GREY_UI_COLOR,
                                 A_KNOB_OUTSIDE_COLOR));
                             ui.add(HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR, 
+                                DARK_GREY_UI_COLOR,
                                 A_KNOB_OUTSIDE_COLOR));
                             ui.add(HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR, 
+                                DARK_GREY_UI_COLOR,
                                 A_KNOB_OUTSIDE_COLOR));
                         });
                     });
@@ -722,40 +703,28 @@ impl AudioModule {
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_1_decay, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_1_sustain, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_1_release, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
 
                         // Curve sliders
@@ -765,30 +734,21 @@ impl AudioModule {
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                         });
                     });
@@ -921,40 +881,28 @@ impl AudioModule {
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_2_decay, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_2_sustain, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_2_release, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
 
                         // Curve sliders
@@ -964,30 +912,21 @@ impl AudioModule {
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                         });
                     });
@@ -1090,13 +1029,13 @@ impl AudioModule {
                         // Curve sliders
                         ui.vertical(|ui| {
                             ui.add(HorizontalParamSlider::for_param(&params.osc_2_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR, 
+                                DARK_GREY_UI_COLOR,
                                 A_KNOB_OUTSIDE_COLOR));
                             ui.add(HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR, 
+                                DARK_GREY_UI_COLOR,
                                 A_KNOB_OUTSIDE_COLOR));
                             ui.add(HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR, 
+                                DARK_GREY_UI_COLOR,
                                 A_KNOB_OUTSIDE_COLOR));
                         });
                     });
@@ -1241,40 +1180,28 @@ impl AudioModule {
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_2_decay, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_2_sustain, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_2_release, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
 
                         // Curve sliders
@@ -1284,30 +1211,21 @@ impl AudioModule {
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                         });
                     });
@@ -1441,40 +1359,28 @@ impl AudioModule {
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_3_decay, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_3_sustain, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_3_release, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
 
                         // Curve sliders
@@ -1484,30 +1390,21 @@ impl AudioModule {
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                         });
                     });
@@ -1610,13 +1507,13 @@ impl AudioModule {
                         // Curve sliders
                         ui.vertical(|ui| {
                             ui.add(HorizontalParamSlider::for_param(&params.osc_3_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR, 
+                                DARK_GREY_UI_COLOR,
                                 A_KNOB_OUTSIDE_COLOR));
                             ui.add(HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR, 
+                                DARK_GREY_UI_COLOR,
                                 A_KNOB_OUTSIDE_COLOR));
                             ui.add(HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR, 
+                                DARK_GREY_UI_COLOR,
                                 A_KNOB_OUTSIDE_COLOR));
                         });
                     });
@@ -1761,40 +1658,28 @@ impl AudioModule {
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_3_decay, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_3_sustain, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
                         ui.add(
                             VerticalParamSlider::for_param(&params.osc_3_release, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT_SHORTENED)
                                 .set_reversed(true)
-                                .override_colors(
-                                    DARK_GREY_UI_COLOR,
-                                    A_KNOB_OUTSIDE_COLOR,
-                                ),
+                                .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                         );
 
                         // Curve sliders
@@ -1804,30 +1689,21 @@ impl AudioModule {
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                             ui.add(
                                 HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter)
                                     .with_width(HCURVE_BWIDTH)
                                     .set_left_sided_label(true)
                                     .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(
-                                        DARK_GREY_UI_COLOR,
-                                        A_KNOB_OUTSIDE_COLOR,
-                                    ),
+                                    .override_colors(DARK_GREY_UI_COLOR, A_KNOB_OUTSIDE_COLOR),
                             );
                         });
                     });
@@ -1989,21 +1865,20 @@ impl AudioModule {
         uni_detune_mod: f32,
         velocity_mod: f32,
         uni_velocity_mod: f32,
-        vel_gain_mod: bool,
+        vel_gain_mod: f32,
         vel_lfo_gain_mod: f32,
-    ) -> (f32, f32, bool, bool, f32) {
+    ) -> (f32, f32, bool, bool) {
         // If the process is in here the file dialog is not open per lib.rs
 
         // Midi events are processed here
         let mut note_on: bool = false;
         let mut note_off: bool = false;
-        let mut returned_velocity: f32 = -1.0;
         match event_passed {
             // The event was valid
             Some(mut event) => {
                 event = event_passed.unwrap();
                 if event.timing() > sample_id as u32 {
-                    return (0.0, 0.0, false, false, 0.0);
+                    return (0.0, 0.0, false, false);
                 }
                 match event {
                     ////////////////////////////////////////////////////////////
@@ -2014,7 +1889,6 @@ impl AudioModule {
                     } => {
                         // Osc + generic stuff
                         note_on = true;
-                        returned_velocity = velocity;
                         let mut new_phase: f32 = 0.0;
 
                         // Sampler when single cycle needs this!!!
@@ -2137,10 +2011,10 @@ impl AudioModule {
                             )),
                             SmoothStyle::Exponential => {
                                 Smoother::new(SmoothingStyle::Exponential(self.osc_attack))
-                            },
+                            }
                             SmoothStyle::LogSteep => {
                                 Smoother::new(SmoothingStyle::LogSteep(self.osc_attack))
-                            },
+                            }
                         };
 
                         let decay_smoother: Smoother<f32> = match self.osc_dec_curve {
@@ -2152,10 +2026,10 @@ impl AudioModule {
                             )),
                             SmoothStyle::Exponential => {
                                 Smoother::new(SmoothingStyle::Exponential(self.osc_decay))
-                            },
+                            }
                             SmoothStyle::LogSteep => {
                                 Smoother::new(SmoothingStyle::LogSteep(self.osc_decay))
-                            },
+                            }
                         };
 
                         let release_smoother: Smoother<f32> = match self.osc_rel_curve {
@@ -2167,10 +2041,10 @@ impl AudioModule {
                             )),
                             SmoothStyle::Exponential => {
                                 Smoother::new(SmoothingStyle::Exponential(self.osc_release))
-                            },
+                            }
                             SmoothStyle::LogSteep => {
                                 Smoother::new(SmoothingStyle::LogSteep(self.osc_release))
-                            },
+                            }
                         };
 
                         match attack_smoother.style {
@@ -2229,11 +2103,11 @@ impl AudioModule {
                                         };
                                     } else {
                                         // Nothing is in our sample library, skip attempting audio output
-                                        return (0.0, 0.0, false, false, 0.0);
+                                        return (0.0, 0.0, false, false);
                                     }
                                 } else {
                                     // Nothing is in our sample library, skip attempting audio output
-                                    return (0.0, 0.0, false, false, 0.0);
+                                    return (0.0, 0.0, false, false);
                                 }
                             }
                             _ => {
@@ -2823,19 +2697,19 @@ impl AudioModule {
                     let temp_osc_gain_multiplier: f32;
                     // Get our current gain amount for use in match below
                     // Include gain scaling if mod is there
-                    if vel_gain_mod {
+                    if vel_gain_mod != -2.0 {
                         temp_osc_gain_multiplier = match voice.state {
                             OscState::Attacking => {
-                                voice.osc_attack.next() * voice._velocity * vel_lfo_gain_mod
+                                voice.osc_attack.next() * vel_gain_mod * vel_lfo_gain_mod
                             }
                             OscState::Decaying => {
-                                voice.osc_decay.next() * voice._velocity * vel_lfo_gain_mod
+                                voice.osc_decay.next() * vel_gain_mod * vel_lfo_gain_mod
                             }
                             OscState::Sustaining => {
-                                (self.osc_sustain / 999.9) * voice._velocity * vel_lfo_gain_mod
+                                (self.osc_sustain / 999.9) * vel_gain_mod * vel_lfo_gain_mod
                             }
                             OscState::Releasing => {
-                                voice.osc_release.next() * voice._velocity * vel_lfo_gain_mod
+                                voice.osc_release.next() * vel_gain_mod * vel_lfo_gain_mod
                             }
                             OscState::Off => 0.0,
                         };
@@ -2910,27 +2784,19 @@ impl AudioModule {
                     let temp_osc_gain_multiplier: f32;
                     // Get our current gain amount for use in match below
                     // Include gain scaling if mod is there
-                    if vel_gain_mod {
+                    if vel_gain_mod != -2.0 {
                         temp_osc_gain_multiplier = match unison_voice.state {
                             OscState::Attacking => {
-                                unison_voice.osc_attack.next()
-                                    * unison_voice._velocity
-                                    * vel_lfo_gain_mod
+                                unison_voice.osc_attack.next() * vel_gain_mod * vel_lfo_gain_mod
                             }
                             OscState::Decaying => {
-                                unison_voice.osc_decay.next()
-                                    * unison_voice._velocity
-                                    * vel_lfo_gain_mod
+                                unison_voice.osc_decay.next() * vel_gain_mod * vel_lfo_gain_mod
                             }
                             OscState::Sustaining => {
-                                (self.osc_sustain / 999.9)
-                                    * unison_voice._velocity
-                                    * vel_lfo_gain_mod
+                                (self.osc_sustain / 999.9) * vel_gain_mod * vel_lfo_gain_mod
                             }
                             OscState::Releasing => {
-                                unison_voice.osc_release.next()
-                                    * unison_voice._velocity
-                                    * vel_lfo_gain_mod
+                                unison_voice.osc_release.next() * vel_gain_mod * vel_lfo_gain_mod
                             }
                             OscState::Off => 0.0,
                         };
@@ -3194,13 +3060,7 @@ impl AudioModule {
         };
 
         // Send it back
-        (
-            output_signal_l,
-            output_signal_r,
-            note_on,
-            note_off,
-            returned_velocity,
-        )
+        (output_signal_l, output_signal_r, note_on, note_off)
     }
 
     pub fn set_playing(&mut self, new_bool: bool) {

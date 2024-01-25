@@ -2,7 +2,7 @@
 // Based off the Duro Console Saturations
 // Ardura 2023
 
-use nih_plug::{params::enums::Enum};
+use nih_plug::params::enums::Enum;
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 
@@ -44,31 +44,31 @@ impl Saturation {
                 // Apply the transfer curve to the input sample
                 output_l = transfer(input_l);
                 output_r = transfer(input_r);
-            },
+            }
             SaturationType::Clip => {
                 let clipped = input_l.signum();
                 // Mix clipped signal with original
                 output_l = input_l * (1.0 - amount) + clipped * amount;
                 output_r = input_r * (1.0 - amount) + clipped * amount;
-            },
+            }
             SaturationType::SinPow => {
                 let transfer = |x: f32| -> f32 { (x * (idrive)).sin().powf(2.0) };
 
                 output_l = transfer(input_l);
                 output_r = transfer(input_r);
-            },
+            }
             SaturationType::Subtle => {
                 let transfer = |x: f32| -> f32 { ((idrive * (idrive * PI * x).cos()) / 4.0) + x };
 
                 output_l = transfer(input_l);
                 output_r = transfer(input_r);
-            },
+            }
             SaturationType::Sine => {
                 let transfer = |x: f32| -> f32 { x.signum() * (x.abs() + idrive).sin() };
 
                 output_l = transfer(input_l);
                 output_r = transfer(input_r);
-            },
+            }
         }
 
         (output_l, output_r)
