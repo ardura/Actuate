@@ -26,5 +26,4 @@ Join the discord! https://discord.com/invite/hscQXkTdfz
 
 
 ## Known Issues
-- Saving and loading happens twice
 - Naming presets and info may be unstable in non-windows environments as I have not tested those sorry
