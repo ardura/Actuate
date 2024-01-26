@@ -480,15 +480,17 @@ pub struct Actuate {
     // Plugin control Arcs
     update_something: Arc<AtomicBool>,
     clear_voices: Arc<AtomicBool>,
-    reload_entire_preset: Arc<AtomicBool>,
+    reload_entire_preset: Arc<Mutex<bool>>,
     file_dialog: Arc<AtomicBool>,
     file_open_buffer_timer: Arc<AtomicU32>,
     // Using this like a state: 0 = Closed, 1 = Opening, 2 = Open
     current_preset: Arc<AtomicU32>,
 
     update_current_preset: Arc<AtomicBool>,
-    load_bank: Arc<AtomicBool>,
-    save_bank: Arc<AtomicBool>,
+    load_bank: Arc<Mutex<bool>>,
+    save_bank: Arc<Mutex<bool>>,
+    import_preset: Arc<Mutex<bool>>,
+    export_preset: Arc<Mutex<bool>>,
 
     current_note_on_velocity: Arc<AtomicF32>,
 
@@ -590,13 +592,15 @@ impl Default for Actuate {
         // These are persistent fields to trigger updates like Diopser
         let update_something = Arc::new(AtomicBool::new(false));
         let clear_voices = Arc::new(AtomicBool::new(false));
-        let reload_entire_preset = Arc::new(AtomicBool::new(false));
+        let reload_entire_preset = Arc::new(Mutex::new(false));
         let file_dialog = Arc::new(AtomicBool::new(false));
         let file_open_buffer_timer = Arc::new(AtomicU32::new(0));
         let current_preset = Arc::new(AtomicU32::new(0));
 
-        let load_bank = Arc::new(AtomicBool::new(false));
-        let save_bank = Arc::new(AtomicBool::new(false));
+        let load_bank = Arc::new(Mutex::new(false));
+        let save_bank = Arc::new(Mutex::new(false));
+        let import_preset = Arc::new(Mutex::new(false));
+        let export_preset = Arc::new(Mutex::new(false));
         let update_current_preset = Arc::new(AtomicBool::new(false));
 
         Self {
@@ -607,6 +611,8 @@ impl Default for Actuate {
                 update_current_preset.clone(),
                 load_bank.clone(),
                 save_bank.clone(),
+                import_preset.clone(),
+                export_preset.clone(),
             )),
             sample_rate: 44100.0,
 
@@ -620,6 +626,8 @@ impl Default for Actuate {
 
             load_bank: load_bank,
             save_bank: save_bank,
+            import_preset: import_preset,
+            export_preset: export_preset,
             update_current_preset: update_current_preset,
 
             current_note_on_velocity: Arc::new(AtomicF32::new(0.0)),
@@ -1433,6 +1441,10 @@ pub struct ActuateParams {
     pub param_load_bank: BoolParam,
     #[id = "param_save_bank"]
     pub param_save_bank: BoolParam,
+    #[id = "param_import_preset"]
+    pub param_import_preset: BoolParam,
+    #[id = "param_export_preset"]
+    pub param_export_preset: BoolParam,
     #[id = "param_next_preset"]
     pub param_next_preset: BoolParam,
     #[id = "param_prev_preset"]
@@ -1452,8 +1464,10 @@ impl ActuateParams {
         clear_voices: Arc<AtomicBool>,
         file_dialog: Arc<AtomicBool>,
         update_current_preset: Arc<AtomicBool>,
-        load_bank: Arc<AtomicBool>,
-        save_bank: Arc<AtomicBool>,
+        load_bank: Arc<Mutex<bool>>,
+        save_bank: Arc<Mutex<bool>>,
+        import_preset: Arc<Mutex<bool>>,
+        export_preset: Arc<Mutex<bool>>,
     ) -> Self {
         Self {
             editor_state: EguiState::from_size(WIDTH, HEIGHT),
@@ -2778,13 +2792,25 @@ impl ActuateParams {
             param_load_bank: BoolParam::new("Load Bank", false)
                 .with_callback({
                     let load_bank = load_bank.clone();
-                    Arc::new(move |_| load_bank.store(true, Ordering::Relaxed))
+                    Arc::new(move |_| *load_bank.lock().unwrap() = true)
                 })
                 .hide(),
             param_save_bank: BoolParam::new("Save Bank", false)
                 .with_callback({
                     let save_bank = save_bank.clone();
-                    Arc::new(move |_| save_bank.store(true, Ordering::Relaxed))
+                    Arc::new(move |_| *save_bank.lock().unwrap() = true)
+                })
+                .hide(),
+            param_import_preset: BoolParam::new("Import Preset", false)
+                .with_callback({
+                    let import_preset = import_preset.clone();
+                    Arc::new(move |_| *import_preset.lock().unwrap() = true)
+                })
+                .hide(),
+            param_export_preset: BoolParam::new("Export Preset", false)
+                .with_callback({
+                    let export_preset = export_preset.clone();
+                    Arc::new(move |_| *export_preset.lock().unwrap() = true)
                 })
                 .hide(),
 
@@ -2835,15 +2861,17 @@ impl Plugin for Actuate {
         let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&self.preset_name);
         let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&self.preset_info);
         let clear_voices: Arc<AtomicBool> = Arc::clone(&self.clear_voices);
-        let reload_entire_preset: Arc<AtomicBool> = Arc::clone(&self.reload_entire_preset);
+        let reload_entire_preset: Arc<Mutex<bool>> = Arc::clone(&self.reload_entire_preset);
         let current_preset: Arc<AtomicU32> = Arc::clone(&self.current_preset);
         let AM1: Arc<Mutex<AudioModule>> = Arc::clone(&self.audio_module_1);
         let AM2: Arc<Mutex<AudioModule>> = Arc::clone(&self.audio_module_2);
         let AM3: Arc<Mutex<AudioModule>> = Arc::clone(&self.audio_module_3);
 
         let update_current_preset: Arc<AtomicBool> = Arc::clone(&self.update_current_preset);
-        let load_bank: Arc<AtomicBool> = Arc::clone(&self.load_bank);
-        let save_bank: Arc<AtomicBool> = Arc::clone(&self.save_bank);
+        let load_bank: Arc<Mutex<bool>> = Arc::clone(&self.load_bank);
+        let save_bank: Arc<Mutex<bool>> = Arc::clone(&self.save_bank);
+        let import_preset: Arc<Mutex<bool>> = Arc::clone(&self.import_preset);
+        let export_preset: Arc<Mutex<bool>> = Arc::clone(&self.export_preset);
 
         let loading: Arc<AtomicBool> = Arc::clone(&self.file_dialog);
         let filter_select_outside: Arc<Mutex<FilterSelect>> =
@@ -2946,7 +2974,7 @@ impl Plugin for Actuate {
                                     AM3.clone(),);
 
                                 // This is set for the process thread
-                                reload_entire_preset.store(true, Ordering::Relaxed);
+                                *reload_entire_preset.lock().unwrap() = true;
                             }
                             setter.set_parameter(&params.loading, false);
                         }
@@ -3000,13 +3028,13 @@ impl Plugin for Actuate {
                                     AM3.clone(),);
 
                                 // This is set for the process thread
-                                reload_entire_preset.store(true, Ordering::Relaxed);
+                                *reload_entire_preset.lock().unwrap() = true;
                             }
                             setter.set_parameter(&params.loading, false);
                         }
-                        if load_bank.load(Ordering::Relaxed) {
+                        if *load_bank.lock().unwrap() {
                             setter.set_parameter(&params.loading, true);
-                            reload_entire_preset.store(true, Ordering::Relaxed);
+                            *reload_entire_preset.lock().unwrap() = true;
                             loading.store(true, Ordering::Relaxed);
 
                             // Move to info tab on preset change
@@ -3042,13 +3070,75 @@ impl Plugin for Actuate {
                                 AM2.clone(),
                                 AM3.clone(),);
                             setter.set_parameter(&params.param_load_bank, false);
-                            load_bank.store(false, Ordering::Relaxed);
-                            reload_entire_preset.store(false, Ordering::Relaxed);
+                            *load_bank.lock().unwrap() = false;
+                            *reload_entire_preset.lock().unwrap() = false;
                             setter.set_parameter(&params.loading, false);
                         }
-                        if save_bank.load(Ordering::Relaxed) {
+                        if *save_bank.lock().unwrap() {
                             setter.set_parameter(&params.param_save_bank, false);
-                            save_bank.store(false, Ordering::Relaxed);
+                            *save_bank.lock().unwrap() = false;
+                        }
+                        if *export_preset.lock().unwrap() {
+                            setter.set_parameter(&params.param_export_preset, false);
+                            *export_preset.lock().unwrap() = false;
+                        }
+                        if *import_preset.lock().unwrap() {
+                            setter.set_parameter(&params.loading, true);
+                            *reload_entire_preset.lock().unwrap() = true;
+                            loading.store(true, Ordering::Relaxed);
+                            setter.set_parameter(&params.param_import_preset, false);
+                            *import_preset.lock().unwrap() = false;
+
+                            // This is manually here to make sure it appears for long loads from different threads
+                            // Create the loading popup here.
+                            let screen_size = Rect::from_x_y_ranges(
+                                RangeInclusive::new(0.0, WIDTH as f32),
+                                RangeInclusive::new(0.0, HEIGHT as f32));
+                            let popup_size = Vec2::new(400.0, 200.0);
+                            let popup_pos = screen_size.center();
+    
+                            // Draw the loading popup content here.
+                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+
+                            //import_preset();
+
+                            (
+                                *mod_source_override_1.lock().unwrap(),
+                                *mod_source_override_2.lock().unwrap(),
+                                *mod_source_override_3.lock().unwrap(),
+                                *mod_source_override_4.lock().unwrap(),
+                                *mod_dest_override_1.lock().unwrap(),
+                                *mod_dest_override_2.lock().unwrap(),
+                                *mod_dest_override_3.lock().unwrap(),
+                                *mod_dest_override_4.lock().unwrap(),
+                            ) = Actuate::reload_entire_preset(
+                                setter,
+                                params.clone(),
+                                current_preset_index as usize,
+                                arc_preset.clone(),
+                                AM1.clone(),
+                                AM2.clone(),
+                                AM3.clone(),);
+                            setter.set_parameter(&params.param_load_bank, false);
+                            *load_bank.lock().unwrap() = false;
+                            *reload_entire_preset.lock().unwrap() = false;
+                            setter.set_parameter(&params.loading, false);
+                        }
+                        if params.param_export_preset.value() {
+                            setter.set_parameter(&params.param_export_preset, false);
+                            *export_preset.lock().unwrap() = false;
+                        }
+                        if params.param_import_preset.value() {
+                            setter.set_parameter(&params.param_import_preset, false);
+                            *import_preset.lock().unwrap() = false;
+                        }
+                        // Extra checks for sanity
+                        if params.param_load_bank.value() {
+                            setter.set_parameter(&params.param_load_bank, false);
+                        }
+                        if params.param_save_bank.value() {
+                            setter.set_parameter(&params.param_save_bank, false);
                         }
                         if update_current_preset.load(Ordering::Relaxed) || params.param_update_current_preset.value() {
                             setter.set_parameter(&params.param_update_current_preset, false);
@@ -3160,9 +3250,6 @@ impl Plugin for Actuate {
                                     let use_fx_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_fx, setter);
                                     ui.add(use_fx_toggle);
                                     ui.separator();
-                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 0.9, SMALLER_FONT)
-                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                    ui.add(update_current_preset);
                                     let load_bank_button = BoolButton::BoolButton::for_param(&params.param_load_bank, setter, 3.5, 0.9, SMALLER_FONT)
                                         .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(load_bank_button);
@@ -4465,6 +4552,17 @@ impl Plugin for Actuate {
                                                         None => {},
                                                     }
                                                 }
+                                                ui.horizontal(|ui| {
+                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 0.9, SMALLER_FONT)
+                                                        .with_background_color(DARK_GREY_UI_COLOR);
+                                                    ui.add(update_current_preset);
+                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 5.0, 0.9, SMALLER_FONT)
+                                                        .with_background_color(DARK_GREY_UI_COLOR);
+                                                    ui.add(import_preset);
+                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 5.0, 0.9, SMALLER_FONT)
+                                                        .with_background_color(DARK_GREY_UI_COLOR);
+                                                    ui.add(export_preset);
+                                                });
                                             },
                                             LFOSelect::FX => {
                                                 ScrollArea::vertical()
@@ -5078,16 +5176,49 @@ impl Actuate {
                 );
                 if self.file_open_buffer_timer.load(Ordering::Relaxed) > FILE_OPEN_BUFFER_MAX {
                     self.file_open_buffer_timer.store(0, Ordering::Relaxed);
-                    self.file_dialog.store(false, Ordering::Release);
+                    self.file_dialog.store(false, Ordering::Relaxed); //Changed from Release
+                }
+            }
+
+            // If Import Preset button was pressed
+            if *self.import_preset.lock().unwrap()
+                && !self.file_dialog.load(Ordering::Relaxed)
+                && self.file_open_buffer_timer.load(Ordering::Relaxed) == 0
+                && !*self.reload_entire_preset.lock().unwrap()
+            {
+                // This is up here so it happens first - putting this down by 
+                // (self.preset_lib_name, unserialized) = Actuate::load_preset_bank();
+                // Makes this block happen twice?
+                *self.import_preset.lock().unwrap() = false;
+                // This is here again purposefully
+                *self.reload_entire_preset.lock().unwrap() = true;
+
+                let unserialized: Option<ActuatePreset>;
+                (_, unserialized) = Actuate::import_preset();
+
+                if unserialized.is_some() {
+                    let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
+                    let mut locked_lib = arc_lib.lock().unwrap();
+                    locked_lib[self.current_preset.load(Ordering::Relaxed) as usize] = unserialized.unwrap();
+                    let temp_preset = &locked_lib[self.current_preset.load(Ordering::Relaxed) as usize];
+                    *self.preset_name.lock().unwrap() = temp_preset.preset_name.clone();
+                    *self.preset_info.lock().unwrap() = temp_preset.preset_info.clone();
                 }
             }
 
             // If the Load Bank button was pressed
-            if self.load_bank.load(Ordering::Relaxed)
+            if *self.load_bank.lock().unwrap()
                 && !self.file_dialog.load(Ordering::Relaxed)
                 && self.file_open_buffer_timer.load(Ordering::Relaxed) == 0
-                && !self.reload_entire_preset.load(Ordering::Acquire)
+                && !*self.reload_entire_preset.lock().unwrap()
             {
+                // This is up here so it happens first - putting this down by 
+                // (self.preset_lib_name, unserialized) = Actuate::load_preset_bank();
+                // Makes this block happen twice?
+                *self.load_bank.lock().unwrap() = false;
+                // This is here again purposefully
+                *self.reload_entire_preset.lock().unwrap() = true;
+
                 let AM1c = self.audio_module_1.clone();
                 let AM2c = self.audio_module_2.clone();
                 let AM3c = self.audio_module_3.clone();
@@ -5101,7 +5232,7 @@ impl Actuate {
                 self.file_open_buffer_timer.store(1, Ordering::Relaxed);
                 let unserialized: Vec<ActuatePreset>;
                 (self.preset_lib_name, unserialized) = Actuate::load_preset_bank();
-                self.load_bank.store(false, Ordering::Relaxed);
+                
 
                 let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
                 let mut locked_lib = arc_lib.lock().unwrap();
@@ -5126,20 +5257,38 @@ impl Actuate {
                     locked_lib[self.current_preset.load(Ordering::Relaxed) as usize].clone();
                 *self.preset_name.lock().unwrap() = temp_current_preset.preset_name;
                 *self.preset_info.lock().unwrap() = temp_current_preset.preset_info;
+            }
 
+            // If Export Preset button has been pressed
+            if *self.export_preset.lock().unwrap()
+                && !self.file_dialog.load(Ordering::Relaxed)
+                && self.file_open_buffer_timer.load(Ordering::Relaxed) == 0
+                && !*self.reload_entire_preset.lock().unwrap()
+            {
+                // Move the mutex update as early as possible
+                *self.export_preset.lock().unwrap() = false;
                 // This is here again purposefully
-                self.reload_entire_preset.store(true, Ordering::Release);
+                *self.reload_entire_preset.lock().unwrap() = true;
+
+                self.file_dialog.store(true, Ordering::Relaxed);
+                self.file_open_buffer_timer.store(1, Ordering::Relaxed);
+                self.export_preset();
             }
 
             // If the save button has been pressed
-            if self.save_bank.load(Ordering::Relaxed)
+            if *self.save_bank.lock().unwrap()
                 && !self.file_dialog.load(Ordering::Relaxed)
                 && self.file_open_buffer_timer.load(Ordering::Relaxed) == 0
+                && !*self.reload_entire_preset.lock().unwrap()
             {
+                // Move the mutex update as early as possible
+                *self.save_bank.lock().unwrap() = false;
+                // This is here again purposefully
+                *self.reload_entire_preset.lock().unwrap() = true;
+
                 self.file_dialog.store(true, Ordering::Relaxed);
                 self.file_open_buffer_timer.store(1, Ordering::Relaxed);
                 self.save_preset_bank();
-                self.save_bank.store(false, Ordering::Relaxed);
             }
 
             // If the Update Current Preset button has been pressed
@@ -6677,13 +6826,288 @@ impl Actuate {
             // Reassign our output signal
             *channel_samples.get_mut(0).unwrap() = left_output * self.params.master_level.value();
             *channel_samples.get_mut(1).unwrap() = right_output * self.params.master_level.value();
+
+            // This is down here for the save function gui and export preset unsetting to work
+            if *self.reload_entire_preset.lock().unwrap() && self.params.param_save_bank.value()
+            {
+                *self.reload_entire_preset.lock().unwrap() = false;
+            }
+            if *self.reload_entire_preset.lock().unwrap() && self.params.param_export_preset.value()
+            {
+                *self.reload_entire_preset.lock().unwrap() = false;
+            }
         }
+    }
+
+    // import_preset() uses message packing with serde
+    fn import_preset() -> (String, Option<ActuatePreset>) {
+        let imported_preset = FileDialog::new()
+            .add_filter("actuate", &["actuate"])
+            .pick_file();
+        let return_name;
+
+        if let Some(imported_preset) = imported_preset {
+            return_name = imported_preset.to_str().unwrap_or("Invalid Path").to_string();
+
+            // Read the compressed data from the file
+            let mut compressed_data = Vec::new();
+            if let Err(err) = std::fs::File::open(&return_name)
+                .and_then(|mut file| file.read_to_end(&mut compressed_data))
+            {
+                eprintln!("Error reading compressed data from file: {}", err);
+                return (err.to_string(), Option::None);
+            }
+
+            // Decompress the data
+            let decompressed_data = Self::decompress_bytes(&compressed_data);
+            if let Err(err) = decompressed_data {
+                eprintln!("Error decompressing data: {}", err);
+                return (err.to_string(), Option::None);
+            }
+
+            // Deserialize the MessagePack data
+            let file_string_data = decompressed_data.unwrap();
+
+            // Deserialize into ActuatePreset - return default empty lib if error
+            let unserialized: ActuatePreset = rmp_serde::from_slice(&file_string_data)
+                .unwrap_or(
+                    ActuatePreset {
+                        preset_name: "Default".to_string(),
+                        preset_info: "Info".to_string(),
+                        mod1_audio_module_type: AudioModuleType::Osc,
+                        mod1_audio_module_level: 1.0,
+                        mod1_loaded_sample: vec![vec![0.0, 0.0]],
+                        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                        mod1_loop_wavetable: false,
+                        mod1_single_cycle: false,
+                        mod1_restretch: true,
+                        mod1_prev_restretch: false,
+                        mod1_grain_hold: 200,
+                        mod1_grain_gap: 200,
+                        mod1_start_position: 0.0,
+                        mod1_end_position: 1.0,
+                        mod1_grain_crossfade: 50,
+                        mod1_osc_type: VoiceType::Sine,
+                        mod1_osc_octave: 0,
+                        mod1_osc_semitones: 0,
+                        mod1_osc_detune: 0.0,
+                        mod1_osc_attack: 0.0001,
+                        mod1_osc_decay: 0.0001,
+                        mod1_osc_sustain: 999.9,
+                        mod1_osc_release: 5.0,
+                        mod1_osc_retrigger: RetriggerStyle::Retrigger,
+                        mod1_osc_atk_curve: SmoothStyle::Linear,
+                        mod1_osc_dec_curve: SmoothStyle::Linear,
+                        mod1_osc_rel_curve: SmoothStyle::Linear,
+                        mod1_osc_unison: 1,
+                        mod1_osc_unison_detune: 0.0,
+                        mod1_osc_stereo: 0.0,
+
+                        mod2_audio_module_type: AudioModuleType::Off,
+                        mod2_audio_module_level: 1.0,
+                        mod2_loaded_sample: vec![vec![0.0, 0.0]],
+                        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                        mod2_loop_wavetable: false,
+                        mod2_single_cycle: false,
+                        mod2_restretch: true,
+                        mod2_prev_restretch: false,
+                        mod2_grain_hold: 200,
+                        mod2_grain_gap: 200,
+                        mod2_start_position: 0.0,
+                        mod2_end_position: 1.0,
+                        mod2_grain_crossfade: 50,
+                        mod2_osc_type: VoiceType::Sine,
+                        mod2_osc_octave: 0,
+                        mod2_osc_semitones: 0,
+                        mod2_osc_detune: 0.0,
+                        mod2_osc_attack: 0.0001,
+                        mod2_osc_decay: 0.0001,
+                        mod2_osc_sustain: 999.9,
+                        mod2_osc_release: 5.0,
+                        mod2_osc_retrigger: RetriggerStyle::Retrigger,
+                        mod2_osc_atk_curve: SmoothStyle::Linear,
+                        mod2_osc_dec_curve: SmoothStyle::Linear,
+                        mod2_osc_rel_curve: SmoothStyle::Linear,
+                        mod2_osc_unison: 1,
+                        mod2_osc_unison_detune: 0.0,
+                        mod2_osc_stereo: 0.0,
+
+                        mod3_audio_module_type: AudioModuleType::Off,
+                        mod3_audio_module_level: 1.0,
+                        mod3_loaded_sample: vec![vec![0.0, 0.0]],
+                        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                        mod3_loop_wavetable: false,
+                        mod3_single_cycle: false,
+                        mod3_restretch: true,
+                        mod3_prev_restretch: false,
+                        mod3_grain_hold: 200,
+                        mod3_grain_gap: 200,
+                        mod3_start_position: 0.0,
+                        mod3_end_position: 1.0,
+                        mod3_grain_crossfade: 50,
+                        mod3_osc_type: VoiceType::Sine,
+                        mod3_osc_octave: 0,
+                        mod3_osc_semitones: 0,
+                        mod3_osc_detune: 0.0,
+                        mod3_osc_attack: 0.0001,
+                        mod3_osc_decay: 0.0001,
+                        mod3_osc_sustain: 999.9,
+                        mod3_osc_release: 5.0,
+                        mod3_osc_retrigger: RetriggerStyle::Retrigger,
+                        mod3_osc_atk_curve: SmoothStyle::Linear,
+                        mod3_osc_dec_curve: SmoothStyle::Linear,
+                        mod3_osc_rel_curve: SmoothStyle::Linear,
+                        mod3_osc_unison: 1,
+                        mod3_osc_unison_detune: 0.0,
+                        mod3_osc_stereo: 0.0,
+
+                        filter_wet: 1.0,
+                        filter_cutoff: 20000.0,
+                        filter_resonance: 1.0,
+                        filter_res_type: ResonanceType::Default,
+                        filter_lp_amount: 1.0,
+                        filter_hp_amount: 0.0,
+                        filter_bp_amount: 0.0,
+                        filter_env_peak: 0.0,
+                        filter_env_attack: 0.0,
+                        filter_env_decay: 0.0001,
+                        filter_env_sustain: 999.9,
+                        filter_env_release: 5.0,
+                        filter_env_atk_curve: SmoothStyle::Linear,
+                        filter_env_dec_curve: SmoothStyle::Linear,
+                        filter_env_rel_curve: SmoothStyle::Linear,
+                        filter_alg_type: FilterAlgorithms::SVF,
+                        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+
+                        filter_wet_2: 1.0,
+                        filter_cutoff_2: 20000.0,
+                        filter_resonance_2: 1.0,
+                        filter_res_type_2: ResonanceType::Default,
+                        filter_lp_amount_2: 1.0,
+                        filter_hp_amount_2: 0.0,
+                        filter_bp_amount_2: 0.0,
+                        filter_env_peak_2: 0.0,
+                        filter_env_attack_2: 0.0,
+                        filter_env_decay_2: 0.0001,
+                        filter_env_sustain_2: 999.9,
+                        filter_env_release_2: 5.0,
+                        filter_env_atk_curve_2: SmoothStyle::Linear,
+                        filter_env_dec_curve_2: SmoothStyle::Linear,
+                        filter_env_rel_curve_2: SmoothStyle::Linear,
+                        filter_alg_type_2: FilterAlgorithms::SVF,
+                        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+
+                        filter_routing: FilterRouting::Parallel,
+
+                        // LFOs
+                        lfo1_enable: false,
+                        lfo2_enable: false,
+                        lfo3_enable: false,
+
+                        lfo1_freq: 2.0,
+                        lfo1_retrigger: LFOController::LFORetrigger::None,
+                        lfo1_sync: true,
+                        lfo1_snap: LFOController::LFOSnapValues::Half,
+                        lfo1_waveform: LFOController::Waveform::Sine,
+                        lfo1_phase: 0.0,
+
+                        lfo2_freq: 2.0,
+                        lfo2_retrigger: LFOController::LFORetrigger::None,
+                        lfo2_sync: true,
+                        lfo2_snap: LFOController::LFOSnapValues::Half,
+                        lfo2_waveform: LFOController::Waveform::Sine,
+                        lfo2_phase: 0.0,
+
+                        lfo3_freq: 2.0,
+                        lfo3_retrigger: LFOController::LFORetrigger::None,
+                        lfo3_sync: true,
+                        lfo3_snap: LFOController::LFOSnapValues::Half,
+                        lfo3_waveform: LFOController::Waveform::Sine,
+                        lfo3_phase: 0.0,
+
+                        // Modulations
+                        mod_source_1: ModulationSource::None,
+                        mod_source_2: ModulationSource::None,
+                        mod_source_3: ModulationSource::None,
+                        mod_source_4: ModulationSource::None,
+                        mod_dest_1: ModulationDestination::None,
+                        mod_dest_2: ModulationDestination::None,
+                        mod_dest_3: ModulationDestination::None,
+                        mod_dest_4: ModulationDestination::None,
+                        mod_amount_1: 0.0,
+                        mod_amount_2: 0.0,
+                        mod_amount_3: 0.0,
+                        mod_amount_4: 0.0,
+
+                        // EQ
+                        pre_use_eq: false,
+                        pre_low_freq: 800.0,
+                        pre_mid_freq: 3000.0,
+                        pre_high_freq: 10000.0,
+                        pre_low_gain: 0.0,
+                        pre_mid_gain: 0.0,
+                        pre_high_gain: 0.0,
+
+                        // FX
+                        use_fx: true,
+
+                        use_compressor: false,
+                        comp_amt: 0.5,
+                        comp_atk: 0.5,
+                        comp_rel: 0.5,
+                        comp_drive: 0.5,
+
+                        use_abass: false,
+                        abass_amount: 0.0011,
+
+                        use_saturation: false,
+                        sat_amount: 0.0,
+                        sat_type: SaturationType::Tape,
+
+                        use_delay: false,
+                        delay_amount: 0.0,
+                        delay_time: DelaySnapValues::Quarter,
+                        delay_decay: 0.0,
+                        delay_type: DelayType::Stereo,
+
+                        use_reverb: false,
+                        reverb_amount: 0.5,
+                        reverb_size: 0.5,
+                        reverb_feedback: 0.5,
+
+                        use_phaser: false,
+                        phaser_amount: 0.5,
+                        phaser_depth: 0.5,
+                        phaser_rate: 0.5,
+                        phaser_feedback: 0.5,
+
+                        use_buffermod: false,
+                        buffermod_amount: 0.5,
+                        buffermod_depth: 0.5,
+                        buffermod_rate: 0.5,
+                        buffermod_spread: 0.0,
+                        buffermod_timing: 620.0,
+
+                        use_flanger: false,
+                        flanger_amount: 0.5,
+                        flanger_depth: 0.5,
+                        flanger_rate: 0.5,
+                        flanger_feedback: 0.5,
+
+                        use_limiter: false,
+                        limiter_threshold: 0.5,
+                        limiter_knee: 0.5,
+                    });
+
+            return (return_name, Some(unserialized));
+        }
+        return (String::from("Error"), Option::None);
     }
 
     // Load presets uses message packing with serde
     fn load_preset_bank() -> (String, Vec<ActuatePreset>) {
         let loading_bank = FileDialog::new()
-            .add_filter("bin", &["bin"]) // Use the same filter as in save_preset_bank
+            .add_filter("actuatebank", &["actuatebank"]) // Use the same filter as in save_preset_bank
             .pick_file();
         let return_name;
 
@@ -7292,10 +7716,55 @@ impl Actuate {
         )
     }
 
+    fn export_preset(&mut self) {
+        let _updated_preset = self.update_current_preset();
+        let saving_preset = FileDialog::new()
+            .add_filter("actuate", &["actuate"]) // Use a binary format for audio data
+            .set_file_name(&self.preset_name.lock().unwrap().replace(" ", "_"))
+            .save_file();
+
+        if let Some(location) = saving_preset {
+            // Create our new save file
+            let file = File::create(location.clone());
+
+            if let Ok(_file) = file {
+                // Serialize our data to a binary format (MessagePack)
+                let preset_store = Arc::clone(&self.preset_lib);
+                let mut loaded_preset = preset_store.lock().unwrap()[self.current_preset.load(Ordering::Relaxed) as usize].clone();
+
+                // Clear out our generated notes and only keep the samples themselves
+                loaded_preset.mod1_sample_lib.clear();
+                loaded_preset.mod2_sample_lib.clear();
+                loaded_preset.mod3_sample_lib.clear();
+
+                // Serialize to MessagePack bytes
+                let serialized_data =
+                    rmp_serde::to_vec::<ActuatePreset>(&loaded_preset);
+
+                if let Err(err) = serialized_data {
+                    eprintln!("Error serializing data: {}", err);
+                    return;
+                }
+
+                // Compress the serialized data using different GzEncoder
+                let compressed_data = Self::compress_bytes(&serialized_data.unwrap());
+
+                // Now you can write the compressed data to the file
+                if let Err(err) = std::fs::write(&location, &compressed_data) {
+                    eprintln!("Error writing compressed data to file: {}", err);
+                    return;
+                }
+            } else {
+                eprintln!("Error creating file at location: {:?}", location);
+            }
+        }
+        *self.save_bank.lock().unwrap() = false;
+    }
+
     fn save_preset_bank(&mut self) {
         let _updated_preset = self.update_current_preset();
         let saving_bank = FileDialog::new()
-            .add_filter("bin", &["bin"]) // Use a binary format for audio data
+            .add_filter("actuatebank", &["actuatebank"]) // Use a binary format for audio data
             .set_file_name(&self.preset_lib_name)
             .save_file();
 
@@ -7336,7 +7805,7 @@ impl Actuate {
                 eprintln!("Error creating file at location: {:?}", location);
             }
         }
-        self.save_bank.store(false, Ordering::Relaxed);
+        *self.save_bank.lock().unwrap() = false;
     }
 
     // Functions to compress bytes and decompress using gz
