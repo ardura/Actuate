@@ -7769,8 +7769,16 @@ impl Actuate {
             loaded_preset.filter_env_release_2,
         );
 
-        setter.set_parameter(&params.preset_category, loaded_preset.preset_category.clone());
-        let preset_category_override = loaded_preset.preset_category.clone();
+        #[allow(unreachable_patterns)]
+        let preset_category_override = match loaded_preset.preset_category {
+            PresetType::Bass|PresetType::FX|PresetType::Lead|PresetType::Other|PresetType::Pad|PresetType::Percussion|PresetType::Select|PresetType::Synth => {
+                setter.set_parameter(&params.preset_category, loaded_preset.preset_category.clone());
+                loaded_preset.preset_category.clone()
+            },
+            // This is for presets made in previous version of actuate 1.1.3 without this field
+            // Clippy thinks this is unreachable but it isn't in that case
+            _ => PresetType::Select
+        };
 
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
