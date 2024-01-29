@@ -176,6 +176,28 @@ pub enum FilterAlgorithms {
     VCF,
 }
 
+// Preset categories in dropdown
+#[derive(Debug, Enum, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
+pub enum PresetType {
+    Select,
+    Bass,
+    FX,
+    Lead,
+    Pad,
+    Percussion,
+    Synth,
+    Other
+}
+
+// These let us output ToString for the ComboBox stuff + Nih-Plug
+impl fmt::Display for PresetType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+        // or, alternatively:
+        // fmt::Debug::fmt(self, f)
+    }
+}
+
 // These let us output ToString for the ComboBox stuff + Nih-Plug
 impl fmt::Display for ModulationSource {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -229,6 +251,7 @@ struct ActuatePreset {
     // Information
     preset_name: String,
     preset_info: String,
+    preset_category: PresetType,
 
     // Modules 1
     ///////////////////////////////////////////////////////////
@@ -546,11 +569,13 @@ pub struct Actuate {
     mod_override_dest_2: Arc<Mutex<ModulationDestination>>,
     mod_override_dest_3: Arc<Mutex<ModulationDestination>>,
     mod_override_dest_4: Arc<Mutex<ModulationDestination>>,
+    preset_category_override: Arc<Mutex<PresetType>>,
 
     // Preset Lib Default
     preset_lib_name: String,
     preset_name: Arc<Mutex<String>>,
     preset_info: Arc<Mutex<String>>,
+    preset_category: Arc<Mutex<PresetType>>,
     preset_lib: Arc<Mutex<Vec<ActuatePreset>>>,
 
     // Used for DC Offset calculations
@@ -704,15 +729,18 @@ impl Default for Actuate {
             mod_override_dest_2: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
             mod_override_dest_3: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
             mod_override_dest_4: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
+            preset_category_override: Arc::new(Mutex::new(PresetType::Select)),
 
             // Preset Library DEFAULT
             preset_lib_name: String::from("Default"),
             preset_name: Arc::new(Mutex::new(String::new())),
             preset_info: Arc::new(Mutex::new(String::new())),
+            preset_category: Arc::new(Mutex::new(PresetType::Select)),
             preset_lib: Arc::new(Mutex::new(vec![
                 ActuatePreset {
                     preset_name: "Default".to_string(),
                     preset_info: "Info".to_string(),
+                    preset_category: PresetType::Select,
                     mod1_audio_module_type: AudioModuleType::Osc,
                     mod1_audio_module_level: 1.0,
                     mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -1451,6 +1479,9 @@ pub struct ActuateParams {
     pub param_prev_preset: BoolParam,
     #[id = "param_update_current_preset"]
     pub param_update_current_preset: BoolParam,
+    
+    #[id = "preset_category"]
+    pub preset_category: EnumParam<PresetType>,
 
     // Not a param
     #[id = "loading"]
@@ -2813,6 +2844,7 @@ impl ActuateParams {
                     Arc::new(move |_| *export_preset.lock().unwrap() = true)
                 })
                 .hide(),
+            preset_category: EnumParam::new("Type", PresetType::Select),
 
             // For some reason the callback doesn't work right here so I went by validating params for previous and next
             param_next_preset: BoolParam::new("->", false).hide(),
@@ -2860,6 +2892,7 @@ impl Plugin for Actuate {
         let arc_preset: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib); //Arc<Mutex<Vec<ActuatePreset>>>
         let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&self.preset_name);
         let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&self.preset_info);
+        let arc_preset_category: Arc<Mutex<PresetType>> = Arc::clone(&self.preset_category);
         let clear_voices: Arc<AtomicBool> = Arc::clone(&self.clear_voices);
         let reload_entire_preset: Arc<Mutex<bool>> = Arc::clone(&self.reload_entire_preset);
         let current_preset: Arc<AtomicU32> = Arc::clone(&self.current_preset);
@@ -2893,6 +2926,8 @@ impl Plugin for Actuate {
             Arc::new(Mutex::new(ModulationDestination::None));
         let mod_dest_4_tracker_outside: Arc<Mutex<ModulationDestination>> =
             Arc::new(Mutex::new(ModulationDestination::None));
+        
+        let preset_category_tracker_outside: Arc<Mutex<PresetType>> = Arc::new(Mutex::new(PresetType::Select));
 
         let mod_source_override_1 = self.mod_override_source_1.clone();
         let mod_source_override_2 = self.mod_override_source_2.clone();
@@ -2902,6 +2937,7 @@ impl Plugin for Actuate {
         let mod_dest_override_2 = self.mod_override_dest_2.clone();
         let mod_dest_override_3 = self.mod_override_dest_3.clone();
         let mod_dest_override_4 = self.mod_override_dest_4.clone();
+        let preset_category_override = self.preset_category_override.clone();
 
         // Do our GUI stuff. Store this to later get parent window handle from it
         create_egui_editor(
@@ -2922,6 +2958,7 @@ impl Plugin for Actuate {
                         let mod_dest_2_tracker = mod_dest_2_tracker_outside.clone();
                         let mod_dest_3_tracker = mod_dest_3_tracker_outside.clone();
                         let mod_dest_4_tracker = mod_dest_4_tracker_outside.clone();
+                        let preset_category_tracker = preset_category_tracker_outside.clone();
 
                         // Reset our buttons
                         if params.param_next_preset.value() {
@@ -2964,6 +3001,7 @@ impl Plugin for Actuate {
                                     *mod_dest_override_2.lock().unwrap(),
                                     *mod_dest_override_3.lock().unwrap(),
                                     *mod_dest_override_4.lock().unwrap(),
+                                    *preset_category_override.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -2972,6 +3010,9 @@ impl Plugin for Actuate {
                                     AM1.clone(),
                                     AM2.clone(),
                                     AM3.clone(),);
+
+                                // This is the gui value only - the preset type itself is loaded in the preset already
+                                *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
 
                                 // This is set for the process thread
                                 *reload_entire_preset.lock().unwrap() = true;
@@ -3018,6 +3059,7 @@ impl Plugin for Actuate {
                                     *mod_dest_override_2.lock().unwrap(),
                                     *mod_dest_override_3.lock().unwrap(),
                                     *mod_dest_override_4.lock().unwrap(),
+                                    *preset_category_override.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -3026,6 +3068,9 @@ impl Plugin for Actuate {
                                     AM1.clone(),
                                     AM2.clone(),
                                     AM3.clone(),);
+
+                                // This is the gui value only - the preset type itself is loaded in the preset already
+                                *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
 
                                 // This is set for the process thread
                                 *reload_entire_preset.lock().unwrap() = true;
@@ -3061,6 +3106,7 @@ impl Plugin for Actuate {
                                 *mod_dest_override_2.lock().unwrap(),
                                 *mod_dest_override_3.lock().unwrap(),
                                 *mod_dest_override_4.lock().unwrap(),
+                                *preset_category_override.lock().unwrap(),
                             ) = Actuate::reload_entire_preset(
                                 setter,
                                 params.clone(),
@@ -3112,6 +3158,7 @@ impl Plugin for Actuate {
                                 *mod_dest_override_2.lock().unwrap(),
                                 *mod_dest_override_3.lock().unwrap(),
                                 *mod_dest_override_4.lock().unwrap(),
+                                *preset_category_override.lock().unwrap(),
                             ) = Actuate::reload_entire_preset(
                                 setter,
                                 params.clone(),
@@ -4522,20 +4569,51 @@ impl Plugin for Actuate {
                                                 });
                                             },
                                             LFOSelect::INFO => {
-                                                let text_response = ui.add(
-                                                    egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
-                                                        .interactive(true)
-                                                        .hint_text("Preset Name")
-                                                        .desired_width(270.0));
-                                                if text_response.clicked() {
-                                                    let mut temp_lock = arc_preset_name.lock().unwrap();
-
-                                                    //TFD
-                                                    match tinyfiledialogs::input_box("Rename preset", "Preset name:", &*temp_lock) {
-                                                        Some(input) => *temp_lock = input,
-                                                        None => {},
+                                                ui.horizontal(|ui| {
+                                                    let text_response = ui.add(
+                                                        egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
+                                                            .interactive(true)
+                                                            .hint_text("Preset Name")
+                                                            .desired_width(120.0));
+                                                    if text_response.clicked() {
+                                                        let mut temp_lock = arc_preset_name.lock().unwrap();
+    
+                                                        //TFD
+                                                        match tinyfiledialogs::input_box("Rename preset", "Preset name:", &*temp_lock) {
+                                                            Some(input) => *temp_lock = input,
+                                                            None => {},
+                                                        }
                                                     }
-                                                }
+                                                    ui.separator();
+                                                    ui.label(RichText::new("Type")
+                                                            .font(FONT)
+                                                            .color(Color32::BLACK));
+                                                        CustomComboBox::ComboBox::new("preset_category", params.preset_category.value().to_string(), true, 8)
+                                                        .selected_text(format!("{:?}", *preset_category_tracker.lock().unwrap()))
+                                                        .width(84.0)
+                                                        .show_ui(ui, |ui|{
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Select, "Select");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Bass, "Bass");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::FX, "FX");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Lead, "Lead");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Pad, "Pad");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Percussion, "Percussion");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Synth, "Synth");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Other, "Other");
+                                                        });
+                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                        if *preset_category_override.lock().unwrap() != PresetType::Select {
+                                                            // This happens on plugin preset load
+                                                            *preset_category_tracker.lock().unwrap() = *preset_category_override.lock().unwrap();
+                                                            setter.set_parameter( &params.preset_category, preset_category_tracker.lock().unwrap().clone());
+                                                            *preset_category_override.lock().unwrap() = PresetType::Select;
+                                                        } else {
+                                                            if *preset_category_tracker.lock().unwrap() != params.preset_category.value() {
+                                                                setter.set_parameter( &params.preset_category, preset_category_tracker.lock().unwrap().clone());
+                                                            }
+                                                        }
+                                                });
+
                                                 let text_info_response = ui.add(
                                                     egui::TextEdit::multiline(&mut *arc_preset_info.lock().unwrap())
                                                         .interactive(true)
@@ -5203,6 +5281,7 @@ impl Actuate {
                     let temp_preset = &locked_lib[self.current_preset.load(Ordering::Relaxed) as usize];
                     *self.preset_name.lock().unwrap() = temp_preset.preset_name.clone();
                     *self.preset_info.lock().unwrap() = temp_preset.preset_info.clone();
+                    *self.preset_category.lock().unwrap() = temp_preset.preset_category.clone();
                 }
             }
 
@@ -5257,6 +5336,7 @@ impl Actuate {
                     locked_lib[self.current_preset.load(Ordering::Relaxed) as usize].clone();
                 *self.preset_name.lock().unwrap() = temp_current_preset.preset_name;
                 *self.preset_info.lock().unwrap() = temp_current_preset.preset_info;
+                *self.preset_category.lock().unwrap() = temp_current_preset.preset_category;
             }
 
             // If Export Preset button has been pressed
@@ -6874,6 +6954,7 @@ impl Actuate {
                     ActuatePreset {
                         preset_name: "Default".to_string(),
                         preset_info: "Info".to_string(),
+                        preset_category: PresetType::Select,
                         mod1_audio_module_type: AudioModuleType::Osc,
                         mod1_audio_module_level: 1.0,
                         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -7139,6 +7220,7 @@ impl Actuate {
                     ActuatePreset {
                         preset_name: "Default".to_string(),
                         preset_info: "Info".to_string(),
+                        preset_category: PresetType::Select,
                         mod1_audio_module_type: AudioModuleType::Osc,
                         mod1_audio_module_level: 1.0,
                         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -7389,6 +7471,7 @@ impl Actuate {
         ModulationDestination,
         ModulationDestination,
         ModulationDestination,
+        PresetType,
     ) {
         // Create mutex locks for AudioModule
         let mut AMod1 = AMod1.as_ref().lock().unwrap();
@@ -7686,6 +7769,9 @@ impl Actuate {
             loaded_preset.filter_env_release_2,
         );
 
+        setter.set_parameter(&params.preset_category, loaded_preset.preset_category.clone());
+        let preset_category_override = loaded_preset.preset_category.clone();
+
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
         AMod1.restretch = loaded_preset.mod1_restretch;
@@ -7713,6 +7799,7 @@ impl Actuate {
             mod_dest_2_override,
             mod_dest_3_override,
             mod_dest_4_override,
+            preset_category_override,
         )
     }
 
@@ -7836,6 +7923,7 @@ impl Actuate {
             ActuatePreset {
                 preset_name: self.preset_name.lock().unwrap().clone(),
                 preset_info: self.preset_info.lock().unwrap().clone(),
+                preset_category: self.params.preset_category.value(),
                 // Modules 1
                 ///////////////////////////////////////////////////////////
                 mod1_audio_module_type: self.params._audio_module_1_type.value(),
