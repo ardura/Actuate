@@ -33,7 +33,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
 
     // Handle the input for a given response. Returns an f32 containing the normalized value of
     // the parameter.
-    fn handle_response(&self, ui: &Ui, response: &Response, rect: Rect) -> f32 {
+    fn handle_response(&mut self, ui: &Ui, response: &Response, rect: Rect) -> f32 {
         let mut value = self.param.modulated_normalized_value();
         let how_on;
         let visuals: WidgetVisuals;
@@ -44,17 +44,24 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                 self.param_setter.set_parameter_normalized(self.param, 1.0);
                 how_on = ui.ctx().animate_bool(response.id, true);
                 visuals = ui.style().interact_selectable(&response, true);
+                self.text_color = Color32::BLACK;
                 value = 1.0;
             } else {
                 self.param_setter.set_parameter_normalized(self.param, 0.0);
                 how_on = ui.ctx().animate_bool(response.id, false);
                 visuals = ui.style().interact_selectable(&response, false);
+                self.text_color = visuals.text_color();
                 value = 0.0;
             }
         } else {
             let temp: bool = if value > 0.0 { true } else { false };
             how_on = ui.ctx().animate_bool(response.id, temp);
             visuals = ui.style().interact_selectable(&response, temp);
+            if temp {
+                self.text_color = Color32::BLACK;
+            } else {
+                self.text_color = visuals.text_color();
+            }
         }
 
         // DRAWING
@@ -156,7 +163,7 @@ impl<'a, P: Param> BoolButton<'a, P> {
 }
 
 impl<'a, P: Param> Widget for BoolButton<'a, P> {
-    fn ui(self, ui: &mut Ui) -> Response {
+    fn ui(mut self, ui: &mut Ui) -> Response {
         // Figure out the size to reserve on screen for widget
         let (rect, response) = ui.allocate_exact_size(
             ui.spacing().interact_size.y * Vec2::new(self.scaling_x, self.scaling_y),
