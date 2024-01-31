@@ -3361,21 +3361,6 @@ impl Plugin for Actuate {
                                         .color(FONT_COLOR))
                                         .on_hover_text("by Ardura!");
                                     ui.separator();
-                                    let prev_preset_button = BoolButton::BoolButton::for_param(&params.param_prev_preset, setter, 1.5, 0.9, FONT)
-                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                    ui.add(prev_preset_button);
-                                    ui.label(RichText::new("Preset")
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                        .color(FONT_COLOR)
-                                        .size(16.0));
-                                    ui.label(RichText::new(current_preset_index.to_string())
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                        .color(FONT_COLOR)
-                                        .size(16.0));
-                                    let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.5, 0.9, FONT)
-                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                    ui.add(next_preset_button);
-                                    ui.separator();
                                     ui.add(CustomParamSlider::ParamSlider::for_param(&params.master_level, setter)
                                         .slimmer(0.5)
                                         .set_left_sided_label(true)
@@ -3403,6 +3388,29 @@ impl Plugin for Actuate {
                                     let save_bank_button = BoolButton::BoolButton::for_param(&params.param_save_bank, setter, 3.5, 0.9, SMALLER_FONT)
                                         .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(save_bank_button);
+
+                                    let prev_preset_button = BoolButton::BoolButton::for_param(&params.param_prev_preset, setter, 1.5, 0.9, FONT)
+                                        .with_background_color(DARK_GREY_UI_COLOR);
+                                    ui.add(prev_preset_button);
+                                    ui.label(RichText::new("Preset")
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .color(FONT_COLOR)
+                                        .size(16.0));
+                                    ui.label(RichText::new(current_preset_index.to_string())
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .color(FONT_COLOR)
+                                        .size(16.0));
+                                    let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.5, 0.9, FONT)
+                                        .with_background_color(DARK_GREY_UI_COLOR);
+                                    ui.add(next_preset_button);
+
+                                    ui.separator();
+                                    ui.label(RichText::new("Browse Presets")
+                                        .font(FONT)
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .color(FONT_COLOR)
+                                    )
+                                        .on_hover_text("Coming soon!");
                                 });
                                 ui.separator();
                                 const KNOB_SIZE: f32 = 32.0;
@@ -4795,13 +4803,13 @@ impl Plugin for Actuate {
                                                         });
                                                 });
                                                 ui.horizontal(|ui| {
-                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 0.9, SMALLER_FONT)
+                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 4.9, 0.9, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(update_current_preset);
-                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 5.0, 0.9, SMALLER_FONT)
+                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 4.9, 0.9, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(import_preset);
-                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 5.0, 0.9, SMALLER_FONT)
+                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 4.9, 0.9, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(export_preset);
                                                 });
