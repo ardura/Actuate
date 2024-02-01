@@ -88,8 +88,8 @@ impl VCFilter {
         self.olds[3] = self.y[2];
         match self.shape {
             ResponseType::Lowpass => self.y[3],
-            ResponseType::Highpass => self.y[3] - input,
-            ResponseType::Bandpass => self.y[3] - (self.y[3] - input),
+            ResponseType::Highpass => input - self.y[3],
+            ResponseType::Bandpass => self.y[3] - (input - self.y[3]),
         }
     }
 }

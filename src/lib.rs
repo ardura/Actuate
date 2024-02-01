@@ -69,6 +69,7 @@ use fx::{
     StateVariableFilter::{ResonanceType, StateVariableFilter},
     VCFilter::ResponseType as VCResponseType,
 };
+use old_preset_structs::load_unserialized_old;
 use CustomWidgets::{
     toggle_switch, ui_knob, BoolButton, CustomComboBox, CustomParamSlider,
     CustomParamSlider::ParamSlider as HorizontalParamSlider, CustomPopupComboBox,
@@ -79,6 +80,7 @@ mod CustomWidgets;
 mod LFOController;
 mod audio_module;
 mod fx;
+mod old_preset_structs;
 
 // This holds our current sample/granulizer sample (L,R) per sample
 pub struct LoadedSample(Vec<Vec<f32>>);
@@ -121,6 +123,7 @@ enum LFOSelect {
     LFO2,
     LFO3,
     Modulation,
+    Misc,
     FX,
 }
 
@@ -176,6 +179,31 @@ pub enum FilterAlgorithms {
     VCF,
 }
 
+// Preset categories in dropdown
+#[derive(Debug, Enum, PartialEq, Eq, Serialize, Deserialize, Clone, Copy)]
+pub enum PresetType {
+    Select,
+    Atmosphere,
+    Bass,
+    FX,
+    Keys,
+    Lead,
+    Pad,
+    Percussion,
+    Pluck,
+    Synth,
+    Other,
+}
+
+// These let us output ToString for the ComboBox stuff + Nih-Plug
+impl fmt::Display for PresetType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+        // or, alternatively:
+        // fmt::Debug::fmt(self, f)
+    }
+}
+
 // These let us output ToString for the ComboBox stuff + Nih-Plug
 impl fmt::Display for ModulationSource {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -225,10 +253,31 @@ pub struct ModulationStruct {
 
 /// This is the structure that represents a storable preset value
 #[derive(Serialize, Deserialize, Clone)]
-struct ActuatePreset {
+pub struct ActuatePreset {
     // Information
     preset_name: String,
     preset_info: String,
+    preset_category: PresetType,
+    // Preset tag information - made into bools to make my life easier
+    tag_acid: bool,
+    tag_analog: bool,
+    tag_bright: bool,
+    tag_chord: bool,
+    tag_crisp: bool,
+    tag_deep: bool,
+    tag_delicate: bool,
+    tag_hard: bool,
+    tag_harsh: bool,
+    tag_lush: bool,
+    tag_mellow: bool,
+    tag_resonant: bool,
+    tag_rich: bool,
+    tag_sharp: bool,
+    tag_silky: bool,
+    tag_smooth: bool,
+    tag_soft: bool,
+    tag_stab: bool,
+    tag_warm: bool,
 
     // Modules 1
     ///////////////////////////////////////////////////////////
@@ -370,6 +419,7 @@ struct ActuatePreset {
     tilt_filter_type_2: ArduraFilter::ResponseType,
 
     filter_routing: FilterRouting,
+    filter_cutoff_link: bool,
 
     // LFOs
     lfo1_enable: bool,
@@ -546,11 +596,13 @@ pub struct Actuate {
     mod_override_dest_2: Arc<Mutex<ModulationDestination>>,
     mod_override_dest_3: Arc<Mutex<ModulationDestination>>,
     mod_override_dest_4: Arc<Mutex<ModulationDestination>>,
+    preset_category_override: Arc<Mutex<PresetType>>,
 
     // Preset Lib Default
     preset_lib_name: String,
     preset_name: Arc<Mutex<String>>,
     preset_info: Arc<Mutex<String>>,
+    preset_category: Arc<Mutex<PresetType>>,
     preset_lib: Arc<Mutex<Vec<ActuatePreset>>>,
 
     // Used for DC Offset calculations
@@ -704,15 +756,37 @@ impl Default for Actuate {
             mod_override_dest_2: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
             mod_override_dest_3: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
             mod_override_dest_4: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
+            preset_category_override: Arc::new(Mutex::new(PresetType::Select)),
 
             // Preset Library DEFAULT
             preset_lib_name: String::from("Default"),
             preset_name: Arc::new(Mutex::new(String::new())),
             preset_info: Arc::new(Mutex::new(String::new())),
+            preset_category: Arc::new(Mutex::new(PresetType::Select)),
             preset_lib: Arc::new(Mutex::new(vec![
                 ActuatePreset {
                     preset_name: "Default".to_string(),
                     preset_info: "Info".to_string(),
+                    preset_category: PresetType::Select,
+                    tag_acid: false,
+                    tag_analog: false,
+                    tag_bright: false,
+                    tag_chord: false,
+                    tag_crisp: false,
+                    tag_deep: false,
+                    tag_delicate: false,
+                    tag_hard: false,
+                    tag_harsh: false,
+                    tag_lush: false,
+                    tag_mellow: false,
+                    tag_resonant: false,
+                    tag_rich: false,
+                    tag_sharp: false,
+                    tag_silky: false,
+                    tag_smooth: false,
+                    tag_soft: false,
+                    tag_stab: false,
+                    tag_warm: false,
                     mod1_audio_module_type: AudioModuleType::Osc,
                     mod1_audio_module_level: 1.0,
                     mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -837,6 +911,7 @@ impl Default for Actuate {
                     tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
 
                     filter_routing: FilterRouting::Parallel,
+                    filter_cutoff_link: false,
 
                     // LFOs
                     lfo1_enable: false,
@@ -1026,6 +1101,8 @@ pub struct ActuateParams {
     // Filter routing
     #[id = "filter_routing"]
     pub filter_routing: EnumParam<FilterRouting>,
+    #[id = "filter_cutoff_link"]
+    pub filter_cutoff_link: BoolParam,
 
     // Controls for when audio_module_1_type is Osc
     #[id = "osc_1_type"]
@@ -1451,6 +1528,47 @@ pub struct ActuateParams {
     pub param_prev_preset: BoolParam,
     #[id = "param_update_current_preset"]
     pub param_update_current_preset: BoolParam,
+
+    #[id = "preset_category"]
+    pub preset_category: EnumParam<PresetType>,
+    #[id = "tag_acid"]
+    pub tag_acid: BoolParam,
+    #[id = "tag_analog"]
+    pub tag_analog: BoolParam,
+    #[id = "tag_bright"]
+    pub tag_bright: BoolParam,
+    #[id = "tag_chord"]
+    pub tag_chord: BoolParam,
+    #[id = "tag_crisp"]
+    pub tag_crisp: BoolParam,
+    #[id = "tag_deep"]
+    pub tag_deep: BoolParam,
+    #[id = "tag_delicate"]
+    pub tag_delicate: BoolParam,
+    #[id = "tag_hard"]
+    pub tag_hard: BoolParam,
+    #[id = "tag_harsh"]
+    pub tag_harsh: BoolParam,
+    #[id = "tag_lush"]
+    pub tag_lush: BoolParam,
+    #[id = "tag_mellow"]
+    pub tag_mellow: BoolParam,
+    #[id = "tag_resonant"]
+    pub tag_resonant: BoolParam,
+    #[id = "tag_rich"]
+    pub tag_rich: BoolParam,
+    #[id = "tag_sharp"]
+    pub tag_sharp: BoolParam,
+    #[id = "tag_silky"]
+    pub tag_silky: BoolParam,
+    #[id = "tag_smooth"]
+    pub tag_smooth: BoolParam,
+    #[id = "tag_soft"]
+    pub tag_soft: BoolParam,
+    #[id = "tag_stab"]
+    pub tag_stab: BoolParam,
+    #[id = "tag_warm"]
+    pub tag_warm: BoolParam,
 
     // Not a param
     #[id = "loading"]
@@ -2427,6 +2545,8 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
 
+            filter_cutoff_link: BoolParam::new("Filter Cutoffs Linked", false),
+
             // LFOs
             ////////////////////////////////////////////////////////////////////////////////////
             lfo1_enable: BoolParam::new("LFO 1 Enable", false),
@@ -2813,6 +2933,26 @@ impl ActuateParams {
                     Arc::new(move |_| *export_preset.lock().unwrap() = true)
                 })
                 .hide(),
+            preset_category: EnumParam::new("Type", PresetType::Select),
+            tag_acid: BoolParam::new("Acid", false).hide(),
+            tag_analog: BoolParam::new("Analog", false).hide(),
+            tag_bright: BoolParam::new("Bright", false).hide(),
+            tag_chord: BoolParam::new("Chord", false).hide(),
+            tag_crisp: BoolParam::new("Crisp", false).hide(),
+            tag_deep: BoolParam::new("Deep", false).hide(),
+            tag_delicate: BoolParam::new("Delicate", false).hide(),
+            tag_hard: BoolParam::new("Hard", false).hide(),
+            tag_harsh: BoolParam::new("Harsh", false).hide(),
+            tag_lush: BoolParam::new("Lush", false).hide(),
+            tag_mellow: BoolParam::new("Mellow", false).hide(),
+            tag_resonant: BoolParam::new("Resonant", false).hide(),
+            tag_rich: BoolParam::new("Rich", false).hide(),
+            tag_sharp: BoolParam::new("Sharp", false).hide(),
+            tag_silky: BoolParam::new("Silky", false).hide(),
+            tag_smooth: BoolParam::new("Smooth", false).hide(),
+            tag_soft: BoolParam::new("Soft", false).hide(),
+            tag_stab: BoolParam::new("Stab", false).hide(),
+            tag_warm: BoolParam::new("Warm", false).hide(),
 
             // For some reason the callback doesn't work right here so I went by validating params for previous and next
             param_next_preset: BoolParam::new("->", false).hide(),
@@ -2860,6 +3000,7 @@ impl Plugin for Actuate {
         let arc_preset: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib); //Arc<Mutex<Vec<ActuatePreset>>>
         let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&self.preset_name);
         let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&self.preset_info);
+        let arc_preset_category: Arc<Mutex<PresetType>> = Arc::clone(&self.preset_category);
         let clear_voices: Arc<AtomicBool> = Arc::clone(&self.clear_voices);
         let reload_entire_preset: Arc<Mutex<bool>> = Arc::clone(&self.reload_entire_preset);
         let current_preset: Arc<AtomicU32> = Arc::clone(&self.current_preset);
@@ -2894,6 +3035,9 @@ impl Plugin for Actuate {
         let mod_dest_4_tracker_outside: Arc<Mutex<ModulationDestination>> =
             Arc::new(Mutex::new(ModulationDestination::None));
 
+        let preset_category_tracker_outside: Arc<Mutex<PresetType>> =
+            Arc::new(Mutex::new(PresetType::Select));
+
         let mod_source_override_1 = self.mod_override_source_1.clone();
         let mod_source_override_2 = self.mod_override_source_2.clone();
         let mod_source_override_3 = self.mod_override_source_3.clone();
@@ -2902,6 +3046,7 @@ impl Plugin for Actuate {
         let mod_dest_override_2 = self.mod_override_dest_2.clone();
         let mod_dest_override_3 = self.mod_override_dest_3.clone();
         let mod_dest_override_4 = self.mod_override_dest_4.clone();
+        let preset_category_override = self.preset_category_override.clone();
 
         // Do our GUI stuff. Store this to later get parent window handle from it
         create_egui_editor(
@@ -2922,6 +3067,7 @@ impl Plugin for Actuate {
                         let mod_dest_2_tracker = mod_dest_2_tracker_outside.clone();
                         let mod_dest_3_tracker = mod_dest_3_tracker_outside.clone();
                         let mod_dest_4_tracker = mod_dest_4_tracker_outside.clone();
+                        let preset_category_tracker = preset_category_tracker_outside.clone();
 
                         // Reset our buttons
                         if params.param_next_preset.value() {
@@ -2964,6 +3110,7 @@ impl Plugin for Actuate {
                                     *mod_dest_override_2.lock().unwrap(),
                                     *mod_dest_override_3.lock().unwrap(),
                                     *mod_dest_override_4.lock().unwrap(),
+                                    *preset_category_override.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -2972,6 +3119,9 @@ impl Plugin for Actuate {
                                     AM1.clone(),
                                     AM2.clone(),
                                     AM3.clone(),);
+
+                                // This is the gui value only - the preset type itself is loaded in the preset already
+                                *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
 
                                 // This is set for the process thread
                                 *reload_entire_preset.lock().unwrap() = true;
@@ -3018,6 +3168,7 @@ impl Plugin for Actuate {
                                     *mod_dest_override_2.lock().unwrap(),
                                     *mod_dest_override_3.lock().unwrap(),
                                     *mod_dest_override_4.lock().unwrap(),
+                                    *preset_category_override.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -3026,6 +3177,9 @@ impl Plugin for Actuate {
                                     AM1.clone(),
                                     AM2.clone(),
                                     AM3.clone(),);
+
+                                // This is the gui value only - the preset type itself is loaded in the preset already
+                                *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
 
                                 // This is set for the process thread
                                 *reload_entire_preset.lock().unwrap() = true;
@@ -3061,6 +3215,7 @@ impl Plugin for Actuate {
                                 *mod_dest_override_2.lock().unwrap(),
                                 *mod_dest_override_3.lock().unwrap(),
                                 *mod_dest_override_4.lock().unwrap(),
+                                *preset_category_override.lock().unwrap(),
                             ) = Actuate::reload_entire_preset(
                                 setter,
                                 params.clone(),
@@ -3096,12 +3251,10 @@ impl Plugin for Actuate {
                                 RangeInclusive::new(0.0, HEIGHT as f32));
                             let popup_size = Vec2::new(400.0, 200.0);
                             let popup_pos = screen_size.center();
-    
+
                             // Draw the loading popup content here.
                             ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
                             ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
-                            //import_preset();
 
                             (
                                 *mod_source_override_1.lock().unwrap(),
@@ -3112,6 +3265,7 @@ impl Plugin for Actuate {
                                 *mod_dest_override_2.lock().unwrap(),
                                 *mod_dest_override_3.lock().unwrap(),
                                 *mod_dest_override_4.lock().unwrap(),
+                                *preset_category_override.lock().unwrap(),
                             ) = Actuate::reload_entire_preset(
                                 setter,
                                 params.clone(),
@@ -3143,6 +3297,9 @@ impl Plugin for Actuate {
                         if update_current_preset.load(Ordering::Relaxed) || params.param_update_current_preset.value() {
                             setter.set_parameter(&params.param_update_current_preset, false);
                             update_current_preset.store(false, Ordering::Relaxed);
+                        }
+                        if params.filter_cutoff_link.value() {
+                            setter.set_parameter(&params.filter_cutoff_2, params.filter_cutoff.value());
                         }
 
                         // Assign default colors
@@ -3214,21 +3371,6 @@ impl Plugin for Actuate {
                                         .color(FONT_COLOR))
                                         .on_hover_text("by Ardura!");
                                     ui.separator();
-                                    let prev_preset_button = BoolButton::BoolButton::for_param(&params.param_prev_preset, setter, 1.5, 0.9, FONT)
-                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                    ui.add(prev_preset_button);
-                                    ui.label(RichText::new("Preset")
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                        .color(FONT_COLOR)
-                                        .size(16.0));
-                                    ui.label(RichText::new(current_preset_index.to_string())
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                        .color(FONT_COLOR)
-                                        .size(16.0));
-                                    let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.5, 0.9, FONT)
-                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                    ui.add(next_preset_button);
-                                    ui.separator();
                                     ui.add(CustomParamSlider::ParamSlider::for_param(&params.master_level, setter)
                                         .slimmer(0.5)
                                         .set_left_sided_label(true)
@@ -3256,6 +3398,29 @@ impl Plugin for Actuate {
                                     let save_bank_button = BoolButton::BoolButton::for_param(&params.param_save_bank, setter, 3.5, 0.9, SMALLER_FONT)
                                         .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(save_bank_button);
+
+                                    let prev_preset_button = BoolButton::BoolButton::for_param(&params.param_prev_preset, setter, 1.5, 0.9, FONT)
+                                        .with_background_color(DARK_GREY_UI_COLOR);
+                                    ui.add(prev_preset_button);
+                                    ui.label(RichText::new("Preset")
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .color(FONT_COLOR)
+                                        .size(16.0));
+                                    ui.label(RichText::new(current_preset_index.to_string())
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .color(FONT_COLOR)
+                                        .size(16.0));
+                                    let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.5, 0.9, FONT)
+                                        .with_background_color(DARK_GREY_UI_COLOR);
+                                    ui.add(next_preset_button);
+
+                                    ui.separator();
+                                    ui.label(RichText::new("Browse Presets")
+                                        .font(FONT)
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .color(FONT_COLOR)
+                                    )
+                                        .on_hover_text("Coming soon!");
                                 });
                                 ui.separator();
                                 const KNOB_SIZE: f32 = 32.0;
@@ -4025,6 +4190,15 @@ impl Plugin for Actuate {
                                                 SYNTH_MIDDLE_BLUE
                                             );
                                         }
+                                        LFOSelect::Misc => {
+                                            ui.painter().rect_filled(
+                                                Rect::from_x_y_ranges(
+                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
+                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
+                                                Rounding::from(16.0),
+                                                SYNTH_SOFT_BLUE2
+                                            );
+                                        }
                                         LFOSelect::Modulation => {
                                             ui.painter().rect_filled(
                                                 Rect::from_x_y_ranges(
@@ -4057,12 +4231,13 @@ impl Plugin for Actuate {
                                     // LFO Box
                                     ui.vertical(|ui|{
                                         ui.horizontal(|ui| {
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Mods").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").color(Color32::BLACK));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Mods").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").color(Color32::BLACK).font(SMALLER_FONT));
                                         });
                                         ui.separator();
                                         match *lfo_select.lock().unwrap() {
@@ -4225,6 +4400,17 @@ impl Plugin for Actuate {
                                                     });
                                                 });
                                             },
+                                            LFOSelect::Misc => {
+                                                ui.horizontal(|ui|{
+                                                    ui.label(RichText::new("Link Cutoff 2 to Cutoff 1")
+                                                        .font(SMALLER_FONT)
+                                                        .color(Color32::BLACK)
+                                                    )
+                                                        .on_hover_text("Filter 1 will control both filter cutoff values");
+                                                    let filter_cutoff_link = toggle_switch::ToggleSwitch::for_param(&params.filter_cutoff_link, setter);
+                                                    ui.add(filter_cutoff_link);
+                                                });
+                                            }
                                             LFOSelect::Modulation => {
                                                 // This is my creative "combobox" to use an enumparam with Nih-Plug
                                                 ui.vertical(|ui|{
@@ -4522,44 +4708,139 @@ impl Plugin for Actuate {
                                                 });
                                             },
                                             LFOSelect::INFO => {
-                                                let text_response = ui.add(
-                                                    egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
-                                                        .interactive(true)
-                                                        .hint_text("Preset Name")
-                                                        .desired_width(270.0));
-                                                if text_response.clicked() {
-                                                    let mut temp_lock = arc_preset_name.lock().unwrap();
-
-                                                    //TFD
-                                                    match tinyfiledialogs::input_box("Rename preset", "Preset name:", &*temp_lock) {
-                                                        Some(input) => *temp_lock = input,
-                                                        None => {},
-                                                    }
-                                                }
-                                                let text_info_response = ui.add(
-                                                    egui::TextEdit::multiline(&mut *arc_preset_info.lock().unwrap())
-                                                        .interactive(true)
-                                                        .hint_text("Preset Info")
-                                                        .desired_width(270.0)
-                                                        .desired_rows(4)
-                                                        .lock_focus(true));
-                                                if text_info_response.clicked() {
-                                                    let mut temp_lock = arc_preset_info.lock().unwrap();
-
-                                                    //TFD
-                                                    match tinyfiledialogs::input_box("Update preset description", "Preset description:", &*temp_lock) {
-                                                        Some(input) => *temp_lock = input,
-                                                        None => {},
-                                                    }
-                                                }
                                                 ui.horizontal(|ui| {
-                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 0.9, SMALLER_FONT)
+                                                    let text_response = ui.add(
+                                                        egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
+                                                            .interactive(true)
+                                                            .hint_text("Preset Name")
+                                                            .desired_width(120.0));
+                                                    if text_response.clicked() {
+                                                        let mut temp_lock = arc_preset_name.lock().unwrap();
+
+                                                        //TFD
+                                                        match tinyfiledialogs::input_box("Rename preset", "Preset name:", &*temp_lock) {
+                                                            Some(input) => *temp_lock = input,
+                                                            None => {},
+                                                        }
+                                                    }
+                                                    ui.label(RichText::new("Type")
+                                                            .font(FONT)
+                                                            .color(Color32::BLACK));
+                                                        CustomComboBox::ComboBox::new("preset_category", params.preset_category.value().to_string(), true, 9)
+                                                        .selected_text(format!("{:?}", *preset_category_tracker.lock().unwrap()))
+                                                        .width(84.0)
+                                                        .show_ui(ui, |ui|{
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Select, "Select");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Atmosphere, "Atmosphere");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Bass, "Bass");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::FX, "FX");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Keys, "Keys");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Lead, "Lead");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Pad, "Pad");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Percussion, "Percussion");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Pluck, "Pluck");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Synth, "Synth");
+                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Other, "Other");
+                                                        });
+                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                        if *preset_category_override.lock().unwrap() != PresetType::Select {
+                                                            // This happens on plugin preset load
+                                                            *preset_category_tracker.lock().unwrap() = *preset_category_override.lock().unwrap();
+                                                            setter.set_parameter( &params.preset_category, preset_category_tracker.lock().unwrap().clone());
+                                                            *preset_category_override.lock().unwrap() = PresetType::Select;
+                                                        } else {
+                                                            if *preset_category_tracker.lock().unwrap() != params.preset_category.value() {
+                                                                setter.set_parameter( &params.preset_category, preset_category_tracker.lock().unwrap().clone());
+                                                            }
+                                                        }
+                                                });
+
+                                                ui.horizontal(|ui|{
+                                                    let text_info_response = ui.add(
+                                                        egui::TextEdit::multiline(&mut *arc_preset_info.lock().unwrap())
+                                                            .interactive(true)
+                                                            .hint_text("Preset Info")
+                                                            .desired_width(120.0)
+                                                            .desired_rows(5)
+                                                            .lock_focus(true));
+                                                    if text_info_response.clicked() {
+                                                        let mut temp_lock = arc_preset_info.lock().unwrap();
+
+                                                        //TFD
+                                                        match tinyfiledialogs::input_box("Update preset description", "Preset description:", &*temp_lock) {
+                                                            Some(input) => *temp_lock = input,
+                                                            None => {},
+                                                        }
+                                                    }
+                                                    ScrollArea::vertical()
+                                                        .max_height(220.0)
+                                                        .max_width(164.0)
+                                                        .always_show_scroll(true)
+                                                        .show(ui, |ui|{
+                                                            ui.vertical(|ui|{
+                                                                ui.horizontal(|ui|{
+                                                                    let tag_acid = BoolButton::BoolButton::for_param(&params.tag_acid, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_acid);
+                                                                    let tag_analog = BoolButton::BoolButton::for_param(&params.tag_analog, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_analog);
+                                                                    let tag_bright = BoolButton::BoolButton::for_param(&params.tag_bright, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_bright);
+                                                                });
+                                                                ui.horizontal(|ui|{
+                                                                    let tag_chord = BoolButton::BoolButton::for_param(&params.tag_chord, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_chord);
+                                                                    let tag_crisp = BoolButton::BoolButton::for_param(&params.tag_crisp, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_crisp);
+                                                                    let tag_deep = BoolButton::BoolButton::for_param(&params.tag_deep, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_deep);
+                                                                });
+                                                                ui.horizontal(|ui|{
+                                                                    let tag_delicate = BoolButton::BoolButton::for_param(&params.tag_delicate, setter, 2.7, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_delicate);
+                                                                    let tag_hard = BoolButton::BoolButton::for_param(&params.tag_hard, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_hard);
+                                                                });
+                                                                ui.horizontal(|ui|{
+                                                                    let tag_harsh = BoolButton::BoolButton::for_param(&params.tag_harsh, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_harsh);
+                                                                    let tag_lush = BoolButton::BoolButton::for_param(&params.tag_lush, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_lush);
+                                                                    let tag_mellow = BoolButton::BoolButton::for_param(&params.tag_mellow, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_mellow);
+                                                                });
+                                                                ui.horizontal(|ui|{
+                                                                    let tag_resonant = BoolButton::BoolButton::for_param(&params.tag_resonant, setter, 2.7, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_resonant);
+                                                                    let tag_rich = BoolButton::BoolButton::for_param(&params.tag_rich, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_rich);
+                                                                });
+                                                                ui.horizontal(|ui|{
+                                                                    let tag_sharp = BoolButton::BoolButton::for_param(&params.tag_sharp, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_sharp);
+                                                                    let tag_silky = BoolButton::BoolButton::for_param(&params.tag_silky, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_silky);
+                                                                    let tag_smooth = BoolButton::BoolButton::for_param(&params.tag_smooth, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_smooth);
+                                                                });
+                                                                ui.horizontal(|ui|{
+                                                                    let tag_soft = BoolButton::BoolButton::for_param(&params.tag_soft, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_soft);
+                                                                    let tag_stab = BoolButton::BoolButton::for_param(&params.tag_stab, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_stab);
+                                                                    let tag_warm = BoolButton::BoolButton::for_param(&params.tag_warm, setter, 2.0, 0.9, SMALLER_FONT);
+                                                                    ui.add(tag_warm);
+                                                                });
+                                                            });
+                                                        });
+                                                });
+                                                ui.horizontal(|ui| {
+                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 4.9, 0.9, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(update_current_preset);
-                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 5.0, 0.9, SMALLER_FONT)
+                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 4.9, 0.9, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(import_preset);
-                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 5.0, 0.9, SMALLER_FONT)
+                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 4.9, 0.9, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(export_preset);
                                                 });
@@ -5186,7 +5467,7 @@ impl Actuate {
                 && self.file_open_buffer_timer.load(Ordering::Relaxed) == 0
                 && !*self.reload_entire_preset.lock().unwrap()
             {
-                // This is up here so it happens first - putting this down by 
+                // This is up here so it happens first - putting this down by
                 // (self.preset_lib_name, unserialized) = Actuate::load_preset_bank();
                 // Makes this block happen twice?
                 *self.import_preset.lock().unwrap() = false;
@@ -5199,10 +5480,13 @@ impl Actuate {
                 if unserialized.is_some() {
                     let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
                     let mut locked_lib = arc_lib.lock().unwrap();
-                    locked_lib[self.current_preset.load(Ordering::Relaxed) as usize] = unserialized.unwrap();
-                    let temp_preset = &locked_lib[self.current_preset.load(Ordering::Relaxed) as usize];
+                    locked_lib[self.current_preset.load(Ordering::Relaxed) as usize] =
+                        unserialized.unwrap();
+                    let temp_preset =
+                        &locked_lib[self.current_preset.load(Ordering::Relaxed) as usize];
                     *self.preset_name.lock().unwrap() = temp_preset.preset_name.clone();
                     *self.preset_info.lock().unwrap() = temp_preset.preset_info.clone();
+                    *self.preset_category.lock().unwrap() = temp_preset.preset_category.clone();
                 }
             }
 
@@ -5212,7 +5496,7 @@ impl Actuate {
                 && self.file_open_buffer_timer.load(Ordering::Relaxed) == 0
                 && !*self.reload_entire_preset.lock().unwrap()
             {
-                // This is up here so it happens first - putting this down by 
+                // This is up here so it happens first - putting this down by
                 // (self.preset_lib_name, unserialized) = Actuate::load_preset_bank();
                 // Makes this block happen twice?
                 *self.load_bank.lock().unwrap() = false;
@@ -5232,7 +5516,6 @@ impl Actuate {
                 self.file_open_buffer_timer.store(1, Ordering::Relaxed);
                 let unserialized: Vec<ActuatePreset>;
                 (self.preset_lib_name, unserialized) = Actuate::load_preset_bank();
-                
 
                 let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
                 let mut locked_lib = arc_lib.lock().unwrap();
@@ -5257,6 +5540,7 @@ impl Actuate {
                     locked_lib[self.current_preset.load(Ordering::Relaxed) as usize].clone();
                 *self.preset_name.lock().unwrap() = temp_current_preset.preset_name;
                 *self.preset_info.lock().unwrap() = temp_current_preset.preset_info;
+                *self.preset_category.lock().unwrap() = temp_current_preset.preset_category;
             }
 
             // If Export Preset button has been pressed
@@ -6828,8 +7112,7 @@ impl Actuate {
             *channel_samples.get_mut(1).unwrap() = right_output * self.params.master_level.value();
 
             // This is down here for the save function gui and export preset unsetting to work
-            if *self.reload_entire_preset.lock().unwrap() && self.params.param_save_bank.value()
-            {
+            if *self.reload_entire_preset.lock().unwrap() && self.params.param_save_bank.value() {
                 *self.reload_entire_preset.lock().unwrap() = false;
             }
             if *self.reload_entire_preset.lock().unwrap() && self.params.param_export_preset.value()
@@ -6847,7 +7130,10 @@ impl Actuate {
         let return_name;
 
         if let Some(imported_preset) = imported_preset {
-            return_name = imported_preset.to_str().unwrap_or("Invalid Path").to_string();
+            return_name = imported_preset
+                .to_str()
+                .unwrap_or("Invalid Path")
+                .to_string();
 
             // Read the compressed data from the file
             let mut compressed_data = Vec::new();
@@ -6869,235 +7155,260 @@ impl Actuate {
             let file_string_data = decompressed_data.unwrap();
 
             // Deserialize into ActuatePreset - return default empty lib if error
-            let unserialized: ActuatePreset = rmp_serde::from_slice(&file_string_data)
-                .unwrap_or(
-                    ActuatePreset {
-                        preset_name: "Default".to_string(),
-                        preset_info: "Info".to_string(),
-                        mod1_audio_module_type: AudioModuleType::Osc,
-                        mod1_audio_module_level: 1.0,
-                        mod1_loaded_sample: vec![vec![0.0, 0.0]],
-                        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                        mod1_loop_wavetable: false,
-                        mod1_single_cycle: false,
-                        mod1_restretch: true,
-                        mod1_prev_restretch: false,
-                        mod1_grain_hold: 200,
-                        mod1_grain_gap: 200,
-                        mod1_start_position: 0.0,
-                        mod1_end_position: 1.0,
-                        mod1_grain_crossfade: 50,
-                        mod1_osc_type: VoiceType::Sine,
-                        mod1_osc_octave: 0,
-                        mod1_osc_semitones: 0,
-                        mod1_osc_detune: 0.0,
-                        mod1_osc_attack: 0.0001,
-                        mod1_osc_decay: 0.0001,
-                        mod1_osc_sustain: 999.9,
-                        mod1_osc_release: 5.0,
-                        mod1_osc_retrigger: RetriggerStyle::Retrigger,
-                        mod1_osc_atk_curve: SmoothStyle::Linear,
-                        mod1_osc_dec_curve: SmoothStyle::Linear,
-                        mod1_osc_rel_curve: SmoothStyle::Linear,
-                        mod1_osc_unison: 1,
-                        mod1_osc_unison_detune: 0.0,
-                        mod1_osc_stereo: 0.0,
+            let mut unserialized: ActuatePreset = rmp_serde::from_slice(&file_string_data)
+                .unwrap_or(ActuatePreset {
+                    preset_name: "Error Importing".to_string(),
+                    preset_info: "Corrupted preset or incompatible version".to_string(),
+                    preset_category: PresetType::Select,
+                    tag_acid: false,
+                    tag_analog: false,
+                    tag_bright: false,
+                    tag_chord: false,
+                    tag_crisp: false,
+                    tag_deep: false,
+                    tag_delicate: false,
+                    tag_hard: false,
+                    tag_harsh: false,
+                    tag_lush: false,
+                    tag_mellow: false,
+                    tag_resonant: false,
+                    tag_rich: false,
+                    tag_sharp: false,
+                    tag_silky: false,
+                    tag_smooth: false,
+                    tag_soft: false,
+                    tag_stab: false,
+                    tag_warm: false,
+                    mod1_audio_module_type: AudioModuleType::Osc,
+                    mod1_audio_module_level: 1.0,
+                    mod1_loaded_sample: vec![vec![0.0, 0.0]],
+                    mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                    mod1_loop_wavetable: false,
+                    mod1_single_cycle: false,
+                    mod1_restretch: true,
+                    mod1_prev_restretch: false,
+                    mod1_grain_hold: 200,
+                    mod1_grain_gap: 200,
+                    mod1_start_position: 0.0,
+                    mod1_end_position: 1.0,
+                    mod1_grain_crossfade: 50,
+                    mod1_osc_type: VoiceType::Sine,
+                    mod1_osc_octave: 0,
+                    mod1_osc_semitones: 0,
+                    mod1_osc_detune: 0.0,
+                    mod1_osc_attack: 0.0001,
+                    mod1_osc_decay: 0.0001,
+                    mod1_osc_sustain: 999.9,
+                    mod1_osc_release: 5.0,
+                    mod1_osc_retrigger: RetriggerStyle::Retrigger,
+                    mod1_osc_atk_curve: SmoothStyle::Linear,
+                    mod1_osc_dec_curve: SmoothStyle::Linear,
+                    mod1_osc_rel_curve: SmoothStyle::Linear,
+                    mod1_osc_unison: 1,
+                    mod1_osc_unison_detune: 0.0,
+                    mod1_osc_stereo: 0.0,
 
-                        mod2_audio_module_type: AudioModuleType::Off,
-                        mod2_audio_module_level: 1.0,
-                        mod2_loaded_sample: vec![vec![0.0, 0.0]],
-                        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                        mod2_loop_wavetable: false,
-                        mod2_single_cycle: false,
-                        mod2_restretch: true,
-                        mod2_prev_restretch: false,
-                        mod2_grain_hold: 200,
-                        mod2_grain_gap: 200,
-                        mod2_start_position: 0.0,
-                        mod2_end_position: 1.0,
-                        mod2_grain_crossfade: 50,
-                        mod2_osc_type: VoiceType::Sine,
-                        mod2_osc_octave: 0,
-                        mod2_osc_semitones: 0,
-                        mod2_osc_detune: 0.0,
-                        mod2_osc_attack: 0.0001,
-                        mod2_osc_decay: 0.0001,
-                        mod2_osc_sustain: 999.9,
-                        mod2_osc_release: 5.0,
-                        mod2_osc_retrigger: RetriggerStyle::Retrigger,
-                        mod2_osc_atk_curve: SmoothStyle::Linear,
-                        mod2_osc_dec_curve: SmoothStyle::Linear,
-                        mod2_osc_rel_curve: SmoothStyle::Linear,
-                        mod2_osc_unison: 1,
-                        mod2_osc_unison_detune: 0.0,
-                        mod2_osc_stereo: 0.0,
+                    mod2_audio_module_type: AudioModuleType::Off,
+                    mod2_audio_module_level: 1.0,
+                    mod2_loaded_sample: vec![vec![0.0, 0.0]],
+                    mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                    mod2_loop_wavetable: false,
+                    mod2_single_cycle: false,
+                    mod2_restretch: true,
+                    mod2_prev_restretch: false,
+                    mod2_grain_hold: 200,
+                    mod2_grain_gap: 200,
+                    mod2_start_position: 0.0,
+                    mod2_end_position: 1.0,
+                    mod2_grain_crossfade: 50,
+                    mod2_osc_type: VoiceType::Sine,
+                    mod2_osc_octave: 0,
+                    mod2_osc_semitones: 0,
+                    mod2_osc_detune: 0.0,
+                    mod2_osc_attack: 0.0001,
+                    mod2_osc_decay: 0.0001,
+                    mod2_osc_sustain: 999.9,
+                    mod2_osc_release: 5.0,
+                    mod2_osc_retrigger: RetriggerStyle::Retrigger,
+                    mod2_osc_atk_curve: SmoothStyle::Linear,
+                    mod2_osc_dec_curve: SmoothStyle::Linear,
+                    mod2_osc_rel_curve: SmoothStyle::Linear,
+                    mod2_osc_unison: 1,
+                    mod2_osc_unison_detune: 0.0,
+                    mod2_osc_stereo: 0.0,
 
-                        mod3_audio_module_type: AudioModuleType::Off,
-                        mod3_audio_module_level: 1.0,
-                        mod3_loaded_sample: vec![vec![0.0, 0.0]],
-                        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                        mod3_loop_wavetable: false,
-                        mod3_single_cycle: false,
-                        mod3_restretch: true,
-                        mod3_prev_restretch: false,
-                        mod3_grain_hold: 200,
-                        mod3_grain_gap: 200,
-                        mod3_start_position: 0.0,
-                        mod3_end_position: 1.0,
-                        mod3_grain_crossfade: 50,
-                        mod3_osc_type: VoiceType::Sine,
-                        mod3_osc_octave: 0,
-                        mod3_osc_semitones: 0,
-                        mod3_osc_detune: 0.0,
-                        mod3_osc_attack: 0.0001,
-                        mod3_osc_decay: 0.0001,
-                        mod3_osc_sustain: 999.9,
-                        mod3_osc_release: 5.0,
-                        mod3_osc_retrigger: RetriggerStyle::Retrigger,
-                        mod3_osc_atk_curve: SmoothStyle::Linear,
-                        mod3_osc_dec_curve: SmoothStyle::Linear,
-                        mod3_osc_rel_curve: SmoothStyle::Linear,
-                        mod3_osc_unison: 1,
-                        mod3_osc_unison_detune: 0.0,
-                        mod3_osc_stereo: 0.0,
+                    mod3_audio_module_type: AudioModuleType::Off,
+                    mod3_audio_module_level: 1.0,
+                    mod3_loaded_sample: vec![vec![0.0, 0.0]],
+                    mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+                    mod3_loop_wavetable: false,
+                    mod3_single_cycle: false,
+                    mod3_restretch: true,
+                    mod3_prev_restretch: false,
+                    mod3_grain_hold: 200,
+                    mod3_grain_gap: 200,
+                    mod3_start_position: 0.0,
+                    mod3_end_position: 1.0,
+                    mod3_grain_crossfade: 50,
+                    mod3_osc_type: VoiceType::Sine,
+                    mod3_osc_octave: 0,
+                    mod3_osc_semitones: 0,
+                    mod3_osc_detune: 0.0,
+                    mod3_osc_attack: 0.0001,
+                    mod3_osc_decay: 0.0001,
+                    mod3_osc_sustain: 999.9,
+                    mod3_osc_release: 5.0,
+                    mod3_osc_retrigger: RetriggerStyle::Retrigger,
+                    mod3_osc_atk_curve: SmoothStyle::Linear,
+                    mod3_osc_dec_curve: SmoothStyle::Linear,
+                    mod3_osc_rel_curve: SmoothStyle::Linear,
+                    mod3_osc_unison: 1,
+                    mod3_osc_unison_detune: 0.0,
+                    mod3_osc_stereo: 0.0,
 
-                        filter_wet: 1.0,
-                        filter_cutoff: 20000.0,
-                        filter_resonance: 1.0,
-                        filter_res_type: ResonanceType::Default,
-                        filter_lp_amount: 1.0,
-                        filter_hp_amount: 0.0,
-                        filter_bp_amount: 0.0,
-                        filter_env_peak: 0.0,
-                        filter_env_attack: 0.0,
-                        filter_env_decay: 0.0001,
-                        filter_env_sustain: 999.9,
-                        filter_env_release: 5.0,
-                        filter_env_atk_curve: SmoothStyle::Linear,
-                        filter_env_dec_curve: SmoothStyle::Linear,
-                        filter_env_rel_curve: SmoothStyle::Linear,
-                        filter_alg_type: FilterAlgorithms::SVF,
-                        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+                    filter_wet: 1.0,
+                    filter_cutoff: 20000.0,
+                    filter_resonance: 1.0,
+                    filter_res_type: ResonanceType::Default,
+                    filter_lp_amount: 1.0,
+                    filter_hp_amount: 0.0,
+                    filter_bp_amount: 0.0,
+                    filter_env_peak: 0.0,
+                    filter_env_attack: 0.0,
+                    filter_env_decay: 0.0001,
+                    filter_env_sustain: 999.9,
+                    filter_env_release: 5.0,
+                    filter_env_atk_curve: SmoothStyle::Linear,
+                    filter_env_dec_curve: SmoothStyle::Linear,
+                    filter_env_rel_curve: SmoothStyle::Linear,
+                    filter_alg_type: FilterAlgorithms::SVF,
+                    tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
 
-                        filter_wet_2: 1.0,
-                        filter_cutoff_2: 20000.0,
-                        filter_resonance_2: 1.0,
-                        filter_res_type_2: ResonanceType::Default,
-                        filter_lp_amount_2: 1.0,
-                        filter_hp_amount_2: 0.0,
-                        filter_bp_amount_2: 0.0,
-                        filter_env_peak_2: 0.0,
-                        filter_env_attack_2: 0.0,
-                        filter_env_decay_2: 0.0001,
-                        filter_env_sustain_2: 999.9,
-                        filter_env_release_2: 5.0,
-                        filter_env_atk_curve_2: SmoothStyle::Linear,
-                        filter_env_dec_curve_2: SmoothStyle::Linear,
-                        filter_env_rel_curve_2: SmoothStyle::Linear,
-                        filter_alg_type_2: FilterAlgorithms::SVF,
-                        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+                    filter_wet_2: 1.0,
+                    filter_cutoff_2: 20000.0,
+                    filter_resonance_2: 1.0,
+                    filter_res_type_2: ResonanceType::Default,
+                    filter_lp_amount_2: 1.0,
+                    filter_hp_amount_2: 0.0,
+                    filter_bp_amount_2: 0.0,
+                    filter_env_peak_2: 0.0,
+                    filter_env_attack_2: 0.0,
+                    filter_env_decay_2: 0.0001,
+                    filter_env_sustain_2: 999.9,
+                    filter_env_release_2: 5.0,
+                    filter_env_atk_curve_2: SmoothStyle::Linear,
+                    filter_env_dec_curve_2: SmoothStyle::Linear,
+                    filter_env_rel_curve_2: SmoothStyle::Linear,
+                    filter_alg_type_2: FilterAlgorithms::SVF,
+                    tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
 
-                        filter_routing: FilterRouting::Parallel,
+                    filter_routing: FilterRouting::Parallel,
+                    filter_cutoff_link: false,
 
-                        // LFOs
-                        lfo1_enable: false,
-                        lfo2_enable: false,
-                        lfo3_enable: false,
+                    // LFOs
+                    lfo1_enable: false,
+                    lfo2_enable: false,
+                    lfo3_enable: false,
 
-                        lfo1_freq: 2.0,
-                        lfo1_retrigger: LFOController::LFORetrigger::None,
-                        lfo1_sync: true,
-                        lfo1_snap: LFOController::LFOSnapValues::Half,
-                        lfo1_waveform: LFOController::Waveform::Sine,
-                        lfo1_phase: 0.0,
+                    lfo1_freq: 2.0,
+                    lfo1_retrigger: LFOController::LFORetrigger::None,
+                    lfo1_sync: true,
+                    lfo1_snap: LFOController::LFOSnapValues::Half,
+                    lfo1_waveform: LFOController::Waveform::Sine,
+                    lfo1_phase: 0.0,
 
-                        lfo2_freq: 2.0,
-                        lfo2_retrigger: LFOController::LFORetrigger::None,
-                        lfo2_sync: true,
-                        lfo2_snap: LFOController::LFOSnapValues::Half,
-                        lfo2_waveform: LFOController::Waveform::Sine,
-                        lfo2_phase: 0.0,
+                    lfo2_freq: 2.0,
+                    lfo2_retrigger: LFOController::LFORetrigger::None,
+                    lfo2_sync: true,
+                    lfo2_snap: LFOController::LFOSnapValues::Half,
+                    lfo2_waveform: LFOController::Waveform::Sine,
+                    lfo2_phase: 0.0,
 
-                        lfo3_freq: 2.0,
-                        lfo3_retrigger: LFOController::LFORetrigger::None,
-                        lfo3_sync: true,
-                        lfo3_snap: LFOController::LFOSnapValues::Half,
-                        lfo3_waveform: LFOController::Waveform::Sine,
-                        lfo3_phase: 0.0,
+                    lfo3_freq: 2.0,
+                    lfo3_retrigger: LFOController::LFORetrigger::None,
+                    lfo3_sync: true,
+                    lfo3_snap: LFOController::LFOSnapValues::Half,
+                    lfo3_waveform: LFOController::Waveform::Sine,
+                    lfo3_phase: 0.0,
 
-                        // Modulations
-                        mod_source_1: ModulationSource::None,
-                        mod_source_2: ModulationSource::None,
-                        mod_source_3: ModulationSource::None,
-                        mod_source_4: ModulationSource::None,
-                        mod_dest_1: ModulationDestination::None,
-                        mod_dest_2: ModulationDestination::None,
-                        mod_dest_3: ModulationDestination::None,
-                        mod_dest_4: ModulationDestination::None,
-                        mod_amount_1: 0.0,
-                        mod_amount_2: 0.0,
-                        mod_amount_3: 0.0,
-                        mod_amount_4: 0.0,
+                    // Modulations
+                    mod_source_1: ModulationSource::None,
+                    mod_source_2: ModulationSource::None,
+                    mod_source_3: ModulationSource::None,
+                    mod_source_4: ModulationSource::None,
+                    mod_dest_1: ModulationDestination::None,
+                    mod_dest_2: ModulationDestination::None,
+                    mod_dest_3: ModulationDestination::None,
+                    mod_dest_4: ModulationDestination::None,
+                    mod_amount_1: 0.0,
+                    mod_amount_2: 0.0,
+                    mod_amount_3: 0.0,
+                    mod_amount_4: 0.0,
 
-                        // EQ
-                        pre_use_eq: false,
-                        pre_low_freq: 800.0,
-                        pre_mid_freq: 3000.0,
-                        pre_high_freq: 10000.0,
-                        pre_low_gain: 0.0,
-                        pre_mid_gain: 0.0,
-                        pre_high_gain: 0.0,
+                    // EQ
+                    pre_use_eq: false,
+                    pre_low_freq: 800.0,
+                    pre_mid_freq: 3000.0,
+                    pre_high_freq: 10000.0,
+                    pre_low_gain: 0.0,
+                    pre_mid_gain: 0.0,
+                    pre_high_gain: 0.0,
 
-                        // FX
-                        use_fx: true,
+                    // FX
+                    use_fx: true,
 
-                        use_compressor: false,
-                        comp_amt: 0.5,
-                        comp_atk: 0.5,
-                        comp_rel: 0.5,
-                        comp_drive: 0.5,
+                    use_compressor: false,
+                    comp_amt: 0.5,
+                    comp_atk: 0.5,
+                    comp_rel: 0.5,
+                    comp_drive: 0.5,
 
-                        use_abass: false,
-                        abass_amount: 0.0011,
+                    use_abass: false,
+                    abass_amount: 0.0011,
 
-                        use_saturation: false,
-                        sat_amount: 0.0,
-                        sat_type: SaturationType::Tape,
+                    use_saturation: false,
+                    sat_amount: 0.0,
+                    sat_type: SaturationType::Tape,
 
-                        use_delay: false,
-                        delay_amount: 0.0,
-                        delay_time: DelaySnapValues::Quarter,
-                        delay_decay: 0.0,
-                        delay_type: DelayType::Stereo,
+                    use_delay: false,
+                    delay_amount: 0.0,
+                    delay_time: DelaySnapValues::Quarter,
+                    delay_decay: 0.0,
+                    delay_type: DelayType::Stereo,
 
-                        use_reverb: false,
-                        reverb_amount: 0.5,
-                        reverb_size: 0.5,
-                        reverb_feedback: 0.5,
+                    use_reverb: false,
+                    reverb_amount: 0.5,
+                    reverb_size: 0.5,
+                    reverb_feedback: 0.5,
 
-                        use_phaser: false,
-                        phaser_amount: 0.5,
-                        phaser_depth: 0.5,
-                        phaser_rate: 0.5,
-                        phaser_feedback: 0.5,
+                    use_phaser: false,
+                    phaser_amount: 0.5,
+                    phaser_depth: 0.5,
+                    phaser_rate: 0.5,
+                    phaser_feedback: 0.5,
 
-                        use_buffermod: false,
-                        buffermod_amount: 0.5,
-                        buffermod_depth: 0.5,
-                        buffermod_rate: 0.5,
-                        buffermod_spread: 0.0,
-                        buffermod_timing: 620.0,
+                    use_buffermod: false,
+                    buffermod_amount: 0.5,
+                    buffermod_depth: 0.5,
+                    buffermod_rate: 0.5,
+                    buffermod_spread: 0.0,
+                    buffermod_timing: 620.0,
 
-                        use_flanger: false,
-                        flanger_amount: 0.5,
-                        flanger_depth: 0.5,
-                        flanger_rate: 0.5,
-                        flanger_feedback: 0.5,
+                    use_flanger: false,
+                    flanger_amount: 0.5,
+                    flanger_depth: 0.5,
+                    flanger_rate: 0.5,
+                    flanger_feedback: 0.5,
 
-                        use_limiter: false,
-                        limiter_threshold: 0.5,
-                        limiter_knee: 0.5,
-                    });
+                    use_limiter: false,
+                    limiter_threshold: 0.5,
+                    limiter_knee: 0.5,
+                });
+
+            if unserialized.preset_name.contains("Error") {
+                // Try loading the previous preset struct version
+                unserialized = load_unserialized_old(file_string_data);
+            }
 
             return (return_name, Some(unserialized));
         }
@@ -7139,6 +7450,26 @@ impl Actuate {
                     ActuatePreset {
                         preset_name: "Default".to_string(),
                         preset_info: "Info".to_string(),
+                        preset_category: PresetType::Select,
+                        tag_acid: false,
+                        tag_analog: false,
+                        tag_bright: false,
+                        tag_chord: false,
+                        tag_crisp: false,
+                        tag_deep: false,
+                        tag_delicate: false,
+                        tag_hard: false,
+                        tag_harsh: false,
+                        tag_lush: false,
+                        tag_mellow: false,
+                        tag_resonant: false,
+                        tag_rich: false,
+                        tag_sharp: false,
+                        tag_silky: false,
+                        tag_smooth: false,
+                        tag_soft: false,
+                        tag_stab: false,
+                        tag_warm: false,
                         mod1_audio_module_type: AudioModuleType::Osc,
                         mod1_audio_module_level: 1.0,
                         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -7263,6 +7594,7 @@ impl Actuate {
                         tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
 
                         filter_routing: FilterRouting::Parallel,
+                        filter_cutoff_link: false,
 
                         // LFOs
                         lfo1_enable: false,
@@ -7389,6 +7721,7 @@ impl Actuate {
         ModulationDestination,
         ModulationDestination,
         ModulationDestination,
+        PresetType,
     ) {
         // Create mutex locks for AudioModule
         let mut AMod1 = AMod1.as_ref().lock().unwrap();
@@ -7686,6 +8019,52 @@ impl Actuate {
             loaded_preset.filter_env_release_2,
         );
 
+        #[allow(unreachable_patterns)]
+        let preset_category_override = match loaded_preset.preset_category {
+            PresetType::Bass
+            | PresetType::FX
+            | PresetType::Lead
+            | PresetType::Other
+            | PresetType::Pad
+            | PresetType::Percussion
+            | PresetType::Select
+            | PresetType::Synth
+            | PresetType::Atmosphere
+            | PresetType::Keys
+            | PresetType::Pluck => {
+                setter.set_parameter(
+                    &params.preset_category,
+                    loaded_preset.preset_category.clone(),
+                );
+                loaded_preset.preset_category.clone()
+            }
+            // This should be unreachable since unserialize will fail before we get here anyways actually
+            _ => PresetType::Select,
+        };
+
+        // Assign the preset tags
+        setter.set_parameter(&params.tag_acid, loaded_preset.tag_acid);
+        setter.set_parameter(&params.tag_analog, loaded_preset.tag_analog);
+        setter.set_parameter(&params.tag_bright, loaded_preset.tag_bright);
+        setter.set_parameter(&params.tag_chord, loaded_preset.tag_chord);
+        setter.set_parameter(&params.tag_crisp, loaded_preset.tag_crisp);
+        setter.set_parameter(&params.tag_deep, loaded_preset.tag_deep);
+        setter.set_parameter(&params.tag_delicate, loaded_preset.tag_delicate);
+        setter.set_parameter(&params.tag_hard, loaded_preset.tag_hard);
+        setter.set_parameter(&params.tag_harsh, loaded_preset.tag_harsh);
+        setter.set_parameter(&params.tag_lush, loaded_preset.tag_lush);
+        setter.set_parameter(&params.tag_mellow, loaded_preset.tag_mellow);
+        setter.set_parameter(&params.tag_resonant, loaded_preset.tag_resonant);
+        setter.set_parameter(&params.tag_rich, loaded_preset.tag_rich);
+        setter.set_parameter(&params.tag_sharp, loaded_preset.tag_sharp);
+        setter.set_parameter(&params.tag_silky, loaded_preset.tag_silky);
+        setter.set_parameter(&params.tag_smooth, loaded_preset.tag_smooth);
+        setter.set_parameter(&params.tag_soft, loaded_preset.tag_soft);
+        setter.set_parameter(&params.tag_stab, loaded_preset.tag_stab);
+        setter.set_parameter(&params.tag_warm, loaded_preset.tag_warm);
+
+        setter.set_parameter(&params.filter_cutoff_link, loaded_preset.filter_cutoff_link);
+
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
         AMod1.restretch = loaded_preset.mod1_restretch;
@@ -7713,6 +8092,7 @@ impl Actuate {
             mod_dest_2_override,
             mod_dest_3_override,
             mod_dest_4_override,
+            preset_category_override,
         )
     }
 
@@ -7730,7 +8110,9 @@ impl Actuate {
             if let Ok(_file) = file {
                 // Serialize our data to a binary format (MessagePack)
                 let preset_store = Arc::clone(&self.preset_lib);
-                let mut loaded_preset = preset_store.lock().unwrap()[self.current_preset.load(Ordering::Relaxed) as usize].clone();
+                let mut loaded_preset = preset_store.lock().unwrap()
+                    [self.current_preset.load(Ordering::Relaxed) as usize]
+                    .clone();
 
                 // Clear out our generated notes and only keep the samples themselves
                 loaded_preset.mod1_sample_lib.clear();
@@ -7738,8 +8120,7 @@ impl Actuate {
                 loaded_preset.mod3_sample_lib.clear();
 
                 // Serialize to MessagePack bytes
-                let serialized_data =
-                    rmp_serde::to_vec::<ActuatePreset>(&loaded_preset);
+                let serialized_data = rmp_serde::to_vec::<ActuatePreset>(&loaded_preset);
 
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
@@ -7836,6 +8217,26 @@ impl Actuate {
             ActuatePreset {
                 preset_name: self.preset_name.lock().unwrap().clone(),
                 preset_info: self.preset_info.lock().unwrap().clone(),
+                preset_category: self.params.preset_category.value(),
+                tag_acid: self.params.tag_acid.value(),
+                tag_analog: self.params.tag_analog.value(),
+                tag_bright: self.params.tag_bright.value(),
+                tag_chord: self.params.tag_chord.value(),
+                tag_crisp: self.params.tag_crisp.value(),
+                tag_deep: self.params.tag_deep.value(),
+                tag_delicate: self.params.tag_delicate.value(),
+                tag_hard: self.params.tag_hard.value(),
+                tag_harsh: self.params.tag_harsh.value(),
+                tag_lush: self.params.tag_lush.value(),
+                tag_mellow: self.params.tag_mellow.value(),
+                tag_resonant: self.params.tag_resonant.value(),
+                tag_rich: self.params.tag_rich.value(),
+                tag_sharp: self.params.tag_sharp.value(),
+                tag_silky: self.params.tag_silky.value(),
+                tag_smooth: self.params.tag_smooth.value(),
+                tag_soft: self.params.tag_soft.value(),
+                tag_stab: self.params.tag_stab.value(),
+                tag_warm: self.params.tag_warm.value(),
                 // Modules 1
                 ///////////////////////////////////////////////////////////
                 mod1_audio_module_type: self.params._audio_module_1_type.value(),
@@ -7976,6 +8377,7 @@ impl Actuate {
                 tilt_filter_type_2: self.params.tilt_filter_type_2.value(),
 
                 filter_routing: self.params.filter_routing.value(),
+                filter_cutoff_link: self.params.filter_cutoff_link.value(),
 
                 lfo1_enable: self.params.lfo1_enable.value(),
                 lfo2_enable: self.params.lfo2_enable.value(),
