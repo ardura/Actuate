@@ -69,6 +69,7 @@ use fx::{
     StateVariableFilter::{ResonanceType, StateVariableFilter},
     VCFilter::ResponseType as VCResponseType,
 };
+use old_preset_structs::load_unserialized_old;
 use CustomWidgets::{
     toggle_switch, ui_knob, BoolButton, CustomComboBox, CustomParamSlider,
     CustomParamSlider::ParamSlider as HorizontalParamSlider, CustomPopupComboBox,
@@ -79,6 +80,7 @@ mod CustomWidgets;
 mod LFOController;
 mod audio_module;
 mod fx;
+mod old_preset_structs;
 
 // This holds our current sample/granulizer sample (L,R) per sample
 pub struct LoadedSample(Vec<Vec<f32>>);
@@ -121,6 +123,7 @@ enum LFOSelect {
     LFO2,
     LFO3,
     Modulation,
+    Misc,
     FX,
 }
 
@@ -250,7 +253,7 @@ pub struct ModulationStruct {
 
 /// This is the structure that represents a storable preset value
 #[derive(Serialize, Deserialize, Clone)]
-struct ActuatePreset {
+pub struct ActuatePreset {
     // Information
     preset_name: String,
     preset_info: String,
@@ -416,6 +419,7 @@ struct ActuatePreset {
     tilt_filter_type_2: ArduraFilter::ResponseType,
 
     filter_routing: FilterRouting,
+    filter_cutoff_link: bool,
 
     // LFOs
     lfo1_enable: bool,
@@ -907,6 +911,7 @@ impl Default for Actuate {
                     tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
 
                     filter_routing: FilterRouting::Parallel,
+                    filter_cutoff_link: false,
 
                     // LFOs
                     lfo1_enable: false,
@@ -1096,6 +1101,8 @@ pub struct ActuateParams {
     // Filter routing
     #[id = "filter_routing"]
     pub filter_routing: EnumParam<FilterRouting>,
+    #[id = "filter_cutoff_link"]
+    pub filter_cutoff_link: BoolParam,
 
     // Controls for when audio_module_1_type is Osc
     #[id = "osc_1_type"]
@@ -2538,6 +2545,8 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
 
+            filter_cutoff_link: BoolParam::new("Filter Cutoffs Linked", false),
+
             // LFOs
             ////////////////////////////////////////////////////////////////////////////////////
             lfo1_enable: BoolParam::new("LFO 1 Enable", false),
@@ -3247,8 +3256,6 @@ impl Plugin for Actuate {
                             ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
                             ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
 
-                            //import_preset();
-
                             (
                                 *mod_source_override_1.lock().unwrap(),
                                 *mod_source_override_2.lock().unwrap(),
@@ -3290,6 +3297,9 @@ impl Plugin for Actuate {
                         if update_current_preset.load(Ordering::Relaxed) || params.param_update_current_preset.value() {
                             setter.set_parameter(&params.param_update_current_preset, false);
                             update_current_preset.store(false, Ordering::Relaxed);
+                        }
+                        if params.filter_cutoff_link.value() {
+                            setter.set_parameter(&params.filter_cutoff_2, params.filter_cutoff.value());
                         }
 
                         // Assign default colors
@@ -4180,6 +4190,15 @@ impl Plugin for Actuate {
                                                 SYNTH_MIDDLE_BLUE
                                             );
                                         }
+                                        LFOSelect::Misc => {
+                                            ui.painter().rect_filled(
+                                                Rect::from_x_y_ranges(
+                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
+                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
+                                                Rounding::from(16.0),
+                                                SYNTH_SOFT_BLUE2
+                                            );
+                                        }
                                         LFOSelect::Modulation => {
                                             ui.painter().rect_filled(
                                                 Rect::from_x_y_ranges(
@@ -4212,12 +4231,13 @@ impl Plugin for Actuate {
                                     // LFO Box
                                     ui.vertical(|ui|{
                                         ui.horizontal(|ui| {
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Mods").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").color(Color32::BLACK));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Mods").color(Color32::BLACK).font(SMALLER_FONT));
+                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").color(Color32::BLACK).font(SMALLER_FONT));
                                         });
                                         ui.separator();
                                         match *lfo_select.lock().unwrap() {
@@ -4380,6 +4400,17 @@ impl Plugin for Actuate {
                                                     });
                                                 });
                                             },
+                                            LFOSelect::Misc => {
+                                                ui.horizontal(|ui|{
+                                                    ui.label(RichText::new("Link Cutoff 2 to Cutoff 1")
+                                                        .font(SMALLER_FONT)
+                                                        .color(Color32::BLACK)
+                                                    )
+                                                        .on_hover_text("Filter 1 will control both filter cutoff values");
+                                                    let filter_cutoff_link = toggle_switch::ToggleSwitch::for_param(&params.filter_cutoff_link, setter);
+                                                    ui.add(filter_cutoff_link);
+                                                });
+                                            }
                                             LFOSelect::Modulation => {
                                                 // This is my creative "combobox" to use an enumparam with Nih-Plug
                                                 ui.vertical(|ui|{
@@ -7124,10 +7155,10 @@ impl Actuate {
             let file_string_data = decompressed_data.unwrap();
 
             // Deserialize into ActuatePreset - return default empty lib if error
-            let unserialized: ActuatePreset =
-                rmp_serde::from_slice(&file_string_data).unwrap_or(ActuatePreset {
-                    preset_name: "Default".to_string(),
-                    preset_info: "Info".to_string(),
+            let mut unserialized: ActuatePreset = rmp_serde::from_slice(&file_string_data)
+                .unwrap_or(ActuatePreset {
+                    preset_name: "Error Importing".to_string(),
+                    preset_info: "Corrupted preset or incompatible version".to_string(),
                     preset_category: PresetType::Select,
                     tag_acid: false,
                     tag_analog: false,
@@ -7272,6 +7303,7 @@ impl Actuate {
                     tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
 
                     filter_routing: FilterRouting::Parallel,
+                    filter_cutoff_link: false,
 
                     // LFOs
                     lfo1_enable: false,
@@ -7372,6 +7404,11 @@ impl Actuate {
                     limiter_threshold: 0.5,
                     limiter_knee: 0.5,
                 });
+
+            if unserialized.preset_name.contains("Error") {
+                // Try loading the previous preset struct version
+                unserialized = load_unserialized_old(file_string_data);
+            }
 
             return (return_name, Some(unserialized));
         }
@@ -7557,6 +7594,7 @@ impl Actuate {
                         tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
 
                         filter_routing: FilterRouting::Parallel,
+                        filter_cutoff_link: false,
 
                         // LFOs
                         lfo1_enable: false,
@@ -8025,6 +8063,8 @@ impl Actuate {
         setter.set_parameter(&params.tag_stab, loaded_preset.tag_stab);
         setter.set_parameter(&params.tag_warm, loaded_preset.tag_warm);
 
+        setter.set_parameter(&params.filter_cutoff_link, loaded_preset.filter_cutoff_link);
+
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
         AMod1.restretch = loaded_preset.mod1_restretch;
@@ -8337,6 +8377,7 @@ impl Actuate {
                 tilt_filter_type_2: self.params.tilt_filter_type_2.value(),
 
                 filter_routing: self.params.filter_routing.value(),
+                filter_cutoff_link: self.params.filter_cutoff_link.value(),
 
                 lfo1_enable: self.params.lfo1_enable.value(),
                 lfo2_enable: self.params.lfo2_enable.value(),
