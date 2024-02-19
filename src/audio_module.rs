@@ -1877,9 +1877,10 @@ impl AudioModule {
             // The event was valid
             Some(mut event) => {
                 event = event_passed.unwrap();
-                if event.timing() > sample_id as u32 {
-                    return (0.0, 0.0, false, false);
-                }
+                // Testing removing this
+                //if event.timing() > sample_id as u32 {
+                    //return (0.0, 0.0, false, false);
+                //}
                 match event {
                     ////////////////////////////////////////////////////////////
                     // MIDI EVENT NOTE ON

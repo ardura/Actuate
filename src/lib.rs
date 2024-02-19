@@ -6599,7 +6599,7 @@ impl Actuate {
                     wave1_r,
                     reset_filter_controller1,
                     note_off_filter_controller1,
-                ) = self.audio_module_1.clone().lock().unwrap().process(
+                ) = self.audio_module_1.lock().unwrap().process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
@@ -6628,7 +6628,7 @@ impl Actuate {
                     wave2_r,
                     reset_filter_controller2,
                     note_off_filter_controller2,
-                ) = self.audio_module_2.clone().lock().unwrap().process(
+                ) = self.audio_module_2.lock().unwrap().process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
@@ -6656,7 +6656,7 @@ impl Actuate {
                     wave3_r,
                     reset_filter_controller3,
                     note_off_filter_controller3,
-                ) = self.audio_module_3.clone().lock().unwrap().process(
+                ) = self.audio_module_3.lock().unwrap().process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
