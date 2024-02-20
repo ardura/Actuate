@@ -5234,9 +5234,9 @@ impl Plugin for Actuate {
         // Clear any voices on change of module type (especially during play)
         // This fixes panics and other broken things attempting to play during preset change/load
         if self.clear_voices.clone().load(Ordering::Relaxed) {
-            self.audio_module_1.as_ref().lock().unwrap().clear_voices();
-            self.audio_module_2.as_ref().lock().unwrap().clear_voices();
-            self.audio_module_3.as_ref().lock().unwrap().clear_voices();
+            self.audio_module_1.lock().unwrap().clear_voices();
+            self.audio_module_2.lock().unwrap().clear_voices();
+            self.audio_module_3.lock().unwrap().clear_voices();
 
             self.clear_voices.store(false, Ordering::Relaxed);
             self.update_something.store(true, Ordering::Relaxed);
