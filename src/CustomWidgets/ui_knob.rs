@@ -51,24 +51,23 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         let value = self.param.unmodulated_normalized_value();
         if response.drag_started() {
             self.param_setter.begin_set_parameter(self.param);
-            ui.memory().data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, value)
+            ui.memory_mut(|mem|mem.data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, value))
         }
 
         if response.dragged() {
             let delta: f32;
             // Invert the y axis, since we want dragging up to increase the value and down to
             // decrease it, but drag_delta() has the y-axis increasing downwards.
-            if ui.input().modifiers.shift {
+            if ui.input(|mem|mem.modifiers.shift) {
                 delta = -response.drag_delta().y * GRANULAR_DRAG_MULTIPLIER;
             } else {
                 delta = -response.drag_delta().y;
             }
 
-            let mut memory = ui.memory();
-            let value = memory.data.get_temp_mut_or(*DRAG_AMOUNT_MEMORY_ID, value);
-            *value = (*value + delta / 100.0).clamp(0.0, 1.0);
+            let mut value = ui.memory_mut(|mem|mem.data.get_temp_mut_or(*DRAG_AMOUNT_MEMORY_ID, value).clone());
+            value = (value + delta / 100.0).clamp(0.0, 1.0);
             self.param_setter
-                .set_parameter_normalized(self.param, *value);
+                .set_parameter_normalized(self.param, value);
         }
 
         // Reset on doubleclick

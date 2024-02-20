@@ -142,7 +142,7 @@ fn combo_box_dyn<'c, R>(
 ) -> InnerResponse<Option<R>> {
     let popup_id = button_id.with("popup");
 
-    let is_popup_open = ui.memory().is_popup_open(popup_id);
+    let is_popup_open = ui.memory(|mem|mem.is_popup_open(popup_id));
     let button_response = button_frame(ui, button_id, is_popup_open, Sense::click(), |ui| {
         // We don't want to change width when user selects something new
         let full_minimum_width = ui.spacing().slider_width;
@@ -189,7 +189,7 @@ fn combo_box_dyn<'c, R>(
     });
 
     if button_response.clicked() {
-        ui.memory().toggle_popup(popup_id);
+        ui.memory_mut(|mem|mem.toggle_popup(popup_id));
     }
     //let inner = crate::egui::popup::popup_below_widget(ui, popup_id, &button_response, |ui| {
     let inner = popup_below_widget(

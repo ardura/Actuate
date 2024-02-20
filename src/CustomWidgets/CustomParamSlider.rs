@@ -142,20 +142,17 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
     /// Enable the keyboard entry part of the widget.
     fn begin_keyboard_entry(&self, ui: &Ui) {
-        ui.memory().request_focus(self.keyboard_focus_id.unwrap());
+        ui.memory_mut(|mem|mem.request_focus(self.keyboard_focus_id.unwrap()));
 
         // Always initialize the field to the current value, that seems nicer than having to
         // being typing from scratch
         let value_entry_mutex = ui
-            .memory()
-            .data
-            .get_temp_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID)
-            .clone();
+            .memory_mut(|mem|mem.data.get_temp_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID).clone());
         *value_entry_mutex.lock() = self.string_value();
     }
 
     fn keyboard_entry_active(&self, ui: &Ui) -> bool {
-        ui.memory().has_focus(self.keyboard_focus_id.unwrap())
+        ui.memory(|mem|mem.has_focus(self.keyboard_focus_id.unwrap()))
     }
 
     fn begin_drag(&self) {
@@ -214,27 +211,19 @@ impl<'a, P: Param> ParamSlider<'a, P> {
     }
 
     fn get_drag_normalized_start_value_memory(ui: &Ui) -> f32 {
-        ui.memory()
-            .data
-            .get_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID)
-            .unwrap_or(0.5)
+        ui.memory(|mem|mem.data.get_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID)).unwrap_or(0.5)
     }
 
     fn set_drag_normalized_start_value_memory(ui: &Ui, amount: f32) {
-        ui.memory()
-            .data
-            .insert_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID, amount);
+        ui.memory_mut(|mem|mem.data.insert_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID,amount));
     }
 
     fn get_drag_amount_memory(ui: &Ui) -> f32 {
-        ui.memory()
-            .data
-            .get_temp(*DRAG_AMOUNT_MEMORY_ID)
-            .unwrap_or(0.0)
+        ui.memory(|mem|mem.data.get_temp(*DRAG_AMOUNT_MEMORY_ID)).unwrap_or(0.0)
     }
 
     fn set_drag_amount_memory(ui: &Ui, amount: f32) {
-        ui.memory().data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, amount);
+        ui.memory_mut(|mem|mem.data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, amount));
     }
 
     fn slider_ui(&self, ui: &mut Ui, response: &mut Response) {
@@ -247,7 +236,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             Self::set_drag_amount_memory(ui, 0.0);
         }
         if let Some(click_pos) = response.interact_pointer_pos() {
-            if ui.input().modifiers.command {
+            if ui.input(|mem|mem.modifiers.command) {
                 // Like double clicking, Ctrl+Click should reset the parameter
                 self.reset_param();
                 response.mark_changed();
@@ -257,7 +246,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             //     // Allow typing in the value on an Alt+Click. Right now this is shown as part of the
             //     // value field, so it only makes sense when we're drawing that.
             //     self.begin_keyboard_entry(ui);
-            } else if ui.input().modifiers.shift {
+            } else if ui.input(|mem|mem.modifiers.shift) {
                 // And shift dragging should switch to a more granulra input method
                 self.granular_drag(ui, response.drag_delta());
                 response.mark_changed();

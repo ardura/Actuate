@@ -4775,7 +4775,7 @@ impl Plugin for Actuate {
                                                     ScrollArea::vertical()
                                                         .max_height(220.0)
                                                         .max_width(164.0)
-                                                        .always_show_scroll(true)
+                                                        //.always_show_scroll(true)
                                                         .show(ui, |ui|{
                                                             ui.vertical(|ui|{
                                                                 ui.horizontal(|ui|{
@@ -4849,7 +4849,7 @@ impl Plugin for Actuate {
                                                 ScrollArea::vertical()
                                                     .max_height(200.0)
                                                     .max_width(270.0)
-                                                    .always_show_scroll(true)
+                                                    //.always_show_scroll(true)
                                                     .show(ui, |ui|{
                                                         ui.vertical(|ui|{
                                                             // Equalizer

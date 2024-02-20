@@ -34,7 +34,7 @@ pub fn popup_below_widget<R>(
     num_options: f32,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
-    if ui.memory().is_popup_open(popup_id) {
+    if ui.memory(|mem|mem.is_popup_open(popup_id)) {
         let inner;
         if display_above {
             inner = Area::new(popup_id)
@@ -84,8 +84,8 @@ pub fn popup_below_widget<R>(
                 .inner;
         }
 
-        if ui.input().key_pressed(Key::Escape) || widget_response.clicked_elsewhere() {
-            ui.memory().close_popup();
+        if ui.input(|mem|mem.key_pressed(Key::Escape)) || widget_response.clicked_elsewhere() {
+            ui.memory_mut(|mem|mem.close_popup());
         }
         Some(inner)
     } else {

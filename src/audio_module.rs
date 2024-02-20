@@ -1858,7 +1858,7 @@ impl AudioModule {
     // This sends back the OSC output + note on for filter to reset
     pub fn process(
         &mut self,
-        sample_id: usize,
+        _sample_id: usize,
         event_passed: Option<NoteEvent<()>>,
         voice_max: usize,
         detune_mod: f32,
