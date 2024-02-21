@@ -293,7 +293,7 @@ impl AudioModule {
             }
             AudioModuleType::Osc => {
                 const KNOB_SIZE: f32 = 30.0;
-                const TEXT_SIZE: f32 = 12.0;
+                const TEXT_SIZE: f32 = 11.0;
                 // Oscillator
                 ui.vertical(|ui| {
                     ui.add_space(1.0);
@@ -495,7 +495,7 @@ impl AudioModule {
                                 setter,
                                 KNOB_SIZE)
                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                .set_fill_color(A_BACKGROUND_COLOR_TOP)
+                                .set_fill_color(DARK_GREY_UI_COLOR)
                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                 .use_outline(true)
                                 .set_text_size(TEXT_SIZE);
@@ -505,7 +505,7 @@ impl AudioModule {
                                 setter,
                                 KNOB_SIZE)
                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                .set_fill_color(A_BACKGROUND_COLOR_TOP)
+                                .set_fill_color(DARK_GREY_UI_COLOR)
                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                 .use_outline(true)
                                 .set_text_size(TEXT_SIZE);
@@ -517,7 +517,7 @@ impl AudioModule {
                                 setter,
                                 KNOB_SIZE)
                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                .set_fill_color(A_BACKGROUND_COLOR_TOP)
+                                .set_fill_color(DARK_GREY_UI_COLOR)
                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                 .use_outline(true)
                                 .set_text_size(TEXT_SIZE);
@@ -972,7 +972,7 @@ impl AudioModule {
                                 setter,
                                 KNOB_SIZE)
                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                .set_fill_color(A_BACKGROUND_COLOR_TOP)
+                                .set_fill_color(DARK_GREY_UI_COLOR)
                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                 .use_outline(true)
                                 .set_text_size(TEXT_SIZE);
@@ -982,7 +982,7 @@ impl AudioModule {
                                 setter,
                                 KNOB_SIZE)
                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                .set_fill_color(A_BACKGROUND_COLOR_TOP)
+                                .set_fill_color(DARK_GREY_UI_COLOR)
                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                 .use_outline(true)
                                 .set_text_size(TEXT_SIZE);
@@ -994,7 +994,7 @@ impl AudioModule {
                                 setter,
                                 KNOB_SIZE)
                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                .set_fill_color(A_BACKGROUND_COLOR_TOP)
+                                .set_fill_color(DARK_GREY_UI_COLOR)
                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                 .use_outline(true)
                                 .set_text_size(TEXT_SIZE);
@@ -1450,7 +1450,7 @@ impl AudioModule {
                                 setter,
                                 KNOB_SIZE)
                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                .set_fill_color(A_BACKGROUND_COLOR_TOP)
+                                .set_fill_color(DARK_GREY_UI_COLOR)
                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                 .use_outline(true)
                                 .set_text_size(TEXT_SIZE);
@@ -1460,7 +1460,7 @@ impl AudioModule {
                                 setter,
                                 KNOB_SIZE)
                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                .set_fill_color(A_BACKGROUND_COLOR_TOP)
+                                .set_fill_color(DARK_GREY_UI_COLOR)
                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                 .use_outline(true)
                                 .set_text_size(TEXT_SIZE);
@@ -1472,7 +1472,7 @@ impl AudioModule {
                                 setter,
                                 KNOB_SIZE)
                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                .set_fill_color(A_BACKGROUND_COLOR_TOP)
+                                .set_fill_color(DARK_GREY_UI_COLOR)
                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
                                 .use_outline(true)
                                 .set_text_size(TEXT_SIZE);
@@ -1879,7 +1879,7 @@ impl AudioModule {
                 event = event_passed.unwrap();
                 // Testing removing this
                 //if event.timing() > sample_id as u32 {
-                    //return (0.0, 0.0, false, false);
+                //return (0.0, 0.0, false, false);
                 //}
                 match event {
                     ////////////////////////////////////////////////////////////

@@ -16,19 +16,17 @@ use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
     self,
     epaint::{CircleShape, PathShape},
-    pos2, Align2, Color32, FontId, Id, Pos2, Rect, Response, Rgba, Sense, Shape, Stroke, Ui, Vec2,
-    Widget,
+    pos2, Align2, Color32, FontId, Pos2, Rect, Response, Rgba, Rounding, Sense, Shape, Stroke, Ui,
+    Vec2, Widget,
 };
-use once_cell::sync::Lazy;
 
-static DRAG_AMOUNT_MEMORY_ID: Lazy<Id> = Lazy::new(|| Id::new("drag_amount_memory_id"));
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
 /// noramlized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.0015;
 
 lazy_static! {
     static ref DRAG_NORMALIZED_START_VALUE_MEMORY_ID: egui::Id = egui::Id::new((file!(), 0));
-//    static ref DRAG_AMOUNT_MEMORY_ID: egui::Id = egui::Id::new((file!(), 1));
+    static ref DRAG_AMOUNT_MEMORY_ID: egui::Id = egui::Id::new((file!(), 1));
     static ref VALUE_ENTRY_MEMORY_ID: egui::Id = egui::Id::new((file!(), 2));
 }
 
@@ -45,41 +43,108 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         }
     }
 
+    fn set_normalized_value(&self, normalized: f32) {
+        // This snaps to the nearest plain value if the parameter is stepped in some way.
+        // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
+        //       avoid this normalized->plain->normalized conversion for parameters that don't need
+        //       it
+        let value = self.param.preview_plain(normalized);
+        if value != self.plain_value() {
+            self.param_setter.set_parameter(self.param, value);
+        }
+    }
+
+    fn plain_value(&self) -> P::Plain {
+        self.param.modulated_plain_value()
+    }
+
+    fn normalized_value(&self) -> f32 {
+        self.param.modulated_normalized_value()
+    }
+
+    fn get_drag_normalized_start_value_memory(ui: &Ui) -> f32 {
+        ui.memory(|mem| mem.data.get_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID))
+            .unwrap_or(0.5)
+    }
+
+    fn set_drag_normalized_start_value_memory(ui: &Ui, amount: f32) {
+        ui.memory_mut(|mem| {
+            mem.data
+                .insert_temp(*DRAG_NORMALIZED_START_VALUE_MEMORY_ID, amount)
+        });
+    }
+
+    fn get_drag_amount_memory(ui: &Ui) -> f32 {
+        ui.memory(|mem| mem.data.get_temp(*DRAG_AMOUNT_MEMORY_ID))
+            .unwrap_or(0.0)
+    }
+
+    fn set_drag_amount_memory(ui: &Ui, amount: f32) {
+        ui.memory_mut(|mem| mem.data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, amount));
+    }
+
+    /// Begin and end drag still need to be called when using this..
+    fn reset_param(&self) {
+        self.param_setter
+            .set_parameter(self.param, self.param.default_plain_value());
+    }
+
+    fn granular_drag(&self, ui: &Ui, drag_delta: Vec2) {
+        // Remember the intial position when we started with the granular drag. This value gets
+        // reset whenever we have a normal itneraction with the slider.
+        let start_value = if Self::get_drag_amount_memory(ui) == 0.0 {
+            Self::set_drag_normalized_start_value_memory(ui, self.normalized_value());
+            self.normalized_value()
+        } else {
+            Self::get_drag_normalized_start_value_memory(ui)
+        };
+
+        let total_drag_distance = drag_delta.x + Self::get_drag_amount_memory(ui);
+        Self::set_drag_amount_memory(ui, total_drag_distance);
+
+        self.set_normalized_value(
+            (start_value + (total_drag_distance * GRANULAR_DRAG_MULTIPLIER)).clamp(0.0, 1.0),
+        );
+    }
+
     // Handle the input for a given response. Returns an f32 containing the normalized value of
     // the parameter.
-    fn handle_response(&self, ui: &Ui, response: &Response) -> f32 {
-        let value = self.param.unmodulated_normalized_value();
+    fn handle_response(&self, ui: &Ui, response: &mut Response) -> f32 {
+        // This has been replaced with the ParamSlider/CustomParamSlider structure and supporting
+        // functions (above) since that was still working in egui 0.22
+
         if response.drag_started() {
+            // When beginning a drag or dragging normally, reset the memory used to keep track of
+            // our granular drag
             self.param_setter.begin_set_parameter(self.param);
-            ui.memory_mut(|mem|mem.data.insert_temp(*DRAG_AMOUNT_MEMORY_ID, value))
+            Self::set_drag_amount_memory(ui, 0.0);
         }
-
-        if response.dragged() {
-            let delta: f32;
-            // Invert the y axis, since we want dragging up to increase the value and down to
-            // decrease it, but drag_delta() has the y-axis increasing downwards.
-            if ui.input(|mem|mem.modifiers.shift) {
-                delta = -response.drag_delta().y * GRANULAR_DRAG_MULTIPLIER;
+        if let Some(click_pos) = response.interact_pointer_pos() {
+            if ui.input(|mem| mem.modifiers.command) {
+                // Like double clicking, Ctrl+Click should reset the parameter
+                self.reset_param();
+                response.mark_changed();
+            } else if ui.input(|mem| mem.modifiers.shift) {
+                // And shift dragging should switch to a more granular input method
+                self.granular_drag(ui, response.drag_delta());
+                response.mark_changed();
             } else {
-                delta = -response.drag_delta().y;
+                let proportion =
+                    egui::emath::remap_clamp(click_pos.y, response.rect.y_range(), 0.0..=1.0)
+                        as f64;
+                self.set_normalized_value(1.0 - proportion as f32);
+                response.mark_changed();
+                Self::set_drag_amount_memory(ui, 0.0);
             }
-
-            let mut value = ui.memory_mut(|mem|mem.data.get_temp_mut_or(*DRAG_AMOUNT_MEMORY_ID, value).clone());
-            value = (value + delta / 100.0).clamp(0.0, 1.0);
-            self.param_setter
-                .set_parameter_normalized(self.param, value);
         }
-
-        // Reset on doubleclick
         if response.double_clicked() {
-            self.param_setter
-                .set_parameter_normalized(self.param, self.param.default_normalized_value());
+            self.reset_param();
+            response.mark_changed();
         }
-
         if response.drag_released() {
             self.param_setter.end_set_parameter(self.param);
         }
-        value
+        self.normalized_value()
     }
 
     fn get_string(&self) -> String {
@@ -105,6 +170,7 @@ pub struct ArcKnob<'a, P: Param> {
     show_label: bool,
     swap_label_and_value: bool,
     text_color_override: Color32,
+    readable_box: bool,
 }
 
 #[allow(dead_code)]
@@ -142,9 +208,17 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             show_label: true,
             swap_label_and_value: true,
             text_color_override: Color32::TEMPORARY_COLOR,
+            readable_box: true,
         }
     }
 
+    // Set readability box visibility for text on other colors
+    pub fn set_readable_box(mut self, show_box: bool) -> Self {
+        self.readable_box = show_box;
+        self
+    }
+
+    // Change the text color if you want it separate from line color
     pub fn override_text_color(mut self, text_color: Color32) -> Self {
         self.text_color_override = text_color;
         self
@@ -292,8 +366,8 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             self.padding + self.radius * 2.0,
             self.padding + self.radius * 2.0,
         );
-        let response = ui.allocate_response(desired_size, Sense::click_and_drag());
-        let value = self.slider_region.handle_response(&ui, &response);
+        let mut response = ui.allocate_response(desired_size, Sense::click_and_drag());
+        let value = self.slider_region.handle_response(&ui, &mut response);
 
         ui.vertical(|ui| {
             let painter = ui.painter_at(response.rect);
@@ -374,6 +448,19 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                         response.rect.center_bottom().y - label_y,
                     );
                     value_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
+                }
+
+                if self.readable_box {
+                    // Background for text readability
+                    let readability_box = Rect::from_two_pos(
+                        response.rect.left_bottom(),
+                        Pos2 {
+                            x: response.rect.right_bottom().x,
+                            y: response.rect.right_bottom().y - 12.0,
+                        },
+                    );
+                    ui.painter()
+                        .rect_filled(readability_box, Rounding::from(16.0), self.fill_color);
                 }
 
                 let text_color: Color32;
@@ -464,8 +551,8 @@ impl<'a, P: Param> TextSlider<'a, P> {
 
 impl<'a, P: Param> Widget for TextSlider<'a, P> {
     fn ui(self, ui: &mut Ui) -> Response {
-        let response = ui.allocate_rect(self.location, Sense::click_and_drag());
-        self.slider_region.handle_response(&ui, &response);
+        let mut response = ui.allocate_rect(self.location, Sense::click_and_drag());
+        self.slider_region.handle_response(&ui, &mut response);
 
         let painter = ui.painter_at(self.location);
         let center = self.location.center();
