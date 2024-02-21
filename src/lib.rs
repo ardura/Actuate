@@ -31,7 +31,7 @@ use flate2::Compression;
 use nih_plug::prelude::*;
 use nih_plug_egui::{
     create_egui_editor,
-    egui::{self, Align2, Color32, FontId, Id, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2},
+    egui::{self, Align2, Color32, FontId, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2},
     widgets::ParamSlider,
     EguiState,
 };
@@ -71,8 +71,8 @@ use fx::{
 };
 use old_preset_structs::load_unserialized_old;
 use CustomWidgets::{
-    toggle_switch, ui_knob, BoolButton, CustomComboBox, CustomParamSlider,
-    CustomParamSlider::ParamSlider as HorizontalParamSlider, CustomPopupComboBox,
+    toggle_switch, ui_knob, BoolButton, CustomParamSlider,
+    CustomParamSlider::ParamSlider as HorizontalParamSlider,
     CustomVerticalSlider::ParamSlider as VerticalParamSlider,
 };
 
@@ -231,9 +231,9 @@ pub enum FilterRouting {
 }
 
 // Fonts
-const FONT: nih_plug_egui::egui::FontId = FontId::monospace(14.0);
-const LOADING_FONT: nih_plug_egui::egui::FontId = FontId::monospace(20.0);
-const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::monospace(11.0);
+const FONT: nih_plug_egui::egui::FontId = FontId::proportional(14.0);
+const LOADING_FONT: nih_plug_egui::egui::FontId = FontId::proportional(20.0);
+const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::proportional(11.0);
 
 /// Modulation struct for passing mods to audio modules
 #[derive(Serialize, Deserialize, Clone)]
@@ -1649,13 +1649,13 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            osc_1_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 })
+            osc_1_semitones: IntParam::new("Semi", 0, IntRange::Linear { min: -11, max: 11 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
             osc_1_detune: FloatParam::new(
-                "Detune",
+                "Fine",
                 0.0,
                 FloatRange::Linear {
                     min: -0.999,
@@ -1731,12 +1731,10 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            osc_1_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger).with_callback(
-                {
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
-                },
-            ),
+            osc_1_retrigger: EnumParam::new("Retrig", RetriggerStyle::Retrigger).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
             osc_1_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear)
                 .with_callback({
                     let update_something = update_something.clone();
@@ -1758,7 +1756,7 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
             osc_1_unison_detune: FloatParam::new(
-                "Uni Detune",
+                "UDetune",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
@@ -1784,13 +1782,13 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            osc_2_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 })
+            osc_2_semitones: IntParam::new("Semi", 0, IntRange::Linear { min: -11, max: 11 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
             osc_2_detune: FloatParam::new(
-                "Detune",
+                "Fine",
                 0.0,
                 FloatRange::Linear {
                     min: -0.999,
@@ -1866,12 +1864,10 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            osc_2_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger).with_callback(
-                {
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
-                },
-            ),
+            osc_2_retrigger: EnumParam::new("Retrig", RetriggerStyle::Retrigger).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
             osc_2_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear)
                 .with_callback({
                     let update_something = update_something.clone();
@@ -1893,7 +1889,7 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
             osc_2_unison_detune: FloatParam::new(
-                "Uni Detune",
+                "UDetune",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
@@ -1919,13 +1915,13 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            osc_3_semitones: IntParam::new("Semitones", 0, IntRange::Linear { min: -11, max: 11 })
+            osc_3_semitones: IntParam::new("Semi", 0, IntRange::Linear { min: -11, max: 11 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
             osc_3_detune: FloatParam::new(
-                "Detune",
+                "Fine",
                 0.0,
                 FloatRange::Linear {
                     min: -0.999,
@@ -2001,12 +1997,10 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            osc_3_retrigger: EnumParam::new("Retrigger", RetriggerStyle::Retrigger).with_callback(
-                {
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
-                },
-            ),
+            osc_3_retrigger: EnumParam::new("Retrig", RetriggerStyle::Retrigger).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
             osc_3_atk_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear)
                 .with_callback({
                     let update_something = update_something.clone();
@@ -2028,7 +2022,7 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
             osc_3_unison_detune: FloatParam::new(
-                "Uni Detune",
+                "UDetune",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
@@ -2105,39 +2099,39 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             // This is from 0 to 2000 samples
-            grain_hold_1: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 })
+            grain_hold_1: IntParam::new("Hold", 200, IntRange::Linear { min: 5, max: 22050 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            grain_hold_2: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 })
+            grain_hold_2: IntParam::new("Hold", 200, IntRange::Linear { min: 5, max: 22050 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            grain_hold_3: IntParam::new("Grain Hold", 200, IntRange::Linear { min: 5, max: 22050 })
+            grain_hold_3: IntParam::new("Hold", 200, IntRange::Linear { min: 5, max: 22050 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            grain_gap_1: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 })
+            grain_gap_1: IntParam::new("Gap", 200, IntRange::Linear { min: 0, max: 22050 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            grain_gap_2: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 })
+            grain_gap_2: IntParam::new("Gap", 200, IntRange::Linear { min: 0, max: 22050 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-            grain_gap_3: IntParam::new("Grain Gap", 200, IntRange::Linear { min: 0, max: 22050 })
+            grain_gap_3: IntParam::new("Gap", 200, IntRange::Linear { min: 0, max: 22050 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
             // This is going to be in % since sample can be any size
             start_position_1: FloatParam::new(
-                "Start Pos",
+                "Start",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
@@ -2148,7 +2142,7 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             start_position_2: FloatParam::new(
-                "Start Pos",
+                "Start",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
@@ -2159,7 +2153,7 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             start_position_3: FloatParam::new(
-                "Start Pos",
+                "Start",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
@@ -2169,39 +2163,27 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            end_position_1: FloatParam::new(
-                "End Pos",
-                1.0,
-                FloatRange::Linear { min: 0.0, max: 1.0 },
-            )
-            .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0))
-            .with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
-            }),
-            end_position_2: FloatParam::new(
-                "End Pos",
-                1.0,
-                FloatRange::Linear { min: 0.0, max: 1.0 },
-            )
-            .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0))
-            .with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
-            }),
-            end_position_3: FloatParam::new(
-                "End Pos",
-                1.0,
-                FloatRange::Linear { min: 0.0, max: 1.0 },
-            )
-            .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0))
-            .with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
-            }),
+            end_position_1: FloatParam::new("End", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            end_position_2: FloatParam::new("End", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            end_position_3: FloatParam::new("End", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
             // Grain Crossfade
             grain_crossfade_1: IntParam::new("Shape", 50, IntRange::Linear { min: 2, max: 2000 })
                 .with_callback({
@@ -3316,6 +3298,8 @@ impl Plugin for Actuate {
                         ui.style_mut().visuals.selection.stroke.color = A_KNOB_OUTSIDE_COLOR;
                         // Unfilled background of the bar
                         ui.style_mut().visuals.widgets.noninteractive.bg_fill = DARK_GREY_UI_COLOR;
+                        // egui 0.20 to 0.22 changed this styling then I later decided proportional looks nice
+                        //ui.style_mut().drag_value_text_style = egui::TextStyle::Monospace;
 
                         // Trying to draw background colors as rects
                         ui.painter().rect_filled(
@@ -3415,16 +3399,15 @@ impl Plugin for Actuate {
                                     ui.add(next_preset_button);
 
                                     ui.separator();
-                                    ui.label(RichText::new("Browse Presets")
-                                        .font(FONT)
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                    ui.button(RichText::new("Browse Presets")
+                                        .font(SMALLER_FONT)
+                                        .background_color(DARK_GREY_UI_COLOR)
                                         .color(FONT_COLOR)
-                                    )
-                                        .on_hover_text("Coming soon!");
+                                    ).on_hover_text("Coming soon!");
                                 });
                                 ui.separator();
                                 const KNOB_SIZE: f32 = 32.0;
-                                const TEXT_SIZE: f32 = 13.0;
+                                const TEXT_SIZE: f32 = 11.0;
                                 ui.horizontal(|ui|{
                                     ui.vertical(|ui|{
                                         ui.label(RichText::new("Generators")
@@ -3460,6 +3443,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                .override_text_color(Color32::GRAY)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_1_filter_routing);
                                         });
@@ -3606,6 +3590,7 @@ impl Plugin for Actuate {
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                                 .set_fill_color(SYNTH_BARS_PURPLE)
                                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                .set_readable_box(false)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
@@ -3679,6 +3664,7 @@ impl Plugin for Actuate {
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                                 .set_fill_color(SYNTH_BARS_PURPLE)
                                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                .set_readable_box(false)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
@@ -3733,6 +3719,7 @@ impl Plugin for Actuate {
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                                 .set_fill_color(SYNTH_BARS_PURPLE)
                                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                .set_readable_box(false)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
@@ -3818,6 +3805,7 @@ impl Plugin for Actuate {
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                                 .set_fill_color(SYNTH_BARS_PURPLE)
                                                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_readable_box(false)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
@@ -3891,6 +3879,7 @@ impl Plugin for Actuate {
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                                 .set_fill_color(SYNTH_BARS_PURPLE)
                                                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_readable_box(false)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
@@ -3945,6 +3934,7 @@ impl Plugin for Actuate {
                                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                                 .set_fill_color(SYNTH_BARS_PURPLE)
                                                                 .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_readable_box(false)
                                                                 .set_text_size(TEXT_SIZE);
                                                             ui.add(filter_env_peak);
                                                         });
@@ -4150,12 +4140,12 @@ impl Plugin for Actuate {
                                                 .override_colors(Color32::WHITE, Color32::BLACK)
                                                 .with_width(30.0)
                                             );
-                                        ui.add_space(5.0);
+                                        //ui.add_space(2.0);
                                         ui.horizontal(|ui|{
-                                            ui.horizontal(|ui| {
+                                            //ui.horizontal(|ui| {
                                                 ui.selectable_value(&mut *filter_select.lock().unwrap(), FilterSelect::Filter1, RichText::new("Filter 1").color(Color32::BLACK));
                                                 ui.selectable_value(&mut *filter_select.lock().unwrap(), FilterSelect::Filter2, RichText::new("Filter 2").color(Color32::BLACK));
-                                            });
+                                            //});
                                         });
                                     });
 
@@ -4260,7 +4250,7 @@ impl Plugin for Actuate {
                                                         let lfosync1 = toggle_switch::ToggleSwitch::for_param(&params.lfo1_sync, setter);
                                                         ui.add(lfosync1);
                                                         ui.separator();
-                                                        ui.label(RichText::new("Retrigger")
+                                                        ui.label(RichText::new("Retrig")
                                                             .font(SMALLER_FONT)
                                                             .color(Color32::BLACK)
                                                         );
@@ -4313,7 +4303,7 @@ impl Plugin for Actuate {
                                                         let lfosync2 = toggle_switch::ToggleSwitch::for_param(&params.lfo2_sync, setter);
                                                         ui.add(lfosync2);
                                                         ui.separator();
-                                                        ui.label(RichText::new("Retrigger")
+                                                        ui.label(RichText::new("Retrig")
                                                             .font(SMALLER_FONT)
                                                             .color(Color32::BLACK)
                                                         );
@@ -4366,7 +4356,7 @@ impl Plugin for Actuate {
                                                         let lfosync3 = toggle_switch::ToggleSwitch::for_param(&params.lfo3_sync, setter);
                                                         ui.add(lfosync3);
                                                         ui.separator();
-                                                        ui.label(RichText::new("Retrigger")
+                                                        ui.label(RichText::new("Retrig")
                                                             .font(SMALLER_FONT)
                                                             .color(Color32::BLACK)
                                                         );
@@ -4427,6 +4417,17 @@ impl Plugin for Actuate {
                                                             .set_show_label(false);
                                                         ui.add(mod_1_knob);
                                                         ui.separator();
+                                                        egui::ComboBox::new("mod_source_supported", "")
+                                                            .selected_text(format!("{:?}", *mod_source_1_tracker.lock().unwrap()))
+                                                            .width(70.0)
+                                                            .show_ui(ui, |ui| {
+                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::None, "None");
+                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
+                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
+                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
+                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
+                                                            });
+                                                        /*
                                                         CustomComboBox::ComboBox::new("mod_source_1_ID",params.mod_source_1.value().to_string(), true, 5)
                                                             .selected_text(format!("{:?}", *mod_source_1_tracker.lock().unwrap()))
                                                             .width(70.0)
@@ -4437,6 +4438,7 @@ impl Plugin for Actuate {
                                                                 ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
                                                                 ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
                                                             });
+                                                            */
                                                             // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
                                                             if *mod_source_override_1.lock().unwrap() != ModulationSource::UnsetModulation {
                                                                 // This happens on plugin preset load
@@ -4449,9 +4451,9 @@ impl Plugin for Actuate {
                                                                 }
                                                             }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(FONT)
+                                                            .font(SMALLER_FONT)
                                                             .color(Color32::BLACK));
-                                                        CustomComboBox::ComboBox::new("mod_dest_1_ID", params.mod_destination_1.value().to_string(), true, 17)
+                                                        egui::ComboBox::new("mod_dest_1_ID", "")
                                                             .selected_text(format!("{:?}", *mod_dest_1_tracker.lock().unwrap()))
                                                             .width(100.0)
                                                             .show_ui(ui, |ui|{
@@ -4500,7 +4502,7 @@ impl Plugin for Actuate {
                                                             .set_show_label(false);
                                                         ui.add(mod_2_knob);
                                                         ui.separator();
-                                                        CustomComboBox::ComboBox::new("mod_source_2_ID",params.mod_source_2.value().to_string(), true, 5)
+                                                        egui::ComboBox::new("mod_source_2_ID","")
                                                             .selected_text(format!("{:?}", *mod_source_2_tracker.lock().unwrap()))
                                                             .width(70.0)
                                                             .show_ui(ui, |ui|{
@@ -4522,9 +4524,9 @@ impl Plugin for Actuate {
                                                             }
                                                         }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(FONT)
+                                                            .font(SMALLER_FONT)
                                                             .color(Color32::BLACK));
-                                                        CustomComboBox::ComboBox::new("mod_dest_2_ID", params.mod_destination_2.value().to_string(), true, 17)
+                                                        egui::ComboBox::new("mod_dest_2_ID", "")
                                                             .selected_text(format!("{:?}", *mod_dest_2_tracker.lock().unwrap()))
                                                             .width(100.0)
                                                             .show_ui(ui, |ui|{
@@ -4573,7 +4575,7 @@ impl Plugin for Actuate {
                                                             .set_show_label(false);
                                                         ui.add(mod_3_knob);
                                                         ui.separator();
-                                                        CustomComboBox::ComboBox::new("mod_source_3_ID",params.mod_source_3.value().to_string(), true, 5)
+                                                        egui::ComboBox::new("mod_source_3_ID","")
                                                             .selected_text(format!("{:?}", *mod_source_3_tracker.lock().unwrap()))
                                                             .width(70.0)
                                                             .show_ui(ui, |ui|{
@@ -4595,9 +4597,9 @@ impl Plugin for Actuate {
                                                             }
                                                         }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(FONT)
+                                                            .font(SMALLER_FONT)
                                                             .color(Color32::BLACK));
-                                                        CustomComboBox::ComboBox::new("mod_dest_3_ID", params.mod_destination_3.value().to_string(), true, 17)
+                                                        egui::ComboBox::new("mod_dest_3_ID", "")
                                                             .selected_text(format!("{:?}", *mod_dest_3_tracker.lock().unwrap()))
                                                             .width(100.0)
                                                             .show_ui(ui, |ui|{
@@ -4646,7 +4648,7 @@ impl Plugin for Actuate {
                                                             .set_show_label(false);
                                                         ui.add(mod_4_knob);
                                                         ui.separator();
-                                                        CustomComboBox::ComboBox::new("mod_source_4_ID",params.mod_source_4.value().to_string(), true, 5)
+                                                        egui::ComboBox::new("mod_source_4_ID","")
                                                             .selected_text(format!("{:?}", *mod_source_4_tracker.lock().unwrap()))
                                                             .width(70.0)
                                                             .show_ui(ui, |ui|{
@@ -4668,9 +4670,9 @@ impl Plugin for Actuate {
                                                             }
                                                         }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(FONT)
+                                                            .font(SMALLER_FONT)
                                                             .color(Color32::BLACK));
-                                                        CustomComboBox::ComboBox::new("mod_dest_4_ID", params.mod_destination_4.value().to_string(), true, 17)
+                                                        egui::ComboBox::new("mod_dest_4_ID", "")
                                                         .selected_text(format!("{:?}", *mod_dest_4_tracker.lock().unwrap()))
                                                         .width(100.0)
                                                         .show_ui(ui, |ui|{
@@ -4725,10 +4727,11 @@ impl Plugin for Actuate {
                                                     }
                                                     ui.label(RichText::new("Type")
                                                             .font(FONT)
+                                                            .size(12.0)
                                                             .color(Color32::BLACK));
-                                                        CustomComboBox::ComboBox::new("preset_category", params.preset_category.value().to_string(), true, 9)
+                                                        egui::ComboBox::new("preset_category", "")
                                                         .selected_text(format!("{:?}", *preset_category_tracker.lock().unwrap()))
-                                                        .width(84.0)
+                                                        .width(100.0)
                                                         .show_ui(ui, |ui|{
                                                             ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Select, "Select");
                                                             ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Atmosphere, "Atmosphere");
@@ -4775,7 +4778,7 @@ impl Plugin for Actuate {
                                                     ScrollArea::vertical()
                                                         .max_height(220.0)
                                                         .max_width(164.0)
-                                                        .always_show_scroll(true)
+                                                        //.always_show_scroll(true)
                                                         .show(ui, |ui|{
                                                             ui.vertical(|ui|{
                                                                 ui.horizontal(|ui|{
@@ -4849,7 +4852,7 @@ impl Plugin for Actuate {
                                                 ScrollArea::vertical()
                                                     .max_height(200.0)
                                                     .max_width(270.0)
-                                                    .always_show_scroll(true)
+                                                    //.always_show_scroll(true)
                                                     .show(ui, |ui|{
                                                         ui.vertical(|ui|{
                                                             // Equalizer
