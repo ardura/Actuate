@@ -2592,15 +2592,15 @@ impl ActuateParams {
             // Pitch Envelope
             ////////////////////////////////////////////////////////////////////////////////////
             pitch_env_peak: FloatParam::new(
-                "Env Mod",
+                "PITCHAA",
                 0.0,
                 FloatRange::Linear {
-                    min: -14980.0,
-                    max: 14980.0,
+                    min: -144.0,
+                    max: 144.0,
                 },
             )
-            .with_step_size(1.0)
-            .with_value_to_string(format_nothing())
+            //.with_step_size(1.0)
+            //.with_value_to_string(format_nothing())
             .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
