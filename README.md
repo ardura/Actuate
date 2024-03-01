@@ -3,6 +3,8 @@ A Synthesizer, Sampler, and Granulizer built in Rust + Nih-Plug
 Written by Ardura
 
 Join the discord! https://discord.com/invite/hscQXkTdfz
+Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura
+
 ![Screenshot 2024-03-01 085443](https://github.com/ardura/Actuate/assets/31751444/9c06b017-99c9-44b7-9dd6-e994c3f3db77)
 
 ## Features
