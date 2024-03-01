@@ -113,7 +113,8 @@ pub const FONT_COLOR: Color32 = Color32::from_rgb(10, 103, 210);
 enum UIBottomSelection {
     Filter1,
     Filter2,
-    Pitch
+    Pitch1,
+    Pitch2,
 }
 
 // Gui for which panel to display in bottom right
@@ -446,6 +447,17 @@ pub struct ActuatePreset {
     pitch_env_atk_curve: Oscillator::SmoothStyle,
     pitch_env_dec_curve: Oscillator::SmoothStyle,
     pitch_env_rel_curve: Oscillator::SmoothStyle,
+
+    pitch_enable_2: bool,
+    pitch_routing_2: PitchRouting,
+    pitch_env_peak_2: f32,
+    pitch_env_attack_2: f32,
+    pitch_env_decay_2: f32,
+    pitch_env_sustain_2: f32,
+    pitch_env_release_2: f32,
+    pitch_env_atk_curve_2: Oscillator::SmoothStyle,
+    pitch_env_dec_curve_2: Oscillator::SmoothStyle,
+    pitch_env_rel_curve_2: Oscillator::SmoothStyle,
 
     // LFOs
     lfo1_enable: bool,
@@ -951,6 +963,17 @@ impl Default for Actuate {
                     pitch_env_dec_curve: SmoothStyle::Linear,
                     pitch_env_rel_curve: SmoothStyle::Linear,
 
+                    pitch_enable_2: false,
+                    pitch_routing_2: PitchRouting::Osc1,
+                    pitch_env_peak_2: 0.0,
+                    pitch_env_attack_2: 0.0,
+                    pitch_env_decay_2: 300.0,
+                    pitch_env_sustain_2: 0.0,
+                    pitch_env_release_2: 0.0,
+                    pitch_env_atk_curve_2: SmoothStyle::Linear,
+                    pitch_env_dec_curve_2: SmoothStyle::Linear,
+                    pitch_env_rel_curve_2: SmoothStyle::Linear,
+
                     // LFOs
                     lfo1_enable: false,
                     lfo2_enable: false,
@@ -1395,6 +1418,27 @@ pub struct ActuateParams {
     pub pitch_env_dec_curve: EnumParam<Oscillator::SmoothStyle>,
     #[id = "pitch_env_rel_curve"]
     pub pitch_env_rel_curve: EnumParam<Oscillator::SmoothStyle>,
+
+    #[id = "pitch_enable_2"]
+    pub pitch_enable_2: BoolParam,
+    #[id = "pitch_routing_2"]
+    pub pitch_routing_2: EnumParam<PitchRouting>,
+    #[id = "pitch_env_peak_2"]
+    pub pitch_env_peak_2: FloatParam,
+    #[id = "pitch_env_attack_2"]
+    pub pitch_env_attack_2: FloatParam,
+    #[id = "pitch_env_decay_2"]
+    pub pitch_env_decay_2: FloatParam,
+    #[id = "pitch_env_sustain_2"]
+    pub pitch_env_sustain_2: FloatParam,
+    #[id = "pitch_env_release_2"]
+    pub pitch_env_release_2: FloatParam,
+    #[id = "pitch_env_atk_curve_2"]
+    pub pitch_env_atk_curve_2: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "pitch_env_dec_curve_2"]
+    pub pitch_env_dec_curve_2: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "pitch_env_rel_curve_2"]
+    pub pitch_env_rel_curve_2: EnumParam<Oscillator::SmoothStyle>,
 
     // LFOS
     #[id = "lfo1_enable"]
@@ -2294,17 +2338,13 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
 
-            filter_wet: FloatParam::new(
-                "Filter",
-                1.0,
-                FloatRange::Linear { min: 0.0, max: 1.0 },
-            )
-            .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0))
-            .with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
-            }),
+            filter_wet: FloatParam::new("Filter", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
             filter_resonance: FloatParam::new(
                 "Res",
                 1.0,
@@ -2455,17 +2495,13 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
 
-            filter_wet_2: FloatParam::new(
-                "Filter",
-                1.0,
-                FloatRange::Linear { min: 0.0, max: 1.0 },
-            )
-            .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0))
-            .with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
-            }),
+            filter_wet_2: FloatParam::new("Filter", 1.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_unit("%")
+                .with_value_to_string(formatters::v2s_f32_percentage(0))
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
             filter_resonance_2: FloatParam::new(
                 "Res",
                 1.0,
@@ -2473,12 +2509,10 @@ impl ActuateParams {
             )
             .with_unit("%")
             .with_value_to_string(formatters::v2s_f32_percentage(0)),
-            filter_res_type_2: EnumParam::new("Res Type", ResonanceType::Default).with_callback(
-                {
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
-                },
-            ),
+            filter_res_type_2: EnumParam::new("Res Type", ResonanceType::Default).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
             filter_cutoff_2: FloatParam::new(
                 "Cutoff",
                 20000.0,
@@ -2592,7 +2626,7 @@ impl ActuateParams {
             // Pitch Envelope
             ////////////////////////////////////////////////////////////////////////////////////
             pitch_env_peak: FloatParam::new(
-                "PITCHAA",
+                "Pitch Env",
                 0.0,
                 FloatRange::Linear {
                     min: -144.0,
@@ -2622,7 +2656,7 @@ impl ActuateParams {
             }),
             pitch_env_decay: FloatParam::new(
                 "Env Decay",
-                0.0001,
+                300.0,
                 FloatRange::Skewed {
                     min: 0.0001,
                     max: 999.9,
@@ -2637,7 +2671,7 @@ impl ActuateParams {
             }),
             pitch_env_sustain: FloatParam::new(
                 "Env Sustain",
-                999.9,
+                0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
                     max: 999.9,
@@ -2681,12 +2715,105 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
             pitch_enable: BoolParam::new("Pitch Enable", false),
-            pitch_routing: EnumParam::new("Routing", PitchRouting::Osc1)
+            pitch_routing: EnumParam::new("Routing", PitchRouting::Osc1).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+
+            pitch_env_peak_2: FloatParam::new(
+                "Pitch Env",
+                0.0,
+                FloatRange::Linear {
+                    min: -144.0,
+                    max: 144.0,
+                },
+            )
+            //.with_step_size(1.0)
+            //.with_value_to_string(format_nothing())
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            pitch_env_attack_2: FloatParam::new(
+                "Env Attack",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.2,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("A")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            pitch_env_decay_2: FloatParam::new(
+                "Env Decay",
+                300.0,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.2,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("D")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            pitch_env_sustain_2: FloatParam::new(
+                "Env Sustain",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.2,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("S")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            pitch_env_release_2: FloatParam::new(
+                "Env Release",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 999.9,
+                    factor: 0.2,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("R")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
+            pitch_env_atk_curve_2: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear)
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
                 }),
-
+            pitch_env_dec_curve_2: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            pitch_env_rel_curve_2: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            pitch_enable_2: BoolParam::new("Pitch Enable", false),
+            pitch_routing_2: EnumParam::new("Routing", PitchRouting::Osc1).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+            }),
 
             // LFOs
             ////////////////////////////////////////////////////////////////////////////////////
@@ -3602,7 +3729,6 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .override_text_color(Color32::GRAY)
                                                 .set_text_size(TEXT_SIZE);
                                             ui.add(audio_module_1_filter_routing);
                                         });
@@ -4119,7 +4245,7 @@ impl Plugin for Actuate {
                                                         A_BACKGROUND_COLOR_TOP
                                                     );
                                                 },
-                                                UIBottomSelection::Pitch => {
+                                                UIBottomSelection::Pitch1 => {
                                                     ui.vertical(|ui|{
                                                         ui.horizontal(|ui|{
                                                             let pitch_toggle = toggle_switch::ToggleSwitch::for_param(&params.pitch_enable, setter);
@@ -4164,6 +4290,61 @@ impl Plugin for Actuate {
                                                             RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
                                                         Rounding::from(16.0),
                                                         SYNTH_MIDDLE_BLUE
+                                                    );
+                                                    // Middle Bottom Filter select background
+                                                    ui.painter().rect_filled(
+                                                        Rect::from_x_y_ranges(
+                                                            RangeInclusive::new((WIDTH as f32)*0.38, (WIDTH as f32)*0.62),
+                                                            RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
+                                                        Rounding::from(16.0),
+                                                        A_BACKGROUND_COLOR_TOP
+                                                    );
+                                                },
+                                                UIBottomSelection::Pitch2 => {
+                                                    ui.vertical(|ui|{
+                                                        ui.horizontal(|ui|{
+                                                            let pitch_toggle_2 = toggle_switch::ToggleSwitch::for_param(&params.pitch_enable_2, setter);
+                                                            ui.add(pitch_toggle_2);
+                                                            ui.label(RichText::new("Enable Pitch Envelope")
+                                                                .font(SMALLER_FONT)
+                                                                .color(A_BACKGROUND_COLOR_TOP)
+                                                            );
+                                                        });
+
+                                                        ui.horizontal(|ui|{
+                                                            let pitch_env_peak_knob_2 = ui_knob::ArcKnob::for_param(
+                                                                &params.pitch_env_peak_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_readable_box(false)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(pitch_env_peak_knob_2);
+
+                                                            let pitch_routing_knob_2 = ui_knob::ArcKnob::for_param(
+                                                                &params.pitch_routing_2,
+                                                                setter,
+                                                                KNOB_SIZE)
+                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                                .set_fill_color(SYNTH_BARS_PURPLE)
+                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                .set_readable_box(false)
+                                                                .set_text_size(TEXT_SIZE);
+                                                            ui.add(pitch_routing_knob_2);
+                                                        });
+                                                    });
+                                                    ui.add_space(KNOB_SIZE*3.5);
+                                                    ui.add_space(8.0);
+
+                                                    // Middle bottom light section
+                                                    ui.painter().rect_filled(
+                                                        Rect::from_x_y_ranges(
+                                                            RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
+                                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
+                                                        Rounding::from(16.0),
+                                                        SYNTH_MIDDLE_BLUE.linear_multiply(0.8)
                                                     );
                                                     // Middle Bottom Filter select background
                                                     ui.painter().rect_filled(
@@ -4273,7 +4454,7 @@ impl Plugin for Actuate {
                                                             ),
                                                     );
                                                 },
-                                                UIBottomSelection::Pitch => {
+                                                UIBottomSelection::Pitch1 => {
                                                     // ADSR
                                                     ui.add(
                                                         VerticalParamSlider::for_param(&params.pitch_env_attack, setter)
@@ -4282,7 +4463,7 @@ impl Plugin for Actuate {
                                                             .set_reversed(true)
                                                             .override_colors(
                                                                 SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE2,
+                                                                SYNTH_SOFT_BLUE,
                                                             ),
                                                     );
                                                     ui.add(
@@ -4292,7 +4473,7 @@ impl Plugin for Actuate {
                                                             .set_reversed(true)
                                                             .override_colors(
                                                                 SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE2,
+                                                                SYNTH_SOFT_BLUE,
                                                             ),
                                                     );
                                                     ui.add(
@@ -4302,11 +4483,54 @@ impl Plugin for Actuate {
                                                             .set_reversed(true)
                                                             .override_colors(
                                                                 SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE2,
+                                                                SYNTH_SOFT_BLUE,
                                                             ),
                                                     );
                                                     ui.add(
                                                         VerticalParamSlider::for_param(&params.pitch_env_release, setter)
+                                                            .with_width(VERT_BAR_WIDTH)
+                                                            .with_height(VERT_BAR_HEIGHT)
+                                                            .set_reversed(true)
+                                                            .override_colors(
+                                                                SYNTH_BARS_PURPLE,
+                                                                SYNTH_SOFT_BLUE,
+                                                            ),
+                                                    );
+                                                },
+                                                UIBottomSelection::Pitch2 => {
+                                                    // ADSR
+                                                    ui.add(
+                                                        VerticalParamSlider::for_param(&params.pitch_env_attack_2, setter)
+                                                            .with_width(VERT_BAR_WIDTH)
+                                                            .with_height(VERT_BAR_HEIGHT)
+                                                            .set_reversed(true)
+                                                            .override_colors(
+                                                                SYNTH_BARS_PURPLE,
+                                                                SYNTH_SOFT_BLUE2,
+                                                            ),
+                                                    );
+                                                    ui.add(
+                                                        VerticalParamSlider::for_param(&params.pitch_env_decay_2, setter)
+                                                            .with_width(VERT_BAR_WIDTH)
+                                                            .with_height(VERT_BAR_HEIGHT)
+                                                            .set_reversed(true)
+                                                            .override_colors(
+                                                                SYNTH_BARS_PURPLE,
+                                                                SYNTH_SOFT_BLUE2,
+                                                            ),
+                                                    );
+                                                    ui.add(
+                                                        VerticalParamSlider::for_param(&params.pitch_env_sustain_2, setter)
+                                                            .with_width(VERT_BAR_WIDTH)
+                                                            .with_height(VERT_BAR_HEIGHT)
+                                                            .set_reversed(true)
+                                                            .override_colors(
+                                                                SYNTH_BARS_PURPLE,
+                                                                SYNTH_SOFT_BLUE2,
+                                                            ),
+                                                    );
+                                                    ui.add(
+                                                        VerticalParamSlider::for_param(&params.pitch_env_release_2, setter)
                                                             .with_width(VERT_BAR_WIDTH)
                                                             .with_height(VERT_BAR_HEIGHT)
                                                             .set_reversed(true)
@@ -4427,7 +4651,7 @@ impl Plugin for Actuate {
                                                                 .with_width(30.0)
                                                             );
                                                     },
-                                                    UIBottomSelection::Pitch => {
+                                                    UIBottomSelection::Pitch1 => {
                                                         ui.add(
                                                             HorizontalParamSlider::for_param(&params.pitch_env_atk_curve, setter)
                                                                 .with_width(HCURVE_BWIDTH)
@@ -4462,15 +4686,52 @@ impl Plugin for Actuate {
                                                                 .with_width(30.0),
                                                         );
                                                         ui.add_space(67.0);
+                                                    },
+                                                    UIBottomSelection::Pitch2 => {
+                                                        ui.add(
+                                                            HorizontalParamSlider::for_param(&params.pitch_env_atk_curve_2, setter)
+                                                                .with_width(HCURVE_BWIDTH)
+                                                                .slimmer(0.7)
+                                                                .set_left_sided_label(true)
+                                                                .set_label_width(HCURVE_WIDTH)
+                                                                .override_colors(
+                                                                    DARK_GREY_UI_COLOR,
+                                                                    SYNTH_SOFT_BLUE)
+                                                                .with_width(30.0),
+                                                        );
+                                                        ui.add(
+                                                            HorizontalParamSlider::for_param(&params.pitch_env_dec_curve_2, setter)
+                                                                .with_width(HCURVE_BWIDTH)
+                                                                .slimmer(0.7)
+                                                                .set_left_sided_label(true)
+                                                                .set_label_width(HCURVE_WIDTH)
+                                                                .override_colors(
+                                                                    DARK_GREY_UI_COLOR,
+                                                                    SYNTH_SOFT_BLUE)
+                                                                .with_width(30.0),
+                                                        );
+                                                        ui.add(
+                                                            HorizontalParamSlider::for_param(&params.pitch_env_rel_curve_2, setter)
+                                                                .with_width(HCURVE_BWIDTH)
+                                                                .slimmer(0.7)
+                                                                .set_left_sided_label(true)
+                                                                .set_label_width(HCURVE_WIDTH)
+                                                                .override_colors(
+                                                                    DARK_GREY_UI_COLOR,
+                                                                    SYNTH_SOFT_BLUE)
+                                                                .with_width(30.0),
+                                                        );
+                                                        ui.add_space(67.0);
                                                     }
                                                 }
                                             });
                                         });
                                         ui.horizontal(|ui|{
-                                            ui.add_space(50.0);
+                                            ui.add_space(25.0);
                                             ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter1, RichText::new("Filter 1").color(Color32::BLACK));
                                             ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter2, RichText::new("Filter 2").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch, RichText::new("Pitch Env").color(Color32::BLACK))
+                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch1, RichText::new("Pitch 1").color(Color32::BLACK));
+                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch2, RichText::new("Pitch 2").color(Color32::BLACK));
                                         });
                                     });
 
@@ -5984,17 +6245,14 @@ impl Actuate {
             // Trigger passing variables to the audio modules when the GUI input changes
             if self.update_something.load(Ordering::Relaxed) {
                 self.audio_module_1
-                    .clone()
                     .lock()
                     .unwrap()
                     .consume_params(self.params.clone(), 1);
                 self.audio_module_2
-                    .clone()
                     .lock()
                     .unwrap()
                     .consume_params(self.params.clone(), 2);
                 self.audio_module_3
-                    .clone()
                     .lock()
                     .unwrap()
                     .consume_params(self.params.clone(), 3);
@@ -7645,6 +7903,17 @@ impl Actuate {
                     pitch_env_sustain: 0.0,
                     pitch_routing: PitchRouting::Osc1,
 
+                    pitch_enable_2: false,
+                    pitch_env_peak_2: 0.0,
+                    pitch_env_atk_curve_2: SmoothStyle::Linear,
+                    pitch_env_dec_curve_2: SmoothStyle::Linear,
+                    pitch_env_rel_curve_2: SmoothStyle::Linear,
+                    pitch_env_attack_2: 0.0,
+                    pitch_env_decay_2: 300.0,
+                    pitch_env_release_2: 0.0,
+                    pitch_env_sustain_2: 0.0,
+                    pitch_routing_2: PitchRouting::Osc1,
+
                     // LFOs
                     lfo1_enable: false,
                     lfo2_enable: false,
@@ -7744,7 +8013,7 @@ impl Actuate {
                     limiter_threshold: 0.5,
                     limiter_knee: 0.5,
                 });
-            
+
             // Attempt to load the previous version preset type
             if unserialized.preset_name.contains("Error") {
                 // Try loading the previous preset struct version
@@ -7953,6 +8222,17 @@ impl Actuate {
                         pitch_env_release: 0.0,
                         pitch_env_peak: 0.0,
                         pitch_routing: PitchRouting::Osc1,
+
+                        pitch_enable_2: false,
+                        pitch_env_peak_2: 0.0,
+                        pitch_env_atk_curve_2: SmoothStyle::Linear,
+                        pitch_env_dec_curve_2: SmoothStyle::Linear,
+                        pitch_env_rel_curve_2: SmoothStyle::Linear,
+                        pitch_env_attack_2: 0.0,
+                        pitch_env_decay_2: 300.0,
+                        pitch_env_release_2: 0.0,
+                        pitch_env_sustain_2: 0.0,
+                        pitch_routing_2: PitchRouting::Osc1,
 
                         // LFOs
                         lfo1_enable: false,
@@ -8400,6 +8680,56 @@ impl Actuate {
             _ => PresetType::Select,
         };
 
+        // 1.2.1 Pitch update
+        setter.set_parameter(&params.pitch_enable, loaded_preset.pitch_enable);
+        setter.set_parameter(&params.pitch_env_peak, loaded_preset.pitch_env_peak);
+        setter.set_parameter(
+            &params.pitch_env_atk_curve,
+            loaded_preset.pitch_env_atk_curve,
+        );
+        setter.set_parameter(
+            &params.pitch_env_dec_curve,
+            loaded_preset.pitch_env_dec_curve,
+        );
+        setter.set_parameter(
+            &params.pitch_env_rel_curve,
+            loaded_preset.pitch_env_rel_curve,
+        );
+        setter.set_parameter(&params.pitch_env_attack, loaded_preset.pitch_env_attack);
+        setter.set_parameter(&params.pitch_env_decay, loaded_preset.pitch_env_decay);
+        setter.set_parameter(&params.pitch_env_sustain, loaded_preset.pitch_env_sustain);
+        setter.set_parameter(&params.pitch_env_release, loaded_preset.pitch_env_release);
+        setter.set_parameter(&params.pitch_routing, loaded_preset.pitch_routing.clone());
+
+        setter.set_parameter(&params.pitch_enable_2, loaded_preset.pitch_enable_2);
+        setter.set_parameter(&params.pitch_env_peak_2, loaded_preset.pitch_env_peak_2);
+        setter.set_parameter(
+            &params.pitch_env_atk_curve_2,
+            loaded_preset.pitch_env_atk_curve_2,
+        );
+        setter.set_parameter(
+            &params.pitch_env_dec_curve_2,
+            loaded_preset.pitch_env_dec_curve_2,
+        );
+        setter.set_parameter(
+            &params.pitch_env_rel_curve_2,
+            loaded_preset.pitch_env_rel_curve_2,
+        );
+        setter.set_parameter(&params.pitch_env_attack_2, loaded_preset.pitch_env_attack_2);
+        setter.set_parameter(&params.pitch_env_decay_2, loaded_preset.pitch_env_decay_2);
+        setter.set_parameter(
+            &params.pitch_env_sustain_2,
+            loaded_preset.pitch_env_sustain_2,
+        );
+        setter.set_parameter(
+            &params.pitch_env_release_2,
+            loaded_preset.pitch_env_release_2,
+        );
+        setter.set_parameter(
+            &params.pitch_routing_2,
+            loaded_preset.pitch_routing_2.clone(),
+        );
+
         // Assign the preset tags
         setter.set_parameter(&params.tag_acid, loaded_preset.tag_acid);
         setter.set_parameter(&params.tag_analog, loaded_preset.tag_analog);
@@ -8748,6 +9078,17 @@ impl Actuate {
                 pitch_env_release: self.params.pitch_env_release.value(),
                 pitch_env_peak: self.params.pitch_env_peak.value(),
                 pitch_routing: self.params.pitch_routing.value(),
+
+                pitch_enable_2: self.params.pitch_enable_2.value(),
+                pitch_env_atk_curve_2: self.params.pitch_env_atk_curve_2.value(),
+                pitch_env_dec_curve_2: self.params.pitch_env_dec_curve_2.value(),
+                pitch_env_rel_curve_2: self.params.pitch_env_rel_curve_2.value(),
+                pitch_env_attack_2: self.params.pitch_env_attack_2.value(),
+                pitch_env_decay_2: self.params.pitch_env_decay_2.value(),
+                pitch_env_sustain_2: self.params.pitch_env_sustain_2.value(),
+                pitch_env_release_2: self.params.pitch_env_release_2.value(),
+                pitch_env_peak_2: self.params.pitch_env_peak_2.value(),
+                pitch_routing_2: self.params.pitch_routing_2.value(),
 
                 // LFOs
                 lfo1_enable: self.params.lfo1_enable.value(),

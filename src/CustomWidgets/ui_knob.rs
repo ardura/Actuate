@@ -22,7 +22,8 @@ use nih_plug_egui::egui::{
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
 /// noramlized parameter.
-const GRANULAR_DRAG_MULTIPLIER: f32 = 0.0015;
+const GRANULAR_DRAG_MULTIPLIER: f32 = 0.001;
+const NORMAL_DRAG_MULTIPLIER: f32 = 0.005;
 
 lazy_static! {
     static ref DRAG_NORMALIZED_START_VALUE_MEMORY_ID: egui::Id = egui::Id::new((file!(), 0));
@@ -99,11 +100,28 @@ impl<'a, P: Param> SliderRegion<'a, P> {
             Self::get_drag_normalized_start_value_memory(ui)
         };
 
-        let total_drag_distance = drag_delta.x + Self::get_drag_amount_memory(ui);
+        let total_drag_distance = -drag_delta.y + Self::get_drag_amount_memory(ui);
         Self::set_drag_amount_memory(ui, total_drag_distance);
 
         self.set_normalized_value(
             (start_value + (total_drag_distance * GRANULAR_DRAG_MULTIPLIER)).clamp(0.0, 1.0),
+        );
+    }
+
+    // Copied this to modify the normal drag behavior to not match a slider
+    fn normal_drag(&self, ui: &Ui, drag_delta: Vec2) {
+        let start_value = if Self::get_drag_amount_memory(ui) == 0.0 {
+            Self::set_drag_normalized_start_value_memory(ui, self.normalized_value());
+            self.normalized_value()
+        } else {
+            Self::get_drag_normalized_start_value_memory(ui)
+        };
+
+        let total_drag_distance = -drag_delta.y + Self::get_drag_amount_memory(ui);
+        Self::set_drag_amount_memory(ui, total_drag_distance);
+
+        self.set_normalized_value(
+            (start_value + (total_drag_distance * NORMAL_DRAG_MULTIPLIER)).clamp(0.0, 1.0),
         );
     }
 
@@ -119,7 +137,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
             self.param_setter.begin_set_parameter(self.param);
             Self::set_drag_amount_memory(ui, 0.0);
         }
-        if let Some(click_pos) = response.interact_pointer_pos() {
+        if let Some(_clicked_pos) = response.interact_pointer_pos() {
             if ui.input(|mem| mem.modifiers.command) {
                 // Like double clicking, Ctrl+Click should reset the parameter
                 self.reset_param();
@@ -129,12 +147,9 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                 self.granular_drag(ui, response.drag_delta());
                 response.mark_changed();
             } else {
-                let proportion =
-                    egui::emath::remap_clamp(click_pos.y, response.rect.y_range(), 0.0..=1.0)
-                        as f64;
-                self.set_normalized_value(1.0 - proportion as f32);
+                self.normal_drag(ui, response.drag_delta());
                 response.mark_changed();
-                Self::set_drag_amount_memory(ui, 0.0);
+                //Self::set_drag_amount_memory(ui, 0.0);
             }
         }
         if response.double_clicked() {
@@ -459,8 +474,11 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                             y: response.rect.right_bottom().y - 12.0,
                         },
                     );
-                    ui.painter()
-                        .rect_filled(readability_box, Rounding::from(16.0), self.fill_color);
+                    ui.painter().rect_filled(
+                        readability_box,
+                        Rounding::from(16.0),
+                        self.fill_color,
+                    );
                 }
 
                 let text_color: Color32;

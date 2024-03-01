@@ -107,6 +107,14 @@ struct SingleVoice {
     pitch_attack: Smoother<f32>,
     pitch_decay: Smoother<f32>,
     pitch_release: Smoother<f32>,
+    // Pitch modulation info 2
+    pitch_enabled_2: bool,
+    pitch_current_2: f32,
+    pitch_env_peak_2: f32,
+    pitch_state_2: Oscillator::OscState,
+    pitch_attack_2: Smoother<f32>,
+    pitch_decay_2: Smoother<f32>,
+    pitch_release_2: Smoother<f32>,
     // Final info for a note to work
     _detune: f32,
     _unison_detune_value: f32,
@@ -218,6 +226,15 @@ pub struct AudioModule {
     pitch_env_atk_curve: SmoothStyle,
     pitch_env_dec_curve: SmoothStyle,
     pitch_env_rel_curve: SmoothStyle,
+    pitch_enable_2: bool,
+    pitch_env_peak_2: f32,
+    pitch_env_attack_2: f32,
+    pitch_env_decay_2: f32,
+    pitch_env_sustain_2: f32,
+    pitch_env_release_2: f32,
+    pitch_env_atk_curve_2: SmoothStyle,
+    pitch_env_dec_curve_2: SmoothStyle,
+    pitch_env_rel_curve_2: SmoothStyle,
 }
 
 // When you create a new audio module you need to add its default creation here as well
@@ -285,6 +302,16 @@ impl Default for AudioModule {
             pitch_env_atk_curve: SmoothStyle::Linear,
             pitch_env_dec_curve: SmoothStyle::Linear,
             pitch_env_rel_curve: SmoothStyle::Linear,
+
+            pitch_enable_2: false,
+            pitch_env_peak_2: 0.0,
+            pitch_env_attack_2: 0.0,
+            pitch_env_decay_2: 300.0,
+            pitch_env_sustain_2: 0.0,
+            pitch_env_release_2: 0.0,
+            pitch_env_atk_curve_2: SmoothStyle::Linear,
+            pitch_env_dec_curve_2: SmoothStyle::Linear,
+            pitch_env_rel_curve_2: SmoothStyle::Linear,
         }
     }
 }
@@ -1775,6 +1802,7 @@ impl AudioModule {
                         self.pitch_env_peak = params.pitch_env_peak.value();
                         self.pitch_env_attack = params.pitch_env_attack.value();
                         self.pitch_env_decay = params.pitch_env_decay.value();
+                        self.pitch_env_sustain = params.pitch_env_sustain.value();
                         self.pitch_env_release = params.pitch_env_release.value();
                         self.pitch_env_atk_curve = params.pitch_env_atk_curve.value();
                         self.pitch_env_dec_curve = params.pitch_env_dec_curve.value();
@@ -1782,16 +1810,22 @@ impl AudioModule {
                     }
                     _ => {
                         self.pitch_enable = false;
-                        // I ended up copying these over to prevent panics on init
-                        /*
-                        self.pitch_env_peak = params.pitch_env_peak.value();
-                        self.pitch_env_attack = params.pitch_env_attack.value();
-                        self.pitch_env_decay = params.pitch_env_decay.value();
-                        self.pitch_env_release = params.pitch_env_release.value();
-                        self.pitch_env_atk_curve = params.pitch_env_atk_curve.value();
-                        self.pitch_env_dec_curve = params.pitch_env_dec_curve.value();
-                        self.pitch_env_rel_curve = params.pitch_env_rel_curve.value();
-                        */
+                    }
+                }
+                match params.pitch_routing_2.value() {
+                    PitchRouting::Osc1 | PitchRouting::Osc1_Osc2 | PitchRouting::Osc1_Osc3 | PitchRouting::All => {
+                        self.pitch_enable_2 = params.pitch_enable_2.value();
+                        self.pitch_env_peak_2 = params.pitch_env_peak_2.value();
+                        self.pitch_env_attack_2 = params.pitch_env_attack_2.value();
+                        self.pitch_env_decay_2 = params.pitch_env_decay_2.value();
+                        self.pitch_env_sustain_2 = params.pitch_env_sustain_2.value();
+                        self.pitch_env_release_2 = params.pitch_env_release_2.value();
+                        self.pitch_env_atk_curve_2 = params.pitch_env_atk_curve_2.value();
+                        self.pitch_env_dec_curve_2 = params.pitch_env_dec_curve_2.value();
+                        self.pitch_env_rel_curve_2 = params.pitch_env_rel_curve_2.value();
+                    }
+                    _ => {
+                        self.pitch_enable_2 = false;
                     }
                 } 
                 self.osc_semitones = params.osc_1_semitones.value();
@@ -1815,7 +1849,7 @@ impl AudioModule {
                 self.grain_hold = params.grain_hold_1.value();
                 self.grain_gap = params.grain_gap_1.value();
                 self.grain_crossfade = params.grain_crossfade_1.value();
-            }
+            },
             2 => {
                 self.audio_module_type = params._audio_module_2_type.value();
                 self.osc_type = params.osc_2_type.value();
@@ -1841,8 +1875,10 @@ impl AudioModule {
                 match params.pitch_routing.value() {
                     PitchRouting::Osc2 | PitchRouting::Osc1_Osc2 | PitchRouting::Osc2_Osc3 | PitchRouting::All => {
                         self.pitch_enable = params.pitch_enable.value();
+                        self.pitch_env_peak = params.pitch_env_peak.value();
                         self.pitch_env_attack = params.pitch_env_attack.value();
                         self.pitch_env_decay = params.pitch_env_decay.value();
+                        self.pitch_env_sustain = params.pitch_env_sustain.value();
                         self.pitch_env_release = params.pitch_env_release.value();
                         self.pitch_env_atk_curve = params.pitch_env_atk_curve.value();
                         self.pitch_env_dec_curve = params.pitch_env_dec_curve.value();
@@ -1851,7 +1887,23 @@ impl AudioModule {
                     _ => {
                         self.pitch_enable = false;
                     }
-                } 
+                }
+                match params.pitch_routing_2.value() {
+                    PitchRouting::Osc2 | PitchRouting::Osc1_Osc2 | PitchRouting::Osc2_Osc3 | PitchRouting::All => {
+                        self.pitch_enable_2 = params.pitch_enable_2.value();
+                        self.pitch_env_peak_2 = params.pitch_env_peak_2.value();
+                        self.pitch_env_attack_2 = params.pitch_env_attack_2.value();
+                        self.pitch_env_decay_2 = params.pitch_env_decay_2.value();
+                        self.pitch_env_sustain_2 = params.pitch_env_sustain_2.value();
+                        self.pitch_env_release_2 = params.pitch_env_release_2.value();
+                        self.pitch_env_atk_curve_2 = params.pitch_env_atk_curve_2.value();
+                        self.pitch_env_dec_curve_2 = params.pitch_env_dec_curve_2.value();
+                        self.pitch_env_rel_curve_2 = params.pitch_env_rel_curve_2.value();
+                    }
+                    _ => {
+                        self.pitch_enable_2 = false;
+                    }
+                }
                 self.osc_semitones = params.osc_2_semitones.value();
                 self.osc_detune = params.osc_2_detune.value();
                 self.osc_attack = params.osc_2_attack.value();
@@ -1873,7 +1925,7 @@ impl AudioModule {
                 self.grain_hold = params.grain_hold_2.value();
                 self.grain_gap = params.grain_gap_2.value();
                 self.grain_crossfade = params.grain_crossfade_2.value();
-            }
+            },
             3 => {
                 self.audio_module_type = params._audio_module_3_type.value();
                 self.osc_type = params.osc_3_type.value();
@@ -1899,8 +1951,10 @@ impl AudioModule {
                 match params.pitch_routing.value() {
                     PitchRouting::Osc3 | PitchRouting::Osc2_Osc3 | PitchRouting::Osc1_Osc3 | PitchRouting::All => {
                         self.pitch_enable = params.pitch_enable.value();
+                        self.pitch_env_peak = params.pitch_env_peak.value();
                         self.pitch_env_attack = params.pitch_env_attack.value();
                         self.pitch_env_decay = params.pitch_env_decay.value();
+                        self.pitch_env_sustain = params.pitch_env_sustain.value();
                         self.pitch_env_release = params.pitch_env_release.value();
                         self.pitch_env_atk_curve = params.pitch_env_atk_curve.value();
                         self.pitch_env_dec_curve = params.pitch_env_dec_curve.value();
@@ -1909,7 +1963,23 @@ impl AudioModule {
                     _ => {
                         self.pitch_enable = false;
                     }
-                } 
+                }
+                match params.pitch_routing_2.value() {
+                    PitchRouting::Osc3 | PitchRouting::Osc2_Osc3 | PitchRouting::Osc1_Osc3 | PitchRouting::All => {
+                        self.pitch_enable_2 = params.pitch_enable_2.value();
+                        self.pitch_env_peak_2 = params.pitch_env_peak_2.value();
+                        self.pitch_env_attack_2 = params.pitch_env_attack_2.value();
+                        self.pitch_env_decay_2 = params.pitch_env_decay_2.value();
+                        self.pitch_env_sustain_2 = params.pitch_env_sustain_2.value();
+                        self.pitch_env_release_2 = params.pitch_env_release_2.value();
+                        self.pitch_env_atk_curve_2 = params.pitch_env_atk_curve_2.value();
+                        self.pitch_env_dec_curve_2 = params.pitch_env_dec_curve_2.value();
+                        self.pitch_env_rel_curve_2 = params.pitch_env_rel_curve_2.value();
+                    }
+                    _ => {
+                        self.pitch_enable_2 = false;
+                    }
+                }
                 self.osc_semitones = params.osc_3_semitones.value();
                 self.osc_detune = params.osc_3_detune.value();
                 self.osc_attack = params.osc_3_attack.value();
@@ -1931,8 +2001,8 @@ impl AudioModule {
                 self.grain_hold = params.grain_hold_3.value();
                 self.grain_gap = params.grain_gap_3.value();
                 self.grain_crossfade = params.grain_crossfade_3.value();
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -1977,6 +2047,10 @@ impl AudioModule {
                         let pitch_decay_smoother: Smoother<f32>;
                         let pitch_release_smoother: Smoother<f32>;
                         let pitch_mod_current: f32;
+                        let pitch_attack_smoother_2: Smoother<f32>;
+                        let pitch_decay_smoother_2: Smoother<f32>;
+                        let pitch_release_smoother_2: Smoother<f32>;
+                        let pitch_mod_current_2: f32;
                         if self.pitch_enable {
                             pitch_attack_smoother = match self.pitch_env_atk_curve {
                                 SmoothStyle::Linear => {
@@ -2042,6 +2116,72 @@ impl AudioModule {
                             pitch_release_smoother = Smoother::new(SmoothingStyle::None);
                             pitch_mod_current = 0.0;
                         }
+                        // Pitch mod 2
+                        if self.pitch_enable_2 {
+                            pitch_attack_smoother_2 = match self.pitch_env_atk_curve_2 {
+                                SmoothStyle::Linear => {
+                                    Smoother::new(SmoothingStyle::Linear(self.pitch_env_attack_2))
+                                }
+                                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                                    self.pitch_env_attack_2.clamp(0.0001, 999.9),
+                                )),
+                                SmoothStyle::Exponential => {
+                                    Smoother::new(SmoothingStyle::Exponential(self.pitch_env_attack_2))
+                                }
+                                SmoothStyle::LogSteep => {
+                                    Smoother::new(SmoothingStyle::LogSteep(self.pitch_env_attack_2))
+                                }
+                            };
+    
+                            pitch_decay_smoother_2 = match self.pitch_env_dec_curve_2 {
+                                SmoothStyle::Linear => {
+                                    Smoother::new(SmoothingStyle::Linear(self.pitch_env_decay_2))
+                                }
+                                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                                    self.pitch_env_decay_2.clamp(0.0001, 999.9),
+                                )),
+                                SmoothStyle::Exponential => {
+                                    Smoother::new(SmoothingStyle::Exponential(self.pitch_env_decay_2))
+                                }
+                                SmoothStyle::LogSteep => {
+                                    Smoother::new(SmoothingStyle::LogSteep(self.pitch_env_decay_2))
+                                }
+                            };
+    
+                            pitch_release_smoother_2 = match self.pitch_env_rel_curve_2 {
+                                SmoothStyle::Linear => {
+                                    Smoother::new(SmoothingStyle::Linear(self.pitch_env_release_2))
+                                }
+                                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                                    self.pitch_env_release_2.clamp(0.0001, 999.9),
+                                )),
+                                SmoothStyle::Exponential => {
+                                    Smoother::new(SmoothingStyle::Exponential(self.pitch_env_release_2))
+                                }
+                                SmoothStyle::LogSteep => {
+                                    Smoother::new(SmoothingStyle::LogSteep(self.pitch_env_release_2))
+                                }
+                            };
+    
+                            match pitch_attack_smoother_2.style {
+                                SmoothingStyle::Logarithmic(_) => {
+                                    pitch_attack_smoother_2.reset(0.0001);
+                                    pitch_attack_smoother_2
+                                        .set_target(self.sample_rate, self.pitch_env_peak_2.max(0.0001));
+                                }
+                                _ => {
+                                    pitch_attack_smoother_2.reset(0.0);
+                                    pitch_attack_smoother_2.set_target(self.sample_rate, self.pitch_env_peak_2);
+                                }
+                            }
+
+                            pitch_mod_current_2 = pitch_attack_smoother_2.next();
+                        } else {
+                            pitch_attack_smoother_2 = Smoother::new(SmoothingStyle::None);
+                            pitch_decay_smoother_2 = Smoother::new(SmoothingStyle::None);
+                            pitch_release_smoother_2 = Smoother::new(SmoothingStyle::None);
+                            pitch_mod_current_2 = 0.0;
+                        }
 
                         // Sampler when single cycle needs this!!!
                         if self.single_cycle {
@@ -2072,13 +2212,14 @@ impl AudioModule {
                         // Shift our note per detune
                         // I'm so glad nih-plug has this helper for f32 conversions!
                         let base_note = if velocity_mod <= 0.0 {
-                            note as f32 + self.osc_detune + detune_mod + pitch_mod_current
+                            note as f32 + self.osc_detune + detune_mod + pitch_mod_current + pitch_mod_current_2
                         } else {
                             note as f32
                                 + self.osc_detune
                                 + detune_mod
                                 + velocity_mod.clamp(0.0, 1.0) * velocity
                                 + pitch_mod_current
+                                + pitch_mod_current_2
                         };
 
                         // Reset the retrigger on Oscs
@@ -2142,7 +2283,8 @@ impl AudioModule {
                                             + uni_detune_mod
                                             + (uni_velocity_mod.clamp(0.0, 1.0) * velocity)
                                             + detune_step * (unison_voice + 1) as f32
-                                            + pitch_mod_current,
+                                            + pitch_mod_current
+                                            + pitch_mod_current_2,
                                     );
                                 } else {
                                     unison_notes[unison_voice] = util::f32_midi_note_to_freq(
@@ -2150,7 +2292,8 @@ impl AudioModule {
                                             - uni_detune_mod
                                             - (uni_velocity_mod.clamp(0.0, 1.0) * velocity)
                                             - detune_step * (unison_voice) as f32
-                                            - pitch_mod_current,
+                                            - pitch_mod_current
+                                            - pitch_mod_current_2,
                                     );
                                 }
                             }
@@ -2292,6 +2435,13 @@ impl AudioModule {
                             pitch_attack: pitch_attack_smoother.clone(),
                             pitch_decay: pitch_decay_smoother.clone(),
                             pitch_release: pitch_release_smoother.clone(),
+                            pitch_enabled_2: self.pitch_enable_2,
+                            pitch_env_peak_2: self.pitch_env_peak_2,
+                            pitch_current_2: pitch_mod_current_2,
+                            pitch_state_2: OscState::Attacking,
+                            pitch_attack_2: pitch_attack_smoother_2.clone(),
+                            pitch_decay_2: pitch_decay_smoother_2.clone(),
+                            pitch_release_2: pitch_release_smoother_2.clone(),
                             _detune: self.osc_detune,
                             _unison_detune_value: self.osc_unison_detune,
                             //frequency: detuned_note,
@@ -2366,6 +2516,13 @@ impl AudioModule {
                                     pitch_attack: pitch_attack_smoother.clone(),
                                     pitch_decay: pitch_decay_smoother.clone(),
                                     pitch_release: pitch_release_smoother.clone(),
+                                    pitch_enabled_2: self.pitch_enable_2,
+                                    pitch_env_peak_2: self.pitch_env_peak_2,
+                                    pitch_current_2: pitch_mod_current_2,
+                                    pitch_state_2: OscState::Attacking,
+                                    pitch_attack_2: pitch_attack_smoother_2.clone(),
+                                    pitch_decay_2: pitch_decay_smoother_2.clone(),
+                                    pitch_release_2: pitch_release_smoother_2.clone(),
                                     _detune: self.osc_detune,
                                     _unison_detune_value: self.osc_unison_detune,
                                     //frequency: unison_notes[unison_voice],
@@ -2419,6 +2576,13 @@ impl AudioModule {
                                     pitch_attack: pitch_attack_smoother.clone(),
                                     pitch_decay: pitch_decay_smoother.clone(),
                                     pitch_release: pitch_release_smoother.clone(),
+                                    pitch_enabled_2: self.pitch_enable_2,
+                                    pitch_env_peak_2: self.pitch_env_peak_2,
+                                    pitch_current_2: 0.0,
+                                    pitch_state_2: OscState::Attacking,
+                                    pitch_attack_2: pitch_attack_smoother_2.clone(),
+                                    pitch_decay_2: pitch_decay_smoother_2.clone(),
+                                    pitch_release_2: pitch_release_smoother_2.clone(),
                                     _detune: 0.0,
                                     _unison_detune_value: 0.0,
                                     frequency: 0.0,
@@ -2467,6 +2631,13 @@ impl AudioModule {
                                         pitch_attack: pitch_attack_smoother.clone(),
                                         pitch_decay: pitch_decay_smoother.clone(),
                                         pitch_release: pitch_release_smoother.clone(),
+                                        pitch_enabled_2: self.pitch_enable_2,
+                                        pitch_env_peak_2: 0.0,
+                                        pitch_current_2: 0.0,
+                                        pitch_state_2: OscState::Off,
+                                        pitch_attack_2: pitch_attack_smoother_2.clone(),
+                                        pitch_decay_2: pitch_decay_smoother_2.clone(),
+                                        pitch_release_2: pitch_release_smoother_2.clone(),
                                         _detune: 0.0,
                                         _unison_detune_value: 0.0,
                                         frequency: 0.0,
@@ -2627,6 +2798,13 @@ impl AudioModule {
             pitch_attack: Smoother::new(SmoothingStyle::None),
             pitch_decay: Smoother::new(SmoothingStyle::None),
             pitch_release: Smoother::new(SmoothingStyle::None),
+            pitch_enabled_2: false,
+            pitch_env_peak_2: 0.0,
+            pitch_current_2: 0.0,
+            pitch_state_2: OscState::Off,
+            pitch_attack_2: Smoother::new(SmoothingStyle::None),
+            pitch_decay_2: Smoother::new(SmoothingStyle::None),
+            pitch_release_2: Smoother::new(SmoothingStyle::None),
             _detune: 0.0,
             _unison_detune_value: 0.0,
             frequency: 0.0,
@@ -2683,6 +2861,7 @@ impl AudioModule {
                     voice.phase -= 1.0;
                 }
                 // This happens on extreme pitch envelope values only and catches wild increments
+                // or pitches above nyquist that would alias into other pitches
                 if voice.phase > 1.0 {
                     voice.phase = voice.phase % 1.0;
                 }
@@ -2701,7 +2880,7 @@ impl AudioModule {
 
                     // Move from Decaying to Sustain hold
                     if voice.pitch_decay.steps_left() == 0 && voice.pitch_state == OscState::Decaying {
-                        let sustain_scaled = self.osc_sustain / 999.9;
+                        let sustain_scaled = self.pitch_env_sustain / 999.9;
                         voice.pitch_current = sustain_scaled;
                         voice.pitch_decay.set_target(self.sample_rate, sustain_scaled.clamp(0.0001, 999.9));
                         voice.pitch_state = OscState::Sustaining;
@@ -2715,6 +2894,34 @@ impl AudioModule {
                     // Reassign here for safety
                     voice.pitch_current = 0.0;
                     voice.pitch_state = OscState::Off;
+                }
+                if self.audio_module_type == AudioModuleType::Osc && voice.pitch_enabled_2 {
+                    // Attack is over so use decay amount to reach sustain level - reusing current smoother
+                    if voice.pitch_attack_2.steps_left() == 0 && voice.pitch_state_2 == OscState::Attacking {
+                        voice.pitch_state_2 = OscState::Decaying;
+                        voice.pitch_current_2 = voice.pitch_attack_2.next();
+                        // Now we will use decay smoother from here
+                        voice.pitch_decay_2.reset(voice.pitch_current_2);
+                        let sustain_scaled_2 = self.pitch_env_sustain_2 / 999.9;
+                        voice.pitch_decay_2.set_target(self.sample_rate, sustain_scaled_2.clamp(0.0001, 999.9));
+                    }
+
+                    // Move from Decaying to Sustain hold
+                    if voice.pitch_decay_2.steps_left() == 0 && voice.pitch_state_2 == OscState::Decaying {
+                        let sustain_scaled_2 = self.pitch_env_sustain_2 / 999.9;
+                        voice.pitch_current_2 = sustain_scaled_2;
+                        voice.pitch_decay_2.set_target(self.sample_rate, sustain_scaled_2.clamp(0.0001, 999.9));
+                        voice.pitch_state_2 = OscState::Sustaining;
+                    }
+
+                    // End of release
+                    if voice.pitch_state_2 == OscState::Releasing && voice.pitch_release_2.steps_left() == 0 {
+                        voice.pitch_state_2 = OscState::Off;
+                    }
+                } else {
+                    // Reassign here for safety
+                    voice.pitch_current_2 = 0.0;
+                    voice.pitch_state_2 = OscState::Off;
                 }
 
                 // Move from attack to decay if needed
@@ -2822,6 +3029,13 @@ impl AudioModule {
                         pitch_attack: voice.pitch_attack.clone(),
                         pitch_decay: voice.pitch_decay.clone(),
                         pitch_release: voice.pitch_release.clone(),
+                        pitch_enabled_2: voice.pitch_enabled_2,
+                        pitch_env_peak_2: voice.pitch_env_peak_2,
+                        pitch_current_2: voice.pitch_current_2,
+                        pitch_state_2: voice.pitch_state_2,
+                        pitch_attack_2: voice.pitch_attack_2.clone(),
+                        pitch_decay_2: voice.pitch_decay_2.clone(),
+                        pitch_release_2: voice.pitch_release_2.clone(),
                         _detune: voice._detune,
                         _unison_detune_value: voice._unison_detune_value,
                         frequency: voice.frequency,
@@ -2870,6 +3084,70 @@ impl AudioModule {
                     if unison_voice.phase > 1.0 {
                         unison_voice.phase -= 1.0;
                     }
+                    // This happens on extreme pitch envelope values only and catches wild increments
+                    // or pitches above nyquist that would alias into other pitches
+                    if unison_voice.phase > 1.0 {
+                        unison_voice.phase = unison_voice.phase % 1.0;
+                    }
+
+                    // Move our pitch envelopes if this is an Osc
+                    if self.audio_module_type == AudioModuleType::Osc && unison_voice.pitch_enabled {
+                        // Attack is over so use decay amount to reach sustain level - reusing current smoother
+                        if unison_voice.pitch_attack.steps_left() == 0 && unison_voice.pitch_state == OscState::Attacking {
+                            unison_voice.pitch_state = OscState::Decaying;
+                            unison_voice.pitch_current = unison_voice.pitch_attack.next();
+                            // Now we will use decay smoother from here
+                            unison_voice.pitch_decay.reset(unison_voice.pitch_current);
+                            let sustain_scaled = self.pitch_env_sustain / 999.9;
+                            unison_voice.pitch_decay.set_target(self.sample_rate, sustain_scaled.clamp(0.0001, 999.9));
+                        }
+
+                        // Move from Decaying to Sustain hold
+                        if unison_voice.pitch_decay.steps_left() == 0 && unison_voice.pitch_state == OscState::Decaying {
+                            let sustain_scaled = self.pitch_env_sustain / 999.9;
+                            unison_voice.pitch_current = sustain_scaled;
+                            unison_voice.pitch_decay.set_target(self.sample_rate, sustain_scaled.clamp(0.0001, 999.9));
+                            unison_voice.pitch_state = OscState::Sustaining;
+                        }
+
+                        // End of release
+                        if unison_voice.pitch_state == OscState::Releasing && unison_voice.pitch_release.steps_left() == 0 {
+                            unison_voice.pitch_state = OscState::Off;
+                        }
+                    } else {
+                        // Reassign here for safety
+                        unison_voice.pitch_current = 0.0;
+                        unison_voice.pitch_state = OscState::Off;
+                    }
+                    if self.audio_module_type == AudioModuleType::Osc && unison_voice.pitch_enabled_2 {
+                        // Attack is over so use decay amount to reach sustain level - reusing current smoother
+                        if unison_voice.pitch_attack_2.steps_left() == 0 && unison_voice.pitch_state_2 == OscState::Attacking {
+                            unison_voice.pitch_state_2 = OscState::Decaying;
+                            unison_voice.pitch_current_2 = unison_voice.pitch_attack_2.next();
+                            // Now we will use decay smoother from here
+                            unison_voice.pitch_decay_2.reset(unison_voice.pitch_current_2);
+                            let sustain_scaled_2 = self.pitch_env_sustain_2 / 999.9;
+                            unison_voice.pitch_decay_2.set_target(self.sample_rate, sustain_scaled_2.clamp(0.0001, 999.9));
+                        }
+
+                        // Move from Decaying to Sustain hold
+                        if unison_voice.pitch_decay_2.steps_left() == 0 && unison_voice.pitch_state_2 == OscState::Decaying {
+                            let sustain_scaled_2 = self.pitch_env_sustain_2 / 999.9;
+                            unison_voice.pitch_current_2 = sustain_scaled_2;
+                            unison_voice.pitch_decay_2.set_target(self.sample_rate, sustain_scaled_2.clamp(0.0001, 999.9));
+                            unison_voice.pitch_state_2 = OscState::Sustaining;
+                        }
+
+                        // End of release
+                        if unison_voice.pitch_state_2 == OscState::Releasing && unison_voice.pitch_release_2.steps_left() == 0 {
+                            unison_voice.pitch_state_2 = OscState::Off;
+                        }
+                    } else {
+                        // Reassign here for safety
+                        unison_voice.pitch_current_2 = 0.0;
+                        unison_voice.pitch_state_2 = OscState::Off;
+                    }
+
                     // Move from attack to decay if needed
                     // Attack is over so use decay amount to reach sustain level - reusing current smoother
                     if unison_voice.osc_attack.steps_left() == 0
@@ -2942,6 +3220,23 @@ impl AudioModule {
                             OscState::Off => 0.0,
                         }
                     }
+                    if voice.pitch_enabled_2 {
+                        voice.pitch_current_2 = match voice.pitch_state_2 {
+                            OscState::Attacking => {
+                                voice.pitch_attack_2.next()
+                            },
+                            OscState::Decaying => {
+                                voice.pitch_decay_2.next()
+                            },
+                            OscState::Sustaining => {
+                                self.pitch_env_sustain_2 / 999.9
+                            },
+                            OscState::Releasing => {
+                                voice.pitch_release_2.next()
+                            },
+                            OscState::Off => 0.0,
+                        }
+                    }
 
                     let temp_osc_gain_multiplier: f32;
                     // Get our current gain amount for use in match below
@@ -2976,7 +3271,7 @@ impl AudioModule {
 
                     let nyquist = self.sample_rate/2.0;
                     if voice.vel_mod_amount == 0.0 {
-                        let base_note = voice.note as f32 + voice._detune + detune_mod + voice.pitch_current;
+                        let base_note = voice.note as f32 + voice._detune + detune_mod + voice.pitch_current + voice.pitch_current_2;
                         voice.phase_delta =
                             util::f32_midi_note_to_freq(base_note).min(nyquist) / self.sample_rate;
                     } else {
@@ -2984,7 +3279,8 @@ impl AudioModule {
                             + voice._detune
                             + detune_mod
                             + (voice.vel_mod_amount * voice._velocity)
-                            + voice.pitch_current;
+                            + voice.pitch_current
+                            + voice.pitch_current_2;
                         voice.phase_delta =
                             util::f32_midi_note_to_freq(base_note).min(nyquist) / self.sample_rate;
                     }
@@ -3071,7 +3367,8 @@ impl AudioModule {
                         let base_note = unison_voice.note as f32
                             + unison_voice._unison_detune_value
                             + uni_detune_mod
-                            + unison_voice.pitch_current;
+                            + unison_voice.pitch_current
+                            + unison_voice.pitch_current_2;
                         unison_voice.phase_delta =
                             util::f32_midi_note_to_freq(base_note) / self.sample_rate;
                     } else {
@@ -3079,7 +3376,8 @@ impl AudioModule {
                             + unison_voice._unison_detune_value
                             + uni_detune_mod
                             + (unison_voice.vel_mod_amount * unison_voice._velocity)
-                            + unison_voice.pitch_current;
+                            + unison_voice.pitch_current
+                            + unison_voice.pitch_current_2;
                         unison_voice.phase_delta =
                             util::f32_midi_note_to_freq(base_note) / self.sample_rate;
                     }

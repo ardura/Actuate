@@ -2,12 +2,15 @@ use crate::{
     audio_module::{
         AudioModuleType,
         Oscillator::{self, RetriggerStyle, SmoothStyle, VoiceType},
-    }, fx::{
+    },
+    fx::{
         delay::{DelaySnapValues, DelayType},
         saturation::SaturationType,
         ArduraFilter,
         StateVariableFilter::ResonanceType,
-    }, ActuatePreset, FilterAlgorithms, FilterRouting, LFOController, ModulationDestination, ModulationSource, PitchRouting, PresetType
+    },
+    ActuatePreset, FilterAlgorithms, FilterRouting, LFOController, ModulationDestination,
+    ModulationSource, PitchRouting, PresetType,
 };
 use serde::{Deserialize, Serialize};
 
@@ -459,7 +462,28 @@ pub struct ActuatePresetV114 {
 
     ///////////////////////////////////////////////////////////////////////////
     // MISSING IN OLDER STRUCTS
-    //PITCH STUFF
+    // PITCH STUFF
+    //
+    // pitch_enable: false,
+    // pitch_env_peak: 0.0,
+    // pitch_env_atk_curve: SmoothStyle::Linear,
+    // pitch_env_dec_curve: SmoothStyle::Linear,
+    // pitch_env_rel_curve: SmoothStyle::Linear,
+    // pitch_env_attack: 0.0,
+    // pitch_env_decay: 300.0,
+    // pitch_env_release: 0.0,
+    // pitch_env_sustain: 0.0,
+    // pitch_routing: PitchRouting::Osc1,
+    // pitch_enable_2: false,
+    // pitch_env_peak_2: 0.0,
+    // pitch_env_atk_curve_2: SmoothStyle::Linear,
+    // pitch_env_dec_curve_2: SmoothStyle::Linear,
+    // pitch_env_rel_curve_2: SmoothStyle::Linear,
+    // pitch_env_attack_2: 0.0,
+    // pitch_env_decay_2: 300.0,
+    // pitch_env_release_2: 0.0,
+    // pitch_env_sustain_2: 0.0,
+    // pitch_routing_2: PitchRouting::Osc1,
     ///////////////////////////////////////////////////////////////////////////
 
     // LFOs
@@ -816,7 +840,6 @@ pub fn load_unserialized_v114(file_data: Vec<u8>) -> ActuatePreset {
         });
     convert_preset_v114(old_unserialized)
 }
-
 
 // This takes the deserialized message pack and converts it into the old struct if it can
 // This then attempts to return the newer preset format after
@@ -1234,6 +1257,16 @@ fn convert_preset_v114(preset: ActuatePresetV114) -> ActuatePreset {
         pitch_env_decay: 300.0,
         pitch_env_release: 0.0,
         pitch_env_sustain: 0.0,
+        pitch_enable_2: false,
+        pitch_env_peak_2: 0.0,
+        pitch_env_atk_curve_2: SmoothStyle::Linear,
+        pitch_env_dec_curve_2: SmoothStyle::Linear,
+        pitch_env_rel_curve_2: SmoothStyle::Linear,
+        pitch_env_attack_2: 0.0,
+        pitch_env_decay_2: 300.0,
+        pitch_env_release_2: 0.0,
+        pitch_env_sustain_2: 0.0,
+        pitch_routing_2: PitchRouting::Osc1,
         ///////////////////////////////////////////////////////////////////
         lfo1_enable: preset.lfo1_enable,
         lfo2_enable: preset.lfo2_enable,
@@ -1477,6 +1510,16 @@ fn convert_preset(preset: ActuatePresetOld) -> ActuatePreset {
         pitch_env_decay: 300.0,
         pitch_env_release: 0.0,
         pitch_env_sustain: 0.0,
+        pitch_enable_2: false,
+        pitch_env_peak_2: 0.0,
+        pitch_env_atk_curve_2: SmoothStyle::Linear,
+        pitch_env_dec_curve_2: SmoothStyle::Linear,
+        pitch_env_rel_curve_2: SmoothStyle::Linear,
+        pitch_env_attack_2: 0.0,
+        pitch_env_decay_2: 300.0,
+        pitch_env_release_2: 0.0,
+        pitch_env_sustain_2: 0.0,
+        pitch_routing_2: PitchRouting::Osc1,
         ///////////////////////////////////////////////////////////////////
         lfo1_enable: preset.lfo1_enable,
         lfo2_enable: preset.lfo2_enable,
