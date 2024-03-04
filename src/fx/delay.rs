@@ -45,7 +45,6 @@ pub(crate) struct Delay {
     delay_type: DelayType,
     feedback: f32,
     current_index: usize,
-    delay_chunk_flip: bool,
 }
 
 impl Delay {
@@ -96,7 +95,6 @@ impl Delay {
             delay_type: DelayType::Stereo,
             feedback,
             current_index: 0,
-            delay_chunk_flip: true,
         }
     }
 
@@ -192,40 +190,42 @@ impl Delay {
         // Calculate the left and right outputs
         let mut output_l: f32;
         let mut output_r: f32;
+
+        output_l = input_l + self.feedback * delayed_sample_l;
+        output_r = input_r + self.feedback * delayed_sample_r;
+
+        let delay_shift_l: usize;
+        let delay_shift_r: usize;
         match self.delay_type {
             DelayType::Stereo => {
-                output_l = input_l + self.feedback * delayed_sample_l;
-                output_r = input_r + self.feedback * delayed_sample_r;
+                delay_shift_l = 0;
+                delay_shift_r = 0;
             }
             DelayType::PingPongL => {
-                if self.delay_chunk_flip {
-                    output_l = input_l + self.feedback * delayed_sample_l;
-                    output_r = input_r;
-                } else {
-                    output_l = input_l;
-                    output_r = input_r + self.feedback * delayed_sample_r;
-                }
+                delay_shift_l = self.delay_length / 2;
+                delay_shift_r = 0;
             }
             DelayType::PingPongR => {
-                if self.delay_chunk_flip {
-                    output_l = input_l;
-                    output_r = input_r + self.feedback * delayed_sample_r;
-                } else {
-                    output_l = input_l + self.feedback * delayed_sample_l;
-                    output_r = input_r;
-                }
+                delay_shift_r = self.delay_length / 2;
+                delay_shift_l = 0;
             }
         }
 
         // Store the outputs in the delay lines
-        self.delay_buffer_l[self.current_index] = output_l;
-        self.delay_buffer_r[self.current_index] = output_r;
+        if self.delay_buffer_l.get(self.current_index + delay_shift_l) != None {
+            self.delay_buffer_l[self.current_index + delay_shift_l] = output_l;
+        } else {
+            self.delay_buffer_l[(self.current_index + delay_shift_l) % self.delay_length] = output_l;
+        }
+        
+        if self.delay_buffer_r.get(self.current_index + delay_shift_r) != None {
+            self.delay_buffer_r[self.current_index + delay_shift_r] = output_r;
+        } else {
+            self.delay_buffer_r[(self.current_index + delay_shift_r) % self.delay_length] = output_r;
+        }
 
         // Move the index to the next position in the delay lines
         self.current_index = (self.current_index + 1) % self.delay_length;
-        if self.current_index == 0 {
-            self.delay_chunk_flip = !self.delay_chunk_flip;
-        }
 
         // Return the left and right outputs
         output_l = input_l * (1.0 - amount) + output_l * amount;

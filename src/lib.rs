@@ -3046,7 +3046,7 @@ impl ActuateParams {
             delay_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
             delay_time: EnumParam::new("Time", DelaySnapValues::Quarter),
-            delay_decay: FloatParam::new("Decay", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+            delay_decay: FloatParam::new("Decay", 0.5, FloatRange::Linear { min: 0.001, max: 1.0 })
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
             delay_type: EnumParam::new("Type", DelayType::Stereo),
 
@@ -3057,7 +3057,7 @@ impl ActuateParams {
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
-            reverb_size: FloatParam::new("Size", 1.0, FloatRange::Linear { min: 0.0, max: 2.0 })
+            reverb_size: FloatParam::new("Size", 1.0, FloatRange::Linear { min: 0.001, max: 2.0 })
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
             reverb_feedback: FloatParam::new(
                 "Feedback",
