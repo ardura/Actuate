@@ -8656,6 +8656,7 @@ impl Actuate {
             &params.filter_env_release_2,
             loaded_preset.filter_env_release_2,
         );
+        setter.set_parameter(&params.filter_routing, loaded_preset.filter_routing.clone());
 
         #[allow(unreachable_patterns)]
         let preset_category_override = match loaded_preset.preset_category {
