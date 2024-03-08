@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.1
+Version 1.2.3
 
 #####################################
 
@@ -69,7 +69,7 @@ use fx::{
     StateVariableFilter::{ResonanceType, StateVariableFilter},
     VCFilter::ResponseType as VCResponseType,
 };
-use old_preset_structs::{load_unserialized_old, load_unserialized_v114};
+use old_preset_structs::{load_unserialized_old, load_unserialized_v114, load_unserialized_v122};
 use CustomWidgets::{
     toggle_switch, ui_knob, BoolButton, CustomParamSlider,
     CustomParamSlider::ParamSlider as HorizontalParamSlider,
@@ -298,6 +298,7 @@ pub struct ActuatePreset {
     ///////////////////////////////////////////////////////////
     mod1_audio_module_type: AudioModuleType,
     mod1_audio_module_level: f32,
+    mod1_audio_module_routing: AMFilterRouting,
     // Granulizer/Sampler
     mod1_loaded_sample: Vec<Vec<f32>>,
     mod1_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -332,6 +333,7 @@ pub struct ActuatePreset {
     ///////////////////////////////////////////////////////////
     mod2_audio_module_type: AudioModuleType,
     mod2_audio_module_level: f32,
+    mod2_audio_module_routing: AMFilterRouting,
     // Granulizer/Sampler
     mod2_loaded_sample: Vec<Vec<f32>>,
     mod2_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -366,6 +368,7 @@ pub struct ActuatePreset {
     ///////////////////////////////////////////////////////////
     mod3_audio_module_type: AudioModuleType,
     mod3_audio_module_level: f32,
+    mod3_audio_module_routing: AMFilterRouting,
     // Granulizer/Sampler
     mod3_loaded_sample: Vec<Vec<f32>>,
     mod3_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -827,6 +830,7 @@ impl Default for Actuate {
                     tag_warm: false,
                     mod1_audio_module_type: AudioModuleType::Osc,
                     mod1_audio_module_level: 1.0,
+                    mod1_audio_module_routing: AMFilterRouting::Filter1,
                     mod1_loaded_sample: vec![vec![0.0, 0.0]],
                     mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod1_loop_wavetable: false,
@@ -856,6 +860,7 @@ impl Default for Actuate {
 
                     mod2_audio_module_type: AudioModuleType::Off,
                     mod2_audio_module_level: 1.0,
+                    mod2_audio_module_routing: AMFilterRouting::Filter1,
                     mod2_loaded_sample: vec![vec![0.0, 0.0]],
                     mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod2_loop_wavetable: false,
@@ -885,6 +890,7 @@ impl Default for Actuate {
 
                     mod3_audio_module_type: AudioModuleType::Off,
                     mod3_audio_module_level: 1.0,
+                    mod3_audio_module_routing: AMFilterRouting::Filter1,
                     mod3_loaded_sample: vec![vec![0.0, 0.0]],
                     mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod3_loop_wavetable: false,
@@ -1041,15 +1047,15 @@ impl Default for Actuate {
                     sat_type: SaturationType::Tape,
 
                     use_delay: false,
-                    delay_amount: 0.0,
+                    delay_amount: 0.5,
                     delay_time: DelaySnapValues::Quarter,
-                    delay_decay: 0.0,
+                    delay_decay: 0.5,
                     delay_type: DelayType::Stereo,
 
                     use_reverb: false,
-                    reverb_amount: 0.5,
-                    reverb_size: 0.5,
-                    reverb_feedback: 0.5,
+                    reverb_amount: 0.85,
+                    reverb_size: 1.0,
+                    reverb_feedback: 0.28,
 
                     use_phaser: false,
                     phaser_amount: 0.5,
@@ -3645,13 +3651,13 @@ impl Plugin for Actuate {
                                         .slimmer(0.5)
                                         .set_left_sided_label(true)
                                         .set_label_width(70.0)
-                                        .with_width(30.0));
+                                        .with_width(30.0)).on_hover_text("Overall output volume");
                                     ui.separator();
                                     ui.add(CustomParamSlider::ParamSlider::for_param(&params.voice_limit, setter)
                                         .slimmer(0.5)
                                         .set_left_sided_label(true)
                                         .set_label_width(84.0)
-                                        .with_width(30.0));
+                                        .with_width(30.0)).on_hover_text("Max playing voices for all Oscs");
                                     ui.separator();
                                     ui.label(RichText::new("FX")
                                         .font(FONT)
@@ -3709,7 +3715,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_1_knob);
                                             let audio_module_1_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_1_level,
@@ -3718,7 +3724,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
                                             ui.add(audio_module_1_level_knob);
                                         });
                                         ui.horizontal(|ui|{
@@ -3729,7 +3735,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_1_filter_routing);
                                         });
 
@@ -3741,7 +3747,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_2_knob);
                                             let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_2_level,
@@ -3750,7 +3756,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
                                             ui.add(audio_module_2_level_knob);
                                         });
                                         ui.horizontal(|ui|{
@@ -3761,7 +3767,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_2_filter_routing);
                                         });
 
@@ -3773,7 +3779,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_3_knob);
                                             let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_3_level,
@@ -3782,7 +3788,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
                                             ui.add(audio_module_3_level_knob);
                                         });
                                         ui.horizontal(|ui|{
@@ -3793,7 +3799,7 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::NewPresets1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_3_filter_routing);
                                         });
                                     });
@@ -7767,6 +7773,7 @@ impl Actuate {
                     tag_warm: false,
                     mod1_audio_module_type: AudioModuleType::Osc,
                     mod1_audio_module_level: 1.0,
+                    mod1_audio_module_routing: AMFilterRouting::Filter1,
                     mod1_loaded_sample: vec![vec![0.0, 0.0]],
                     mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod1_loop_wavetable: false,
@@ -7796,6 +7803,7 @@ impl Actuate {
 
                     mod2_audio_module_type: AudioModuleType::Off,
                     mod2_audio_module_level: 1.0,
+                    mod2_audio_module_routing: AMFilterRouting::Filter1,
                     mod2_loaded_sample: vec![vec![0.0, 0.0]],
                     mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod2_loop_wavetable: false,
@@ -7825,6 +7833,7 @@ impl Actuate {
 
                     mod3_audio_module_type: AudioModuleType::Off,
                     mod3_audio_module_level: 1.0,
+                    mod3_audio_module_routing: AMFilterRouting::Filter1,
                     mod3_loaded_sample: vec![vec![0.0, 0.0]],
                     mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod3_loop_wavetable: false,
@@ -7980,15 +7989,15 @@ impl Actuate {
                     sat_type: SaturationType::Tape,
 
                     use_delay: false,
-                    delay_amount: 0.0,
+                    delay_amount: 0.5,
                     delay_time: DelaySnapValues::Quarter,
-                    delay_decay: 0.0,
+                    delay_decay: 0.5,
                     delay_type: DelayType::Stereo,
 
                     use_reverb: false,
-                    reverb_amount: 0.5,
-                    reverb_size: 0.5,
-                    reverb_feedback: 0.5,
+                    reverb_amount: 0.85,
+                    reverb_size: 1.0,
+                    reverb_feedback: 0.28,
 
                     use_phaser: false,
                     phaser_amount: 0.5,
@@ -8017,13 +8026,19 @@ impl Actuate {
             // Attempt to load the previous version preset type
             if unserialized.preset_name.contains("Error") {
                 // Try loading the previous preset struct version
-                unserialized = load_unserialized_v114(file_string_data.clone());
-            }
+                unserialized = load_unserialized_v122(file_string_data.clone());
 
-            // Attempt to load the oldest preset type
-            if unserialized.preset_name.contains("Error") {
-                // Try loading the previous preset struct version
-                unserialized = load_unserialized_old(file_string_data.clone());
+                // Attempt to load the previous version preset type
+                if unserialized.preset_name.contains("Error") {
+                    // Try loading the previous preset struct version
+                    unserialized = load_unserialized_v114(file_string_data.clone());
+
+                    // Attempt to load the oldest preset type
+                    if unserialized.preset_name.contains("Error") {
+                        // Try loading the previous preset struct version
+                        unserialized = load_unserialized_old(file_string_data.clone());
+                    }
+                }
             }
 
             return (return_name, Some(unserialized));
@@ -8088,6 +8103,7 @@ impl Actuate {
                         tag_warm: false,
                         mod1_audio_module_type: AudioModuleType::Osc,
                         mod1_audio_module_level: 1.0,
+                        mod1_audio_module_routing: AMFilterRouting::Filter1,
                         mod1_loaded_sample: vec![vec![0.0, 0.0]],
                         mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
                         mod1_loop_wavetable: false,
@@ -8117,6 +8133,7 @@ impl Actuate {
 
                         mod2_audio_module_type: AudioModuleType::Off,
                         mod2_audio_module_level: 1.0,
+                        mod2_audio_module_routing: AMFilterRouting::Filter1,
                         mod2_loaded_sample: vec![vec![0.0, 0.0]],
                         mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
                         mod2_loop_wavetable: false,
@@ -8146,6 +8163,7 @@ impl Actuate {
 
                         mod3_audio_module_type: AudioModuleType::Off,
                         mod3_audio_module_level: 1.0,
+                        mod3_audio_module_routing: AMFilterRouting::Filter1,
                         mod3_loaded_sample: vec![vec![0.0, 0.0]],
                         mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
                         mod3_loop_wavetable: false,
@@ -8300,15 +8318,15 @@ impl Actuate {
                         sat_type: SaturationType::Tape,
 
                         use_delay: false,
-                        delay_amount: 0.0,
+                        delay_amount: 0.5,
                         delay_time: DelaySnapValues::Quarter,
-                        delay_decay: 0.0,
+                        delay_decay: 0.5,
                         delay_type: DelayType::Stereo,
 
                         use_reverb: false,
-                        reverb_amount: 0.5,
-                        reverb_size: 0.5,
-                        reverb_feedback: 0.5,
+                        reverb_amount: 0.85,
+                        reverb_size: 1.0,
+                        reverb_feedback: 0.28,
 
                         use_phaser: false,
                         phaser_amount: 0.5,
@@ -8377,6 +8395,10 @@ impl Actuate {
             &params.audio_module_1_level,
             loaded_preset.mod1_audio_module_level,
         );
+        setter.set_parameter(
+            &params.audio_module_1_routing, 
+            loaded_preset.mod1_audio_module_routing.clone(),
+        );
         setter.set_parameter(&params.loop_sample_1, loaded_preset.mod1_loop_wavetable);
         setter.set_parameter(&params.single_cycle_1, loaded_preset.mod1_single_cycle);
         setter.set_parameter(&params.restretch_1, loaded_preset.mod1_restretch);
@@ -8415,6 +8437,10 @@ impl Actuate {
             &params.audio_module_2_level,
             loaded_preset.mod2_audio_module_level,
         );
+        setter.set_parameter(
+            &params.audio_module_2_routing, 
+            loaded_preset.mod2_audio_module_routing.clone(),
+        );
         setter.set_parameter(&params.loop_sample_2, loaded_preset.mod2_loop_wavetable);
         setter.set_parameter(&params.single_cycle_2, loaded_preset.mod2_single_cycle);
         setter.set_parameter(&params.restretch_2, loaded_preset.mod2_restretch);
@@ -8452,6 +8478,10 @@ impl Actuate {
         setter.set_parameter(
             &params.audio_module_3_level,
             loaded_preset.mod3_audio_module_level,
+        );
+        setter.set_parameter(
+            &params.audio_module_3_routing, 
+            loaded_preset.mod3_audio_module_routing.clone(),
         );
         setter.set_parameter(&params.loop_sample_3, loaded_preset.mod3_loop_wavetable);
         setter.set_parameter(&params.single_cycle_3, loaded_preset.mod3_single_cycle);
@@ -8930,6 +8960,7 @@ impl Actuate {
                 ///////////////////////////////////////////////////////////
                 mod1_audio_module_type: self.params._audio_module_1_type.value(),
                 mod1_audio_module_level: self.params.audio_module_1_level.value(),
+                mod1_audio_module_routing: self.params.audio_module_1_routing.value(),
                 // Granulizer/Sampler
                 mod1_loaded_sample: AM1.loaded_sample.clone(),
                 mod1_sample_lib: AM1.sample_lib.clone(),
@@ -8964,6 +8995,7 @@ impl Actuate {
                 ///////////////////////////////////////////////////////////
                 mod2_audio_module_type: self.params._audio_module_2_type.value(),
                 mod2_audio_module_level: self.params.audio_module_2_level.value(),
+                mod2_audio_module_routing: self.params.audio_module_2_routing.value(),
                 // Granulizer/Sampler
                 mod2_loaded_sample: AM2.loaded_sample.clone(),
                 mod2_sample_lib: AM2.sample_lib.clone(),
@@ -8998,6 +9030,7 @@ impl Actuate {
                 ///////////////////////////////////////////////////////////
                 mod3_audio_module_type: self.params._audio_module_3_type.value(),
                 mod3_audio_module_level: self.params.audio_module_3_level.value(),
+                mod3_audio_module_routing: self.params.audio_module_3_routing.value(),
                 // Granulizer/Sampler
                 mod3_loaded_sample: AM3.loaded_sample.clone(),
                 mod3_sample_lib: AM3.sample_lib.clone(),
