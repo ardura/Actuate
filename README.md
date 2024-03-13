@@ -58,5 +58,16 @@ Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura
 - [ ] Fix text input not working (right now it's a OS safe workaround)
 - [ ] Fix file dialog in the process thread (right now it's a OS safe workaround)
 
+## DAWS and compatibility
+- Compatible with Windows 10 and up
+- Compatible with Linux
+- Compatible with Mac
+- DAWS
+    - FL Studio tested compatible
+    - Reaper tested compatible
+    - Ardour tested **compatible with some reported performance issues**
+    - Bitwig tested compatible
+    - Cantibile tested **uncompatible and has issues**
+    - VSTHost tested **compatible but has gui issues**
 ## Known Issues
 - Naming presets and info may be unstable in non-windows environments as I have not tested those sorry
