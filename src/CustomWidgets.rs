@@ -1,3 +1,4 @@
+pub(crate) mod BeizerButton;
 pub(crate) mod BoolButton;
 pub(crate) mod CustomParamSlider;
 pub(crate) mod CustomVerticalSlider;

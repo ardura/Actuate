@@ -22,11 +22,9 @@ This is intended to be a generic implementation that can be extended for other a
 */
 
 use nih_plug::{
-    params::enums::Enum,
-    prelude::{NoteEvent, ParamSetter, Smoother, SmoothingStyle},
-    util,
+    params::enums::Enum, prelude::{NoteEvent, ParamSetter, Smoother, SmoothingStyle}, util
 };
-use nih_plug_egui::egui::{RichText, Ui};
+use nih_plug_egui::egui::{Pos2, Rect, RichText, Rounding, Ui};
 use pitch_shift::PitchShifter;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -52,7 +50,7 @@ use crate::{
     // UI Colors
     YELLOW_MUSTARD,
 };
-use CustomParamSlider::ParamSlider as HorizontalParamSlider;
+use crate::{CustomWidgets::{BeizerButton, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
 use Oscillator::VoiceType;
 
@@ -313,40 +311,140 @@ impl Default for AudioModule {
 }
 
 impl AudioModule {
-    // Draw functions for each module type. This works at CRATE level on the params to draw all 3!!!
     // Passing the params here is not the nicest thing but we have to move things around to get past the threading stuff + egui's gui separation
-    pub fn draw_modules(ui: &mut Ui, params: Arc<ActuateParams>, setter: &ParamSetter<'_>) {
-        // Resetting these from the draw thread since setter is valid here - I recognize this is ugly/bad practice
-        if params.load_sample_1.value() {
-            setter.set_parameter(&params.load_sample_1, false);
+    pub fn draw_module(
+        ui: &mut Ui,
+        setter: &ParamSetter<'_>,
+        params: Arc<ActuateParams>,
+        index: u8,
+    ) {
+        let am_type;
+        let osc_voice;
+        let osc_retrigger;
+        let osc_octave;
+        let osc_semitones;
+        let osc_stereo;
+        let osc_unison;
+        let osc_detune;
+        let osc_unison_detune;
+        let osc_attack;
+        let osc_decay;
+        let osc_sustain;
+        let osc_release;
+        let osc_atk_curve;
+        let osc_dec_curve;
+        let osc_rel_curve;
+        let load_sample;
+        let restretch;
+        let loop_sample;
+        let single_cycle;
+        let start_position;
+        let end_position;
+        let grain_crossfade;
+        let grain_hold;
+        let grain_gap;
+        match index {
+            1 => {
+                am_type = &params._audio_module_1_type;
+                osc_voice = &params.osc_1_type;
+                osc_retrigger = &params.osc_1_retrigger;
+                osc_octave = &params.osc_1_octave;
+                osc_semitones = &params.osc_1_semitones;
+                osc_stereo = &params.osc_1_stereo;
+                osc_unison = &params.osc_1_unison;
+                osc_detune = &params.osc_1_detune;
+                osc_unison_detune = &params.osc_1_unison_detune;
+                osc_attack = &params.osc_1_attack;
+                osc_decay = &params.osc_1_decay;
+                osc_sustain = &params.osc_1_sustain;
+                osc_release = &params.osc_1_release;
+                osc_atk_curve = &params.osc_1_atk_curve;
+                osc_dec_curve = &params.osc_1_dec_curve;
+                osc_rel_curve = &params.osc_1_rel_curve;
+                load_sample = &params.load_sample_1;
+                restretch = &params.restretch_1;
+                loop_sample = &params.loop_sample_1;
+                single_cycle = &params.single_cycle_1;
+                start_position = &params.start_position_1;
+                end_position = &params.end_position_1;
+                grain_crossfade = &params.grain_crossfade_1;
+                grain_hold = &params.grain_hold_1;
+                grain_gap = &params.grain_gap_1;
+            },
+            2 => {
+                am_type = &params._audio_module_2_type;
+                osc_voice = &params.osc_2_type;
+                osc_retrigger = &params.osc_2_retrigger;
+                osc_octave = &params.osc_2_octave;
+                osc_semitones = &params.osc_2_semitones;
+                osc_stereo = &params.osc_2_stereo;
+                osc_unison = &params.osc_2_unison;
+                osc_detune = &params.osc_2_detune;
+                osc_unison_detune = &params.osc_2_unison_detune;
+                osc_attack = &params.osc_2_attack;
+                osc_decay = &params.osc_2_decay;
+                osc_sustain = &params.osc_2_sustain;
+                osc_release = &params.osc_2_release;
+                osc_atk_curve = &params.osc_2_atk_curve;
+                osc_dec_curve = &params.osc_2_dec_curve;
+                osc_rel_curve = &params.osc_2_rel_curve;
+                load_sample = &params.load_sample_2;
+                restretch = &params.restretch_2;
+                loop_sample = &params.loop_sample_2;
+                single_cycle = &params.single_cycle_2;
+                start_position = &params.start_position_2;
+                end_position = &params.end_position_2;
+                grain_crossfade = &params.grain_crossfade_2;
+                grain_hold = &params.grain_hold_2;
+                grain_gap = &params.grain_gap_2;
+            },
+            3 => {
+                am_type = &params._audio_module_3_type;
+                osc_voice = &params.osc_3_type;
+                osc_retrigger = &params.osc_3_retrigger;
+                osc_octave = &params.osc_3_octave;
+                osc_semitones = &params.osc_3_semitones;
+                osc_stereo = &params.osc_3_stereo;
+                osc_unison = &params.osc_3_unison;
+                osc_detune = &params.osc_3_detune;
+                osc_unison_detune = &params.osc_3_unison_detune;
+                osc_attack = &params.osc_3_attack;
+                osc_decay = &params.osc_3_decay;
+                osc_sustain = &params.osc_3_sustain;
+                osc_release = &params.osc_3_release;
+                osc_atk_curve = &params.osc_3_atk_curve;
+                osc_dec_curve = &params.osc_3_dec_curve;
+                osc_rel_curve = &params.osc_3_rel_curve;
+                load_sample = &params.load_sample_3;
+                restretch = &params.restretch_3;
+                loop_sample = &params.loop_sample_3;
+                single_cycle = &params.single_cycle_3;
+                start_position = &params.start_position_3;
+                end_position = &params.end_position_3;
+                grain_crossfade = &params.grain_crossfade_3;
+                grain_hold = &params.grain_hold_3;
+                grain_gap = &params.grain_gap_3;
+            },
+            #[allow(unreachable_code)]
+            _ => !unreachable!(),
         }
-        if params.load_sample_2.value() {
-            setter.set_parameter(&params.load_sample_2, false);
-        }
-        if params.load_sample_3.value() {
-            setter.set_parameter(&params.load_sample_3, false);
+        // Resetting from the draw thread since setter is valid here - I recognize this is ugly/bad practice
+        if load_sample.value() {
+            setter.set_parameter(load_sample, false);
         }
 
-        const VERT_BAR_HEIGHT: f32 = 106.0;
-        let VERT_BAR_HEIGHT_SHORTENED: f32 = VERT_BAR_HEIGHT - ui.spacing().interact_size.y - 3.0;
-        const VERT_BAR_WIDTH: f32 = 14.0;
-        const HCURVE_WIDTH: f32 = 120.0;
-        const HCURVE_BWIDTH: f32 = 28.0;
+        const VERT_BAR_HEIGHT: f32 = 76.0;
+        const VERT_BAR_WIDTH: f32 = 12.0;
         const DISABLED_SPACE: f32 = 116.0;
 
-        // This is ugly but I couldn't figure out a better architechture for egui and separating audio modules
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // Spot One (1)
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        match params._audio_module_1_type.value() {
+        match am_type.value() {
             AudioModuleType::Off => {
                 // Blank space
                 ui.label("Disabled");
                 ui.add_space(DISABLED_SPACE);
             }
             AudioModuleType::Osc => {
-                const KNOB_SIZE: f32 = 24.0;
+                const KNOB_SIZE: f32 = 22.0;
                 const TEXT_SIZE: f32 = 10.0;
                 // Oscillator
                 ui.vertical(|ui| {
@@ -354,7 +452,7 @@ impl AudioModule {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             let osc_1_type_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_type,
+                                osc_voice,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -366,7 +464,7 @@ impl AudioModule {
                             ui.add(osc_1_type_knob);
 
                             let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_retrigger,
+                                osc_retrigger,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -381,7 +479,7 @@ impl AudioModule {
 
                         ui.vertical(|ui| {
                             let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_octave,
+                                osc_octave,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -394,7 +492,7 @@ impl AudioModule {
                             ui.add(osc_1_octave_knob);
 
                             let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_semitones,
+                                osc_semitones,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -409,7 +507,7 @@ impl AudioModule {
 
                         ui.vertical(|ui| {
                             let osc_1_stereo_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_stereo,
+                                osc_stereo,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -422,14 +520,14 @@ impl AudioModule {
                             ui.add(osc_1_stereo_knob);
 
                             let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_unison,
+                                osc_unison,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
                             )
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
+                            .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                             ui.add(osc_1_unison_knob);
@@ -437,7 +535,7 @@ impl AudioModule {
 
                         ui.vertical(|ui| {
                             let osc_1_detune_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_detune,
+                                osc_detune,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -450,220 +548,275 @@ impl AudioModule {
                             ui.add(osc_1_detune_knob);
 
                             let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_unison_detune,
+                                osc_unison_detune,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
                             )
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
+                            .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE);
                             ui.add(osc_1_unison_detune_knob);
                         });
 
+                        // Trying to draw background box as rect
+                        ui.painter().rect_filled(
+                            Rect::from_two_pos(
+                                Pos2 {
+                                    x: ui.cursor().left_top().x - 4.0,
+                                    y: ui.cursor().left_top().y - 4.0,
+                                },
+                                Pos2 {
+                                    x: ui.cursor().left_top().x + VERT_BAR_WIDTH * 6.0 + 8.0,
+                                    y: ui.cursor().left_top().y + VERT_BAR_HEIGHT + 12.0 + 8.0,
+                                },
+                            ),
+                            Rounding::from(4.0),
+                            DARKER_GREY_UI_COLOR,
+                        );
+                        ui.add_space(2.0);
+
                         // ADSR
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_1_attack, setter)
+                            VerticalParamSlider::for_param(osc_attack, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                                .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_1_decay, setter)
+                            VerticalParamSlider::for_param(osc_decay, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                                .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_1_sustain, setter)
+                            VerticalParamSlider::for_param(osc_sustain, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                                .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_1_release, setter)
+                            VerticalParamSlider::for_param(osc_release, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                                .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
 
-                        // Curve sliders
-                        ui.vertical(|ui| {
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_1_atk_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                        });
+                        // Curves
+                        ui.add(
+                            BeizerButton::BeizerButton::for_param(
+                                osc_atk_curve,
+                                setter,
+                                3.2,
+                                5.3,
+                            )
+                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                            .with_line_color(YELLOW_MUSTARD),
+                        );
+                        ui.add(
+                            BeizerButton::BeizerButton::for_param(
+                                osc_dec_curve,
+                                setter,
+                                3.2,
+                                5.3,
+                            )
+                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                            .with_line_color(YELLOW_MUSTARD),
+                        );
+                        ui.add(
+                            BeizerButton::BeizerButton::for_param(
+                                osc_rel_curve,
+                                setter,
+                                3.2,
+                                5.3,
+                            )
+                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                            .with_line_color(YELLOW_MUSTARD),
+                        );
                     });
                 });
+                ui.add_space(20.0);
             }
             AudioModuleType::Sampler => {
-                const KNOB_SIZE: f32 = 25.0;
-                const TEXT_SIZE: f32 = 11.0;
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Load Sample")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("The longer the sample the longer the process!");
-                        let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_1, setter);
-                        ui.add(switch_toggle);
-
-                        ui.label(RichText::new("Resample")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("Reload your sample after changing this! On: Resample, Off: Repitch");
-                        let stretch_toggle = toggle_switch::ToggleSwitch::for_param(&params.restretch_1, setter);
-                        ui.add(stretch_toggle);
-
-                        ui.label(RichText::new("Looping")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("To repeat your sample if MIDI key is held");
-                        let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_1, setter);
+                const KNOB_SIZE: f32 = 22.0;
+                const TEXT_SIZE: f32 = 10.0;
+                // Even up with OSC spacing
+                ui.add_space(1.0);
+                ui.horizontal(|ui| {
+                    ui.vertical(|ui| {
+                        let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 1.0, SMALLER_FONT);
+                        ui.add(load_sample_boolButton);
+                        let restretch_button = BoolButton::BoolButton::for_param(restretch, setter, 3.5, 1.0, SMALLER_FONT);
+                        ui.add(restretch_button);
+                        let loop_toggle = BoolButton::BoolButton::for_param(loop_sample, setter, 3.5, 1.0, SMALLER_FONT);
                         ui.add(loop_toggle);
-
-                        ui.label(RichText::new("Single Cycle")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("Use this with Looping ON and Resample ON if you loaded a single cycle waveform");
-                        let sc_toggle = toggle_switch::ToggleSwitch::for_param(&params.single_cycle_1, setter);
+                        let sc_toggle = BoolButton::BoolButton::for_param(single_cycle, setter, 3.5, 1.0, SMALLER_FONT);
                         ui.add(sc_toggle);
                     });
-                    ui.horizontal(|ui|{
-                        ui.vertical(|ui| {
-                            let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_octave,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .use_outline(true)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(osc_1_octave_knob);
-                            let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_retrigger,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .use_outline(true)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(osc_1_retrigger_knob);
-                        });
-                        ui.vertical(|ui| {
-                            let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_semitones,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .use_outline(true)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(osc_1_semitones_knob);
-                        });
-                        ui.vertical(|ui|{
-                            let start_position_1_knob = ui_knob::ArcKnob::for_param(
-                                &params.start_position_1,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(start_position_1_knob);
-                            let end_position_1_knob = ui_knob::ArcKnob::for_param(
-                                &params.end_position_1,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(end_position_1_knob);
-                        });
-                        // ADSR
-                        ui.add(VerticalParamSlider::for_param(&params.osc_1_attack, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_1_decay, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_1_sustain, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_1_release, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-
-                        // Curve sliders
-                        ui.vertical(|ui| {
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR,
-                                YELLOW_MUSTARD));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR,
-                                YELLOW_MUSTARD));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR,
-                                YELLOW_MUSTARD));
-                        });
+                    ui.vertical(|ui| {
+                        let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
+                            osc_octave,
+                            setter,
+                            KNOB_SIZE,
+                            KnobLayout::Horizonal,
+                        )
+                        .preset_style(ui_knob::KnobStyle::Preset1)
+                        .set_fill_color(DARK_GREY_UI_COLOR)
+                        .set_line_color(YELLOW_MUSTARD)
+                        .use_outline(true)
+                        .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_octave_knob);
+                        let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
+                            osc_retrigger,
+                            setter,
+                            KNOB_SIZE,
+                            KnobLayout::Horizonal,
+                        )
+                        .preset_style(ui_knob::KnobStyle::Preset1)
+                        .set_fill_color(DARK_GREY_UI_COLOR)
+                        .set_line_color(YELLOW_MUSTARD)
+                        .use_outline(true)
+                        .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_retrigger_knob);
                     });
+                    ui.vertical(|ui| {
+                        let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
+                            osc_semitones,
+                            setter,
+                            KNOB_SIZE,
+                            KnobLayout::Horizonal,
+                        )
+                        .preset_style(ui_knob::KnobStyle::Preset1)
+                        .set_fill_color(DARK_GREY_UI_COLOR)
+                        .set_line_color(YELLOW_MUSTARD)
+                        .use_outline(true)
+                        .set_text_size(TEXT_SIZE);
+                        ui.add(osc_1_semitones_knob);
+                    });
+                    ui.vertical(|ui| {
+                        let start_position_1_knob = ui_knob::ArcKnob::for_param(
+                            start_position,
+                            setter,
+                            KNOB_SIZE,
+                            KnobLayout::Horizonal,
+                        )
+                        .preset_style(ui_knob::KnobStyle::Preset1)
+                        .set_fill_color(DARK_GREY_UI_COLOR)
+                        .set_line_color(YELLOW_MUSTARD)
+                        .set_text_size(TEXT_SIZE);
+                        ui.add(start_position_1_knob);
+                        let end_position_1_knob = ui_knob::ArcKnob::for_param(
+                            end_position,
+                            setter,
+                            KNOB_SIZE,
+                            KnobLayout::Horizonal,
+                        )
+                        .preset_style(ui_knob::KnobStyle::Preset1)
+                        .set_fill_color(DARK_GREY_UI_COLOR)
+                        .set_line_color(YELLOW_MUSTARD)
+                        .set_text_size(TEXT_SIZE);
+                        ui.add(end_position_1_knob);
+                    });
+                    // Trying to draw background box as rect
+                    ui.painter().rect_filled(
+                        Rect::from_two_pos(
+                            Pos2 {
+                                x: ui.cursor().left_top().x - 4.0,
+                                y: ui.cursor().left_top().y - 4.0,
+                            },
+                            Pos2 {
+                                x: ui.cursor().left_top().x + VERT_BAR_WIDTH * 6.0 + 8.0,
+                                y: ui.cursor().left_top().y + VERT_BAR_HEIGHT + 12.0 + 8.0,
+                            },
+                        ),
+                        Rounding::from(4.0),
+                        DARKER_GREY_UI_COLOR,
+                    );
+                    ui.add_space(2.0);
+                    // ADSR
+                    ui.add(
+                        VerticalParamSlider::for_param(osc_attack, setter)
+                            .with_width(VERT_BAR_WIDTH)
+                            .with_height(VERT_BAR_HEIGHT)
+                            .set_reversed(true)
+                            .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                    );
+                    ui.add(
+                        VerticalParamSlider::for_param(osc_decay, setter)
+                            .with_width(VERT_BAR_WIDTH)
+                            .with_height(VERT_BAR_HEIGHT)
+                            .set_reversed(true)
+                            .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                    );
+                    ui.add(
+                        VerticalParamSlider::for_param(osc_sustain, setter)
+                            .with_width(VERT_BAR_WIDTH)
+                            .with_height(VERT_BAR_HEIGHT)
+                            .set_reversed(true)
+                            .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                    );
+                    ui.add(
+                        VerticalParamSlider::for_param(osc_release, setter)
+                            .with_width(VERT_BAR_WIDTH)
+                            .with_height(VERT_BAR_HEIGHT)
+                            .set_reversed(true)
+                            .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                    );
+                    // Curves
+                    ui.add(
+                        BeizerButton::BeizerButton::for_param(
+                            osc_atk_curve,
+                            setter,
+                            3.2,
+                            5.3,
+                        )
+                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                        .with_line_color(YELLOW_MUSTARD),
+                    );
+                    ui.add(
+                        BeizerButton::BeizerButton::for_param(
+                            osc_dec_curve,
+                            setter,
+                            3.2,
+                            5.3,
+                        )
+                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                        .with_line_color(YELLOW_MUSTARD),
+                    );
+                    ui.add(
+                        BeizerButton::BeizerButton::for_param(
+                            osc_rel_curve,
+                            setter,
+                            3.2,
+                            5.3,
+                        )
+                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                        .with_line_color(YELLOW_MUSTARD),
+                    );
                 });
+                ui.add_space(20.0);
             }
             AudioModuleType::Granulizer => {
-                const KNOB_SIZE: f32 = 25.0;
-                const TEXT_SIZE: f32 = 11.0;
+                const KNOB_SIZE: f32 = 22.0;
+                const TEXT_SIZE: f32 = 10.0;
                 // This fixes the granulizer release being longer than a grain itself
-                if params.grain_hold_1.value() < params.grain_crossfade_1.value() {
-                    setter.set_parameter(&params.grain_crossfade_1, params.grain_hold_1.value());
+                if grain_hold.value() < grain_crossfade.value() {
+                    setter.set_parameter(grain_crossfade, grain_hold.value());
                 }
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
-                        ui.label(
-                            RichText::new("Load Sample")
-                                .font(SMALLER_FONT)
-                                .color(FONT_COLOR),
-                        )
-                        .on_hover_text("The longer the sample the longer the process!");
-                        let switch_toggle =
-                            toggle_switch::ToggleSwitch::for_param(&params.load_sample_1, setter);
-                        ui.add(switch_toggle);
-
-                        ui.label(
-                            RichText::new("Looping")
-                                .font(SMALLER_FONT)
-                                .color(FONT_COLOR),
-                        )
-                        .on_hover_text("To repeat your sample if MIDI key is held");
-                        let loop_toggle =
-                            toggle_switch::ToggleSwitch::for_param(&params.loop_sample_1, setter);
+                        let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 0.8, SMALLER_FONT);
+                        ui.add(load_sample_boolButton);
+                        let loop_toggle = BoolButton::BoolButton::for_param(loop_sample, setter, 3.5, 0.8, SMALLER_FONT);
                         ui.add(loop_toggle);
 
-                        ui.add_space(30.0);
+                        ui.add_space(10.0);
                         ui.label(
                             RichText::new("Note: ADSR is per note, Shape is AR per grain")
                                 .font(SMALLER_FONT)
@@ -674,7 +827,7 @@ impl AudioModule {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             let osc_1_octave_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_octave,
+                                osc_octave,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -687,7 +840,7 @@ impl AudioModule {
                             ui.add(osc_1_octave_knob);
 
                             let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_semitones,
+                                osc_semitones,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -702,7 +855,7 @@ impl AudioModule {
 
                         ui.vertical(|ui| {
                             let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_1_retrigger,
+                                osc_retrigger,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -715,7 +868,7 @@ impl AudioModule {
                             ui.add(osc_1_retrigger_knob);
 
                             let grain_crossfade_1_knob = ui_knob::ArcKnob::for_param(
-                                &params.grain_crossfade_1,
+                                grain_crossfade,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -729,7 +882,7 @@ impl AudioModule {
 
                         ui.vertical(|ui| {
                             let grain_hold_1_knob = ui_knob::ArcKnob::for_param(
-                                &params.grain_hold_1,
+                                grain_hold,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -741,7 +894,7 @@ impl AudioModule {
                             ui.add(grain_hold_1_knob);
 
                             let grain_gap_1_knob = ui_knob::ArcKnob::for_param(
-                                &params.grain_gap_1,
+                                grain_gap,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -755,7 +908,7 @@ impl AudioModule {
 
                         ui.vertical(|ui| {
                             let start_position_1_knob = ui_knob::ArcKnob::for_param(
-                                &params.start_position_1,
+                                start_position,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -767,7 +920,7 @@ impl AudioModule {
                             ui.add(start_position_1_knob);
 
                             let end_position_1_knob = ui_knob::ArcKnob::for_param(
-                                &params.end_position_1,
+                                end_position,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -778,1065 +931,82 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE);
                             ui.add(end_position_1_knob);
                         });
+                        // Trying to draw background box as rect
+                        ui.painter().rect_filled(
+                            Rect::from_two_pos(
+                                Pos2 {
+                                    x: ui.cursor().left_top().x - 4.0,
+                                    y: ui.cursor().left_top().y - 4.0,
+                                },
+                                Pos2 {
+                                    x: ui.cursor().left_top().x + VERT_BAR_WIDTH * 6.0 + 8.0,
+                                    y: ui.cursor().left_top().y + VERT_BAR_HEIGHT + 12.0 + 8.0,
+                                },
+                            ),
+                            Rounding::from(4.0),
+                            DARKER_GREY_UI_COLOR,
+                        );
+                        ui.add_space(2.0);
                         // ADSR
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_1_attack, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-                        ui.add(
-                            VerticalParamSlider::for_param(&params.osc_1_decay, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-                        ui.add(
-                            VerticalParamSlider::for_param(&params.osc_1_sustain, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-                        ui.add(
-                            VerticalParamSlider::for_param(&params.osc_1_release, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-
-                        // Curve sliders
-                        ui.vertical(|ui| {
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_1_atk_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_1_dec_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_1_rel_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                        });
-                    });
-                });
-            }
-        }
-
-        ui.separator();
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // Spot Two (2)
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        match params._audio_module_2_type.value() {
-            AudioModuleType::Off => {
-                // Blank space
-                ui.label("Disabled");
-                ui.add_space(DISABLED_SPACE);
-            }
-            AudioModuleType::Osc => {
-                const KNOB_SIZE: f32 = 24.0;
-                const TEXT_SIZE: f32 = 10.0;
-                // Oscillator
-                ui.vertical(|ui| {
-                    ui.add_space(1.0);
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            let osc_2_type_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_type,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_type_knob);
-
-                            let osc_2_retrigger_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_retrigger,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_retrigger_knob);
-                        });
-
-                        ui.vertical(|ui| {
-                            let osc_2_octave_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_octave,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_octave_knob);
-
-                            let osc_2_semitones_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_semitones,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_semitones_knob);
-                        });
-
-                        ui.vertical(|ui| {
-                            let osc_2_stereo_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_stereo,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_stereo_knob);
-
-                            let osc_2_unison_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_unison,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_unison_knob);
-                        });
-
-                        ui.vertical(|ui| {
-                            let osc_2_detune_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_detune,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_detune_knob);
-
-                            let osc_2_unison_detune_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_unison_detune,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_unison_detune_knob);
-                        });
-
-                        // ADSR
-                        ui.add(
-                            VerticalParamSlider::for_param(&params.osc_2_attack, setter)
+                            VerticalParamSlider::for_param(osc_attack, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                                .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_2_decay, setter)
+                            VerticalParamSlider::for_param(osc_decay, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                                .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_2_sustain, setter)
+                            VerticalParamSlider::for_param(osc_sustain, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                                .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_2_release, setter)
+                            VerticalParamSlider::for_param(osc_release, setter)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_BAR_HEIGHT)
                                 .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                                .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
-
-                        // Curve sliders
-                        ui.vertical(|ui| {
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_2_atk_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                        });
-                    });
-                });
-            }
-            AudioModuleType::Sampler => {
-                const KNOB_SIZE: f32 = 25.0;
-                const TEXT_SIZE: f32 = 11.0;
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Load Sample")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("The longer the sample the longer the process!");
-                        let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_2, setter);
-                        ui.add(switch_toggle);
-
-                        ui.label(RichText::new("Resample")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("Reload your sample after changing this! On: Resample, Off: Repitch");
-                        let stretch_toggle = toggle_switch::ToggleSwitch::for_param(&params.restretch_2, setter);
-                        ui.add(stretch_toggle);
-
-                        ui.label(RichText::new("Looping")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("To repeat your sample if MIDI key is held");
-                        let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_2, setter);
-                        ui.add(loop_toggle);
-
-                        ui.label(RichText::new("Single Cycle")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("Use this with Looping ON and Resample ON if you loaded a single cycle waveform");
-                        let sc_toggle = toggle_switch::ToggleSwitch::for_param(&params.single_cycle_2, setter);
-                        ui.add(sc_toggle);
-                    });
-                    ui.horizontal(|ui|{
-                        ui.vertical(|ui| {
-                            let osc_2_octave_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_octave,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .use_outline(true)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_octave_knob);
-                            let osc_2_retrigger_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_retrigger,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .use_outline(true)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_retrigger_knob);
-                        });
-                        ui.vertical(|ui| {
-                            let osc_2_semitones_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_semitones,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .use_outline(true)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_semitones_knob);
-                        });
-                        ui.vertical(|ui|{
-                            let start_position_2_knob = ui_knob::ArcKnob::for_param(
-                                &params.start_position_2,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(start_position_2_knob);
-                            let end_position_2_knob = ui_knob::ArcKnob::for_param(
-                                &params.end_position_2,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(end_position_2_knob);
-                        });
-                        // ADSR
-                        ui.add(VerticalParamSlider::for_param(&params.osc_2_attack, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_2_decay, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_2_sustain, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_2_release, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-
-                        // Curve sliders
-                        ui.vertical(|ui| {
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_2_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR,
-                                YELLOW_MUSTARD));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR,
-                                YELLOW_MUSTARD));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR,
-                                YELLOW_MUSTARD));
-                        });
-                    });
-                });
-            }
-            AudioModuleType::Granulizer => {
-                const KNOB_SIZE: f32 = 25.0;
-                const TEXT_SIZE: f32 = 11.0;
-                // This fixes the granulizer release being longer than a grain itself
-                if params.grain_hold_2.value() < params.grain_crossfade_2.value() {
-                    setter.set_parameter(&params.grain_crossfade_2, params.grain_hold_2.value());
-                }
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            RichText::new("Load Sample")
-                                .font(SMALLER_FONT)
-                                .color(FONT_COLOR),
-                        )
-                        .on_hover_text("The longer the sample the longer the process!");
-                        let switch_toggle =
-                            toggle_switch::ToggleSwitch::for_param(&params.load_sample_2, setter);
-                        ui.add(switch_toggle);
-
-                        ui.label(
-                            RichText::new("Looping")
-                                .font(SMALLER_FONT)
-                                .color(FONT_COLOR),
-                        )
-                        .on_hover_text("To repeat your sample if MIDI key is held");
-                        let loop_toggle =
-                            toggle_switch::ToggleSwitch::for_param(&params.loop_sample_2, setter);
-                        ui.add(loop_toggle);
-
-                        ui.add_space(30.0);
-                        ui.label(
-                            RichText::new("Note: ADSR is per note, Shape is AR per grain")
-                                .font(SMALLER_FONT)
-                                .color(FONT_COLOR),
-                        )
-                        .on_hover_text("ADSR is per note, Shape is AR per grain");
-                    });
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            let osc_2_octave_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_octave,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_octave_knob);
-
-                            let osc_2_semitones_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_semitones,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_semitones_knob);
-                        });
-
-                        ui.vertical(|ui| {
-                            let osc_2_retrigger_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_2_retrigger,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_2_retrigger_knob);
-
-                            let grain_crossfade_2_knob = ui_knob::ArcKnob::for_param(
-                                &params.grain_crossfade_2,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(grain_crossfade_2_knob);
-                        });
-
-                        ui.vertical(|ui| {
-                            let grain_hold_2_knob = ui_knob::ArcKnob::for_param(
-                                &params.grain_hold_2,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(grain_hold_2_knob);
-
-                            let grain_gap_2_knob = ui_knob::ArcKnob::for_param(
-                                &params.grain_gap_2,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(grain_gap_2_knob);
-                        });
-
-                        ui.vertical(|ui| {
-                            let start_position_2_knob = ui_knob::ArcKnob::for_param(
-                                &params.start_position_2,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(start_position_2_knob);
-
-                            let end_position_2_knob = ui_knob::ArcKnob::for_param(
-                                &params.end_position_2,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(end_position_2_knob);
-                        });
-                        // ADSR
+                        // Curves
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_2_attack, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                            BeizerButton::BeizerButton::for_param(
+                                osc_atk_curve,
+                                setter,
+                                3.2,
+                                5.3,
+                            )
+                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                            .with_line_color(YELLOW_MUSTARD),
                         );
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_2_decay, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-                        ui.add(
-                            VerticalParamSlider::for_param(&params.osc_2_sustain, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-                        ui.add(
-                            VerticalParamSlider::for_param(&params.osc_2_release, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-
-                        // Curve sliders
-                        ui.vertical(|ui| {
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_2_atk_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_2_dec_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_2_rel_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                        });
-                    });
-                });
-            }
-        }
-
-        ui.separator();
-
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        // Spot Three (3)
-        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-        match params._audio_module_3_type.value() {
-            AudioModuleType::Off => {
-                // Blank space
-                ui.label("Disabled");
-                ui.add_space(DISABLED_SPACE);
-            }
-            AudioModuleType::Osc => {
-                const KNOB_SIZE: f32 = 24.0;
-                const TEXT_SIZE: f32 = 10.0;
-                // Oscillator
-                ui.horizontal(|ui| {
-                    ui.vertical(|ui| {
-                        let osc_3_type_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_type,
-                            setter,
-                            KNOB_SIZE,
-                            KnobLayout::Horizonal,
-                        )
-                        .preset_style(ui_knob::KnobStyle::Preset1)
-                        .set_fill_color(DARK_GREY_UI_COLOR)
-                        .set_line_color(YELLOW_MUSTARD)
-                        .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_type_knob);
-
-                        let osc_3_retrigger_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_retrigger,
-                            setter,
-                            KNOB_SIZE,
-                            KnobLayout::Horizonal,
-                        )
-                        .preset_style(ui_knob::KnobStyle::Preset1)
-                        .set_fill_color(DARK_GREY_UI_COLOR)
-                        .set_line_color(YELLOW_MUSTARD)
-                        .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_retrigger_knob);
-                    });
-
-                    ui.vertical(|ui| {
-                        let osc_3_octave_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_octave,
-                            setter,
-                            KNOB_SIZE,
-                            KnobLayout::Horizonal,
-                        )
-                        .preset_style(ui_knob::KnobStyle::Preset1)
-                        .set_fill_color(DARK_GREY_UI_COLOR)
-                        .set_line_color(YELLOW_MUSTARD)
-                        .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_octave_knob);
-
-                        let osc_3_semitones_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_semitones,
-                            setter,
-                            KNOB_SIZE,
-                            KnobLayout::Horizonal,
-                        )
-                        .preset_style(ui_knob::KnobStyle::Preset1)
-                        .set_fill_color(DARK_GREY_UI_COLOR)
-                        .set_line_color(YELLOW_MUSTARD)
-                        .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_semitones_knob);
-                    });
-
-                    ui.vertical(|ui| {
-                        let osc_3_stereo_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_stereo,
-                            setter,
-                            KNOB_SIZE,
-                            KnobLayout::Horizonal,
-                        )
-                        .preset_style(ui_knob::KnobStyle::Preset1)
-                        .set_fill_color(DARK_GREY_UI_COLOR)
-                        .set_line_color(YELLOW_MUSTARD)
-                        .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_stereo_knob);
-
-                        let osc_3_unison_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_unison,
-                            setter,
-                            KNOB_SIZE,
-                            KnobLayout::Horizonal,
-                        )
-                        .preset_style(ui_knob::KnobStyle::Preset1)
-                        .set_fill_color(DARK_GREY_UI_COLOR)
-                        .set_line_color(YELLOW_MUSTARD)
-                        .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_unison_knob);
-                    });
-
-                    ui.vertical(|ui| {
-                        let osc_3_detune_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_detune,
-                            setter,
-                            KNOB_SIZE,
-                            KnobLayout::Horizonal,
-                        )
-                        .preset_style(ui_knob::KnobStyle::Preset1)
-                        .set_fill_color(DARK_GREY_UI_COLOR)
-                        .set_line_color(YELLOW_MUSTARD)
-                        .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_detune_knob);
-
-                        let osc_3_unison_detune_knob = ui_knob::ArcKnob::for_param(
-                            &params.osc_3_unison_detune,
-                            setter,
-                            KNOB_SIZE,
-                            KnobLayout::Horizonal,
-                        )
-                        .preset_style(ui_knob::KnobStyle::Preset1)
-                        .set_fill_color(DARK_GREY_UI_COLOR)
-                        .set_line_color(YELLOW_MUSTARD)
-                        .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
-                        ui.add(osc_3_unison_detune_knob);
-                    });
-
-                    // ADSR
-                    ui.add(
-                        VerticalParamSlider::for_param(&params.osc_3_attack, setter)
-                            .with_width(VERT_BAR_WIDTH)
-                            .with_height(VERT_BAR_HEIGHT)
-                            .set_reversed(true)
-                            .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                    );
-                    ui.add(
-                        VerticalParamSlider::for_param(&params.osc_3_decay, setter)
-                            .with_width(VERT_BAR_WIDTH)
-                            .with_height(VERT_BAR_HEIGHT)
-                            .set_reversed(true)
-                            .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                    );
-                    ui.add(
-                        VerticalParamSlider::for_param(&params.osc_3_sustain, setter)
-                            .with_width(VERT_BAR_WIDTH)
-                            .with_height(VERT_BAR_HEIGHT)
-                            .set_reversed(true)
-                            .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                    );
-                    ui.add(
-                        VerticalParamSlider::for_param(&params.osc_3_release, setter)
-                            .with_width(VERT_BAR_WIDTH)
-                            .with_height(VERT_BAR_HEIGHT)
-                            .set_reversed(true)
-                            .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                    );
-
-                    // Curve sliders
-                    ui.vertical(|ui| {
-                        ui.add(
-                            HorizontalParamSlider::for_param(&params.osc_3_atk_curve, setter)
-                                .with_width(HCURVE_BWIDTH)
-                                .set_left_sided_label(true)
-                                .set_label_width(HCURVE_WIDTH)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-                        ui.add(
-                            HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter)
-                                .with_width(HCURVE_BWIDTH)
-                                .set_left_sided_label(true)
-                                .set_label_width(HCURVE_WIDTH)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-                        ui.add(
-                            HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter)
-                                .with_width(HCURVE_BWIDTH)
-                                .set_left_sided_label(true)
-                                .set_label_width(HCURVE_WIDTH)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-                    });
-                });
-            }
-            AudioModuleType::Sampler => {
-                const KNOB_SIZE: f32 = 25.0;
-                const TEXT_SIZE: f32 = 11.0;
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Load Sample")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("The longer the sample the longer the process!");
-                        let switch_toggle = toggle_switch::ToggleSwitch::for_param(&params.load_sample_3, setter);
-                        ui.add(switch_toggle);
-
-                        ui.label(RichText::new("Resample")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("Reload your sample after changing this! On: Resample, Off: Repitch");
-                        let stretch_toggle = toggle_switch::ToggleSwitch::for_param(&params.restretch_3, setter);
-                        ui.add(stretch_toggle);
-
-                        ui.label(RichText::new("Looping")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("To repeat your sample if MIDI key is held");
-                        let loop_toggle = toggle_switch::ToggleSwitch::for_param(&params.loop_sample_3, setter);
-                        ui.add(loop_toggle);
-
-                        ui.label(RichText::new("Single Cycle")
-                        .font(SMALLER_FONT)
-                        .color(FONT_COLOR))
-                        .on_hover_text("Use this with Looping ON and Resample ON if you loaded a single cycle waveform");
-                        let sc_toggle = toggle_switch::ToggleSwitch::for_param(&params.single_cycle_3, setter);
-                        ui.add(sc_toggle);
-                    });
-                    ui.horizontal(|ui|{
-                        ui.vertical(|ui| {
-                            let osc_3_octave_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_3_octave,
+                            BeizerButton::BeizerButton::for_param(
+                                osc_dec_curve,
                                 setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .use_outline(true)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(osc_3_octave_knob);
-                            let osc_3_retrigger_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_3_retrigger,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .use_outline(true)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(osc_3_retrigger_knob);
-                        });
-                        ui.vertical(|ui| {
-                            let osc_3_semitones_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_3_semitones,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .use_outline(true)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(osc_3_semitones_knob);
-                        });
-                        ui.vertical(|ui|{
-                            let start_position_3_knob = ui_knob::ArcKnob::for_param(
-                                &params.start_position_3,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(start_position_3_knob);
-                            let end_position_3_knob = ui_knob::ArcKnob::for_param(
-                                &params.end_position_3,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal)
-                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                .set_line_color(YELLOW_MUSTARD)
-                                .set_text_size(TEXT_SIZE);
-                            ui.add(end_position_3_knob);
-                        });
-                        // ADSR
-                        ui.add(VerticalParamSlider::for_param(&params.osc_3_attack, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_3_decay, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_3_sustain, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-                        ui.add(VerticalParamSlider::for_param(&params.osc_3_release, setter).with_width(VERT_BAR_WIDTH).with_height(VERT_BAR_HEIGHT_SHORTENED).set_reversed(true).override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD));
-
-                        // Curve sliders
-                        ui.vertical(|ui| {
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_3_atk_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR,
-                                YELLOW_MUSTARD));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR,
-                                YELLOW_MUSTARD));
-                            ui.add(HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter).with_width(HCURVE_BWIDTH).set_left_sided_label(true).set_label_width(HCURVE_WIDTH).override_colors(
-                                DARK_GREY_UI_COLOR,
-                                YELLOW_MUSTARD));
-                        });
-                    });
-                });
-            }
-            AudioModuleType::Granulizer => {
-                const KNOB_SIZE: f32 = 25.0;
-                const TEXT_SIZE: f32 = 11.0;
-                // This fixes the granulizer release being longer than a grain itself
-                if params.grain_hold_3.value() < params.grain_crossfade_3.value() {
-                    setter.set_parameter(&params.grain_crossfade_3, params.grain_hold_3.value());
-                }
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            RichText::new("Load Sample")
-                                .font(SMALLER_FONT)
-                                .color(FONT_COLOR),
-                        )
-                        .on_hover_text("The longer the sample the longer the process!");
-                        let switch_toggle =
-                            toggle_switch::ToggleSwitch::for_param(&params.load_sample_3, setter);
-                        ui.add(switch_toggle);
-
-                        ui.label(
-                            RichText::new("Looping")
-                                .font(SMALLER_FONT)
-                                .color(FONT_COLOR),
-                        )
-                        .on_hover_text("To repeat your sample if MIDI key is held");
-                        let loop_toggle =
-                            toggle_switch::ToggleSwitch::for_param(&params.loop_sample_3, setter);
-                        ui.add(loop_toggle);
-
-                        ui.add_space(30.0);
-                        ui.label(
-                            RichText::new("Note: ADSR is per note, Shape is AR per grain")
-                                .font(SMALLER_FONT)
-                                .color(FONT_COLOR),
-                        )
-                        .on_hover_text("ADSR is per note, Shape is AR per grain");
-                    });
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            let osc_3_octave_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_3_octave,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
+                                3.2,
+                                5.3,
                             )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_3_octave_knob);
-
-                            let osc_3_semitones_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_3_semitones,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_3_semitones_knob);
-                        });
-
-                        ui.vertical(|ui| {
-                            let osc_3_retrigger_knob = ui_knob::ArcKnob::for_param(
-                                &params.osc_3_retrigger,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(osc_3_retrigger_knob);
-
-                            let grain_crossfade_3_knob = ui_knob::ArcKnob::for_param(
-                                &params.grain_crossfade_3,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(grain_crossfade_3_knob);
-                        });
-
-                        ui.vertical(|ui| {
-                            let grain_hold_3_knob = ui_knob::ArcKnob::for_param(
-                                &params.grain_hold_3,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(grain_hold_3_knob);
-
-                            let grain_gap_3_knob = ui_knob::ArcKnob::for_param(
-                                &params.grain_gap_3,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(grain_gap_3_knob);
-                        });
-
-                        ui.vertical(|ui| {
-                            let start_position_3_knob = ui_knob::ArcKnob::for_param(
-                                &params.start_position_3,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(start_position_3_knob);
-
-                            let end_position_3_knob = ui_knob::ArcKnob::for_param(
-                                &params.end_position_3,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
-                            ui.add(end_position_3_knob);
-                        });
-                        // ADSR
-                        ui.add(
-                            VerticalParamSlider::for_param(&params.osc_3_attack, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                            .with_line_color(YELLOW_MUSTARD),
                         );
                         ui.add(
-                            VerticalParamSlider::for_param(&params.osc_3_decay, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
+                            BeizerButton::BeizerButton::for_param(
+                                osc_rel_curve,
+                                setter,
+                                3.2,
+                                5.3,
+                            )
+                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                            .with_line_color(YELLOW_MUSTARD),
                         );
-                        ui.add(
-                            VerticalParamSlider::for_param(&params.osc_3_sustain, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-                        ui.add(
-                            VerticalParamSlider::for_param(&params.osc_3_release, setter)
-                                .with_width(VERT_BAR_WIDTH)
-                                .with_height(VERT_BAR_HEIGHT_SHORTENED)
-                                .set_reversed(true)
-                                .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                        );
-
-                        // Curve sliders
-                        ui.vertical(|ui| {
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_3_atk_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_3_dec_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                            ui.add(
-                                HorizontalParamSlider::for_param(&params.osc_3_rel_curve, setter)
-                                    .with_width(HCURVE_BWIDTH)
-                                    .set_left_sided_label(true)
-                                    .set_label_width(HCURVE_WIDTH)
-                                    .override_colors(DARK_GREY_UI_COLOR, YELLOW_MUSTARD),
-                            );
-                        });
                     });
                 });
             }
@@ -2156,7 +1326,9 @@ impl AudioModule {
                                     SmoothingStyle::Exponential(self.pitch_env_attack),
                                 ),
                                 SmoothStyle::LogSteep => {
-                                    Smoother::new(SmoothingStyle::LogSteep(self.pitch_env_attack))
+                                    Smoother::new(SmoothingStyle::LogSteep(
+                                        self.pitch_env_attack.clamp(0.0001, 999.9)
+                                    ))
                                 }
                             };
 
@@ -2173,7 +1345,9 @@ impl AudioModule {
                                     Smoother::new(SmoothingStyle::Exponential(self.pitch_env_decay))
                                 }
                                 SmoothStyle::LogSteep => {
-                                    Smoother::new(SmoothingStyle::LogSteep(self.pitch_env_decay))
+                                    Smoother::new(SmoothingStyle::LogSteep(
+                                        self.pitch_env_decay.clamp(0.0001, 999.9)
+                                    ))
                                 }
                             };
 
@@ -2190,12 +1364,14 @@ impl AudioModule {
                                     SmoothingStyle::Exponential(self.pitch_env_release),
                                 ),
                                 SmoothStyle::LogSteep => {
-                                    Smoother::new(SmoothingStyle::LogSteep(self.pitch_env_release))
+                                    Smoother::new(SmoothingStyle::LogSteep(
+                                        self.pitch_env_release.clamp(0.0001, 999.9)
+                                    ))
                                 }
                             };
 
                             match pitch_attack_smoother.style {
-                                SmoothingStyle::Logarithmic(_) => {
+                                SmoothingStyle::Logarithmic(_) | SmoothingStyle::LogSteep(_) => {
                                     pitch_attack_smoother.reset(0.0001);
                                     pitch_attack_smoother.set_target(
                                         self.sample_rate,
@@ -2231,7 +1407,9 @@ impl AudioModule {
                                     SmoothingStyle::Exponential(self.pitch_env_attack_2),
                                 ),
                                 SmoothStyle::LogSteep => {
-                                    Smoother::new(SmoothingStyle::LogSteep(self.pitch_env_attack_2))
+                                    Smoother::new(SmoothingStyle::LogSteep(
+                                        self.pitch_env_attack_2.clamp(0.0001, 999.9)
+                                    ))
                                 }
                             };
 
@@ -2248,7 +1426,9 @@ impl AudioModule {
                                     SmoothingStyle::Exponential(self.pitch_env_decay_2),
                                 ),
                                 SmoothStyle::LogSteep => {
-                                    Smoother::new(SmoothingStyle::LogSteep(self.pitch_env_decay_2))
+                                    Smoother::new(SmoothingStyle::LogSteep(
+                                        self.pitch_env_decay_2.clamp(0.0001, 999.9)
+                                    ))
                                 }
                             };
 
@@ -2265,12 +1445,12 @@ impl AudioModule {
                                     SmoothingStyle::Exponential(self.pitch_env_release_2),
                                 ),
                                 SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                                    self.pitch_env_release_2,
+                                    self.pitch_env_release_2.clamp(0.0001, 999.9),
                                 )),
                             };
 
                             match pitch_attack_smoother_2.style {
-                                SmoothingStyle::Logarithmic(_) => {
+                                SmoothingStyle::Logarithmic(_) | SmoothingStyle::LogSteep(_)=> {
                                     pitch_attack_smoother_2.reset(0.0001);
                                     pitch_attack_smoother_2.set_target(
                                         self.sample_rate,
@@ -2423,7 +1603,9 @@ impl AudioModule {
                                 Smoother::new(SmoothingStyle::Exponential(self.osc_attack))
                             }
                             SmoothStyle::LogSteep => {
-                                Smoother::new(SmoothingStyle::LogSteep(self.osc_attack))
+                                Smoother::new(SmoothingStyle::LogSteep(
+                                    self.osc_attack.clamp(0.0001, 999.9)
+                                ))
                             }
                         };
 
@@ -2438,7 +1620,9 @@ impl AudioModule {
                                 Smoother::new(SmoothingStyle::Exponential(self.osc_decay))
                             }
                             SmoothStyle::LogSteep => {
-                                Smoother::new(SmoothingStyle::LogSteep(self.osc_decay))
+                                Smoother::new(SmoothingStyle::LogSteep(
+                                    self.osc_decay.clamp(0.0001, 999.9)
+                                ))
                             }
                         };
 
@@ -2453,12 +1637,14 @@ impl AudioModule {
                                 Smoother::new(SmoothingStyle::Exponential(self.osc_release))
                             }
                             SmoothStyle::LogSteep => {
-                                Smoother::new(SmoothingStyle::LogSteep(self.osc_release))
+                                Smoother::new(SmoothingStyle::LogSteep(
+                                    self.osc_release.clamp(0.0001, 999.9)
+                                ))
                             }
                         };
 
                         match attack_smoother.style {
-                            SmoothingStyle::Logarithmic(_) => {
+                            SmoothingStyle::Logarithmic(_) | SmoothingStyle::LogSteep(_) => {
                                 attack_smoother.reset(0.0001);
                                 attack_smoother
                                     .set_target(self.sample_rate, velocity.clamp(0.0001, 999.9));
@@ -3937,8 +3123,8 @@ impl AudioModule {
                     loaded_right = self.loaded_sample[0].as_slice();
                 }
 
-                shifter.shift_pitch(1, translated_i, loaded_left, &mut out_buffer_left);
-                shifter.shift_pitch(1, translated_i, loaded_right, &mut out_buffer_right);
+                shifter.shift_pitch(3, translated_i, loaded_left, &mut out_buffer_left);
+                shifter.shift_pitch(3, translated_i, loaded_right, &mut out_buffer_right);
 
                 let mut NoteVector = Vec::with_capacity(2);
                 NoteVector.insert(0, out_buffer_left);

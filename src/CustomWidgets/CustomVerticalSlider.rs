@@ -258,12 +258,20 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         if ui.is_rect_visible(response.rect) {
             // Also flipped these orders for vertical
             if self.reversed {
-                // We'll do a flat widget with background -> filled foreground -> slight border
-                ui.painter()
-                    .rect_filled(response.rect, 0.0, ui.visuals().widgets.inactive.bg_fill);
+                if self.background_set_color == Color32::TEMPORARY_COLOR {
+                    // We'll do a flat widget with background -> filled foreground -> slight border
+                    ui.painter().rect_filled(
+                        response.rect,
+                        4.0,
+                        ui.visuals().widgets.inactive.bg_fill,
+                    );
+                } else {
+                    ui.painter()
+                        .rect_filled(response.rect, 4.0, self.background_set_color);
+                }
             } else {
                 ui.painter()
-                    .rect_filled(response.rect, 0.0, ui.visuals().selection.bg_fill);
+                    .rect_filled(response.rect, 4.0, ui.visuals().selection.bg_fill);
             }
 
             let filled_proportion = self.normalized_value();
@@ -305,27 +313,27 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                             self.bar_set_color
                         }
                     };
-                    ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
+                    ui.painter().rect_filled(filled_rect, 4.0, filled_bg);
                 } else {
                     let filled_bg = if response.dragged() {
                         nUtil::add_hsv(ui.visuals().widgets.inactive.bg_fill, 0.0, -0.1, 0.1)
                     } else {
                         ui.visuals().widgets.inactive.bg_fill
                     };
-                    ui.painter().rect_filled(filled_rect, 0.0, filled_bg);
+                    ui.painter().rect_filled(filled_rect, 4.0, filled_bg);
                 }
             }
 
             if self.background_set_color == Color32::TEMPORARY_COLOR {
                 ui.painter().rect_stroke(
                     response.rect,
-                    0.0,
+                    4.0,
                     Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
                 );
             } else {
                 ui.painter().rect_stroke(
                     response.rect,
-                    0.0,
+                    4.0,
                     Stroke::new(1.0, self.background_set_color),
                 );
             }

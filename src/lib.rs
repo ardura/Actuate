@@ -98,14 +98,14 @@ const PRESET_BANK_SIZE: usize = 32;
 const FILE_OPEN_BUFFER_MAX: u32 = 1;
 
 // GUI values to refer to
-pub const TEAL_GREEN: Color32 = Color32::from_rgb(55, 121, 117);
-pub const DARKER_GREY_UI_COLOR: Color32 = Color32::from_rgb(30, 30, 30);
-pub const DARK_GREY_UI_COLOR: Color32 = Color32::from_rgb(45, 45, 45);
-pub const MEDIUM_GREY_UI_COLOR: Color32 = Color32::from_rgb(60, 60, 60);
-pub const LIGHTER_GREY_UI_COLOR: Color32 = Color32::from_rgb(76, 76, 76);
-pub const A_BACKGROUND_COLOR_TOP: Color32 = Color32::from_rgb(185, 186, 198);
+pub const TEAL_GREEN: Color32 = Color32::from_rgb(61, 178, 166);
+pub const DARKER_GREY_UI_COLOR: Color32 = Color32::from_rgb(34, 34, 34);
+pub const DARK_GREY_UI_COLOR: Color32 = Color32::from_rgb(42, 42, 42);
+pub const MEDIUM_GREY_UI_COLOR: Color32 = Color32::from_rgb(52, 52, 52);
+pub const LIGHTER_GREY_UI_COLOR: Color32 = Color32::from_rgb(69, 69, 69);
+pub const A_BACKGROUND_COLOR_TOP: Color32 = Color32::from_rgb(38, 38, 38);
 pub const YELLOW_MUSTARD: Color32 = Color32::from_rgb(172, 131, 25);
-pub const FONT_COLOR: Color32 = Color32::from_rgb(200, 200, 200);
+pub const FONT_COLOR: Color32 = Color32::from_rgb(248, 248, 248);
 
 // Gui for which filter to display on bottom
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -584,6 +584,11 @@ pub struct Actuate {
 
     current_note_on_velocity: Arc<AtomicF32>,
 
+    // Managing resample logic
+    prev_restretch_1: Arc<AtomicBool>,
+    prev_restretch_2: Arc<AtomicBool>,
+    prev_restretch_3: Arc<AtomicBool>,
+
     // Modules
     audio_module_1: Arc<Mutex<AudioModule>>,
     _audio_module_1_type: AudioModuleType,
@@ -723,6 +728,10 @@ impl Default for Actuate {
             update_current_preset: update_current_preset,
 
             current_note_on_velocity: Arc::new(AtomicF32::new(0.0)),
+
+            prev_restretch_1: Arc::new(AtomicBool::new(false)),
+            prev_restretch_2: Arc::new(AtomicBool::new(false)),
+            prev_restretch_3: Arc::new(AtomicBool::new(false)),
 
             // Module 1
             audio_module_1: Arc::new(Mutex::new(AudioModule::default())),
@@ -925,7 +934,7 @@ impl Default for Actuate {
                     filter_hp_amount: 0.0,
                     filter_bp_amount: 0.0,
                     filter_env_peak: 0.0,
-                    filter_env_attack: 0.0,
+                    filter_env_attack: 0.0001,
                     filter_env_decay: 0.0001,
                     filter_env_sustain: 999.9,
                     filter_env_release: 5.0,
@@ -943,7 +952,7 @@ impl Default for Actuate {
                     filter_hp_amount_2: 0.0,
                     filter_bp_amount_2: 0.0,
                     filter_env_peak_2: 0.0,
-                    filter_env_attack_2: 0.0,
+                    filter_env_attack_2: 0.0001,
                     filter_env_decay_2: 0.0001,
                     filter_env_sustain_2: 999.9,
                     filter_env_release_2: 5.0,
@@ -960,10 +969,10 @@ impl Default for Actuate {
                     pitch_enable: false,
                     pitch_routing: PitchRouting::Osc1,
                     pitch_env_peak: 0.0,
-                    pitch_env_attack: 0.0,
+                    pitch_env_attack: 0.0001,
                     pitch_env_decay: 300.0,
                     pitch_env_sustain: 0.0,
-                    pitch_env_release: 0.0,
+                    pitch_env_release: 0.0001,
                     pitch_env_atk_curve: SmoothStyle::Linear,
                     pitch_env_dec_curve: SmoothStyle::Linear,
                     pitch_env_rel_curve: SmoothStyle::Linear,
@@ -971,10 +980,10 @@ impl Default for Actuate {
                     pitch_enable_2: false,
                     pitch_routing_2: PitchRouting::Osc1,
                     pitch_env_peak_2: 0.0,
-                    pitch_env_attack_2: 0.0,
+                    pitch_env_attack_2: 0.0001,
                     pitch_env_decay_2: 300.0,
                     pitch_env_sustain_2: 0.0,
-                    pitch_env_release_2: 0.0,
+                    pitch_env_release_2: 0.0001,
                     pitch_env_atk_curve_2: SmoothStyle::Linear,
                     pitch_env_dec_curve_2: SmoothStyle::Linear,
                     pitch_env_rel_curve_2: SmoothStyle::Linear,
@@ -2195,15 +2204,15 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             // Always true for granulizer/ can be off for sampler
-            restretch_1: BoolParam::new("Load Stretch", true).with_callback({
+            restretch_1: BoolParam::new("Resample", true).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            restretch_2: BoolParam::new("Load Stretch", true).with_callback({
+            restretch_2: BoolParam::new("Resample", true).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            restretch_3: BoolParam::new("Load Stretch", true).with_callback({
+            restretch_3: BoolParam::new("Resample", true).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
@@ -3613,7 +3622,7 @@ impl Plugin for Actuate {
                                 RangeInclusive::new(0.0, (HEIGHT as f32)*0.72)),
                             Rounding::none(),
                             DARK_GREY_UI_COLOR);
-                        
+
                         // Draw top bar background
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
@@ -3622,7 +3631,7 @@ impl Plugin for Actuate {
                             Rounding::none(),
                             DARKER_GREY_UI_COLOR
                         );
-                        
+
                         // Background boxes for Generators
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
@@ -3649,21 +3658,21 @@ impl Plugin for Actuate {
                         // Background boxes for Audio Modules
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.98),
+                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.25)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.98),
+                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.26, HEIGHT as f32 * 0.45)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.98),
+                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.70)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
@@ -3864,10 +3873,14 @@ impl Plugin for Actuate {
                                         ui.add_space(32.0);
                                     });
 
-                                    ui.separator();
+                                    ui.add_space(20.0);
                                     ui.vertical(|ui|{
-                                        ui.add_space(8.0);
-                                        audio_module::AudioModule::draw_modules(ui, params.clone(), setter);
+                                        ui.add_space(12.0);
+                                        AudioModule::draw_module(ui, setter, params.clone(), 1);
+                                        ui.add_space(10.0);
+                                        AudioModule::draw_module(ui, setter, params.clone(), 2);
+                                        ui.add_space(10.0);
+                                        AudioModule::draw_module(ui, setter, params.clone(), 3);
                                     });
                                 });
                                 //ui.add_space(32.0);
@@ -6115,7 +6128,6 @@ impl Actuate {
                 .pick_file();
             if Option::is_some(&sample_file) {
                 self.audio_module_1
-                    .as_ref()
                     .lock()
                     .unwrap()
                     .load_new_sample(sample_file.unwrap());
@@ -6128,7 +6140,6 @@ impl Actuate {
                 .pick_file();
             if Option::is_some(&sample_file) {
                 self.audio_module_2
-                    .as_ref()
                     .lock()
                     .unwrap()
                     .load_new_sample(sample_file.unwrap());
@@ -6141,7 +6152,6 @@ impl Actuate {
                 .pick_file();
             if Option::is_some(&sample_file) {
                 self.audio_module_3
-                    .as_ref()
                     .lock()
                     .unwrap()
                     .load_new_sample(sample_file.unwrap());
@@ -6367,6 +6377,21 @@ impl Actuate {
                     .lock()
                     .unwrap()
                     .consume_params(self.params.clone(), 3);
+                // Fix Auto restretch/repitch behavior
+                if self.prev_restretch_1.load(Ordering::Relaxed) != self.params.restretch_1.value() {
+                    self.prev_restretch_1.store(self.params.restretch_1.value(), Ordering::Relaxed);
+                    self.audio_module_1.lock().unwrap().regenerate_samples();
+                }
+                if self.prev_restretch_2.load(Ordering::Relaxed) != self.params.restretch_2.value() {
+                    self.prev_restretch_2.store(self.params.restretch_2.value(), Ordering::Relaxed);
+                    
+                    self.audio_module_2.lock().unwrap().regenerate_samples();
+                }
+                if self.prev_restretch_3.load(Ordering::Relaxed) != self.params.restretch_3.value() {
+                    self.prev_restretch_3.store(self.params.restretch_3.value(), Ordering::Relaxed);
+                    self.audio_module_3.lock().unwrap().regenerate_samples();
+                }
+
                 self.update_something.store(false, Ordering::Relaxed);
             }
 
@@ -8485,9 +8510,9 @@ impl Actuate {
         PresetType,
     ) {
         // Create mutex locks for AudioModule
-        let mut AMod1 = AMod1.as_ref().lock().unwrap();
-        let mut AMod2 = AMod2.as_ref().lock().unwrap();
-        let mut AMod3 = AMod3.as_ref().lock().unwrap();
+        let mut AMod1 = AMod1.lock().unwrap();
+        let mut AMod2 = AMod2.lock().unwrap();
+        let mut AMod3 = AMod3.lock().unwrap();
 
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset.lock().unwrap()[current_preset_index as usize];
