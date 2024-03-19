@@ -9,11 +9,17 @@ use nih_plug_egui::egui::{
     Align2, Color32, FontId, Pos2, Rect, Response, Rounding, Shape, Stroke, Ui, Vec2, Widget,
 };
 
+pub enum ButtonLayout {
+    HorizontalInline,
+    Vertical,
+}
+
 struct SliderRegion<'a, P: Param> {
     param: &'a P,
     param_setter: &'a ParamSetter<'a>,
     background_color: Color32,
     line_color: Color32,
+    button_layout: ButtonLayout,
 }
 
 impl<'a, P: Param> SliderRegion<'a, P> {
@@ -22,12 +28,14 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         param_setter: &'a ParamSetter,
         background_color: Color32,
         line_color: Color32,
+        button_layout: ButtonLayout,
     ) -> Self {
         SliderRegion {
             param,
             param_setter,
             background_color,
             line_color,
+            button_layout,
         }
     }
 
@@ -39,65 +47,145 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         let value = self.param.unmodulated_normalized_value();
         let rect = rect.expand(visuals.expansion);
         let spacer = 12.0;
-        let mut control_points = [
-            Pos2 {
-                x: rect.left_top().x + spacer,
-                y: rect.left_top().y + spacer,
-            },
-            rect.center(),
-            Pos2 {
-                x: rect.right_bottom().x - spacer,
-                y: rect.right_bottom().y - 10.0 - spacer,
-            },
-            Pos2 {
-                x: rect.right_bottom().x - spacer,
-                y: rect.right_bottom().y - 10.0 - spacer,
-            },
-        ];
+        let hspacer = 6.0;
+        let mut control_points = match self.button_layout {
+            ButtonLayout::Vertical => {[
+                Pos2 {
+                    x: rect.left_top().x + spacer,
+                    y: rect.left_top().y + spacer,
+                },
+                rect.center(),
+                Pos2 {
+                    x: rect.right_bottom().x - spacer,
+                    y: rect.right_bottom().y - 10.0 - spacer,
+                },
+                Pos2 {
+                    x: rect.right_bottom().x - spacer,
+                    y: rect.right_bottom().y - 10.0 - spacer,
+                },
+            ]},
+            ButtonLayout::HorizontalInline => {[
+                Pos2 {
+                    x: rect.right_top().x + hspacer - rect.height(),
+                    y: rect.right_top().y + hspacer,
+                },
+                Pos2 {
+                    x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
+                    y: ((rect.right_bottom().y - 10.0 - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
+                },
+                Pos2 {
+                    x: rect.right_bottom().x - hspacer,
+                    y: rect.right_bottom().y - 2.0 - hspacer,
+                },
+                Pos2 {
+                    x: rect.right_bottom().x - hspacer,
+                    y: rect.right_bottom().y - 2.0 - hspacer,
+                },
+            ]},
+        };
 
         // Check if our button is clicked
         if response.clicked() {
-            if value == 0.0 {
-                self.param_setter
-                    .set_parameter_normalized(self.param, 0.333333343);
-                control_points[1] = rect.center();
-            } else if value == 0.333333343 {
-                self.param_setter
-                    .set_parameter_normalized(self.param, 0.666666687);
-                control_points[1] = rect.left_center();
-            } else if value == 0.666666687 {
-                self.param_setter.set_parameter_normalized(self.param, 1.0);
-                control_points[1] = Pos2 {
-                    x: rect.left_center().x + spacer,
-                    y: rect.left_center().y + 40.0,
-                };
-            } else if value == 1.0 {
-                self.param_setter.set_parameter_normalized(self.param, 0.0);
-                control_points[1] = rect.right_center();
+            match self.button_layout {
+                ButtonLayout::Vertical => {
+                    if value == 0.0 {
+                        self.param_setter
+                            .set_parameter_normalized(self.param, 0.333333343);
+                        control_points[1] = rect.center();
+                    } else if value == 0.333333343 {
+                        self.param_setter
+                            .set_parameter_normalized(self.param, 0.666666687);
+                        control_points[1] = rect.left_center();
+                    } else if value == 0.666666687 {
+                        self.param_setter.set_parameter_normalized(self.param, 1.0);
+                        control_points[1] = Pos2 {
+                            x: rect.left_center().x + spacer,
+                            y: rect.left_center().y + 40.0,
+                        };
+                    } else if value == 1.0 {
+                        self.param_setter.set_parameter_normalized(self.param, 0.0);
+                        control_points[1] = rect.right_center();
+                    }
+                },
+                ButtonLayout::HorizontalInline => {
+                    if value == 0.0 {
+                        self.param_setter
+                            .set_parameter_normalized(self.param, 0.333333343);
+                        control_points[1] = rect.center();
+                    } else if value == 0.333333343 {
+                        self.param_setter
+                            .set_parameter_normalized(self.param, 0.666666687);
+                        control_points[1] = rect.center_bottom();
+                    } else if value == 0.666666687 {
+                        self.param_setter.set_parameter_normalized(self.param, 1.0);
+                        control_points[1] = rect.right_top();
+                    } else if value == 1.0 {
+                        self.param_setter.set_parameter_normalized(self.param, 0.0);
+                        control_points[1] = Pos2 {
+                            x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
+                            y: ((rect.right_bottom().y - 10.0 - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
+                        };
+                    }
+                }
             }
+            
         } else {
-            if value == 0.0 {
-                control_points[1] = rect.center();
-            } else if value == 0.333333343 {
-                control_points[1] = rect.left_center();
-            } else if value == 0.666666687 {
-                control_points[1] = Pos2 {
-                    x: rect.left_center().x,
-                    y: rect.left_center().y + 40.0,
-                };
-            } else if value == 1.0 {
-                control_points[1] = rect.right_center();
+            match self.button_layout {
+                ButtonLayout::Vertical => {
+                    if value == 0.0 {
+                        control_points[1] = rect.center();
+                    } else if value == 0.333333343 {
+                        control_points[1] = rect.left_center();
+                    } else if value == 0.666666687 {
+                        control_points[1] = Pos2 {
+                            x: rect.left_center().x,
+                            y: rect.left_center().y + 40.0,
+                        };
+                    } else if value == 1.0 {
+                        control_points[1] = rect.right_center();
+                    }
+                },
+                ButtonLayout::HorizontalInline => {
+                    if value == 0.0 {
+                        control_points[1] = Pos2 {
+                            x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x - hspacer - rect.height())) * 0.5,
+                            y: ((rect.right_bottom().y - 10.0 - hspacer) + (rect.right_top().y - hspacer)) * 0.5,
+                        };
+                    } else if value == 0.333333343 {
+                        control_points[1] = rect.center();
+                    } else if value == 0.666666687 {
+                        control_points[1] = rect.center_bottom();
+                    } else if value == 1.0 {
+                        control_points[1] = rect.right_top();
+                    }
+                }
             }
+            
         }
 
         // DRAWING
         ui.painter().rect(
-            Rect {
-                min: rect.left_top(),
-                max: Pos2 {
-                    x: rect.right_bottom().x,
-                    y: rect.right_bottom().y - 16.0,
+            match self.button_layout {
+                ButtonLayout::Vertical => {
+                    Rect {
+                        min: rect.left_top(),
+                        max: Pos2 {
+                            x: rect.right_bottom().x,
+                            y: rect.right_bottom().y - 16.0,
+                        },
+                    }
                 },
+                ButtonLayout::HorizontalInline => {
+                    Rect {
+                        min: Pos2 { 
+                            x: rect.right_top().x - rect.height(),
+                            y: rect.right_top().y },
+                        max: Pos2 {
+                            x: rect.right_bottom().x,
+                            y: rect.right_bottom().y,
+                        },
+                    }
+                }
             },
             Rounding::from(4.0),
             if self.background_color == Color32::TEMPORARY_COLOR {
@@ -153,16 +241,32 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         ));
         */
         ui.painter().add(shape);
-        ui.painter().text(
-            Pos2 {
-                x: rect.center_bottom().x,
-                y: rect.center_bottom().y - 8.0,
+        match self.button_layout {
+            ButtonLayout::Vertical => {
+                ui.painter().text(
+                    Pos2 {
+                        x: rect.center_bottom().x,
+                        y: rect.center_bottom().y - 8.0,
+                    },
+                    Align2::CENTER_CENTER,
+                    self.param.name(),
+                    FontId::proportional(11.0),
+                    Color32::WHITE.linear_multiply(0.5),
+                );
             },
-            Align2::CENTER_CENTER,
-            self.param.name(),
-            FontId::proportional(11.0),
-            Color32::WHITE.linear_multiply(0.5),
-        );
+            ButtonLayout::HorizontalInline => {
+                ui.painter().text(
+                    Pos2 {
+                        x: rect.left_center().x + hspacer,
+                        y: rect.left_center().y,
+                    },
+                    Align2::LEFT_CENTER,
+                    self.param.name(),
+                    FontId::proportional(11.0),
+                    Color32::WHITE.linear_multiply(0.5),
+                );
+            }
+        }
 
         value
     }
@@ -183,6 +287,7 @@ impl<'a, P: Param> BeizerButton<'a, P> {
         param_setter: &'a ParamSetter,
         x_scaling: f32,
         y_scaling: f32,
+        button_layout: ButtonLayout,
     ) -> Self {
         BeizerButton {
             // Pass things to slider to get around
@@ -191,6 +296,7 @@ impl<'a, P: Param> BeizerButton<'a, P> {
                 param_setter,
                 Color32::TEMPORARY_COLOR,
                 Color32::TEMPORARY_COLOR,
+                button_layout,
             ),
             scaling_x: x_scaling,
             scaling_y: y_scaling,

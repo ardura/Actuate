@@ -50,7 +50,7 @@ use crate::{
     // UI Colors
     YELLOW_MUSTARD,
 };
-use crate::{CustomWidgets::{BeizerButton, BoolButton}, DARKER_GREY_UI_COLOR};
+use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
 use Oscillator::VoiceType;
 
@@ -435,7 +435,7 @@ impl AudioModule {
 
         const VERT_BAR_HEIGHT: f32 = 76.0;
         const VERT_BAR_WIDTH: f32 = 12.0;
-        const DISABLED_SPACE: f32 = 116.0;
+        const DISABLED_SPACE: f32 = 104.0;
 
         match am_type.value() {
             AudioModuleType::Off => {
@@ -615,6 +615,7 @@ impl AudioModule {
                                 setter,
                                 3.2,
                                 5.3,
+                                ButtonLayout::Vertical,
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
@@ -625,6 +626,7 @@ impl AudioModule {
                                 setter,
                                 3.2,
                                 5.3,
+                                ButtonLayout::Vertical,
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
@@ -635,6 +637,7 @@ impl AudioModule {
                                 setter,
                                 3.2,
                                 5.3,
+                                ButtonLayout::Vertical,
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
@@ -775,6 +778,7 @@ impl AudioModule {
                             setter,
                             3.2,
                             5.3,
+                            ButtonLayout::Vertical,
                         )
                         .with_background_color(MEDIUM_GREY_UI_COLOR)
                         .with_line_color(YELLOW_MUSTARD),
@@ -785,6 +789,7 @@ impl AudioModule {
                             setter,
                             3.2,
                             5.3,
+                            ButtonLayout::Vertical,
                         )
                         .with_background_color(MEDIUM_GREY_UI_COLOR)
                         .with_line_color(YELLOW_MUSTARD),
@@ -795,6 +800,7 @@ impl AudioModule {
                             setter,
                             3.2,
                             5.3,
+                            ButtonLayout::Vertical,
                         )
                         .with_background_color(MEDIUM_GREY_UI_COLOR)
                         .with_line_color(YELLOW_MUSTARD),
@@ -983,6 +989,7 @@ impl AudioModule {
                                 setter,
                                 3.2,
                                 5.3,
+                                ButtonLayout::Vertical,
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
@@ -993,6 +1000,7 @@ impl AudioModule {
                                 setter,
                                 3.2,
                                 5.3,
+                                ButtonLayout::Vertical,
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
@@ -1003,6 +1011,7 @@ impl AudioModule {
                                 setter,
                                 3.2,
                                 5.3,
+                                ButtonLayout::Vertical,
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),

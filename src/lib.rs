@@ -71,12 +71,10 @@ use fx::{
 };
 use old_preset_structs::{load_unserialized_old, load_unserialized_v114, load_unserialized_v122};
 use CustomWidgets::{
-    toggle_switch, ui_knob, BoolButton, CustomParamSlider,
-    CustomParamSlider::ParamSlider as HorizontalParamSlider,
+    toggle_switch, ui_knob::{self, KnobLayout}, BoolButton, CustomParamSlider,
     CustomVerticalSlider::ParamSlider as VerticalParamSlider,
+    BeizerButton::{self, ButtonLayout}
 };
-
-use crate::CustomWidgets::ui_knob::KnobLayout;
 
 mod CustomWidgets;
 mod LFOController;
@@ -3027,7 +3025,7 @@ impl ActuateParams {
             .with_value_to_string(formatters::v2s_f32_rounded(1)),
 
             // fx
-            use_fx: BoolParam::new("FX", true),
+            use_fx: BoolParam::new("Use FX", true),
 
             use_compressor: BoolParam::new("Compressor", false),
             comp_amt: FloatParam::new("Amount", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 })
@@ -3619,7 +3617,7 @@ impl Plugin for Actuate {
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, (HEIGHT as f32)*0.72)),
+                                RangeInclusive::new(0.0, (HEIGHT as f32)*0.65)),
                             Rounding::none(),
                             DARK_GREY_UI_COLOR);
 
@@ -3673,7 +3671,7 @@ impl Plugin for Actuate {
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
-                                RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.70)),
+                                RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.65)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
@@ -3681,11 +3679,13 @@ impl Plugin for Actuate {
                             // GUI Structure
                             ui.vertical(|ui| {
                                 ui.horizontal(|ui|{
+                                    ui.add_space(2.0);
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
                                         .on_hover_text("by Ardura!");
-                                    ui.add_space(4.0);
+                                    ui.add_space(2.0);
+                                    ui.separator();
                                     let load_bank_button = BoolButton::BoolButton::for_param(&params.param_load_bank, setter, 3.5, 0.9, SMALLER_FONT)
                                         .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(load_bank_button);
@@ -3697,11 +3697,11 @@ impl Plugin for Actuate {
                                         .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(prev_preset_button);
                                     ui.label(RichText::new("Preset")
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .background_color(DARK_GREY_UI_COLOR)
                                         .color(FONT_COLOR)
                                         .size(16.0));
                                     ui.label(RichText::new(current_preset_index.to_string())
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                        .background_color(DARK_GREY_UI_COLOR)
                                         .color(FONT_COLOR)
                                         .size(16.0));
                                     let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.5, 0.9, FONT)
@@ -3714,28 +3714,10 @@ impl Plugin for Actuate {
                                         .background_color(DARK_GREY_UI_COLOR)
                                         .color(FONT_COLOR)
                                     ).on_hover_text("Coming soon!");
-                                    /*
-                                    ui.add(CustomParamSlider::ParamSlider::for_param(&params.master_level, setter)
-                                        .slimmer(0.5)
-                                        .set_left_sided_label(true)
-                                        .set_label_width(70.0)
-                                        .with_width(30.0)).on_hover_text("Overall output volume");
                                     ui.separator();
-                                    ui.add(CustomParamSlider::ParamSlider::for_param(&params.voice_limit, setter)
-                                        .slimmer(0.5)
-                                        .set_left_sided_label(true)
-                                        .set_label_width(84.0)
-                                        .with_width(30.0)).on_hover_text("Max playing voices for all Oscs");
-                                    ui.separator();
-                                    */
-                                    ui.label(RichText::new("FX")
-                                        .font(FONT)
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                        .color(FONT_COLOR)
-                                    )
-                                        .on_hover_text("Process FX");
-                                    let use_fx_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_fx, setter);
+                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.5, 1.0, FONT);
                                     ui.add(use_fx_toggle);
+                                    ui.separator();
                                     let max_voice_knob = ui_knob::ArcKnob::for_param(
                                         &params.voice_limit,
                                         setter,
@@ -3881,14 +3863,361 @@ impl Plugin for Actuate {
                                         AudioModule::draw_module(ui, setter, params.clone(), 2);
                                         ui.add_space(10.0);
                                         AudioModule::draw_module(ui, setter, params.clone(), 3);
+                                        ui.add_space(4.0);
                                     });
                                 });
-                                //ui.add_space(32.0);
-                                ui.label("Filters and Modulations");
+                                ui.horizontal(|ui|{
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter1, RichText::new("Filter 1").color(Color32::BLACK));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter2, RichText::new("Filter 2").color(Color32::BLACK));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch1, RichText::new("Pitch 1").color(Color32::BLACK));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch2, RichText::new("Pitch 2").color(Color32::BLACK));
+                                });
 
+                                ////////////////////////////////////////////////////////////
+                                // ADSR FOR FILTER
+                                const VERT_BAR_HEIGHT: f32 = 110.0;
+                                const VERT_BAR_WIDTH: f32 = 14.0;
+                                ui.horizontal(|ui|{
+                                    ui.horizontal(|ui|{
+                                        match *filter_select.lock().unwrap() {
+                                            UIBottomSelection::Filter1 => {
+                                                // ADSR
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.filter_env_attack, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            YELLOW_MUSTARD,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.filter_env_decay, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            YELLOW_MUSTARD,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.filter_env_sustain, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            YELLOW_MUSTARD,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.filter_env_release, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            YELLOW_MUSTARD,
+                                                        ),
+                                                );
+                                            },
+                                            UIBottomSelection::Filter2 => {
+                                                // ADSR
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.filter_env_attack_2, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            TEAL_GREEN,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.filter_env_decay_2, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            TEAL_GREEN,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.filter_env_sustain_2, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            TEAL_GREEN,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.filter_env_release_2, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            TEAL_GREEN,
+                                                        ),
+                                                );
+                                            },
+                                            UIBottomSelection::Pitch1 => {
+                                                // ADSR
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.pitch_env_attack, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            YELLOW_MUSTARD,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.pitch_env_decay, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            YELLOW_MUSTARD,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.pitch_env_sustain, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            YELLOW_MUSTARD,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.pitch_env_release, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            YELLOW_MUSTARD,
+                                                        ),
+                                                );
+                                            },
+                                            UIBottomSelection::Pitch2 => {
+                                                // ADSR
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.pitch_env_attack_2, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            TEAL_GREEN,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.pitch_env_decay_2, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            TEAL_GREEN,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.pitch_env_sustain_2, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            TEAL_GREEN,
+                                                        ),
+                                                );
+                                                ui.add(
+                                                    VerticalParamSlider::for_param(&params.pitch_env_release_2, setter)
+                                                        .with_width(VERT_BAR_WIDTH)
+                                                        .with_height(VERT_BAR_HEIGHT)
+                                                        .set_reversed(true)
+                                                        .override_colors(
+                                                            LIGHTER_GREY_UI_COLOR,
+                                                            TEAL_GREEN,
+                                                        ),
+                                                );
+                                            }
+                                        }
+                                        // Curve sliders
+                                        ui.vertical(|ui| {
+                                            match *filter_select.lock().unwrap() {
+                                                UIBottomSelection::Filter1 => {
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.filter_env_atk_curve,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.filter_env_dec_curve,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.filter_env_rel_curve,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
+                                                            .slimmer(0.4)
+                                                            .set_left_sided_label(true)
+                                                            .set_label_width(120.0)
+                                                            .override_colors(Color32::WHITE, Color32::BLACK)
+                                                            .with_width(30.0)
+                                                        );
+                                                },
+                                                UIBottomSelection::Filter2 => {
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.filter_env_atk_curve_2,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.filter_env_dec_curve_2,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.filter_env_rel_curve_2,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
+                                                            .slimmer(0.4)
+                                                            .set_left_sided_label(true)
+                                                            .set_label_width(120.0)
+                                                            .override_colors(Color32::WHITE, Color32::BLACK)
+                                                            .with_width(30.0)
+                                                        );
+                                                },
+                                                UIBottomSelection::Pitch1 => {
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.pitch_env_atk_curve,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.pitch_env_dec_curve,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.pitch_env_rel_curve,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                },
+                                                UIBottomSelection::Pitch2 => {
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.pitch_env_atk_curve_2,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.pitch_env_dec_curve_2,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                    ui.add(
+                                                        BeizerButton::BeizerButton::for_param(
+                                                            &params.pitch_env_rel_curve_2,
+                                                            setter,
+                                                            5.1,
+                                                            2.0,
+                                                            ButtonLayout::HorizontalInline,
+                                                        )
+                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                        .with_line_color(YELLOW_MUSTARD),
+                                                    );
+                                                }
+                                            }
+                                        });
+                                    });
+                                //});
+                                const BKNOB_SIZE: f32 = 26.0;
+                                const BTEXT_SIZE: f32 = 11.0;
                                 // Filter section
-
-                                ui.horizontal(|ui| {
+                                //ui.horizontal(|ui| {
                                     ui.vertical(|ui|{
                                         ui.horizontal(|ui|{
                                             match *filter_select.lock().unwrap() {
@@ -3896,466 +4225,487 @@ impl Plugin for Actuate {
                                                     match params.filter_alg_type.value() {
                                                         FilterAlgorithms::SVF => {
                                                             ui.vertical(|ui|{
-                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_wet,
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_lp_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_lp_amount,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_wet_knob);
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_lp_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_resonance_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_wet_knob);
+                                                                let filter_bp_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_bp_amount,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_bp_knob);
+                                                                let filter_res_type_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_res_type,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_res_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_cutoff_knob);
-                                                                let filter_res_type_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_res_type,
-                                                                    setter,
-                                                                    KNOB_SIZE,
-                                                                    KnobLayout::Horizonal)
-                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
-                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_res_type_knob);
-                                                            });
-                                                            ui.vertical(|ui|{
                                                                 let filter_hp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_hp_amount,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_hp_knob);
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_env_peak);
-                                                            });
-                                                            ui.vertical(|ui| {
-                                                                let filter_lp_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_lp_amount,
-                                                                    setter,
-                                                                    KNOB_SIZE,
-                                                                    KnobLayout::Horizonal)
-                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
-                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_lp_knob);
-                                                                let filter_bp_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_bp_amount,
-                                                                    setter,
-                                                                    KNOB_SIZE,
-                                                                    KnobLayout::Horizonal)
-                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
-                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_bp_knob);
                                                             });
                                                         },
                                                         FilterAlgorithms::TILT => {
                                                             ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_cutoff_knob);
                                                                 let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.tilt_filter_type,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_tilt_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(KNOB_SIZE*2.0);
+                                                            ui.add_space(BKNOB_SIZE*2.0);
                                                         },
                                                         FilterAlgorithms::VCF => {
                                                             ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_cutoff_knob);
                                                                 let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.vcf_filter_type,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(vcf_filter_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(KNOB_SIZE*2.0);
+                                                            ui.add_space(BKNOB_SIZE*2.0);
                                                         },
                                                     }
-
-                                                    // Middle bottom light section
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
-                                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                        Rounding::from(16.0),
-                                                        DARK_GREY_UI_COLOR
-                                                    );
-                                                    // Middle Bottom Filter select background
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.38, (WIDTH as f32)*0.62),
-                                                            RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                        Rounding::from(16.0),
-                                                        A_BACKGROUND_COLOR_TOP
-                                                    );
                                                 },
                                                 UIBottomSelection::Filter2 => {
                                                     match params.filter_alg_type_2.value() {
                                                         FilterAlgorithms::SVF => {
                                                             ui.vertical(|ui|{
-                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_wet_2,
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_wet_knob);
-
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_lp_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_lp_amount_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_lp_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_resonance_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_wet_knob);
+                                                                let filter_bp_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_bp_amount_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_bp_knob);
+                                                                let filter_res_type_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_res_type_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_res_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_cutoff_knob);
-
-                                                                let filter_res_type_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_res_type_2,
-                                                                    setter,
-                                                                    KNOB_SIZE,
-                                                                    KnobLayout::Horizonal)
-                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
-                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_res_type_knob);
-                                                            });
-                                                            ui.vertical(|ui|{
                                                                 let filter_hp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_hp_amount_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_hp_knob);
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_env_peak);
-                                                            });
-                                                            ui.vertical(|ui| {
-                                                                let filter_lp_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_lp_amount_2,
-                                                                    setter,
-                                                                    KNOB_SIZE,
-                                                                    KnobLayout::Horizonal)
-                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
-                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_lp_knob);
-                                                                let filter_bp_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_bp_amount_2,
-                                                                    setter,
-                                                                    KNOB_SIZE,
-                                                                    KnobLayout::Horizonal)
-                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
-                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_bp_knob);
                                                             });
                                                         },
                                                         FilterAlgorithms::TILT => {
                                                             ui.vertical(|ui|{
-                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_wet_2,
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_cutoff_knob);
                                                                 let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.tilt_filter_type_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_tilt_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(KNOB_SIZE*2.0);
+                                                            ui.add_space(BKNOB_SIZE*2.0);
                                                         },
                                                         FilterAlgorithms::VCF => {
                                                             ui.vertical(|ui|{
-                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_wet_2,
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_cutoff_knob);
                                                                 let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.vcf_filter_type_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(vcf_filter_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak_2,
                                                                     setter,
-                                                                    KNOB_SIZE,
+                                                                    BKNOB_SIZE,
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(KNOB_SIZE*2.0);
+                                                            ui.add_space(BKNOB_SIZE*2.0);
                                                         },
                                                     }
-                                                    // Middle bottom light section
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
-                                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                        Rounding::from(16.0),
-                                                        MEDIUM_GREY_UI_COLOR
-                                                    );
-                                                    // Middle Bottom Filter select background
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.38, (WIDTH as f32)*0.62),
-                                                            RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                        Rounding::from(16.0),
-                                                        A_BACKGROUND_COLOR_TOP
-                                                    );
                                                 },
                                                 UIBottomSelection::Pitch1 => {
                                                     ui.vertical(|ui|{
@@ -4372,47 +4722,30 @@ impl Plugin for Actuate {
                                                             let pitch_env_peak_knob = ui_knob::ArcKnob::for_param(
                                                                 &params.pitch_env_peak,
                                                                 setter,
-                                                                KNOB_SIZE,
+                                                                BKNOB_SIZE,
                                                                 KnobLayout::Horizonal)
                                                                 .preset_style(ui_knob::KnobStyle::Preset1)
                                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                                 .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(TEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE);
                                                             ui.add(pitch_env_peak_knob);
 
                                                             let pitch_routing_knob = ui_knob::ArcKnob::for_param(
                                                                 &params.pitch_routing,
                                                                 setter,
-                                                                KNOB_SIZE,
+                                                                BKNOB_SIZE,
                                                                 KnobLayout::Horizonal)
                                                                 .preset_style(ui_knob::KnobStyle::Preset1)
                                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                                 .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(TEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE);
                                                             ui.add(pitch_routing_knob);
                                                         });
                                                     });
-                                                    ui.add_space(KNOB_SIZE*3.5);
-                                                    ui.add_space(8.0);
-
-                                                    // Middle bottom light section
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
-                                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                        Rounding::from(16.0),
-                                                        YELLOW_MUSTARD
-                                                    );
-                                                    // Middle Bottom Filter select background
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.38, (WIDTH as f32)*0.62),
-                                                            RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                        Rounding::from(16.0),
-                                                        A_BACKGROUND_COLOR_TOP
-                                                    );
+                                                    ui.add_space(BKNOB_SIZE*4.0);
+                                                    //ui.add_space(8.0);
                                                 },
                                                 UIBottomSelection::Pitch2 => {
                                                     ui.vertical(|ui|{
@@ -4429,496 +4762,34 @@ impl Plugin for Actuate {
                                                             let pitch_env_peak_knob_2 = ui_knob::ArcKnob::for_param(
                                                                 &params.pitch_env_peak_2,
                                                                 setter,
-                                                                KNOB_SIZE,
+                                                                BKNOB_SIZE,
                                                                 KnobLayout::Horizonal)
                                                                 .preset_style(ui_knob::KnobStyle::Preset1)
                                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                                 .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(TEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE);
                                                             ui.add(pitch_env_peak_knob_2);
 
                                                             let pitch_routing_knob_2 = ui_knob::ArcKnob::for_param(
                                                                 &params.pitch_routing_2,
                                                                 setter,
-                                                                KNOB_SIZE,
+                                                                BKNOB_SIZE,
                                                                 KnobLayout::Horizonal)
                                                                 .preset_style(ui_knob::KnobStyle::Preset1)
                                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                                 .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(TEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE);
                                                             ui.add(pitch_routing_knob_2);
                                                         });
                                                     });
-                                                    ui.add_space(KNOB_SIZE*3.5);
+                                                    ui.add_space(BKNOB_SIZE*3.5);
                                                     ui.add_space(8.0);
-
-                                                    // Middle bottom light section
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
-                                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                        Rounding::from(16.0),
-                                                        YELLOW_MUSTARD.linear_multiply(0.8)
-                                                    );
-                                                    // Middle Bottom Filter select background
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.38, (WIDTH as f32)*0.62),
-                                                            RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                        Rounding::from(16.0),
-                                                        A_BACKGROUND_COLOR_TOP
-                                                    );
                                                 }
                                             }
                                         });
                                     });
-
-                                    ////////////////////////////////////////////////////////////
-                                    // ADSR FOR FILTER
-                                    const VERT_BAR_HEIGHT: f32 = 106.0;
-                                    const VERT_BAR_WIDTH: f32 = 14.0;
-                                    const HCURVE_WIDTH: f32 = 120.0;
-                                    const HCURVE_BWIDTH: f32 = 28.0;
-                                    ui.vertical(|ui|{
-                                        ui.horizontal(|ui|{
-                                            match *filter_select.lock().unwrap() {
-                                                UIBottomSelection::Filter1 => {
-                                                    // ADSR
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_attack, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                YELLOW_MUSTARD,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_decay, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                YELLOW_MUSTARD,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_sustain, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                YELLOW_MUSTARD,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_release, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                YELLOW_MUSTARD,
-                                                            ),
-                                                    );
-                                                },
-                                                UIBottomSelection::Filter2 => {
-                                                    // ADSR
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_attack_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                TEAL_GREEN,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_decay_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                TEAL_GREEN,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_sustain_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                TEAL_GREEN,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_release_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                TEAL_GREEN,
-                                                            ),
-                                                    );
-                                                },
-                                                UIBottomSelection::Pitch1 => {
-                                                    // ADSR
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_attack, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                DARK_GREY_UI_COLOR,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_decay, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                DARK_GREY_UI_COLOR,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_sustain, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                DARK_GREY_UI_COLOR,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_release, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                DARK_GREY_UI_COLOR,
-                                                            ),
-                                                    );
-                                                },
-                                                UIBottomSelection::Pitch2 => {
-                                                    // ADSR
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_attack_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                MEDIUM_GREY_UI_COLOR,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_decay_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                MEDIUM_GREY_UI_COLOR,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_sustain_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                MEDIUM_GREY_UI_COLOR,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_release_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                DARK_GREY_UI_COLOR,
-                                                                MEDIUM_GREY_UI_COLOR,
-                                                            ),
-                                                    );
-                                                }
-                                            }
-
-                                            // Curve sliders
-                                            ui.vertical(|ui| {
-                                                match *filter_select.lock().unwrap() {
-                                                    UIBottomSelection::Filter1 => {
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_atk_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    YELLOW_MUSTARD),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_dec_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    YELLOW_MUSTARD),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_rel_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    YELLOW_MUSTARD),
-                                                        );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type, setter)
-                                                            .slimmer(0.4)
-                                                            .set_left_sided_label(true)
-                                                            .set_label_width(120.0)
-                                                            .override_colors(Color32::WHITE, Color32::BLACK)
-                                                            .with_width(30.0)
-                                                        );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type_2, setter)
-                                                                .slimmer(0.4)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(120.0)
-                                                                .override_colors(Color32::WHITE, Color32::BLACK)
-                                                                .with_width(30.0)
-                                                            );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
-                                                                .slimmer(0.4)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(120.0)
-                                                                .override_colors(Color32::WHITE, Color32::BLACK)
-                                                                .with_width(30.0)
-                                                            );
-                                                    },
-                                                    UIBottomSelection::Filter2 => {
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_atk_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    TEAL_GREEN),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_dec_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    TEAL_GREEN),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_rel_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    TEAL_GREEN),
-                                                        );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type, setter)
-                                                            .slimmer(0.4)
-                                                            .set_left_sided_label(true)
-                                                            .set_label_width(120.0)
-                                                            .override_colors(Color32::WHITE, Color32::BLACK)
-                                                            .with_width(30.0)
-                                                        );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type_2, setter)
-                                                                .slimmer(0.4)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(120.0)
-                                                                .override_colors(Color32::WHITE, Color32::BLACK)
-                                                                .with_width(30.0)
-                                                            );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
-                                                                .slimmer(0.4)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(120.0)
-                                                                .override_colors(Color32::WHITE, Color32::BLACK)
-                                                                .with_width(30.0)
-                                                            );
-                                                    },
-                                                    UIBottomSelection::Pitch1 => {
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_atk_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    MEDIUM_GREY_UI_COLOR)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_dec_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    MEDIUM_GREY_UI_COLOR)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_rel_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    MEDIUM_GREY_UI_COLOR)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add_space(67.0);
-                                                    },
-                                                    UIBottomSelection::Pitch2 => {
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_atk_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    DARK_GREY_UI_COLOR)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_dec_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    DARK_GREY_UI_COLOR)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_rel_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    DARK_GREY_UI_COLOR)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add_space(67.0);
-                                                    }
-                                                }
-                                            });
-                                        });
-                                        ui.horizontal(|ui|{
-                                            ui.add_space(25.0);
-                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter1, RichText::new("Filter 1").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter2, RichText::new("Filter 2").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch1, RichText::new("Pitch 1").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch2, RichText::new("Pitch 2").color(Color32::BLACK));
-                                        });
-                                    });
-
-                                    // Move Presets over!
-                                    ui.add_space(8.0);
-
-                                    match *lfo_select.lock().unwrap() {
-                                        LFOSelect::LFO1 => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, WIDTH as f32),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                A_BACKGROUND_COLOR_TOP
-                                            );
-                                        }
-                                        LFOSelect::LFO2 => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, WIDTH as f32),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                DARK_GREY_UI_COLOR
-                                            );
-                                        }
-                                        LFOSelect::LFO3 => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, WIDTH as f32),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                YELLOW_MUSTARD
-                                            );
-                                        }
-                                        LFOSelect::Misc => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, WIDTH as f32),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                MEDIUM_GREY_UI_COLOR
-                                            );
-                                        }
-                                        LFOSelect::Modulation => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, WIDTH as f32),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                MEDIUM_GREY_UI_COLOR
-                                            );
-                                        }
-                                        LFOSelect::INFO => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, WIDTH as f32),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                MEDIUM_GREY_UI_COLOR
-                                            );
-                                        }
-                                        LFOSelect::FX => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, WIDTH as f32),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                FONT_COLOR
-                                            );
-                                        }
-                                    }
 
                                     // LFO Box
                                     ui.vertical(|ui|{
@@ -5586,12 +5457,12 @@ impl Plugin for Actuate {
                                                                     let low_freq_knob = ui_knob::ArcKnob::for_param(
                                                                         &params.pre_low_freq,
                                                                         setter,
-                                                                        KNOB_SIZE * 0.6,
+                                                                        BKNOB_SIZE * 0.6,
                                                                         KnobLayout::Horizonal)
                                                                         .preset_style(ui_knob::KnobStyle::Preset1)
                                                                         .set_fill_color(DARK_GREY_UI_COLOR)
                                                                         .set_line_color(TEAL_GREEN)
-                                                                        .set_text_size(TEXT_SIZE)
+                                                                        .set_text_size(BTEXT_SIZE)
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(low_freq_knob);
                                                                 });
@@ -5609,12 +5480,12 @@ impl Plugin for Actuate {
                                                                     let mid_freq_knob = ui_knob::ArcKnob::for_param(
                                                                         &params.pre_mid_freq,
                                                                         setter,
-                                                                        KNOB_SIZE * 0.6,
+                                                                        BKNOB_SIZE * 0.6,
                                                                         KnobLayout::Horizonal)
                                                                         .preset_style(ui_knob::KnobStyle::Preset1)
                                                                         .set_fill_color(DARK_GREY_UI_COLOR)
                                                                         .set_line_color(TEAL_GREEN)
-                                                                        .set_text_size(TEXT_SIZE)
+                                                                        .set_text_size(BTEXT_SIZE)
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(mid_freq_knob);
                                                                 });
@@ -5632,12 +5503,12 @@ impl Plugin for Actuate {
                                                                     let high_freq_knob = ui_knob::ArcKnob::for_param(
                                                                         &params.pre_high_freq,
                                                                         setter,
-                                                                        KNOB_SIZE * 0.6,
+                                                                        BKNOB_SIZE * 0.6,
                                                                         KnobLayout::Horizonal)
                                                                         .preset_style(ui_knob::KnobStyle::Preset1)
                                                                         .set_fill_color(DARK_GREY_UI_COLOR)
                                                                         .set_line_color(TEAL_GREEN)
-                                                                        .set_text_size(TEXT_SIZE)
+                                                                        .set_text_size(BTEXT_SIZE)
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(high_freq_knob);
                                                                 });
@@ -5889,24 +5760,6 @@ impl Plugin for Actuate {
                                     });
                                 });
                             });
-
-                            /*
-                            // Synth Bars on left and right
-                            ui.painter().rect_filled(
-                                Rect::from_x_y_ranges(
-                                    RangeInclusive::new(WIDTH as f32 - synth_bar_space, WIDTH as f32),
-                                    RangeInclusive::new(0.0, HEIGHT as f32)),
-                                Rounding::none(),
-                                DARK_GREY_UI_COLOR
-                            );
-
-                            // Screws for that vintage look
-                            let screw_space = 16.0;
-                            ui.painter().circle_filled(Pos2::new(screw_space,screw_space), 4.0, Color32::LIGHT_GRAY);
-                            ui.painter().circle_filled(Pos2::new(screw_space,HEIGHT as f32 - screw_space), 4.0, Color32::LIGHT_GRAY);
-                            ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,screw_space), 4.0, Color32::LIGHT_GRAY);
-                            ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,HEIGHT as f32 - screw_space), 4.0, Color32::LIGHT_GRAY);
-                        });*/
 
                         if params.loading.value() || loading.load(Ordering::Relaxed) {
                             // Create the loading popup here.
@@ -7999,7 +7852,7 @@ impl Actuate {
                     filter_hp_amount: 0.0,
                     filter_bp_amount: 0.0,
                     filter_env_peak: 0.0,
-                    filter_env_attack: 0.0,
+                    filter_env_attack: 0.0001,
                     filter_env_decay: 0.0001,
                     filter_env_sustain: 999.9,
                     filter_env_release: 5.0,
@@ -8017,7 +7870,7 @@ impl Actuate {
                     filter_hp_amount_2: 0.0,
                     filter_bp_amount_2: 0.0,
                     filter_env_peak_2: 0.0,
-                    filter_env_attack_2: 0.0,
+                    filter_env_attack_2: 0.0001,
                     filter_env_decay_2: 0.0001,
                     filter_env_sustain_2: 999.9,
                     filter_env_release_2: 5.0,
@@ -8036,9 +7889,9 @@ impl Actuate {
                     pitch_env_atk_curve: SmoothStyle::Linear,
                     pitch_env_dec_curve: SmoothStyle::Linear,
                     pitch_env_rel_curve: SmoothStyle::Linear,
-                    pitch_env_attack: 0.0,
+                    pitch_env_attack: 0.0001,
                     pitch_env_decay: 300.0,
-                    pitch_env_release: 0.0,
+                    pitch_env_release: 0.0001,
                     pitch_env_sustain: 0.0,
                     pitch_routing: PitchRouting::Osc1,
 
@@ -8047,9 +7900,9 @@ impl Actuate {
                     pitch_env_atk_curve_2: SmoothStyle::Linear,
                     pitch_env_dec_curve_2: SmoothStyle::Linear,
                     pitch_env_rel_curve_2: SmoothStyle::Linear,
-                    pitch_env_attack_2: 0.0,
+                    pitch_env_attack_2: 0.0001,
                     pitch_env_decay_2: 300.0,
-                    pitch_env_release_2: 0.0,
+                    pitch_env_release_2: 0.0001,
                     pitch_env_sustain_2: 0.0,
                     pitch_routing_2: PitchRouting::Osc1,
 
