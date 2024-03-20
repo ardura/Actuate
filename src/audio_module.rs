@@ -1872,25 +1872,24 @@ impl AudioModule {
                                     phase: 0.0,
                                     phase_delta: 0.0,
                                     state: OscState::Off,
-                                    // These get cloned since smoother cannot be copied
                                     amp_current: 0.0,
-                                    osc_attack: attack_smoother.clone(),
-                                    osc_decay: decay_smoother.clone(),
-                                    osc_release: release_smoother.clone(),
+                                    osc_attack: Smoother::new(SmoothingStyle::None),
+                                    osc_decay: Smoother::new(SmoothingStyle::None),
+                                    osc_release: Smoother::new(SmoothingStyle::None),
                                     pitch_enabled: self.pitch_enable,
                                     pitch_env_peak: self.pitch_env_peak,
                                     pitch_current: 0.0,
                                     pitch_state: OscState::Attacking,
-                                    pitch_attack: pitch_attack_smoother.clone(),
-                                    pitch_decay: pitch_decay_smoother.clone(),
-                                    pitch_release: pitch_release_smoother.clone(),
+                                    pitch_attack: Smoother::new(SmoothingStyle::None),
+                                    pitch_decay: Smoother::new(SmoothingStyle::None),
+                                    pitch_release: Smoother::new(SmoothingStyle::None),
                                     pitch_enabled_2: self.pitch_enable_2,
                                     pitch_env_peak_2: self.pitch_env_peak_2,
                                     pitch_current_2: 0.0,
                                     pitch_state_2: OscState::Attacking,
-                                    pitch_attack_2: pitch_attack_smoother_2.clone(),
-                                    pitch_decay_2: pitch_decay_smoother_2.clone(),
-                                    pitch_release_2: pitch_release_smoother_2.clone(),
+                                    pitch_attack_2: Smoother::new(SmoothingStyle::None),
+                                    pitch_decay_2: Smoother::new(SmoothingStyle::None),
+                                    pitch_release_2: Smoother::new(SmoothingStyle::None),
                                     _detune: 0.0,
                                     _unison_detune_value: 0.0,
                                     frequency: 0.0,
@@ -1927,25 +1926,24 @@ impl AudioModule {
                                         phase: new_phase,
                                         phase_delta: 0.0,
                                         state: OscState::Off,
-                                        // These get cloned since smoother cannot be copied
                                         amp_current: 0.0,
-                                        osc_attack: attack_smoother.clone(),
-                                        osc_decay: decay_smoother.clone(),
-                                        osc_release: release_smoother.clone(),
+                                        osc_attack: Smoother::new(SmoothingStyle::None),
+                                        osc_decay: Smoother::new(SmoothingStyle::None),
+                                        osc_release: Smoother::new(SmoothingStyle::None),
                                         pitch_enabled: self.pitch_enable,
                                         pitch_env_peak: 0.0,
                                         pitch_current: 0.0,
                                         pitch_state: OscState::Off,
-                                        pitch_attack: pitch_attack_smoother.clone(),
-                                        pitch_decay: pitch_decay_smoother.clone(),
-                                        pitch_release: pitch_release_smoother.clone(),
+                                        pitch_attack: Smoother::new(SmoothingStyle::None),
+                                        pitch_decay: Smoother::new(SmoothingStyle::None),
+                                        pitch_release: Smoother::new(SmoothingStyle::None),
                                         pitch_enabled_2: self.pitch_enable_2,
                                         pitch_env_peak_2: 0.0,
                                         pitch_current_2: 0.0,
                                         pitch_state_2: OscState::Off,
-                                        pitch_attack_2: pitch_attack_smoother_2.clone(),
-                                        pitch_decay_2: pitch_decay_smoother_2.clone(),
-                                        pitch_release_2: pitch_release_smoother_2.clone(),
+                                        pitch_attack_2: Smoother::new(SmoothingStyle::None),
+                                        pitch_decay_2: Smoother::new(SmoothingStyle::None),
+                                        pitch_release_2: Smoother::new(SmoothingStyle::None),
                                         _detune: 0.0,
                                         _unison_detune_value: 0.0,
                                         frequency: 0.0,
@@ -1973,6 +1971,17 @@ impl AudioModule {
                         }
 
                         // Remove any off notes
+                        self.playing_voices.voices.retain(|voice| {
+                            voice.state != OscState::Off &&
+                            !(voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0)
+                        });
+                        if self.audio_module_type == AudioModuleType::Osc {
+                            self.unison_voices.voices.retain(|unison_voice| {
+                                unison_voice.state != OscState::Off
+                                //&& !(unison_voice.grain_state == GrainState::Releasing && unison_voice.grain_release.steps_left() == 0)
+                            });
+                        }
+                        /*
                         for (i, voice) in self.playing_voices.voices.clone().iter().enumerate() {
                             if voice.state == OscState::Off {
                                 self.playing_voices.voices.remove(i);
@@ -1991,6 +2000,7 @@ impl AudioModule {
                                 }
                             }
                         }
+                        */
                     }
                     ////////////////////////////////////////////////////////////
                     // MIDI EVENT NOTE OFF
@@ -2139,7 +2149,19 @@ impl AudioModule {
         };
         let mut new_grain: bool = false;
 
-        // Second check for off notes before output to cut down on iterating...with iterating
+        // Second check for off notes before output to cut down on iterating
+        // Remove any off notes
+        self.playing_voices.voices.retain(|voice| {
+            voice.state != OscState::Off &&
+            !(voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0)
+        });
+        if self.audio_module_type == AudioModuleType::Osc {
+            self.unison_voices.voices.retain(|unison_voice| {
+                unison_voice.state != OscState::Off
+                //&& !(unison_voice.grain_state == GrainState::Releasing && unison_voice.grain_release.steps_left() == 0)
+            });
+        }
+        /*
         for (i, voice) in self.playing_voices.voices.clone().iter().enumerate() {
             if voice.state == OscState::Off {
                 self.playing_voices.voices.remove(i);
@@ -2156,6 +2178,7 @@ impl AudioModule {
                 }
             }
         }
+        */
 
         ////////////////////////////////////////////////////////////
         // Update our voices before output
@@ -2785,11 +2808,17 @@ impl AudioModule {
 
                         // Our angle comes back as radians
                         let pan = unison_voice._angle;
-
+                                            
+                        // Precompute sine and cosine of the angle
+                        let cos_pan = pan.cos();
+                        let sin_pan = pan.sin();
+                                            
                         // Calculate the amplitudes for the panned voice using vector operations
                         let scale = SQRT_2 / 2.0;
-                        let left_amp = scale * (pan.cos() + pan.sin()) * temp_unison_voice;
-                        let right_amp = scale * (pan.cos() - pan.sin()) * temp_unison_voice;
+                        let temp_unison_voice_scaled = scale * temp_unison_voice;
+                                            
+                        let left_amp = temp_unison_voice_scaled * (cos_pan + sin_pan);
+                        let right_amp = temp_unison_voice_scaled * (cos_pan - sin_pan);
 
                         // Add the voice to the sum of stereo voices
                         stereo_voices_l += left_amp;
@@ -3030,7 +3059,7 @@ impl AudioModule {
             for sample_chunk in samples.chunks(channels) {
                 // sample_chunk is a chunk like [a, b]
                 for (i, sample) in sample_chunk.into_iter().enumerate() {
-                    new_samples[i].push(sample.clone());
+                    new_samples[i].push(*sample);
                 }
             }
 

@@ -499,6 +499,8 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             });
             painter.add(circle_shape);
 
+            /*
+            Not enough processing power yet
             // Gradient values
             let g2 = value - 0.04;
             let g3 = value - 0.08;
@@ -860,6 +862,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
             });
             painter.add(line_shape16);
+            */
 
             let line_shape = Shape::Path(PathShape {
                 points: get_pointer_points(

@@ -56,8 +56,19 @@ tinyfiledialogs = "3.9.1"
 [profile.release]
 opt-level = 3
 debug = false
-lto = "fat"
-strip = "symbols"
+split-debuginfo = '...'  # Platform-specific.
+strip = "none"
+debug-assertions = false
+overflow-checks = false
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
+#opt-level = 3
+#debug = false
+#lto = "fat"
+#strip = "symbols"
 
 [profile.profiling]
 inherits = "release"
