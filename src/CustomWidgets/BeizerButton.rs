@@ -71,7 +71,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                 },
                 Pos2 {
                     x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
-                    y: ((rect.right_bottom().y - 10.0 - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
+                    y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
                 },
                 Pos2 {
                     x: rect.right_bottom().x - hspacer,
@@ -111,19 +111,28 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                     if value == 0.0 {
                         self.param_setter
                             .set_parameter_normalized(self.param, 0.333333343);
-                        control_points[1] = rect.center();
+                        control_points[1] = Pos2 {
+                            x: rect.center_bottom().x + rect.height()*0.5,
+                            y: rect.center_bottom().y
+                        };
                     } else if value == 0.333333343 {
                         self.param_setter
                             .set_parameter_normalized(self.param, 0.666666687);
-                        control_points[1] = rect.center_bottom();
+                        control_points[1] = Pos2 {
+                            x: rect.center_bottom().x + rect.height()*0.2,
+                            y: rect.center_bottom().y
+                        };
                     } else if value == 0.666666687 {
                         self.param_setter.set_parameter_normalized(self.param, 1.0);
-                        control_points[1] = rect.right_top();
+                        control_points[1] = Pos2 {
+                            x: rect.right_top().x - rect.height()*0.25,
+                            y: rect.right_top().y
+                        };
                     } else if value == 1.0 {
                         self.param_setter.set_parameter_normalized(self.param, 0.0);
                         control_points[1] = Pos2 {
                             x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
-                            y: ((rect.right_bottom().y - 10.0 - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
+                            y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
                         };
                     }
                 }
@@ -149,14 +158,23 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                     if value == 0.0 {
                         control_points[1] = Pos2 {
                             x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x - hspacer - rect.height())) * 0.5,
-                            y: ((rect.right_bottom().y - 10.0 - hspacer) + (rect.right_top().y - hspacer)) * 0.5,
+                            y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y - hspacer)) * 0.5,
                         };
                     } else if value == 0.333333343 {
-                        control_points[1] = rect.center();
+                        control_points[1] = Pos2 {
+                            x: rect.center_bottom().x + rect.height()*0.5,
+                            y: rect.center_bottom().y
+                        };
                     } else if value == 0.666666687 {
-                        control_points[1] = rect.center_bottom();
+                        control_points[1] = Pos2 {
+                            x: rect.center_bottom().x + rect.height()*0.2,
+                            y: rect.center_bottom().y
+                        };
                     } else if value == 1.0 {
-                        control_points[1] = rect.right_top();
+                        control_points[1] = Pos2 {
+                            x: rect.right_top().x - rect.height()*0.25,
+                            y: rect.right_top().y
+                        };
                     }
                 }
             }

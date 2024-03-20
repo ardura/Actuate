@@ -97,6 +97,7 @@ const FILE_OPEN_BUFFER_MAX: u32 = 1;
 
 // GUI values to refer to
 pub const TEAL_GREEN: Color32 = Color32::from_rgb(61, 178, 166);
+pub const DARKEST_BOTTOM_UI_COLOR: Color32 = Color32::from_rgb(27, 27, 27);
 pub const DARKER_GREY_UI_COLOR: Color32 = Color32::from_rgb(34, 34, 34);
 pub const DARK_GREY_UI_COLOR: Color32 = Color32::from_rgb(42, 42, 42);
 pub const MEDIUM_GREY_UI_COLOR: Color32 = Color32::from_rgb(52, 52, 52);
@@ -3697,11 +3698,11 @@ impl Plugin for Actuate {
                                         .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(prev_preset_button);
                                     ui.label(RichText::new("Preset")
-                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
                                         .size(16.0));
                                     ui.label(RichText::new(current_preset_index.to_string())
-                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
                                         .size(16.0));
                                     let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.5, 0.9, FONT)
@@ -3711,7 +3712,7 @@ impl Plugin for Actuate {
                                     ui.separator();
                                     ui.button(RichText::new("Browse Presets")
                                         .font(SMALLER_FONT)
-                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
                                     ).on_hover_text("Coming soon!");
                                     ui.separator();
@@ -3744,8 +3745,7 @@ impl Plugin for Actuate {
                                 ui.horizontal(|ui|{
                                     ui.vertical(|ui|{
                                         ui.label(RichText::new("Generators")
-                                            .font(FONT)
-                                            .color(Color32::BLACK))
+                                            .font(FONT))
                                             .on_hover_text("These are the audio modules that create sound on midi events");
                                         ui.horizontal(|ui|{
                                             ui.add_space(4.0);
@@ -3867,10 +3867,21 @@ impl Plugin for Actuate {
                                     });
                                 });
                                 ui.horizontal(|ui|{
-                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter1, RichText::new("Filter 1").color(Color32::BLACK));
-                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter2, RichText::new("Filter 2").color(Color32::BLACK));
-                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch1, RichText::new("Pitch 1").color(Color32::BLACK));
-                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch2, RichText::new("Pitch 2").color(Color32::BLACK));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter1, RichText::new("Filter 1").background_color(DARKEST_BOTTOM_UI_COLOR));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter2, RichText::new("Filter 2").background_color(DARKEST_BOTTOM_UI_COLOR));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch1, RichText::new("Pitch 1").background_color(DARKEST_BOTTOM_UI_COLOR));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch2, RichText::new("Pitch 2").background_color(DARKEST_BOTTOM_UI_COLOR));
+                                    // Jank spacing stuff :)
+                                    ui.add_space(300.0);
+                                    //ui.horizontal(|ui| {
+                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Modulation").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    //});
                                 });
 
                                 ////////////////////////////////////////////////////////////
@@ -3879,338 +3890,340 @@ impl Plugin for Actuate {
                                 const VERT_BAR_WIDTH: f32 = 14.0;
                                 ui.horizontal(|ui|{
                                     ui.horizontal(|ui|{
-                                        match *filter_select.lock().unwrap() {
-                                            UIBottomSelection::Filter1 => {
-                                                // ADSR
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.filter_env_attack, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            YELLOW_MUSTARD,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.filter_env_decay, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            YELLOW_MUSTARD,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.filter_env_sustain, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            YELLOW_MUSTARD,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.filter_env_release, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            YELLOW_MUSTARD,
-                                                        ),
-                                                );
-                                            },
-                                            UIBottomSelection::Filter2 => {
-                                                // ADSR
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.filter_env_attack_2, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            TEAL_GREEN,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.filter_env_decay_2, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            TEAL_GREEN,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.filter_env_sustain_2, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            TEAL_GREEN,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.filter_env_release_2, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            TEAL_GREEN,
-                                                        ),
-                                                );
-                                            },
-                                            UIBottomSelection::Pitch1 => {
-                                                // ADSR
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.pitch_env_attack, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            YELLOW_MUSTARD,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.pitch_env_decay, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            YELLOW_MUSTARD,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.pitch_env_sustain, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            YELLOW_MUSTARD,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.pitch_env_release, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            YELLOW_MUSTARD,
-                                                        ),
-                                                );
-                                            },
-                                            UIBottomSelection::Pitch2 => {
-                                                // ADSR
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.pitch_env_attack_2, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            TEAL_GREEN,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.pitch_env_decay_2, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            TEAL_GREEN,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.pitch_env_sustain_2, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            TEAL_GREEN,
-                                                        ),
-                                                );
-                                                ui.add(
-                                                    VerticalParamSlider::for_param(&params.pitch_env_release_2, setter)
-                                                        .with_width(VERT_BAR_WIDTH)
-                                                        .with_height(VERT_BAR_HEIGHT)
-                                                        .set_reversed(true)
-                                                        .override_colors(
-                                                            LIGHTER_GREY_UI_COLOR,
-                                                            TEAL_GREEN,
-                                                        ),
-                                                );
-                                            }
-                                        }
-                                        // Curve sliders
-                                        ui.vertical(|ui| {
-                                            match *filter_select.lock().unwrap() {
-                                                UIBottomSelection::Filter1 => {
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.filter_env_atk_curve,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.filter_env_dec_curve,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.filter_env_rel_curve,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
-                                                            .slimmer(0.4)
-                                                            .set_left_sided_label(true)
-                                                            .set_label_width(120.0)
-                                                            .override_colors(Color32::WHITE, Color32::BLACK)
-                                                            .with_width(30.0)
+                                        // Filter ADSR+Curves + Routing
+                                        ui.vertical(|ui|{
+                                            ui.horizontal(|ui|{
+                                                match *filter_select.lock().unwrap() {
+                                                    UIBottomSelection::Filter1 => {
+                                                        // ADSR
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_attack, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
                                                         );
-                                                },
-                                                UIBottomSelection::Filter2 => {
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.filter_env_atk_curve_2,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.filter_env_dec_curve_2,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.filter_env_rel_curve_2,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
-                                                            .slimmer(0.4)
-                                                            .set_left_sided_label(true)
-                                                            .set_label_width(120.0)
-                                                            .override_colors(Color32::WHITE, Color32::BLACK)
-                                                            .with_width(30.0)
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_decay, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
                                                         );
-                                                },
-                                                UIBottomSelection::Pitch1 => {
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.pitch_env_atk_curve,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.pitch_env_dec_curve,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.pitch_env_rel_curve,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                },
-                                                UIBottomSelection::Pitch2 => {
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.pitch_env_atk_curve_2,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.pitch_env_dec_curve_2,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
-                                                    ui.add(
-                                                        BeizerButton::BeizerButton::for_param(
-                                                            &params.pitch_env_rel_curve_2,
-                                                            setter,
-                                                            5.1,
-                                                            2.0,
-                                                            ButtonLayout::HorizontalInline,
-                                                        )
-                                                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                                                        .with_line_color(YELLOW_MUSTARD),
-                                                    );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_sustain, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_release, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                    },
+                                                    UIBottomSelection::Filter2 => {
+                                                        // ADSR
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_attack_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_decay_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_sustain_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_release_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                    },
+                                                    UIBottomSelection::Pitch1 => {
+                                                        // ADSR
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_attack, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_decay, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_sustain, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_release, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                    },
+                                                    UIBottomSelection::Pitch2 => {
+                                                        // ADSR
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_attack_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_decay_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_sustain_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_release_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                    }
                                                 }
-                                            }
+                                                // Curve sliders
+                                                ui.vertical(|ui| {
+                                                    match *filter_select.lock().unwrap() {
+                                                        UIBottomSelection::Filter1 => {
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_atk_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_dec_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_rel_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                        },
+                                                        UIBottomSelection::Filter2 => {
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_atk_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_dec_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_rel_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                        },
+                                                        UIBottomSelection::Pitch1 => {
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_atk_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_dec_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_rel_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                        },
+                                                        UIBottomSelection::Pitch2 => {
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_atk_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_dec_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_rel_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            );
+                                                        }
+                                                    }
+                                                });
+                                            });
+                                            // Filter routing goes here
+                                            let filter_routing_hknob = ui_knob::ArcKnob::for_param(
+                                                &params.filter_routing,
+                                                setter,
+                                                26.0,
+                                                KnobLayout::Horizonal)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(YELLOW_MUSTARD)
+                                                .set_text_size(TEXT_SIZE);
+                                            ui.add(filter_routing_hknob);
                                         });
                                     });
                                 //});
@@ -4242,7 +4255,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_lp_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
@@ -4274,7 +4287,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_bp_knob);
                                                                 let filter_res_type_knob = ui_knob::ArcKnob::for_param(
@@ -4306,7 +4319,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_hp_knob);
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
@@ -4373,7 +4386,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_tilt_type_knob);
                                                             });
@@ -4401,7 +4414,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_line_color(TEAL_GREEN.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
@@ -4485,7 +4498,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_lp_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
@@ -4517,7 +4530,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_bp_knob);
                                                                 let filter_res_type_knob = ui_knob::ArcKnob::for_param(
@@ -4549,7 +4562,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_hp_knob);
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
@@ -4616,7 +4629,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_tilt_type_knob);
                                                             });
@@ -4686,7 +4699,7 @@ impl Plugin for Actuate {
                                                                     KnobLayout::Horizonal)
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
-                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                                                                     .set_text_size(BTEXT_SIZE);
                                                                 ui.add(vcf_filter_type_knob);
                                                             });
@@ -4713,8 +4726,8 @@ impl Plugin for Actuate {
                                                             let pitch_toggle = toggle_switch::ToggleSwitch::for_param(&params.pitch_enable, setter);
                                                             ui.add(pitch_toggle);
                                                             ui.label(RichText::new("Enable Pitch Envelope")
-                                                                .font(SMALLER_FONT)
-                                                                .color(A_BACKGROUND_COLOR_TOP)
+                                                                .font(FONT)
+                                                                .color(FONT_COLOR)
                                                             );
                                                         });
 
@@ -4744,8 +4757,7 @@ impl Plugin for Actuate {
                                                             ui.add(pitch_routing_knob);
                                                         });
                                                     });
-                                                    ui.add_space(BKNOB_SIZE*4.0);
-                                                    //ui.add_space(8.0);
+                                                    ui.add_space(BKNOB_SIZE*3.39);
                                                 },
                                                 UIBottomSelection::Pitch2 => {
                                                     ui.vertical(|ui|{
@@ -4753,8 +4765,8 @@ impl Plugin for Actuate {
                                                             let pitch_toggle_2 = toggle_switch::ToggleSwitch::for_param(&params.pitch_enable_2, setter);
                                                             ui.add(pitch_toggle_2);
                                                             ui.label(RichText::new("Enable Pitch Envelope")
-                                                                .font(SMALLER_FONT)
-                                                                .color(A_BACKGROUND_COLOR_TOP)
+                                                                .font(FONT)
+                                                                .color(FONT_COLOR)
                                                             );
                                                         });
 
@@ -4784,8 +4796,7 @@ impl Plugin for Actuate {
                                                             ui.add(pitch_routing_knob_2);
                                                         });
                                                     });
-                                                    ui.add_space(BKNOB_SIZE*3.5);
-                                                    ui.add_space(8.0);
+                                                    ui.add_space(BKNOB_SIZE*3.39);
                                                 }
                                             }
                                         });
@@ -4793,47 +4804,34 @@ impl Plugin for Actuate {
 
                                     // LFO Box
                                     ui.vertical(|ui|{
-                                        ui.horizontal(|ui| {
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Mods").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").color(Color32::BLACK).font(SMALLER_FONT));
-                                        });
-                                        ui.separator();
+                                        //ui.separator();
                                         match *lfo_select.lock().unwrap() {
                                             LFOSelect::LFO1 => {
                                                 ui.vertical(|ui|{
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("LFO Enabled")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         let lfo1_toggle = toggle_switch::ToggleSwitch::for_param(&params.lfo1_enable, setter);
                                                         ui.add(lfo1_toggle);
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Sync")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         )
                                                             .on_hover_text("Sync LFO values to your DAW");
                                                         let lfosync1 = toggle_switch::ToggleSwitch::for_param(&params.lfo1_sync, setter);
                                                         ui.add(lfosync1);
                                                         ui.separator();
                                                         ui.label(RichText::new("Retrig")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo1_retrigger, setter).with_width(80.0));
                                                     });
                                                     ui.separator();
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Rate ")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         if params.lfo1_sync.value() {
                                                             ui.add(ParamSlider::for_param(&params.lfo1_snap, setter).with_width(180.0));
@@ -4843,15 +4841,13 @@ impl Plugin for Actuate {
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Shape")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo1_waveform, setter).with_width(180.0));
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Phase")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo1_phase, setter).with_width(180.0));
                                                     });
@@ -4861,32 +4857,28 @@ impl Plugin for Actuate {
                                                 ui.vertical(|ui|{
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("LFO Enabled")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         let lfo2_toggle = toggle_switch::ToggleSwitch::for_param(&params.lfo2_enable, setter);
                                                         ui.add(lfo2_toggle);
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Sync")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         )
                                                             .on_hover_text("Sync LFO values to your DAW");
                                                         let lfosync2 = toggle_switch::ToggleSwitch::for_param(&params.lfo2_sync, setter);
                                                         ui.add(lfosync2);
                                                         ui.separator();
                                                         ui.label(RichText::new("Retrig")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo2_retrigger, setter).with_width(80.0));
                                                     });
                                                     ui.separator();
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Rate ")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         if params.lfo2_sync.value() {
                                                             ui.add(ParamSlider::for_param(&params.lfo2_snap, setter).with_width(180.0));
@@ -4896,15 +4888,13 @@ impl Plugin for Actuate {
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Shape")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo2_waveform, setter).with_width(180.0));
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Phase")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo2_phase, setter).with_width(180.0));
                                                     });
@@ -4914,32 +4904,28 @@ impl Plugin for Actuate {
                                                 ui.vertical(|ui|{
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("LFO Enabled")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         let lfo3_toggle = toggle_switch::ToggleSwitch::for_param(&params.lfo3_enable, setter);
                                                         ui.add(lfo3_toggle);
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Sync")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         )
                                                             .on_hover_text("Sync LFO values to your DAW");
                                                         let lfosync3 = toggle_switch::ToggleSwitch::for_param(&params.lfo3_sync, setter);
                                                         ui.add(lfosync3);
                                                         ui.separator();
                                                         ui.label(RichText::new("Retrig")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo3_retrigger, setter).with_width(80.0));
                                                     });
                                                     ui.separator();
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Rate ")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         if params.lfo3_sync.value() {
                                                             ui.add(ParamSlider::for_param(&params.lfo3_snap, setter).with_width(180.0));
@@ -4949,15 +4935,13 @@ impl Plugin for Actuate {
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Shape")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo3_waveform, setter).with_width(180.0));
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Phase")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo3_phase, setter).with_width(180.0));
                                                     });
@@ -4966,8 +4950,7 @@ impl Plugin for Actuate {
                                             LFOSelect::Misc => {
                                                 ui.horizontal(|ui|{
                                                     ui.label(RichText::new("Link Cutoff 2 to Cutoff 1")
-                                                        .font(SMALLER_FONT)
-                                                        .color(Color32::BLACK)
+                                                        .font(FONT)
                                                     )
                                                         .on_hover_text("Filter 1 will control both filter cutoff values");
                                                     let filter_cutoff_link = toggle_switch::ToggleSwitch::for_param(&params.filter_cutoff_link, setter);
@@ -4975,7 +4958,6 @@ impl Plugin for Actuate {
                                                 });
                                             }
                                             LFOSelect::Modulation => {
-                                                // This is my creative "combobox" to use an enumparam with Nih-Plug
                                                 ui.vertical(|ui|{
                                                     // Modulator section 1
                                                     //////////////////////////////////////////////////////////////////////////////////
@@ -4984,7 +4966,7 @@ impl Plugin for Actuate {
                                                             &params.mod_amount_knob_1,
                                                             setter,
                                                             12.0,
-                                                            KnobLayout::Horizonal)
+                                                            KnobLayout::SquareNoLabel)
                                                                 .preset_style(ui_knob::KnobStyle::Preset2)
                                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                                 .set_line_color(TEAL_GREEN)
@@ -5025,8 +5007,7 @@ impl Plugin for Actuate {
                                                                 }
                                                             }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK));
+                                                            .font(FONT));
                                                         egui::ComboBox::new("mod_dest_1_ID", "")
                                                             .selected_text(format!("{:?}", *mod_dest_1_tracker.lock().unwrap()))
                                                             .width(100.0)
@@ -5070,7 +5051,7 @@ impl Plugin for Actuate {
                                                             &params.mod_amount_knob_2,
                                                             setter,
                                                             12.0,
-                                                            KnobLayout::Horizonal)
+                                                            KnobLayout::SquareNoLabel)
                                                             .preset_style(ui_knob::KnobStyle::Preset2)
                                                             .set_fill_color(DARK_GREY_UI_COLOR)
                                                             .set_line_color(TEAL_GREEN)
@@ -5099,8 +5080,7 @@ impl Plugin for Actuate {
                                                             }
                                                         }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK));
+                                                            .font(FONT));
                                                         egui::ComboBox::new("mod_dest_2_ID", "")
                                                             .selected_text(format!("{:?}", *mod_dest_2_tracker.lock().unwrap()))
                                                             .width(100.0)
@@ -5144,7 +5124,7 @@ impl Plugin for Actuate {
                                                             &params.mod_amount_knob_3,
                                                             setter,
                                                             12.0,
-                                                            KnobLayout::Horizonal)
+                                                            KnobLayout::SquareNoLabel)
                                                             .preset_style(ui_knob::KnobStyle::Preset2)
                                                             .set_fill_color(DARK_GREY_UI_COLOR)
                                                             .set_line_color(TEAL_GREEN)
@@ -5173,8 +5153,7 @@ impl Plugin for Actuate {
                                                             }
                                                         }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK));
+                                                            .font(FONT));
                                                         egui::ComboBox::new("mod_dest_3_ID", "")
                                                             .selected_text(format!("{:?}", *mod_dest_3_tracker.lock().unwrap()))
                                                             .width(100.0)
@@ -5218,7 +5197,7 @@ impl Plugin for Actuate {
                                                             &params.mod_amount_knob_4,
                                                             setter,
                                                             12.0,
-                                                            KnobLayout::Horizonal)
+                                                            KnobLayout::SquareNoLabel)
                                                             .preset_style(ui_knob::KnobStyle::Preset2)
                                                             .set_fill_color(DARK_GREY_UI_COLOR)
                                                             .set_line_color(TEAL_GREEN)
@@ -5247,9 +5226,7 @@ impl Plugin for Actuate {
                                                             }
                                                         }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK));
-                                                        egui::ComboBox::new("mod_dest_4_ID", "")
+                                                            .font(FONT));                                                        egui::ComboBox::new("mod_dest_4_ID", "")
                                                         .selected_text(format!("{:?}", *mod_dest_4_tracker.lock().unwrap()))
                                                         .width(100.0)
                                                         .show_ui(ui, |ui|{
@@ -5292,7 +5269,7 @@ impl Plugin for Actuate {
                                                         egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
                                                             .interactive(true)
                                                             .hint_text("Preset Name")
-                                                            .desired_width(120.0));
+                                                            .desired_width(150.0));
                                                     if text_response.clicked() {
                                                         let mut temp_lock = arc_preset_name.lock().unwrap();
 
@@ -5302,13 +5279,12 @@ impl Plugin for Actuate {
                                                             None => {},
                                                         }
                                                     }
-                                                    ui.label(RichText::new("Type")
+                                                    ui.label(RichText::new("Category:")
                                                             .font(FONT)
-                                                            .size(12.0)
-                                                            .color(Color32::BLACK));
+                                                            .size(12.0));
                                                         egui::ComboBox::new("preset_category", "")
                                                         .selected_text(format!("{:?}", *preset_category_tracker.lock().unwrap()))
-                                                        .width(100.0)
+                                                        .width(150.0)
                                                         .show_ui(ui, |ui|{
                                                             ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Select, "Select");
                                                             ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Atmosphere, "Atmosphere");
@@ -5340,8 +5316,8 @@ impl Plugin for Actuate {
                                                         egui::TextEdit::multiline(&mut *arc_preset_info.lock().unwrap())
                                                             .interactive(true)
                                                             .hint_text("Preset Info")
-                                                            .desired_width(120.0)
-                                                            .desired_rows(5)
+                                                            .desired_width(150.0)
+                                                            .desired_rows(6)
                                                             .lock_focus(true));
                                                     if text_info_response.clicked() {
                                                         let mut temp_lock = arc_preset_info.lock().unwrap();
@@ -5352,84 +5328,77 @@ impl Plugin for Actuate {
                                                             None => {},
                                                         }
                                                     }
-                                                    ScrollArea::vertical()
-                                                        .max_height(220.0)
-                                                        .max_width(164.0)
-                                                        //.always_show_scroll(true)
-                                                        .show(ui, |ui|{
-                                                            ui.vertical(|ui|{
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_acid = BoolButton::BoolButton::for_param(&params.tag_acid, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_acid);
-                                                                    let tag_analog = BoolButton::BoolButton::for_param(&params.tag_analog, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_analog);
-                                                                    let tag_bright = BoolButton::BoolButton::for_param(&params.tag_bright, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_bright);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_chord = BoolButton::BoolButton::for_param(&params.tag_chord, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_chord);
-                                                                    let tag_crisp = BoolButton::BoolButton::for_param(&params.tag_crisp, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_crisp);
-                                                                    let tag_deep = BoolButton::BoolButton::for_param(&params.tag_deep, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_deep);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_delicate = BoolButton::BoolButton::for_param(&params.tag_delicate, setter, 2.7, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_delicate);
-                                                                    let tag_hard = BoolButton::BoolButton::for_param(&params.tag_hard, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_hard);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_harsh = BoolButton::BoolButton::for_param(&params.tag_harsh, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_harsh);
-                                                                    let tag_lush = BoolButton::BoolButton::for_param(&params.tag_lush, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_lush);
-                                                                    let tag_mellow = BoolButton::BoolButton::for_param(&params.tag_mellow, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_mellow);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_resonant = BoolButton::BoolButton::for_param(&params.tag_resonant, setter, 2.7, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_resonant);
-                                                                    let tag_rich = BoolButton::BoolButton::for_param(&params.tag_rich, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_rich);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_sharp = BoolButton::BoolButton::for_param(&params.tag_sharp, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_sharp);
-                                                                    let tag_silky = BoolButton::BoolButton::for_param(&params.tag_silky, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_silky);
-                                                                    let tag_smooth = BoolButton::BoolButton::for_param(&params.tag_smooth, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_smooth);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_soft = BoolButton::BoolButton::for_param(&params.tag_soft, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_soft);
-                                                                    let tag_stab = BoolButton::BoolButton::for_param(&params.tag_stab, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_stab);
-                                                                    let tag_warm = BoolButton::BoolButton::for_param(&params.tag_warm, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_warm);
-                                                                });
-                                                            });
+                                                    ui.vertical(|ui|{
+                                                        ui.horizontal(|ui|{
+                                                            let tag_acid = BoolButton::BoolButton::for_param(&params.tag_acid, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_acid);
+                                                            let tag_analog = BoolButton::BoolButton::for_param(&params.tag_analog, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_analog);
+                                                            let tag_bright = BoolButton::BoolButton::for_param(&params.tag_bright, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_bright);
+                                                            let tag_chord = BoolButton::BoolButton::for_param(&params.tag_chord, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_chord);
+                                                            let tag_crisp = BoolButton::BoolButton::for_param(&params.tag_crisp, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_crisp);
                                                         });
+                                                        ui.horizontal(|ui|{
+                                                            
+                                                            let tag_deep = BoolButton::BoolButton::for_param(&params.tag_deep, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_deep);
+                                                            let tag_delicate = BoolButton::BoolButton::for_param(&params.tag_delicate, setter, 2.7, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_delicate);
+                                                            let tag_hard = BoolButton::BoolButton::for_param(&params.tag_hard, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_hard);
+                                                            let tag_harsh = BoolButton::BoolButton::for_param(&params.tag_harsh, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_harsh);
+                                                        });
+                                                        ui.horizontal(|ui|{
+                                                            let tag_lush = BoolButton::BoolButton::for_param(&params.tag_lush, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_lush);
+                                                            let tag_mellow = BoolButton::BoolButton::for_param(&params.tag_mellow, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_mellow);
+                                                            let tag_resonant = BoolButton::BoolButton::for_param(&params.tag_resonant, setter, 2.7, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_resonant);
+                                                            let tag_rich = BoolButton::BoolButton::for_param(&params.tag_rich, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_rich);
+                                                            let tag_sharp = BoolButton::BoolButton::for_param(&params.tag_sharp, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_sharp);
+                                                        });
+                                                        ui.horizontal(|ui|{
+                                                            let tag_silky = BoolButton::BoolButton::for_param(&params.tag_silky, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_silky);
+                                                            let tag_smooth = BoolButton::BoolButton::for_param(&params.tag_smooth, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_smooth);
+                                                            let tag_soft = BoolButton::BoolButton::for_param(&params.tag_soft, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_soft);
+                                                            let tag_stab = BoolButton::BoolButton::for_param(&params.tag_stab, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_stab);
+                                                            let tag_warm = BoolButton::BoolButton::for_param(&params.tag_warm, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_warm);
+                                                        });
+                                                    });
                                                 });
+                                                ui.separator();
                                                 ui.horizontal(|ui| {
-                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 4.9, 0.9, SMALLER_FONT)
+                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 1.2, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(update_current_preset);
-                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 4.9, 0.9, SMALLER_FONT)
+                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 5.0, 1.2, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(import_preset);
-                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 4.9, 0.9, SMALLER_FONT)
+                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 5.0, 1.2, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(export_preset);
+                                                    ui.separator();
+                                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.8, 1.2, FONT);
+                                                    ui.add(use_fx_toggle);
                                                 });
                                             },
                                             LFOSelect::FX => {
                                                 ScrollArea::vertical()
+                                                    .auto_shrink([false; 2])
                                                     .max_height(200.0)
-                                                    .max_width(270.0)
-                                                    //.always_show_scroll(true)
+                                                    .max_width(320.0)
                                                     .show(ui, |ui|{
                                                         ui.vertical(|ui|{
                                                             // Equalizer
@@ -5437,7 +5406,6 @@ impl Plugin for Actuate {
                                                                 ui.vertical(|ui|{
                                                                     ui.label(RichText::new("EQ")
                                                                         .font(FONT)
-                                                                        .color(Color32::BLACK)
                                                                     )
                                                                         .on_hover_text("non interleaved EQ from Interleaf");
                                                                     let use_eq_toggle = toggle_switch::ToggleSwitch::for_param(&params.pre_use_eq, setter);
@@ -5446,8 +5414,8 @@ impl Plugin for Actuate {
                                                                 ui.vertical(|ui|{
                                                                     ui.add(
                                                                         VerticalParamSlider::for_param(&params.pre_low_gain, setter)
-                                                                            .with_width(VERT_BAR_WIDTH * 2.2)
-                                                                            .with_height(VERT_BAR_HEIGHT * 0.6)
+                                                                            .with_width(VERT_BAR_WIDTH * 2.5)
+                                                                            .with_height(VERT_BAR_HEIGHT * 0.8)
                                                                             .set_reversed(true)
                                                                             .override_colors(
                                                                                 DARK_GREY_UI_COLOR,
@@ -5457,8 +5425,8 @@ impl Plugin for Actuate {
                                                                     let low_freq_knob = ui_knob::ArcKnob::for_param(
                                                                         &params.pre_low_freq,
                                                                         setter,
-                                                                        BKNOB_SIZE * 0.6,
-                                                                        KnobLayout::Horizonal)
+                                                                        BKNOB_SIZE,
+                                                                        KnobLayout::Vertical)
                                                                         .preset_style(ui_knob::KnobStyle::Preset1)
                                                                         .set_fill_color(DARK_GREY_UI_COLOR)
                                                                         .set_line_color(TEAL_GREEN)
@@ -5469,8 +5437,8 @@ impl Plugin for Actuate {
                                                                 ui.vertical(|ui|{
                                                                     ui.add(
                                                                         VerticalParamSlider::for_param(&params.pre_mid_gain, setter)
-                                                                            .with_width(VERT_BAR_WIDTH * 2.2)
-                                                                            .with_height(VERT_BAR_HEIGHT * 0.6)
+                                                                            .with_width(VERT_BAR_WIDTH * 2.5)
+                                                                            .with_height(VERT_BAR_HEIGHT * 0.8)
                                                                             .set_reversed(true)
                                                                             .override_colors(
                                                                                 DARK_GREY_UI_COLOR,
@@ -5480,8 +5448,8 @@ impl Plugin for Actuate {
                                                                     let mid_freq_knob = ui_knob::ArcKnob::for_param(
                                                                         &params.pre_mid_freq,
                                                                         setter,
-                                                                        BKNOB_SIZE * 0.6,
-                                                                        KnobLayout::Horizonal)
+                                                                        BKNOB_SIZE,
+                                                                        KnobLayout::Vertical)
                                                                         .preset_style(ui_knob::KnobStyle::Preset1)
                                                                         .set_fill_color(DARK_GREY_UI_COLOR)
                                                                         .set_line_color(TEAL_GREEN)
@@ -5492,8 +5460,8 @@ impl Plugin for Actuate {
                                                                 ui.vertical(|ui|{
                                                                     ui.add(
                                                                         VerticalParamSlider::for_param(&params.pre_high_gain, setter)
-                                                                            .with_width(VERT_BAR_WIDTH * 2.2)
-                                                                            .with_height(VERT_BAR_HEIGHT * 0.6)
+                                                                            .with_width(VERT_BAR_WIDTH * 2.5)
+                                                                            .with_height(VERT_BAR_HEIGHT * 0.8)
                                                                             .set_reversed(true)
                                                                             .override_colors(
                                                                                 DARK_GREY_UI_COLOR,
@@ -5503,8 +5471,8 @@ impl Plugin for Actuate {
                                                                     let high_freq_knob = ui_knob::ArcKnob::for_param(
                                                                         &params.pre_high_freq,
                                                                         setter,
-                                                                        BKNOB_SIZE * 0.6,
-                                                                        KnobLayout::Horizonal)
+                                                                        BKNOB_SIZE,
+                                                                        KnobLayout::Vertical)
                                                                         .preset_style(ui_knob::KnobStyle::Preset1)
                                                                         .set_fill_color(DARK_GREY_UI_COLOR)
                                                                         .set_line_color(TEAL_GREEN)
@@ -5514,243 +5482,208 @@ impl Plugin for Actuate {
                                                                 });
                                                                 ui.separator();
                                                             });
+                                                            ui.separator();
                                                             // Compressor
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Compressor")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_comp_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_compressor, setter);
                                                                 ui.add(use_comp_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_amt, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_atk, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_rel, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_drive, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                             });
                                                             ui.separator();
                                                             // ABass
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("ABass Algorithm")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_abass_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_abass, setter);
                                                                 ui.add(use_abass_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.abass_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                             });
                                                             ui.separator();
                                                             // Saturation
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Saturation")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_sat_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_saturation, setter);
                                                                 ui.add(use_sat_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_type, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_amt, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                             });
                                                             ui.separator();
                                                             // Phaser
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Phaser")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_phaser_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_phaser, setter);
                                                                 ui.add(use_phaser_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_depth, setter)
                                                                     .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_rate, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                             });
                                                             ui.separator();
                                                             // Flanger
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Flanger")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_flanger_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_flanger, setter);
                                                                 ui.add(use_flanger_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_depth, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_rate, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_feedback, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                             });
                                                             ui.separator();
                                                             // Buffer Modulator
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Buffer Modulator")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_buffermod_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_buffermod, setter);
                                                                 ui.add(use_buffermod_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_depth, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_rate, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_spread, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_timing, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                             });
                                                             ui.separator();
                                                             // Delay
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Delay")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_delay_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_delay, setter);
                                                                 ui.add(use_delay_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_time, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_decay, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_type, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                             });
                                                             ui.separator();
                                                             // Reverb
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Reverb")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_reverb_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_reverb, setter);
                                                                 ui.add(use_reverb_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_size, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_feedback, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                             });
                                                             ui.separator();
                                                             // Limiter
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Limiter")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_limiter_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_limiter, setter);
                                                                 ui.add(use_limiter_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_threshold, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_knee, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(250.0));
                                                             });
                                                         });
                                                     })
@@ -7291,63 +7224,63 @@ impl Actuate {
                 AMFilterRouting::Bypass => {
                     left_output += wave1_l;
                     right_output += wave1_r;
-                }
+                },
                 AMFilterRouting::Filter1 => {
                     left_output_filter1 += wave1_l;
                     right_output_filter1 += wave1_r;
-                }
+                },
                 AMFilterRouting::Filter2 => {
                     left_output_filter2 += wave1_l;
                     right_output_filter2 += wave1_r;
-                }
+                },
                 AMFilterRouting::Both => {
                     left_output_filter1 += wave1_l;
                     right_output_filter1 += wave1_r;
                     left_output_filter2 += wave1_l;
                     right_output_filter2 += wave1_r;
-                }
+                },
             }
-            #[allow(unused_assignments)]
+            //#[allow(unused_assignments)]
             match self.params.audio_module_2_routing.value() {
                 AMFilterRouting::Bypass => {
                     left_output += wave2_l;
                     right_output += wave2_r;
-                }
+                },
                 AMFilterRouting::Filter1 => {
                     left_output_filter1 += wave2_l;
                     right_output_filter1 += wave2_r;
-                }
+                },
                 AMFilterRouting::Filter2 => {
                     left_output_filter2 += wave2_l;
                     right_output_filter2 += wave2_r;
-                }
+                },
                 AMFilterRouting::Both => {
                     left_output_filter1 += wave2_l;
                     right_output_filter1 += wave2_r;
                     left_output_filter2 += wave2_l;
                     right_output_filter2 += wave2_r;
-                }
+                },
             }
-            #[allow(unused_assignments)]
+            //#[allow(unused_assignments)]
             match self.params.audio_module_3_routing.value() {
                 AMFilterRouting::Bypass => {
                     left_output += wave3_l;
                     right_output += wave3_r;
-                }
+                },
                 AMFilterRouting::Filter1 => {
                     left_output_filter1 += wave3_l;
                     right_output_filter1 += wave3_r;
-                }
+                },
                 AMFilterRouting::Filter2 => {
-                    left_output_filter1 += wave3_l;
+                    left_output_filter2 += wave3_l;
                     right_output_filter2 += wave3_r;
-                }
+                },
                 AMFilterRouting::Both => {
                     left_output_filter1 += wave3_l;
                     right_output_filter1 += wave3_r;
                     left_output_filter2 += wave3_l;
                     right_output_filter2 += wave3_r;
-                }
+                },
             }
 
             let mut filter1_processed_l: f32 = 0.0;

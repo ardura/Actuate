@@ -203,6 +203,7 @@ pub enum KnobLayout {
     Vertical,
     Horizonal,
     HorizontalInline,
+    SquareNoLabel,
     Default,
 }
 
@@ -236,12 +237,14 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             layout: layout,
             arc_start: match layout {
                 KnobLayout::Default => 0.75,
+                KnobLayout::SquareNoLabel => 0.625,
                 KnobLayout::Vertical => 0.625,
                 KnobLayout::Horizonal => 0.625,
                 KnobLayout::HorizontalInline => 0.625,
             },
             arc_end: match layout {
                 KnobLayout::Default => -1.0,
+                KnobLayout::SquareNoLabel => -0.75,
                 KnobLayout::Vertical => -0.75,
                 KnobLayout::Horizonal => -0.75,
                 KnobLayout::HorizontalInline => -0.75,
@@ -383,6 +386,10 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 self.padding + self.radius * 9.0,
                 self.padding + self.radius * 2.0,
             ),
+            KnobLayout::SquareNoLabel => egui::vec2(
+                self.padding + self.radius * 2.0,
+                self.padding + self.radius * 2.0,
+            ),
             KnobLayout::Default => egui::vec2(
                 self.padding + self.radius * 2.0,
                 self.padding + self.radius * 2.0,
@@ -395,7 +402,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
         ui.vertical(|ui| {
             let painter = ui.painter_at(response.rect);
             let center = match self.layout {
-                KnobLayout::Default => response.rect.center(),
+                KnobLayout::Default | KnobLayout::SquareNoLabel => response.rect.center(),
                 KnobLayout::Vertical => response.rect.center(),
                 KnobLayout::Horizonal => Pos2 {
                     x: response.rect.left_center().x + self.radius,
@@ -898,6 +905,12 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 let value_pos: Pos2;
                 let label_pos: Pos2;
                 match self.layout {
+                    KnobLayout::SquareNoLabel => {
+                        // This isn't indended to be a possibility but it has to be here since
+                        // it's in the enum. Hence these making no sense
+                        value_pos = response.rect.center();
+                        label_pos = response.rect.center();
+                    },
                     KnobLayout::Default => {
                         if self.swap_label_and_value {
                             // Newer rearranged positions to put value at bottom of knob
