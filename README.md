@@ -54,7 +54,7 @@ Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura
 - [ ] Add more decay styles
 - [ ] Fix some bandpass glitching on certain filter types
 - [ ] Create different stereo spreading algorithms
-- [ ] Make the GUI nicer - see Discussion https://github.com/ardura/Actuate/discussions/26
+- [x] Make the GUI nicer - see Discussion https://github.com/ardura/Actuate/discussions/26
 - [ ] Look into making the preset loading more reliable
 - [ ] Fix text input not working (right now it's a OS safe workaround)
 - [ ] Fix file dialog in the process thread (right now it's a OS safe workaround)
