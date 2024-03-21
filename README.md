@@ -7,11 +7,12 @@ Written by Ardura
 Join the discord! https://discord.com/invite/hscQXkTdfz
 Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura
 
-![Screenshot 2024-03-01 085443](https://github.com/ardura/Actuate/assets/31751444/9c06b017-99c9-44b7-9dd6-e994c3f3db77)
+![image](https://github.com/ardura/Actuate/assets/31751444/c14cfbc2-dec2-4bc1-9e29-32416859e513)
 
 ## Features
 - Two SVF Filters, a VCF inspired filter, and Tilt inspired filters that can be parallel, serial, or bypassed with ADSR Envelopes
-![Screenshot 2024-03-01 085849](https://github.com/ardura/Actuate/assets/31751444/5940f589-63f3-40c8-b639-a8c20c76a32a)
+- Pitch modulation with ASDR
+![image](https://github.com/ardura/Actuate/assets/31751444/accd4727-975a-4266-a82a-180c55db628d)
 
 - 12 Oscillator shapes:
   - The standard: Sine, Triangle, Saw, Ramp, Square, Pulse, Noise
@@ -29,13 +30,13 @@ Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura
   - Bump - I made this up - a gentle bump resonance different from the others
   - Powf - I made this up - Curves based on Powf math function as it scales
 - 10 Different FX for post processing
-![Screenshot 2024-03-01 085630](https://github.com/ardura/Actuate/assets/31751444/2b398ff3-2a17-4ea8-81a2-c9b3d44dfaeb)
+![image](https://github.com/ardura/Actuate/assets/31751444/c13b62bb-a29e-420c-9f3a-764950cbd4a2)
 
 - 3 LFO controllers
-![2](https://github.com/ardura/Actuate/assets/31751444/b9904160-5a66-400a-8e66-2a77ba9743f4)
+![image](https://github.com/ardura/Actuate/assets/31751444/22499e32-50e4-4724-9483-de5ceb43751a)
 
 - 4 Modulators that can be linked to multiple things
-![Screenshot 2024-03-01 085601](https://github.com/ardura/Actuate/assets/31751444/f1d0e4a8-f77f-40d3-b754-b6e28b9c9152)
+![image](https://github.com/ardura/Actuate/assets/31751444/67d7cdeb-9214-4eef-ad8b-63b6a03ceb60)
 
 - Sampler with pitch shifting or resample stretching
 - Sampler supports single cycle waveforms for wavetable-like functions
@@ -61,9 +62,10 @@ Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura
 ## DAWS and compatibility
 - Compatible with Windows 10 and up
 - Compatible with Linux
-- Compatible with Mac
+- Compatible with Mac(?)
 - DAWS
     - FL Studio tested compatible
+    - Ableton tested compatible
     - Reaper tested compatible
     - Ardour tested **compatible with some reported performance issues**
     - Bitwig tested compatible
