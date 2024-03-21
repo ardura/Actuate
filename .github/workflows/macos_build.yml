@@ -1,0 +1,25 @@
+name: macos_build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run bundler
+      run: cargo xtask bundle Actuate --profile release
+    - uses: actions/upload-artifact@v4
+      with:
+        name: macos_build
+        path: target/bundled/Actuate.vst3
+        if-no-files-found: warn
