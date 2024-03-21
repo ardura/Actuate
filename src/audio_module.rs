@@ -460,7 +460,8 @@ impl AudioModule {
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Oscillator wave form type".to_string());
                             ui.add(osc_1_type_knob);
 
                             let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
@@ -473,7 +474,12 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Retrigger behavior on MIDI note input:
+Free: constantly running phase based off previous note
+Retrigger: wave form restarts at every new note
+Random: Wave and all unisons use a new random phase every note
+UniRandom: Every voice uses its own unique random phase every note".to_string());
                             ui.add(osc_1_retrigger_knob);
                         });
 
@@ -488,7 +494,8 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Adjust the MIDI input by octave".to_string());
                             ui.add(osc_1_octave_knob);
 
                             let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
@@ -501,7 +508,8 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Adjust the MIDI input by semitone".to_string());
                             ui.add(osc_1_semitones_knob);
                         });
 
@@ -516,7 +524,8 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Oscillator voice stereo spread. 0 is Mono.".to_string());
                             ui.add(osc_1_stereo_knob);
 
                             let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
@@ -529,7 +538,8 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("How many voices should play in unison".to_string());
                             ui.add(osc_1_unison_knob);
                         });
 
@@ -544,7 +554,8 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Move the pitch to fine tune it".to_string());
                             ui.add(osc_1_detune_knob);
 
                             let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
@@ -557,7 +568,8 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Spread the pitches of the unison voices apart".to_string());
                             ui.add(osc_1_unison_detune_knob);
                         });
 
@@ -619,7 +631,7 @@ impl AudioModule {
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
-                        );
+                        ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
                         ui.add(
                             BeizerButton::BeizerButton::for_param(
                                 osc_dec_curve,
@@ -630,7 +642,7 @@ impl AudioModule {
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
-                        );
+                        ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
                         ui.add(
                             BeizerButton::BeizerButton::for_param(
                                 osc_rel_curve,
@@ -641,7 +653,7 @@ impl AudioModule {
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
-                        );
+                        ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
                     });
                 });
                 ui.add_space(20.0);
@@ -673,7 +685,8 @@ impl AudioModule {
                         .set_fill_color(DARK_GREY_UI_COLOR)
                         .set_line_color(YELLOW_MUSTARD)
                         .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
+                        .set_text_size(TEXT_SIZE)
+                        .set_hover_text("Adjust the MIDI input by octave".to_string());
                         ui.add(osc_1_octave_knob);
                         let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
                             osc_retrigger,
@@ -685,7 +698,10 @@ impl AudioModule {
                         .set_fill_color(DARK_GREY_UI_COLOR)
                         .set_line_color(YELLOW_MUSTARD)
                         .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
+                        .set_text_size(TEXT_SIZE)
+                        .set_hover_text("Retrigger behavior on MIDI note input:
+Retrigger: Sample restarts at every new note
+Random: Sample uses a new random position every note".to_string());
                         ui.add(osc_1_retrigger_knob);
                     });
                     ui.vertical(|ui| {
@@ -699,7 +715,8 @@ impl AudioModule {
                         .set_fill_color(DARK_GREY_UI_COLOR)
                         .set_line_color(YELLOW_MUSTARD)
                         .use_outline(true)
-                        .set_text_size(TEXT_SIZE);
+                        .set_text_size(TEXT_SIZE)
+                        .set_hover_text("Adjust the MIDI input by semitone".to_string());
                         ui.add(osc_1_semitones_knob);
                     });
                     ui.vertical(|ui| {
@@ -712,7 +729,8 @@ impl AudioModule {
                         .preset_style(ui_knob::KnobStyle::Preset1)
                         .set_fill_color(DARK_GREY_UI_COLOR)
                         .set_line_color(YELLOW_MUSTARD)
-                        .set_text_size(TEXT_SIZE);
+                        .set_text_size(TEXT_SIZE)
+                        .set_hover_text("Where the sample should start".to_string());
                         ui.add(start_position_1_knob);
                         let end_position_1_knob = ui_knob::ArcKnob::for_param(
                             end_position,
@@ -723,7 +741,8 @@ impl AudioModule {
                         .preset_style(ui_knob::KnobStyle::Preset1)
                         .set_fill_color(DARK_GREY_UI_COLOR)
                         .set_line_color(YELLOW_MUSTARD)
-                        .set_text_size(TEXT_SIZE);
+                        .set_text_size(TEXT_SIZE)
+                        .set_hover_text("Where the sample should end".to_string());
                         ui.add(end_position_1_knob);
                     });
                     // Trying to draw background box as rect
@@ -782,7 +801,7 @@ impl AudioModule {
                         )
                         .with_background_color(MEDIUM_GREY_UI_COLOR)
                         .with_line_color(YELLOW_MUSTARD),
-                    );
+                    ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
                     ui.add(
                         BeizerButton::BeizerButton::for_param(
                             osc_dec_curve,
@@ -793,7 +812,7 @@ impl AudioModule {
                         )
                         .with_background_color(MEDIUM_GREY_UI_COLOR)
                         .with_line_color(YELLOW_MUSTARD),
-                    );
+                    ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
                     ui.add(
                         BeizerButton::BeizerButton::for_param(
                             osc_rel_curve,
@@ -804,7 +823,7 @@ impl AudioModule {
                         )
                         .with_background_color(MEDIUM_GREY_UI_COLOR)
                         .with_line_color(YELLOW_MUSTARD),
-                    );
+                    ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
                 });
                 ui.add_space(20.0);
             }
@@ -842,7 +861,8 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Adjust the MIDI input by octave".to_string());
                             ui.add(osc_1_octave_knob);
 
                             let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
@@ -855,7 +875,8 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Adjust the MIDI input by semitone".to_string());
                             ui.add(osc_1_semitones_knob);
                         });
 
@@ -870,7 +891,10 @@ impl AudioModule {
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Retrigger behavior on MIDI note input:
+Retrigger: Sample restarts at every new note
+Random: Sample uses a new random position every note".to_string());
                             ui.add(osc_1_retrigger_knob);
 
                             let grain_crossfade_1_knob = ui_knob::ArcKnob::for_param(
@@ -882,7 +906,8 @@ impl AudioModule {
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("How much crossfading between grains".to_string());
                             ui.add(grain_crossfade_1_knob);
                         });
 
@@ -896,7 +921,8 @@ impl AudioModule {
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("How long do grains last".to_string());
                             ui.add(grain_hold_1_knob);
 
                             let grain_gap_1_knob = ui_knob::ArcKnob::for_param(
@@ -908,7 +934,8 @@ impl AudioModule {
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("The space between grains".to_string());
                             ui.add(grain_gap_1_knob);
                         });
 
@@ -922,7 +949,8 @@ impl AudioModule {
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Where the sample should start".to_string());
                             ui.add(start_position_1_knob);
 
                             let end_position_1_knob = ui_knob::ArcKnob::for_param(
@@ -934,7 +962,8 @@ impl AudioModule {
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
                             .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE);
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("Where the sample should end".to_string());
                             ui.add(end_position_1_knob);
                         });
                         // Trying to draw background box as rect
@@ -993,7 +1022,7 @@ impl AudioModule {
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
-                        );
+                        ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
                         ui.add(
                             BeizerButton::BeizerButton::for_param(
                                 osc_dec_curve,
@@ -1004,7 +1033,7 @@ impl AudioModule {
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
-                        );
+                        ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
                         ui.add(
                             BeizerButton::BeizerButton::for_param(
                                 osc_rel_curve,
@@ -1015,7 +1044,7 @@ impl AudioModule {
                             )
                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                             .with_line_color(YELLOW_MUSTARD),
-                        );
+                        ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
                     });
                 });
             }
@@ -2584,7 +2613,8 @@ impl AudioModule {
                 for voice in self.playing_voices.voices.iter_mut() {
                     // Move the pitch envelope stuff independently of the MIDI info
                     if voice.pitch_enabled {
-                        voice.pitch_current = match voice.pitch_state {
+                        voice.pitch_current = 
+                        match voice.pitch_state {
                             OscState::Attacking => voice.pitch_attack.next(),
                             OscState::Decaying => voice.pitch_decay.next(),
                             OscState::Sustaining => self.pitch_env_sustain / 999.9,
@@ -2696,6 +2726,27 @@ impl AudioModule {
                 }
                 // Stereo applies to unison voices
                 for unison_voice in self.unison_voices.voices.iter_mut() {
+                    // Move the pitch envelope stuff independently of the MIDI info
+                    if unison_voice.pitch_enabled {
+                        unison_voice.pitch_current = 
+                        match unison_voice.pitch_state {
+                            OscState::Attacking => unison_voice.pitch_attack.next(),
+                            OscState::Decaying => unison_voice.pitch_decay.next(),
+                            OscState::Sustaining => self.pitch_env_sustain / 999.9,
+                            OscState::Releasing => unison_voice.pitch_release.next(),
+                            OscState::Off => 0.0,
+                        }
+                    }
+                    if unison_voice.pitch_enabled_2 {
+                        unison_voice.pitch_current_2 = match unison_voice.pitch_state_2 {
+                            OscState::Attacking => unison_voice.pitch_attack_2.next(),
+                            OscState::Decaying => unison_voice.pitch_decay_2.next(),
+                            OscState::Sustaining => self.pitch_env_sustain_2 / 999.9,
+                            OscState::Releasing => unison_voice.pitch_release_2.next(),
+                            OscState::Off => 0.0,
+                        }
+                    }
+
                     let temp_osc_gain_multiplier: f32;
                     // Get our current gain amount for use in match below
                     // Include gain scaling if mod is there

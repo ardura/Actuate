@@ -2383,7 +2383,7 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            filter_alg_type: EnumParam::new("Filter 1 Alg", FilterAlgorithms::SVF),
+            filter_alg_type: EnumParam::new("Filter Alg", FilterAlgorithms::SVF),
             tilt_filter_type: EnumParam::new("Filter Type", ResponseType::Lowpass),
             vcf_filter_type: EnumParam::new("Filter Type", VCResponseType::Lowpass),
 
@@ -2540,7 +2540,7 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            filter_alg_type_2: EnumParam::new("Filter 2 Alg", FilterAlgorithms::SVF),
+            filter_alg_type_2: EnumParam::new("Filter Alg", FilterAlgorithms::SVF),
             tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass),
             vcf_filter_type_2: EnumParam::new("Filter Type", VCResponseType::Lowpass),
 
@@ -3717,7 +3717,7 @@ impl Plugin for Actuate {
                                     ).on_hover_text("Coming soon!");
                                     ui.separator();
                                     let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.5, 1.0, FONT);
-                                    ui.add(use_fx_toggle);
+                                    ui.add(use_fx_toggle).on_hover_text("Enable or disable FX processing");
                                     ui.separator();
                                     let max_voice_knob = ui_knob::ArcKnob::for_param(
                                         &params.voice_limit,
@@ -3727,7 +3727,8 @@ impl Plugin for Actuate {
                                         .preset_style(ui_knob::KnobStyle::Preset1)
                                         .set_fill_color(DARK_GREY_UI_COLOR)
                                         .set_line_color(YELLOW_MUSTARD)
-                                        .set_text_size(TEXT_SIZE);
+                                        .set_text_size(TEXT_SIZE)
+                                        .set_hover_text("The maximum number of voices that can be playing at once".to_string());
                                     ui.add(max_voice_knob);
                                     let master_knob = ui_knob::ArcKnob::for_param(
                                         &params.master_level,
@@ -3737,7 +3738,8 @@ impl Plugin for Actuate {
                                         .preset_style(ui_knob::KnobStyle::Preset1)
                                         .set_fill_color(DARK_GREY_UI_COLOR)
                                         .set_line_color(YELLOW_MUSTARD)
-                                        .set_text_size(TEXT_SIZE);
+                                        .set_text_size(TEXT_SIZE)
+                                        .set_hover_text("Master volume level for Actuate".to_string());
                                     ui.add(master_knob);
                                 });
                                 const KNOB_SIZE: f32 = 28.0;
@@ -3872,16 +3874,14 @@ impl Plugin for Actuate {
                                     ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch1, RichText::new("Pitch 1").background_color(DARKEST_BOTTOM_UI_COLOR));
                                     ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch2, RichText::new("Pitch 2").background_color(DARKEST_BOTTOM_UI_COLOR));
                                     // Jank spacing stuff :)
-                                    ui.add_space(300.0);
-                                    //ui.horizontal(|ui| {
-                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
-                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
-                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
-                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
-                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
-                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Modulation").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
-                                        ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
-                                    //});
+                                    ui.add_space(304.0);
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Modulation").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                 });
 
                                 ////////////////////////////////////////////////////////////
@@ -4081,7 +4081,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
                                                             ui.add(
                                                                 BeizerButton::BeizerButton::for_param(
                                                                     &params.filter_env_dec_curve,
@@ -4092,7 +4092,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
                                                             ui.add(
                                                                 BeizerButton::BeizerButton::for_param(
                                                                     &params.filter_env_rel_curve,
@@ -4103,7 +4103,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
                                                         },
                                                         UIBottomSelection::Filter2 => {
                                                             ui.add(
@@ -4116,7 +4116,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
                                                             ui.add(
                                                                 BeizerButton::BeizerButton::for_param(
                                                                     &params.filter_env_dec_curve_2,
@@ -4127,7 +4127,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
                                                             ui.add(
                                                                 BeizerButton::BeizerButton::for_param(
                                                                     &params.filter_env_rel_curve_2,
@@ -4138,7 +4138,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
                                                         },
                                                         UIBottomSelection::Pitch1 => {
                                                             ui.add(
@@ -4151,7 +4151,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
                                                             ui.add(
                                                                 BeizerButton::BeizerButton::for_param(
                                                                     &params.pitch_env_dec_curve,
@@ -4162,7 +4162,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
                                                             ui.add(
                                                                 BeizerButton::BeizerButton::for_param(
                                                                     &params.pitch_env_rel_curve,
@@ -4173,7 +4173,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
                                                         },
                                                         UIBottomSelection::Pitch2 => {
                                                             ui.add(
@@ -4186,7 +4186,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
                                                             ui.add(
                                                                 BeizerButton::BeizerButton::for_param(
                                                                     &params.pitch_env_dec_curve_2,
@@ -4197,7 +4197,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
                                                             ui.add(
                                                                 BeizerButton::BeizerButton::for_param(
                                                                     &params.pitch_env_rel_curve_2,
@@ -4208,7 +4208,7 @@ impl Plugin for Actuate {
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
-                                                            );
+                                                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
                                                         }
                                                     }
                                                 });
@@ -4222,7 +4222,8 @@ impl Plugin for Actuate {
                                                 .preset_style(ui_knob::KnobStyle::Preset1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                 .set_line_color(YELLOW_MUSTARD)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_text_size(TEXT_SIZE)
+                                                .set_hover_text("This controls filter ordering or isolation".to_string());
                                             ui.add(filter_routing_hknob);
                                         });
                                     });
@@ -4246,7 +4247,12 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_lp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_lp_amount,
@@ -4256,7 +4262,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Low passed signal output".to_string());
                                                                 ui.add(filter_lp_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance,
@@ -4266,7 +4273,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
@@ -4278,7 +4286,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_bp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_bp_amount,
@@ -4288,7 +4297,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Band passed signal output".to_string());
                                                                 ui.add(filter_bp_knob);
                                                                 let filter_res_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_res_type,
@@ -4298,7 +4308,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Which resonance algorithm to use".to_string());
                                                                 ui.add(filter_res_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
@@ -4310,7 +4321,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let filter_hp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_hp_amount,
@@ -4320,7 +4332,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("High passed signal output".to_string());
                                                                 ui.add(filter_hp_knob);
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak,
@@ -4331,7 +4344,8 @@ impl Plugin for Actuate {
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
                                                         },
@@ -4345,7 +4359,12 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -4355,7 +4374,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance,
@@ -4365,7 +4385,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
@@ -4377,7 +4398,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.tilt_filter_type,
@@ -4387,7 +4409,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Tilt filter algorithm type".to_string());
                                                                 ui.add(filter_tilt_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
@@ -4400,10 +4423,10 @@ impl Plugin for Actuate {
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(BKNOB_SIZE*2.0);
                                                         },
                                                         FilterAlgorithms::VCF => {
                                                             ui.vertical(|ui|{
@@ -4415,7 +4438,12 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(TEAL_GREEN.gamma_multiply(2.0))
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -4425,7 +4453,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance,
@@ -4435,7 +4464,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
@@ -4447,7 +4477,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.vcf_filter_type,
@@ -4470,10 +4501,10 @@ impl Plugin for Actuate {
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(BKNOB_SIZE*2.0);
                                                         },
                                                     }
                                                 },
@@ -4489,7 +4520,12 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_lp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_lp_amount_2,
@@ -4509,7 +4545,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
@@ -4521,7 +4558,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_bp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_bp_amount_2,
@@ -4553,7 +4591,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let filter_hp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_hp_amount_2,
@@ -4574,7 +4613,8 @@ impl Plugin for Actuate {
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
                                                         },
@@ -4588,7 +4628,12 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
@@ -4598,7 +4643,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance_2,
@@ -4608,7 +4654,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
@@ -4620,7 +4667,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.tilt_filter_type_2,
@@ -4643,10 +4691,10 @@ impl Plugin for Actuate {
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(BKNOB_SIZE*2.0);
                                                         },
                                                         FilterAlgorithms::VCF => {
                                                             ui.vertical(|ui|{
@@ -4658,7 +4706,12 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(TEAL_GREEN)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
@@ -4668,7 +4721,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance_2,
@@ -4678,7 +4732,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
@@ -4690,7 +4745,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.vcf_filter_type_2,
@@ -4700,7 +4756,8 @@ impl Plugin for Actuate {
                                                                     .preset_style(ui_knob::KnobStyle::Preset1)
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("VCF filter algorithm to use".to_string());
                                                                 ui.add(vcf_filter_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
@@ -4713,10 +4770,10 @@ impl Plugin for Actuate {
                                                                     .set_fill_color(DARK_GREY_UI_COLOR)
                                                                     .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(BTEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(BKNOB_SIZE*2.0);
                                                         },
                                                     }
                                                 },
@@ -4741,7 +4798,8 @@ impl Plugin for Actuate {
                                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                                 .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(BTEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE)
+                                                                .set_hover_text("The relative pitch level to reach in the ADSR envelope".to_string());
                                                             ui.add(pitch_env_peak_knob);
 
                                                             let pitch_routing_knob = ui_knob::ArcKnob::for_param(
@@ -4753,7 +4811,8 @@ impl Plugin for Actuate {
                                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                                 .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(BTEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE)
+                                                                .set_hover_text("Where the pitch envelope should be applied".to_string());
                                                             ui.add(pitch_routing_knob);
                                                         });
                                                     });
@@ -4780,7 +4839,8 @@ impl Plugin for Actuate {
                                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                                 .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(BTEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE)
+                                                                .set_hover_text("The relative pitch level to reach in the ADSR envelope".to_string());
                                                             ui.add(pitch_env_peak_knob_2);
 
                                                             let pitch_routing_knob_2 = ui_knob::ArcKnob::for_param(
@@ -4792,7 +4852,8 @@ impl Plugin for Actuate {
                                                                 .set_fill_color(DARK_GREY_UI_COLOR)
                                                                 .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(BTEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE)
+                                                                .set_hover_text("Where the pitch envelope should be applied".to_string());
                                                             ui.add(pitch_routing_knob_2);
                                                         });
                                                     });
@@ -4825,7 +4886,8 @@ impl Plugin for Actuate {
                                                         ui.separator();
                                                         ui.label(RichText::new("Retrig")
                                                             .font(FONT)
-                                                        );
+                                                        )
+                                                            .on_hover_text("When to reset the LFO".to_string());
                                                         ui.add(ParamSlider::for_param(&params.lfo1_retrigger, setter).with_width(80.0));
                                                     });
                                                     ui.separator();
@@ -4872,7 +4934,7 @@ impl Plugin for Actuate {
                                                         ui.separator();
                                                         ui.label(RichText::new("Retrig")
                                                             .font(FONT)
-                                                        );
+                                                        ).on_hover_text("When to reset the LFO".to_string());
                                                         ui.add(ParamSlider::for_param(&params.lfo2_retrigger, setter).with_width(80.0));
                                                     });
                                                     ui.separator();
@@ -4919,7 +4981,7 @@ impl Plugin for Actuate {
                                                         ui.separator();
                                                         ui.label(RichText::new("Retrig")
                                                             .font(FONT)
-                                                        );
+                                                        ).on_hover_text("When to reset the LFO".to_string());
                                                         ui.add(ParamSlider::for_param(&params.lfo3_retrigger, setter).with_width(80.0));
                                                     });
                                                     ui.separator();
@@ -5494,19 +5556,19 @@ impl Plugin for Actuate {
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_amt, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_atk, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_rel, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_drive, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // ABass
@@ -5520,7 +5582,7 @@ impl Plugin for Actuate {
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.abass_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Saturation
@@ -5534,11 +5596,11 @@ impl Plugin for Actuate {
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_type, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_amt, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Phaser
@@ -5552,16 +5614,16 @@ impl Plugin for Actuate {
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_depth, setter)
                                                                     .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_rate, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Flanger
@@ -5575,19 +5637,19 @@ impl Plugin for Actuate {
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_depth, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_rate, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_feedback, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Buffer Modulator
@@ -5601,23 +5663,23 @@ impl Plugin for Actuate {
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_depth, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_rate, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_spread, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_timing, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Delay
@@ -5631,19 +5693,19 @@ impl Plugin for Actuate {
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_time, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_decay, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_type, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Reverb
@@ -5657,15 +5719,15 @@ impl Plugin for Actuate {
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_size, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_feedback, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Limiter
@@ -5679,15 +5741,14 @@ impl Plugin for Actuate {
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_threshold, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_knee, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(250.0));
+                                                                    .with_width(285.0));
                                                             });
                                                         });
-                                                    })
-                                                    .inner;
+                                                    }).inner;
                                             }
                                         }
                                     });
