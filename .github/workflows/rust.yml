@@ -19,7 +19,7 @@ jobs:
     - name: Run bundler
       run: cargo xtask bundle Actuate --profile release
     - uses: actions/upload-artifact@v4
-    - name: Upload a Build Artifact
       with:
         name: macos_build
         path: target/bundled/Actuate.vst3
+        if-no-files-found: warn
