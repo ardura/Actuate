@@ -1,4 +1,4 @@
-name: Rust
+name: rust_bundle
 
 on:
   push:
