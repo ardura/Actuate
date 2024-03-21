@@ -215,13 +215,15 @@ impl Delay {
         if self.delay_buffer_l.get(self.current_index + delay_shift_l) != None {
             self.delay_buffer_l[self.current_index + delay_shift_l] = output_l;
         } else {
-            self.delay_buffer_l[(self.current_index + delay_shift_l) % self.delay_length] = output_l;
+            self.delay_buffer_l[(self.current_index + delay_shift_l) % self.delay_length] =
+                output_l;
         }
-        
+
         if self.delay_buffer_r.get(self.current_index + delay_shift_r) != None {
             self.delay_buffer_r[self.current_index + delay_shift_r] = output_r;
         } else {
-            self.delay_buffer_r[(self.current_index + delay_shift_r) % self.delay_length] = output_r;
+            self.delay_buffer_r[(self.current_index + delay_shift_r) % self.delay_length] =
+                output_r;
         }
 
         // Move the index to the next position in the delay lines

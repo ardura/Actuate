@@ -1,6 +1,6 @@
 [package]
 name = "Actuate"
-version = "1.2.2"
+version = "1.2.3"
 edition = "2021"
 authors = ["Ardura <azviscarra@gmail.com>"]
 license = "GPL-3.0-or-later"
@@ -40,7 +40,6 @@ nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "96d4137
 #nih_plug = { path = "../../nih-plug", features = ["assert_process_allocs"] }
 #nih_plug_egui = { path = "../../nih-plug/nih_plug_egui" }
 
-
 num-complex = "0.4.4"
 num-traits = "0.2.17"
 once_cell = "1.18.0"
@@ -57,8 +56,19 @@ tinyfiledialogs = "3.9.1"
 [profile.release]
 opt-level = 3
 debug = false
-lto = "fat"
-strip = "symbols"
+split-debuginfo = '...'  # Platform-specific.
+strip = "none"
+debug-assertions = false
+overflow-checks = false
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
+#opt-level = 3
+#debug = false
+#lto = "fat"
+#strip = "symbols"
 
 [profile.profiling]
 inherits = "release"

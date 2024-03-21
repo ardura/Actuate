@@ -26,7 +26,10 @@ pub enum ResonanceType {
 #[derive(Clone)]
 pub struct StateVariableFilter {
     sample_rate: f32,
+    sample_rate_quad: f32,
+    sample_rate_half: f32,
     frequency: f32,
+    double_pi_freq: f32,
     q: f32,
     low_output: f32,
     band_output: f32,
@@ -39,8 +42,11 @@ impl Default for StateVariableFilter {
     fn default() -> Self {
         Self {
             sample_rate: 44100.0,
+            sample_rate_quad: 44100.0 * 4.0,
+            sample_rate_half: 22050.0,
             q: 0.0,
             frequency: 20000.0,
+            double_pi_freq: 2.0 * PI * 20000.0,
             low_output: 0.0,
             band_output: 0.0,
             high_output: 0.0,
@@ -83,6 +89,7 @@ impl StateVariableFilter {
         if frequency != self.frequency {
             //self.frequency = frequency.clamp(20.0, 16000.0);
             self.frequency = frequency.clamp(20.0, 20000.0);
+            self.double_pi_freq = 2.0 * PI * self.frequency;
         }
         if resonance_mode != self.res_mode {
             self.res_mode = resonance_mode;
@@ -92,14 +99,14 @@ impl StateVariableFilter {
     pub fn process(&mut self, input: f32) -> (f32, f32, f32) {
         // Calculate our normalized freq for filtering
         let normalized_freq: f32 = match self.res_mode {
-            ResonanceType::Default => (2.0 * PI * self.frequency) / (self.sample_rate * 4.0),
-            ResonanceType::Moog => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
-            ResonanceType::TB => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
-            ResonanceType::Arp => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
+            ResonanceType::Default => self.double_pi_freq / self.sample_rate_quad,
+            ResonanceType::Moog => self.double_pi_freq / self.sample_rate_half,
+            ResonanceType::TB => self.double_pi_freq / self.sample_rate_half,
+            ResonanceType::Arp => self.double_pi_freq / self.sample_rate_half,
             // Actuate v1.0.2 additions
-            ResonanceType::Res => (2.0 * PI * self.frequency) / (self.sample_rate * 0.5),
-            ResonanceType::Bump => (2.0 * PI * self.frequency) / (self.sample_rate * 4.0),
-            ResonanceType::Powf => (2.0 * PI * self.frequency) / (self.sample_rate * 4.0),
+            ResonanceType::Res => self.double_pi_freq / self.sample_rate_half,
+            ResonanceType::Bump => self.double_pi_freq / self.sample_rate_quad,
+            ResonanceType::Powf => self.double_pi_freq / self.sample_rate_quad,
         };
 
         // Calculate our resonance coefficient

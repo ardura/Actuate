@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.1
+Version 1.2.3
 
 #####################################
 
@@ -69,11 +69,11 @@ use fx::{
     StateVariableFilter::{ResonanceType, StateVariableFilter},
     VCFilter::ResponseType as VCResponseType,
 };
-use old_preset_structs::{load_unserialized_old, load_unserialized_v114};
+use old_preset_structs::{load_unserialized_old, load_unserialized_v114, load_unserialized_v122};
 use CustomWidgets::{
-    toggle_switch, ui_knob, BoolButton, CustomParamSlider,
-    CustomParamSlider::ParamSlider as HorizontalParamSlider,
+    toggle_switch, ui_knob::{self, KnobLayout}, BoolButton, CustomParamSlider,
     CustomVerticalSlider::ParamSlider as VerticalParamSlider,
+    BeizerButton::{self, ButtonLayout}
 };
 
 mod CustomWidgets;
@@ -96,17 +96,15 @@ const PRESET_BANK_SIZE: usize = 32;
 const FILE_OPEN_BUFFER_MAX: u32 = 1;
 
 // GUI values to refer to
-pub const A_KNOB_OUTSIDE_COLOR: Color32 = Color32::from_rgb(67, 157, 148);
-pub const DARK_GREY_UI_COLOR: Color32 = Color32::from_rgb(49, 53, 71);
-pub const LIGHT_GREY_UI_COLOR: Color32 = Color32::from_rgb(99, 103, 121);
-pub const LIGHTER_GREY_UI_COLOR: Color32 = Color32::from_rgb(149, 153, 171);
-pub const SYNTH_SOFT_BLUE: Color32 = Color32::from_rgb(142, 166, 201);
-pub const SYNTH_SOFT_BLUE2: Color32 = Color32::from_rgb(102, 126, 181);
-pub const A_BACKGROUND_COLOR_TOP: Color32 = Color32::from_rgb(185, 186, 198);
-pub const SYNTH_BARS_PURPLE: Color32 = Color32::from_rgb(45, 41, 99);
-pub const LIGHTER_PURPLE: Color32 = Color32::from_rgb(85, 81, 139);
-pub const SYNTH_MIDDLE_BLUE: Color32 = Color32::from_rgb(98, 145, 204);
-pub const FONT_COLOR: Color32 = Color32::from_rgb(10, 103, 210);
+pub const TEAL_GREEN: Color32 = Color32::from_rgb(61, 178, 166);
+pub const DARKEST_BOTTOM_UI_COLOR: Color32 = Color32::from_rgb(27, 27, 27);
+pub const DARKER_GREY_UI_COLOR: Color32 = Color32::from_rgb(34, 34, 34);
+pub const DARK_GREY_UI_COLOR: Color32 = Color32::from_rgb(42, 42, 42);
+pub const MEDIUM_GREY_UI_COLOR: Color32 = Color32::from_rgb(52, 52, 52);
+pub const LIGHTER_GREY_UI_COLOR: Color32 = Color32::from_rgb(69, 69, 69);
+pub const A_BACKGROUND_COLOR_TOP: Color32 = Color32::from_rgb(38, 38, 38);
+pub const YELLOW_MUSTARD: Color32 = Color32::from_rgb(172, 131, 25);
+pub const FONT_COLOR: Color32 = Color32::from_rgb(248, 248, 248);
 
 // Gui for which filter to display on bottom
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -246,7 +244,7 @@ pub enum PitchRouting {
 }
 
 // Fonts
-const FONT: nih_plug_egui::egui::FontId = FontId::proportional(14.0);
+const FONT: nih_plug_egui::egui::FontId = FontId::proportional(12.0);
 const LOADING_FONT: nih_plug_egui::egui::FontId = FontId::proportional(20.0);
 const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::proportional(11.0);
 
@@ -298,6 +296,7 @@ pub struct ActuatePreset {
     ///////////////////////////////////////////////////////////
     mod1_audio_module_type: AudioModuleType,
     mod1_audio_module_level: f32,
+    mod1_audio_module_routing: AMFilterRouting,
     // Granulizer/Sampler
     mod1_loaded_sample: Vec<Vec<f32>>,
     mod1_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -332,6 +331,7 @@ pub struct ActuatePreset {
     ///////////////////////////////////////////////////////////
     mod2_audio_module_type: AudioModuleType,
     mod2_audio_module_level: f32,
+    mod2_audio_module_routing: AMFilterRouting,
     // Granulizer/Sampler
     mod2_loaded_sample: Vec<Vec<f32>>,
     mod2_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -366,6 +366,7 @@ pub struct ActuatePreset {
     ///////////////////////////////////////////////////////////
     mod3_audio_module_type: AudioModuleType,
     mod3_audio_module_level: f32,
+    mod3_audio_module_routing: AMFilterRouting,
     // Granulizer/Sampler
     mod3_loaded_sample: Vec<Vec<f32>>,
     mod3_sample_lib: Vec<Vec<Vec<f32>>>,
@@ -582,6 +583,11 @@ pub struct Actuate {
 
     current_note_on_velocity: Arc<AtomicF32>,
 
+    // Managing resample logic
+    prev_restretch_1: Arc<AtomicBool>,
+    prev_restretch_2: Arc<AtomicBool>,
+    prev_restretch_3: Arc<AtomicBool>,
+
     // Modules
     audio_module_1: Arc<Mutex<AudioModule>>,
     _audio_module_1_type: AudioModuleType,
@@ -722,6 +728,10 @@ impl Default for Actuate {
 
             current_note_on_velocity: Arc::new(AtomicF32::new(0.0)),
 
+            prev_restretch_1: Arc::new(AtomicBool::new(false)),
+            prev_restretch_2: Arc::new(AtomicBool::new(false)),
+            prev_restretch_3: Arc::new(AtomicBool::new(false)),
+
             // Module 1
             audio_module_1: Arc::new(Mutex::new(AudioModule::default())),
             _audio_module_1_type: AudioModuleType::Osc,
@@ -827,6 +837,7 @@ impl Default for Actuate {
                     tag_warm: false,
                     mod1_audio_module_type: AudioModuleType::Osc,
                     mod1_audio_module_level: 1.0,
+                    mod1_audio_module_routing: AMFilterRouting::Filter1,
                     mod1_loaded_sample: vec![vec![0.0, 0.0]],
                     mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod1_loop_wavetable: false,
@@ -856,6 +867,7 @@ impl Default for Actuate {
 
                     mod2_audio_module_type: AudioModuleType::Off,
                     mod2_audio_module_level: 1.0,
+                    mod2_audio_module_routing: AMFilterRouting::Filter1,
                     mod2_loaded_sample: vec![vec![0.0, 0.0]],
                     mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod2_loop_wavetable: false,
@@ -885,6 +897,7 @@ impl Default for Actuate {
 
                     mod3_audio_module_type: AudioModuleType::Off,
                     mod3_audio_module_level: 1.0,
+                    mod3_audio_module_routing: AMFilterRouting::Filter1,
                     mod3_loaded_sample: vec![vec![0.0, 0.0]],
                     mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod3_loop_wavetable: false,
@@ -920,7 +933,7 @@ impl Default for Actuate {
                     filter_hp_amount: 0.0,
                     filter_bp_amount: 0.0,
                     filter_env_peak: 0.0,
-                    filter_env_attack: 0.0,
+                    filter_env_attack: 0.0001,
                     filter_env_decay: 0.0001,
                     filter_env_sustain: 999.9,
                     filter_env_release: 5.0,
@@ -938,7 +951,7 @@ impl Default for Actuate {
                     filter_hp_amount_2: 0.0,
                     filter_bp_amount_2: 0.0,
                     filter_env_peak_2: 0.0,
-                    filter_env_attack_2: 0.0,
+                    filter_env_attack_2: 0.0001,
                     filter_env_decay_2: 0.0001,
                     filter_env_sustain_2: 999.9,
                     filter_env_release_2: 5.0,
@@ -955,10 +968,10 @@ impl Default for Actuate {
                     pitch_enable: false,
                     pitch_routing: PitchRouting::Osc1,
                     pitch_env_peak: 0.0,
-                    pitch_env_attack: 0.0,
+                    pitch_env_attack: 0.0001,
                     pitch_env_decay: 300.0,
                     pitch_env_sustain: 0.0,
-                    pitch_env_release: 0.0,
+                    pitch_env_release: 0.0001,
                     pitch_env_atk_curve: SmoothStyle::Linear,
                     pitch_env_dec_curve: SmoothStyle::Linear,
                     pitch_env_rel_curve: SmoothStyle::Linear,
@@ -966,10 +979,10 @@ impl Default for Actuate {
                     pitch_enable_2: false,
                     pitch_routing_2: PitchRouting::Osc1,
                     pitch_env_peak_2: 0.0,
-                    pitch_env_attack_2: 0.0,
+                    pitch_env_attack_2: 0.0001,
                     pitch_env_decay_2: 300.0,
                     pitch_env_sustain_2: 0.0,
-                    pitch_env_release_2: 0.0,
+                    pitch_env_release_2: 0.0001,
                     pitch_env_atk_curve_2: SmoothStyle::Linear,
                     pitch_env_dec_curve_2: SmoothStyle::Linear,
                     pitch_env_rel_curve_2: SmoothStyle::Linear,
@@ -1041,15 +1054,15 @@ impl Default for Actuate {
                     sat_type: SaturationType::Tape,
 
                     use_delay: false,
-                    delay_amount: 0.0,
+                    delay_amount: 0.5,
                     delay_time: DelaySnapValues::Quarter,
-                    delay_decay: 0.0,
+                    delay_decay: 0.5,
                     delay_type: DelayType::Stereo,
 
                     use_reverb: false,
-                    reverb_amount: 0.5,
-                    reverb_size: 0.5,
-                    reverb_feedback: 0.5,
+                    reverb_amount: 0.85,
+                    reverb_size: 1.0,
+                    reverb_feedback: 0.28,
 
                     use_phaser: false,
                     phaser_amount: 0.5,
@@ -2190,15 +2203,15 @@ impl ActuateParams {
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
             // Always true for granulizer/ can be off for sampler
-            restretch_1: BoolParam::new("Load Stretch", true).with_callback({
+            restretch_1: BoolParam::new("Resample", true).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            restretch_2: BoolParam::new("Load Stretch", true).with_callback({
+            restretch_2: BoolParam::new("Resample", true).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            restretch_3: BoolParam::new("Load Stretch", true).with_callback({
+            restretch_3: BoolParam::new("Resample", true).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
@@ -2370,7 +2383,7 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            filter_alg_type: EnumParam::new("Filter 1 Alg", FilterAlgorithms::SVF),
+            filter_alg_type: EnumParam::new("Filter Alg", FilterAlgorithms::SVF),
             tilt_filter_type: EnumParam::new("Filter Type", ResponseType::Lowpass),
             vcf_filter_type: EnumParam::new("Filter Type", VCResponseType::Lowpass),
 
@@ -2527,7 +2540,7 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
             }),
-            filter_alg_type_2: EnumParam::new("Filter 2 Alg", FilterAlgorithms::SVF),
+            filter_alg_type_2: EnumParam::new("Filter Alg", FilterAlgorithms::SVF),
             tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass),
             vcf_filter_type_2: EnumParam::new("Filter Type", VCResponseType::Lowpass),
 
@@ -3013,7 +3026,7 @@ impl ActuateParams {
             .with_value_to_string(formatters::v2s_f32_rounded(1)),
 
             // fx
-            use_fx: BoolParam::new("FX", true),
+            use_fx: BoolParam::new("Use FX", true),
 
             use_compressor: BoolParam::new("Compressor", false),
             comp_amt: FloatParam::new("Amount", 0.3, FloatRange::Linear { min: 0.0, max: 1.0 })
@@ -3046,8 +3059,15 @@ impl ActuateParams {
             delay_amount: FloatParam::new("Amount", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
             delay_time: EnumParam::new("Time", DelaySnapValues::Quarter),
-            delay_decay: FloatParam::new("Decay", 0.5, FloatRange::Linear { min: 0.001, max: 1.0 })
-                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            delay_decay: FloatParam::new(
+                "Decay",
+                0.5,
+                FloatRange::Linear {
+                    min: 0.001,
+                    max: 1.0,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
             delay_type: EnumParam::new("Type", DelayType::Stereo),
 
             use_reverb: BoolParam::new("Reverb", false),
@@ -3057,8 +3077,15 @@ impl ActuateParams {
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
-            reverb_size: FloatParam::new("Size", 1.0, FloatRange::Linear { min: 0.001, max: 2.0 })
-                .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            reverb_size: FloatParam::new(
+                "Size",
+                1.0,
+                FloatRange::Linear {
+                    min: 0.001,
+                    max: 2.0,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(2)),
             reverb_feedback: FloatParam::new(
                 "Feedback",
                 0.28,
@@ -3571,96 +3598,94 @@ impl Plugin for Actuate {
                         }
 
                         // Assign default colors
-                        ui.style_mut().visuals.widgets.inactive.bg_stroke.color = A_KNOB_OUTSIDE_COLOR;
+                        ui.style_mut().visuals.widgets.inactive.bg_stroke.color = TEAL_GREEN;
                         ui.style_mut().visuals.widgets.inactive.bg_fill = DARK_GREY_UI_COLOR;
-                        ui.style_mut().visuals.widgets.active.fg_stroke.color = A_KNOB_OUTSIDE_COLOR;
-                        ui.style_mut().visuals.widgets.active.bg_stroke.color = A_KNOB_OUTSIDE_COLOR;
-                        ui.style_mut().visuals.widgets.open.fg_stroke.color = A_KNOB_OUTSIDE_COLOR;
+                        ui.style_mut().visuals.widgets.active.fg_stroke.color = TEAL_GREEN;
+                        ui.style_mut().visuals.widgets.active.bg_stroke.color = TEAL_GREEN;
+                        ui.style_mut().visuals.widgets.open.fg_stroke.color = TEAL_GREEN;
                         ui.style_mut().visuals.widgets.open.bg_fill = DARK_GREY_UI_COLOR;
                         // Lettering on param sliders
-                        ui.style_mut().visuals.widgets.inactive.fg_stroke.color = A_KNOB_OUTSIDE_COLOR;
+                        ui.style_mut().visuals.widgets.inactive.fg_stroke.color = TEAL_GREEN;
                         // Background of the bar in param sliders
-                        ui.style_mut().visuals.selection.bg_fill = A_KNOB_OUTSIDE_COLOR;
-                        ui.style_mut().visuals.selection.stroke.color = A_KNOB_OUTSIDE_COLOR;
+                        ui.style_mut().visuals.selection.bg_fill = TEAL_GREEN;
+                        ui.style_mut().visuals.selection.stroke.color = TEAL_GREEN;
                         // Unfilled background of the bar
                         ui.style_mut().visuals.widgets.noninteractive.bg_fill = DARK_GREY_UI_COLOR;
                         // egui 0.20 to 0.22 changed this styling then I later decided proportional looks nice
                         //ui.style_mut().drag_value_text_style = egui::TextStyle::Monospace;
 
-                        // Trying to draw background colors as rects
+                        // Trying to draw background box as rect
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, (HEIGHT as f32)*0.72)),
-                            Rounding::from(16.0), A_BACKGROUND_COLOR_TOP);
+                                RangeInclusive::new(0.0, (HEIGHT as f32)*0.65)),
+                            Rounding::none(),
+                            DARK_GREY_UI_COLOR);
+
+                        // Draw top bar background
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new((HEIGHT as f32)*0.72, HEIGHT as f32)),
-                            Rounding::from(16.0), DARK_GREY_UI_COLOR);
+                                RangeInclusive::new(0.0, HEIGHT as f32 * 0.05)),
+                            Rounding::none(),
+                            DARKER_GREY_UI_COLOR
+                        );
 
-                        //ui.set_style(ui.style_mut());
+                        // Background boxes for Generators
+                        ui.painter().rect_filled(
+                            Rect::from_x_y_ranges(
+                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
+                                RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.23)),
+                            Rounding::from(4.0),
+                            LIGHTER_GREY_UI_COLOR
+                        );
+                        ui.painter().rect_filled(
+                            Rect::from_x_y_ranges(
+                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
+                                RangeInclusive::new(HEIGHT as f32 * 0.24, HEIGHT as f32 * 0.41)),
+                            Rounding::from(4.0),
+                            LIGHTER_GREY_UI_COLOR
+                        );
+                        ui.painter().rect_filled(
+                            Rect::from_x_y_ranges(
+                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
+                                RangeInclusive::new(HEIGHT as f32 * 0.42, HEIGHT as f32 * 0.59)),
+                            Rounding::from(4.0),
+                            LIGHTER_GREY_UI_COLOR
+                        );
 
-                        ui.horizontal(|ui| {
-                            // Synth Bars on left and right
-                            let synth_bar_space = 32.0;
-                            ui.painter().rect_filled(
-                                Rect::from_x_y_ranges(
-                                    RangeInclusive::new(0.0, synth_bar_space),
-                                    RangeInclusive::new(0.0, HEIGHT as f32)),
-                                Rounding::none(),
-                                SYNTH_BARS_PURPLE
-                            );
-
-                            // Spacers for primary generator knobs
-                            let generator_separator_length: f32 = 170.0;
-                            ui.painter().rect_filled(
-                                Rect::from_x_y_ranges(
-                                    RangeInclusive::new(synth_bar_space + 4.0, synth_bar_space + generator_separator_length),
-                                    RangeInclusive::new(192.0, 194.0)),
-                                Rounding::none(),
-                                LIGHTER_GREY_UI_COLOR
-                            );
-
-                            // Spacers for primary generator knobs
-                            ui.painter().rect_filled(
-                                Rect::from_x_y_ranges(
-                                    RangeInclusive::new(synth_bar_space + 4.0, synth_bar_space + generator_separator_length),
-                                    RangeInclusive::new(328.0, 330.0)),
-                                Rounding::none(),
-                                LIGHTER_GREY_UI_COLOR
-                            );
-
-                            ui.add_space(synth_bar_space);
+                        // Background boxes for Audio Modules
+                        ui.painter().rect_filled(
+                            Rect::from_x_y_ranges(
+                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
+                                RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.25)),
+                            Rounding::from(4.0),
+                            LIGHTER_GREY_UI_COLOR
+                        );
+                        ui.painter().rect_filled(
+                            Rect::from_x_y_ranges(
+                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
+                                RangeInclusive::new(HEIGHT as f32 * 0.26, HEIGHT as f32 * 0.45)),
+                            Rounding::from(4.0),
+                            LIGHTER_GREY_UI_COLOR
+                        );
+                        ui.painter().rect_filled(
+                            Rect::from_x_y_ranges(
+                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
+                                RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.65)),
+                            Rounding::from(4.0),
+                            LIGHTER_GREY_UI_COLOR
+                        );
 
                             // GUI Structure
                             ui.vertical(|ui| {
                                 ui.horizontal(|ui|{
+                                    ui.add_space(2.0);
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
                                         .on_hover_text("by Ardura!");
-                                    ui.separator();
-                                    ui.add(CustomParamSlider::ParamSlider::for_param(&params.master_level, setter)
-                                        .slimmer(0.5)
-                                        .set_left_sided_label(true)
-                                        .set_label_width(70.0)
-                                        .with_width(30.0));
-                                    ui.separator();
-                                    ui.add(CustomParamSlider::ParamSlider::for_param(&params.voice_limit, setter)
-                                        .slimmer(0.5)
-                                        .set_left_sided_label(true)
-                                        .set_label_width(84.0)
-                                        .with_width(30.0));
-                                    ui.separator();
-                                    ui.label(RichText::new("FX")
-                                        .font(FONT)
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                        .color(FONT_COLOR)
-                                    )
-                                        .on_hover_text("Process FX");
-                                    let use_fx_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_fx, setter);
-                                    ui.add(use_fx_toggle);
+                                    ui.add_space(2.0);
                                     ui.separator();
                                     let load_bank_button = BoolButton::BoolButton::for_param(&params.param_load_bank, setter, 3.5, 0.9, SMALLER_FONT)
                                         .with_background_color(DARK_GREY_UI_COLOR);
@@ -3687,132 +3712,526 @@ impl Plugin for Actuate {
                                     ui.separator();
                                     ui.button(RichText::new("Browse Presets")
                                         .font(SMALLER_FONT)
-                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
                                     ).on_hover_text("Coming soon!");
+                                    ui.separator();
+                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.5, 1.0, FONT);
+                                    ui.add(use_fx_toggle).on_hover_text("Enable or disable FX processing");
+                                    ui.separator();
+                                    let max_voice_knob = ui_knob::ArcKnob::for_param(
+                                        &params.voice_limit,
+                                        setter,
+                                        11.0,
+                                        KnobLayout::HorizontalInline)
+                                        .preset_style(ui_knob::KnobStyle::Preset1)
+                                        .set_fill_color(DARK_GREY_UI_COLOR)
+                                        .set_line_color(YELLOW_MUSTARD)
+                                        .set_text_size(TEXT_SIZE)
+                                        .set_hover_text("The maximum number of voices that can be playing at once".to_string());
+                                    ui.add(max_voice_knob);
+                                    let master_knob = ui_knob::ArcKnob::for_param(
+                                        &params.master_level,
+                                        setter,
+                                        11.0,
+                                        KnobLayout::HorizontalInline)
+                                        .preset_style(ui_knob::KnobStyle::Preset1)
+                                        .set_fill_color(DARK_GREY_UI_COLOR)
+                                        .set_line_color(YELLOW_MUSTARD)
+                                        .set_text_size(TEXT_SIZE)
+                                        .set_hover_text("Master volume level for Actuate".to_string());
+                                    ui.add(master_knob);
                                 });
-                                ui.separator();
-                                const KNOB_SIZE: f32 = 32.0;
+                                const KNOB_SIZE: f32 = 28.0;
                                 const TEXT_SIZE: f32 = 11.0;
                                 ui.horizontal(|ui|{
                                     ui.vertical(|ui|{
                                         ui.label(RichText::new("Generators")
-                                            .font(FONT)
-                                            .color(FONT_COLOR))
+                                            .font(FONT))
                                             .on_hover_text("These are the audio modules that create sound on midi events");
-                                        // Side knobs for types
                                         ui.horizontal(|ui|{
+                                            ui.add_space(4.0);
                                             let audio_module_1_knob = ui_knob::ArcKnob::for_param(
                                                 &params._audio_module_1_type,
                                                 setter,
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                    .set_line_color(TEAL_GREEN)
+                                                    .set_text_size(TEXT_SIZE)
+                                                    .set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_1_knob);
                                             let audio_module_1_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_1_level,
                                                 setter,
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string())
+                                                .use_outline(true);
                                             ui.add(audio_module_1_level_knob);
-                                        });
-                                        ui.horizontal(|ui|{
                                             let audio_module_1_filter_routing = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_1_routing,
                                                 setter,
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_1_filter_routing);
                                         });
+                                        ui.add_space(32.0);
 
                                         ui.horizontal(|ui|{
+                                            ui.add_space(4.0);
                                             let audio_module_2_knob = ui_knob::ArcKnob::for_param(
                                                 &params._audio_module_2_type,
                                                 setter,
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_2_knob);
                                             let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_2_level,
                                                 setter,
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
                                             ui.add(audio_module_2_level_knob);
-                                        });
-                                        ui.horizontal(|ui|{
                                             let audio_module_2_filter_routing = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_2_routing,
                                                 setter,
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_2_filter_routing);
                                         });
+                                        ui.add_space(32.0);
 
                                         ui.horizontal(|ui| {
+                                            ui.add_space(4.0);
                                             let audio_module_3_knob = ui_knob::ArcKnob::for_param(
                                                 &params._audio_module_3_type,
                                                 setter,
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_3_knob);
                                             let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_3_level,
                                                 setter,
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
                                             ui.add(audio_module_3_level_knob);
-                                        });
-                                        ui.horizontal(|ui|{
                                             let audio_module_3_filter_routing = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_3_routing,
                                                 setter,
-                                                KNOB_SIZE)
-                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
                                                 .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                .set_text_size(TEXT_SIZE);
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_3_filter_routing);
                                         });
+                                        ui.add_space(32.0);
                                     });
 
-                                    ui.separator();
+                                    ui.add_space(20.0);
                                     ui.vertical(|ui|{
-                                        ui.label(RichText::new("Generator Controls")
-                                            .font(SMALLER_FONT)
-                                            .color(FONT_COLOR))
-                                            .on_hover_text("These are the controls for the active/selected generators");
-                                        audio_module::AudioModule::draw_modules(ui, params.clone(), setter);
+                                        ui.add_space(12.0);
+                                        AudioModule::draw_module(ui, setter, params.clone(), 1);
+                                        ui.add_space(10.0);
+                                        AudioModule::draw_module(ui, setter, params.clone(), 2);
+                                        ui.add_space(10.0);
+                                        AudioModule::draw_module(ui, setter, params.clone(), 3);
+                                        ui.add_space(4.0);
                                     });
                                 });
-                                //ui.add_space(32.0);
-                                ui.label("Filters and Modulations");
+                                ui.horizontal(|ui|{
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter1, RichText::new("Filter 1").background_color(DARKEST_BOTTOM_UI_COLOR));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter2, RichText::new("Filter 2").background_color(DARKEST_BOTTOM_UI_COLOR));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch1, RichText::new("Pitch 1").background_color(DARKEST_BOTTOM_UI_COLOR));
+                                    ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch2, RichText::new("Pitch 2").background_color(DARKEST_BOTTOM_UI_COLOR));
+                                    // Jank spacing stuff :)
+                                    ui.add_space(304.0);
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Modulation").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                });
 
+                                ////////////////////////////////////////////////////////////
+                                // ADSR FOR FILTER
+                                const VERT_BAR_HEIGHT: f32 = 110.0;
+                                const VERT_BAR_WIDTH: f32 = 14.0;
+                                ui.horizontal(|ui|{
+                                    ui.horizontal(|ui|{
+                                        // Filter ADSR+Curves + Routing
+                                        ui.vertical(|ui|{
+                                            ui.horizontal(|ui|{
+                                                match *filter_select.lock().unwrap() {
+                                                    UIBottomSelection::Filter1 => {
+                                                        // ADSR
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_attack, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_decay, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_sustain, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_release, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                    },
+                                                    UIBottomSelection::Filter2 => {
+                                                        // ADSR
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_attack_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_decay_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_sustain_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.filter_env_release_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                    },
+                                                    UIBottomSelection::Pitch1 => {
+                                                        // ADSR
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_attack, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_decay, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_sustain, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_release, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    YELLOW_MUSTARD,
+                                                                ),
+                                                        );
+                                                    },
+                                                    UIBottomSelection::Pitch2 => {
+                                                        // ADSR
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_attack_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_decay_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_sustain_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                        ui.add(
+                                                            VerticalParamSlider::for_param(&params.pitch_env_release_2, setter)
+                                                                .with_width(VERT_BAR_WIDTH)
+                                                                .with_height(VERT_BAR_HEIGHT)
+                                                                .set_reversed(true)
+                                                                .override_colors(
+                                                                    LIGHTER_GREY_UI_COLOR,
+                                                                    TEAL_GREEN,
+                                                                ),
+                                                        );
+                                                    }
+                                                }
+                                                // Curve sliders
+                                                ui.vertical(|ui| {
+                                                    match *filter_select.lock().unwrap() {
+                                                        UIBottomSelection::Filter1 => {
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_atk_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_dec_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_rel_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                                                        },
+                                                        UIBottomSelection::Filter2 => {
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_atk_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_dec_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.filter_env_rel_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                                                        },
+                                                        UIBottomSelection::Pitch1 => {
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_atk_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_dec_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_rel_curve,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                                                        },
+                                                        UIBottomSelection::Pitch2 => {
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_atk_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_dec_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
+                                                            ui.add(
+                                                                BeizerButton::BeizerButton::for_param(
+                                                                    &params.pitch_env_rel_curve_2,
+                                                                    setter,
+                                                                    5.1,
+                                                                    2.0,
+                                                                    ButtonLayout::HorizontalInline,
+                                                                )
+                                                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                                .with_line_color(YELLOW_MUSTARD),
+                                                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                                                        }
+                                                    }
+                                                });
+                                            });
+                                            // Filter routing goes here
+                                            let filter_routing_hknob = ui_knob::ArcKnob::for_param(
+                                                &params.filter_routing,
+                                                setter,
+                                                26.0,
+                                                KnobLayout::Horizonal)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(YELLOW_MUSTARD)
+                                                .set_text_size(TEXT_SIZE)
+                                                .set_hover_text("This controls filter ordering or isolation".to_string());
+                                            ui.add(filter_routing_hknob);
+                                        });
+                                    });
+                                //});
+                                const BKNOB_SIZE: f32 = 26.0;
+                                const BTEXT_SIZE: f32 = 11.0;
                                 // Filter section
-
-                                ui.horizontal(|ui| {
+                                //ui.horizontal(|ui| {
                                     ui.vertical(|ui|{
                                         ui.horizontal(|ui|{
                                             match *filter_select.lock().unwrap() {
@@ -3820,430 +4239,543 @@ impl Plugin for Actuate {
                                                     match params.filter_alg_type.value() {
                                                         FilterAlgorithms::SVF => {
                                                             ui.vertical(|ui|{
-                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_wet,
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_wet_knob);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_lp_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_lp_amount,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Low passed signal output".to_string());
+                                                                ui.add(filter_lp_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
+                                                                ui.add(filter_wet_knob);
+                                                                let filter_bp_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_bp_amount,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Band passed signal output".to_string());
+                                                                ui.add(filter_bp_knob);
+                                                                let filter_res_type_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_res_type,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Which resonance algorithm to use".to_string());
+                                                                ui.add(filter_res_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
-                                                                let filter_res_type_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_res_type,
-                                                                    setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_res_type_knob);
-                                                            });
-                                                            ui.vertical(|ui|{
                                                                 let filter_hp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_hp_amount,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("High passed signal output".to_string());
                                                                 ui.add(filter_hp_knob);
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
-                                                            });
-                                                            ui.vertical(|ui| {
-                                                                let filter_lp_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_lp_amount,
-                                                                    setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_lp_knob);
-                                                                let filter_bp_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_bp_amount,
-                                                                    setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_bp_knob);
                                                             });
                                                         },
                                                         FilterAlgorithms::TILT => {
                                                             ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
+                                                                ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.tilt_filter_type,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Tilt filter algorithm type".to_string());
                                                                 ui.add(filter_tilt_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(KNOB_SIZE*2.0);
                                                         },
                                                         FilterAlgorithms::VCF => {
                                                             ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
+                                                                ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.vcf_filter_type,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(vcf_filter_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(SYNTH_MIDDLE_BLUE)
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(KNOB_SIZE*2.0);
                                                         },
                                                     }
-
-                                                    // Middle bottom light section
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
-                                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                        Rounding::from(16.0),
-                                                        SYNTH_SOFT_BLUE
-                                                    );
-                                                    // Middle Bottom Filter select background
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.38, (WIDTH as f32)*0.62),
-                                                            RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                        Rounding::from(16.0),
-                                                        A_BACKGROUND_COLOR_TOP
-                                                    );
                                                 },
                                                 UIBottomSelection::Filter2 => {
                                                     match params.filter_alg_type_2.value() {
                                                         FilterAlgorithms::SVF => {
                                                             ui.vertical(|ui|{
-                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_wet_2,
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_wet_knob);
-
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_lp_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_lp_amount_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_lp_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
+                                                                ui.add(filter_wet_knob);
+                                                                let filter_bp_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_bp_amount_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_bp_knob);
+                                                                let filter_res_type_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_res_type_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(filter_res_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
-
-                                                                let filter_res_type_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_res_type_2,
-                                                                    setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_res_type_knob);
-                                                            });
-                                                            ui.vertical(|ui|{
                                                                 let filter_hp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_hp_amount_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_hp_knob);
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
-                                                            });
-                                                            ui.vertical(|ui| {
-                                                                let filter_lp_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_lp_amount_2,
-                                                                    setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_lp_knob);
-                                                                let filter_bp_knob = ui_knob::ArcKnob::for_param(
-                                                                    &params.filter_bp_amount_2,
-                                                                    setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
-                                                                ui.add(filter_bp_knob);
                                                             });
                                                         },
                                                         FilterAlgorithms::TILT => {
                                                             ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
+                                                                ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let filter_tilt_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.tilt_filter_type_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE);
                                                                 ui.add(filter_tilt_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(KNOB_SIZE*2.0);
                                                         },
                                                         FilterAlgorithms::VCF => {
                                                             ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
+                                                                ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
                                                                 ui.add(filter_wet_knob);
                                                                 let filter_resonance_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_resonance_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
                                                                 ui.add(filter_resonance_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_cutoff_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
                                                                 ui.add(filter_cutoff_knob);
                                                                 let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.vcf_filter_type_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("VCF filter algorithm to use".to_string());
                                                                 ui.add(vcf_filter_type_knob);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 let filter_env_peak = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_env_peak_2,
                                                                     setter,
-                                                                    KNOB_SIZE)
-                                                                    .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                    .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                    .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
                                                                     .set_readable_box(false)
-                                                                    .set_text_size(TEXT_SIZE);
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
-                                                            ui.add_space(KNOB_SIZE*2.0);
                                                         },
                                                     }
-                                                    // Middle bottom light section
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
-                                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                        Rounding::from(16.0),
-                                                        SYNTH_SOFT_BLUE2
-                                                    );
-                                                    // Middle Bottom Filter select background
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.38, (WIDTH as f32)*0.62),
-                                                            RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                        Rounding::from(16.0),
-                                                        A_BACKGROUND_COLOR_TOP
-                                                    );
                                                 },
                                                 UIBottomSelection::Pitch1 => {
                                                     ui.vertical(|ui|{
@@ -4251,8 +4783,8 @@ impl Plugin for Actuate {
                                                             let pitch_toggle = toggle_switch::ToggleSwitch::for_param(&params.pitch_enable, setter);
                                                             ui.add(pitch_toggle);
                                                             ui.label(RichText::new("Enable Pitch Envelope")
-                                                                .font(SMALLER_FONT)
-                                                                .color(A_BACKGROUND_COLOR_TOP)
+                                                                .font(FONT)
+                                                                .color(FONT_COLOR)
                                                             );
                                                         });
 
@@ -4260,45 +4792,31 @@ impl Plugin for Actuate {
                                                             let pitch_env_peak_knob = ui_knob::ArcKnob::for_param(
                                                                 &params.pitch_env_peak,
                                                                 setter,
-                                                                KNOB_SIZE)
-                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                BKNOB_SIZE,
+                                                                KnobLayout::Horizonal)
+                                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(TEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE)
+                                                                .set_hover_text("The relative pitch level to reach in the ADSR envelope".to_string());
                                                             ui.add(pitch_env_peak_knob);
 
                                                             let pitch_routing_knob = ui_knob::ArcKnob::for_param(
                                                                 &params.pitch_routing,
                                                                 setter,
-                                                                KNOB_SIZE)
-                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                BKNOB_SIZE,
+                                                                KnobLayout::Horizonal)
+                                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(TEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE)
+                                                                .set_hover_text("Where the pitch envelope should be applied".to_string());
                                                             ui.add(pitch_routing_knob);
                                                         });
                                                     });
-                                                    ui.add_space(KNOB_SIZE*3.5);
-                                                    ui.add_space(8.0);
-
-                                                    // Middle bottom light section
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
-                                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                        Rounding::from(16.0),
-                                                        SYNTH_MIDDLE_BLUE
-                                                    );
-                                                    // Middle Bottom Filter select background
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.38, (WIDTH as f32)*0.62),
-                                                            RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                        Rounding::from(16.0),
-                                                        A_BACKGROUND_COLOR_TOP
-                                                    );
+                                                    ui.add_space(BKNOB_SIZE*3.39);
                                                 },
                                                 UIBottomSelection::Pitch2 => {
                                                     ui.vertical(|ui|{
@@ -4306,8 +4824,8 @@ impl Plugin for Actuate {
                                                             let pitch_toggle_2 = toggle_switch::ToggleSwitch::for_param(&params.pitch_enable_2, setter);
                                                             ui.add(pitch_toggle_2);
                                                             ui.label(RichText::new("Enable Pitch Envelope")
-                                                                .font(SMALLER_FONT)
-                                                                .color(A_BACKGROUND_COLOR_TOP)
+                                                                .font(FONT)
+                                                                .color(FONT_COLOR)
                                                             );
                                                         });
 
@@ -4315,538 +4833,67 @@ impl Plugin for Actuate {
                                                             let pitch_env_peak_knob_2 = ui_knob::ArcKnob::for_param(
                                                                 &params.pitch_env_peak_2,
                                                                 setter,
-                                                                KNOB_SIZE)
-                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                BKNOB_SIZE,
+                                                                KnobLayout::Horizonal)
+                                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(TEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE)
+                                                                .set_hover_text("The relative pitch level to reach in the ADSR envelope".to_string());
                                                             ui.add(pitch_env_peak_knob_2);
 
                                                             let pitch_routing_knob_2 = ui_knob::ArcKnob::for_param(
                                                                 &params.pitch_routing_2,
                                                                 setter,
-                                                                KNOB_SIZE)
-                                                                .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                                BKNOB_SIZE,
+                                                                KnobLayout::Horizonal)
+                                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                .set_line_color(TEAL_GREEN)
                                                                 .set_readable_box(false)
-                                                                .set_text_size(TEXT_SIZE);
+                                                                .set_text_size(BTEXT_SIZE)
+                                                                .set_hover_text("Where the pitch envelope should be applied".to_string());
                                                             ui.add(pitch_routing_knob_2);
                                                         });
                                                     });
-                                                    ui.add_space(KNOB_SIZE*3.5);
-                                                    ui.add_space(8.0);
-
-                                                    // Middle bottom light section
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.35, (WIDTH as f32)*0.64),
-                                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                        Rounding::from(16.0),
-                                                        SYNTH_MIDDLE_BLUE.linear_multiply(0.8)
-                                                    );
-                                                    // Middle Bottom Filter select background
-                                                    ui.painter().rect_filled(
-                                                        Rect::from_x_y_ranges(
-                                                            RangeInclusive::new((WIDTH as f32)*0.38, (WIDTH as f32)*0.62),
-                                                            RangeInclusive::new((HEIGHT as f32) - 26.0, (HEIGHT as f32) - 2.0)),
-                                                        Rounding::from(16.0),
-                                                        A_BACKGROUND_COLOR_TOP
-                                                    );
+                                                    ui.add_space(BKNOB_SIZE*3.39);
                                                 }
                                             }
                                         });
                                     });
-
-                                    ////////////////////////////////////////////////////////////
-                                    // ADSR FOR FILTER
-                                    const VERT_BAR_HEIGHT: f32 = 106.0;
-                                    const VERT_BAR_WIDTH: f32 = 14.0;
-                                    const HCURVE_WIDTH: f32 = 120.0;
-                                    const HCURVE_BWIDTH: f32 = 28.0;
-                                    ui.vertical(|ui|{
-                                        ui.horizontal(|ui|{
-                                            match *filter_select.lock().unwrap() {
-                                                UIBottomSelection::Filter1 => {
-                                                    // ADSR
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_attack, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_MIDDLE_BLUE,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_decay, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_MIDDLE_BLUE,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_sustain, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_MIDDLE_BLUE,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_release, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_MIDDLE_BLUE,
-                                                            ),
-                                                    );
-                                                },
-                                                UIBottomSelection::Filter2 => {
-                                                    // ADSR
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_attack_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                A_KNOB_OUTSIDE_COLOR,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_decay_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                A_KNOB_OUTSIDE_COLOR,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_sustain_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                A_KNOB_OUTSIDE_COLOR,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.filter_env_release_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                A_KNOB_OUTSIDE_COLOR,
-                                                            ),
-                                                    );
-                                                },
-                                                UIBottomSelection::Pitch1 => {
-                                                    // ADSR
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_attack, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_decay, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_sustain, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_release, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE,
-                                                            ),
-                                                    );
-                                                },
-                                                UIBottomSelection::Pitch2 => {
-                                                    // ADSR
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_attack_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE2,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_decay_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE2,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_sustain_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE2,
-                                                            ),
-                                                    );
-                                                    ui.add(
-                                                        VerticalParamSlider::for_param(&params.pitch_env_release_2, setter)
-                                                            .with_width(VERT_BAR_WIDTH)
-                                                            .with_height(VERT_BAR_HEIGHT)
-                                                            .set_reversed(true)
-                                                            .override_colors(
-                                                                SYNTH_BARS_PURPLE,
-                                                                SYNTH_SOFT_BLUE2,
-                                                            ),
-                                                    );
-                                                }
-                                            }
-
-                                            // Curve sliders
-                                            ui.vertical(|ui| {
-                                                match *filter_select.lock().unwrap() {
-                                                    UIBottomSelection::Filter1 => {
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_atk_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    SYNTH_MIDDLE_BLUE),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_dec_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    SYNTH_MIDDLE_BLUE),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_rel_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    SYNTH_MIDDLE_BLUE),
-                                                        );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type, setter)
-                                                            .slimmer(0.4)
-                                                            .set_left_sided_label(true)
-                                                            .set_label_width(120.0)
-                                                            .override_colors(Color32::WHITE, Color32::BLACK)
-                                                            .with_width(30.0)
-                                                        );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type_2, setter)
-                                                                .slimmer(0.4)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(120.0)
-                                                                .override_colors(Color32::WHITE, Color32::BLACK)
-                                                                .with_width(30.0)
-                                                            );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
-                                                                .slimmer(0.4)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(120.0)
-                                                                .override_colors(Color32::WHITE, Color32::BLACK)
-                                                                .with_width(30.0)
-                                                            );
-                                                    },
-                                                    UIBottomSelection::Filter2 => {
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_atk_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    SYNTH_BARS_PURPLE,
-                                                                    A_KNOB_OUTSIDE_COLOR),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_dec_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    SYNTH_BARS_PURPLE,
-                                                                    A_KNOB_OUTSIDE_COLOR),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.filter_env_rel_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    SYNTH_BARS_PURPLE,
-                                                                    A_KNOB_OUTSIDE_COLOR),
-                                                        );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type, setter)
-                                                            .slimmer(0.4)
-                                                            .set_left_sided_label(true)
-                                                            .set_label_width(120.0)
-                                                            .override_colors(Color32::WHITE, Color32::BLACK)
-                                                            .with_width(30.0)
-                                                        );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_alg_type_2, setter)
-                                                                .slimmer(0.4)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(120.0)
-                                                                .override_colors(Color32::WHITE, Color32::BLACK)
-                                                                .with_width(30.0)
-                                                            );
-                                                        ui.add(CustomParamSlider::ParamSlider::for_param(&params.filter_routing, setter)
-                                                                .slimmer(0.4)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(120.0)
-                                                                .override_colors(Color32::WHITE, Color32::BLACK)
-                                                                .with_width(30.0)
-                                                            );
-                                                    },
-                                                    UIBottomSelection::Pitch1 => {
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_atk_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    SYNTH_SOFT_BLUE2)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_dec_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    SYNTH_SOFT_BLUE2)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_rel_curve, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    SYNTH_SOFT_BLUE2)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add_space(67.0);
-                                                    },
-                                                    UIBottomSelection::Pitch2 => {
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_atk_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    SYNTH_SOFT_BLUE)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_dec_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    SYNTH_SOFT_BLUE)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add(
-                                                            HorizontalParamSlider::for_param(&params.pitch_env_rel_curve_2, setter)
-                                                                .with_width(HCURVE_BWIDTH)
-                                                                .slimmer(0.7)
-                                                                .set_left_sided_label(true)
-                                                                .set_label_width(HCURVE_WIDTH)
-                                                                .override_colors(
-                                                                    DARK_GREY_UI_COLOR,
-                                                                    SYNTH_SOFT_BLUE)
-                                                                .with_width(30.0),
-                                                        );
-                                                        ui.add_space(67.0);
-                                                    }
-                                                }
-                                            });
-                                        });
-                                        ui.horizontal(|ui|{
-                                            ui.add_space(25.0);
-                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter1, RichText::new("Filter 1").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Filter2, RichText::new("Filter 2").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch1, RichText::new("Pitch 1").color(Color32::BLACK));
-                                            ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch2, RichText::new("Pitch 2").color(Color32::BLACK));
-                                        });
-                                    });
-
-                                    // Move Presets over!
-                                    ui.add_space(8.0);
-
-                                    match *lfo_select.lock().unwrap() {
-                                        LFOSelect::LFO1 => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                A_BACKGROUND_COLOR_TOP
-                                            );
-                                        }
-                                        LFOSelect::LFO2 => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                SYNTH_SOFT_BLUE
-                                            );
-                                        }
-                                        LFOSelect::LFO3 => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                SYNTH_MIDDLE_BLUE
-                                            );
-                                        }
-                                        LFOSelect::Misc => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                SYNTH_SOFT_BLUE2
-                                            );
-                                        }
-                                        LFOSelect::Modulation => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                LIGHTER_PURPLE
-                                            );
-                                        }
-                                        LFOSelect::INFO => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                SYNTH_SOFT_BLUE2
-                                            );
-                                        }
-                                        LFOSelect::FX => {
-                                            ui.painter().rect_filled(
-                                                Rect::from_x_y_ranges(
-                                            RangeInclusive::new((WIDTH as f32)*0.64, (WIDTH as f32) - (synth_bar_space + 4.0)),
-                                            RangeInclusive::new((HEIGHT as f32)*0.73, (HEIGHT as f32) - 4.0)),
-                                                Rounding::from(16.0),
-                                                FONT_COLOR
-                                            );
-                                        }
-                                    }
 
                                     // LFO Box
                                     ui.vertical(|ui|{
-                                        ui.horizontal(|ui| {
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Mods").color(Color32::BLACK).font(SMALLER_FONT));
-                                            ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").color(Color32::BLACK).font(SMALLER_FONT));
-                                        });
-                                        ui.separator();
+                                        //ui.separator();
                                         match *lfo_select.lock().unwrap() {
                                             LFOSelect::LFO1 => {
                                                 ui.vertical(|ui|{
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("LFO Enabled")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         let lfo1_toggle = toggle_switch::ToggleSwitch::for_param(&params.lfo1_enable, setter);
                                                         ui.add(lfo1_toggle);
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Sync")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         )
                                                             .on_hover_text("Sync LFO values to your DAW");
                                                         let lfosync1 = toggle_switch::ToggleSwitch::for_param(&params.lfo1_sync, setter);
                                                         ui.add(lfosync1);
                                                         ui.separator();
                                                         ui.label(RichText::new("Retrig")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
-                                                        );
+                                                            .font(FONT)
+                                                        )
+                                                            .on_hover_text("When to reset the LFO".to_string());
                                                         ui.add(ParamSlider::for_param(&params.lfo1_retrigger, setter).with_width(80.0));
                                                     });
                                                     ui.separator();
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Rate ")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         if params.lfo1_sync.value() {
                                                             ui.add(ParamSlider::for_param(&params.lfo1_snap, setter).with_width(180.0));
@@ -4856,15 +4903,13 @@ impl Plugin for Actuate {
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Shape")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo1_waveform, setter).with_width(180.0));
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Phase")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo1_phase, setter).with_width(180.0));
                                                     });
@@ -4874,32 +4919,28 @@ impl Plugin for Actuate {
                                                 ui.vertical(|ui|{
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("LFO Enabled")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         let lfo2_toggle = toggle_switch::ToggleSwitch::for_param(&params.lfo2_enable, setter);
                                                         ui.add(lfo2_toggle);
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Sync")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         )
                                                             .on_hover_text("Sync LFO values to your DAW");
                                                         let lfosync2 = toggle_switch::ToggleSwitch::for_param(&params.lfo2_sync, setter);
                                                         ui.add(lfosync2);
                                                         ui.separator();
                                                         ui.label(RichText::new("Retrig")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
-                                                        );
+                                                            .font(FONT)
+                                                        ).on_hover_text("When to reset the LFO".to_string());
                                                         ui.add(ParamSlider::for_param(&params.lfo2_retrigger, setter).with_width(80.0));
                                                     });
                                                     ui.separator();
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Rate ")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         if params.lfo2_sync.value() {
                                                             ui.add(ParamSlider::for_param(&params.lfo2_snap, setter).with_width(180.0));
@@ -4909,15 +4950,13 @@ impl Plugin for Actuate {
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Shape")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo2_waveform, setter).with_width(180.0));
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Phase")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo2_phase, setter).with_width(180.0));
                                                     });
@@ -4927,32 +4966,28 @@ impl Plugin for Actuate {
                                                 ui.vertical(|ui|{
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("LFO Enabled")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         let lfo3_toggle = toggle_switch::ToggleSwitch::for_param(&params.lfo3_enable, setter);
                                                         ui.add(lfo3_toggle);
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Sync")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         )
                                                             .on_hover_text("Sync LFO values to your DAW");
                                                         let lfosync3 = toggle_switch::ToggleSwitch::for_param(&params.lfo3_sync, setter);
                                                         ui.add(lfosync3);
                                                         ui.separator();
                                                         ui.label(RichText::new("Retrig")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
-                                                        );
+                                                            .font(FONT)
+                                                        ).on_hover_text("When to reset the LFO".to_string());
                                                         ui.add(ParamSlider::for_param(&params.lfo3_retrigger, setter).with_width(80.0));
                                                     });
                                                     ui.separator();
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Rate ")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         if params.lfo3_sync.value() {
                                                             ui.add(ParamSlider::for_param(&params.lfo3_snap, setter).with_width(180.0));
@@ -4962,15 +4997,13 @@ impl Plugin for Actuate {
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Shape")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo3_waveform, setter).with_width(180.0));
                                                     });
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Phase")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK)
+                                                            .font(FONT)
                                                         );
                                                         ui.add(ParamSlider::for_param(&params.lfo3_phase, setter).with_width(180.0));
                                                     });
@@ -4979,8 +5012,7 @@ impl Plugin for Actuate {
                                             LFOSelect::Misc => {
                                                 ui.horizontal(|ui|{
                                                     ui.label(RichText::new("Link Cutoff 2 to Cutoff 1")
-                                                        .font(SMALLER_FONT)
-                                                        .color(Color32::BLACK)
+                                                        .font(FONT)
                                                     )
                                                         .on_hover_text("Filter 1 will control both filter cutoff values");
                                                     let filter_cutoff_link = toggle_switch::ToggleSwitch::for_param(&params.filter_cutoff_link, setter);
@@ -4988,7 +5020,6 @@ impl Plugin for Actuate {
                                                 });
                                             }
                                             LFOSelect::Modulation => {
-                                                // This is my creative "combobox" to use an enumparam with Nih-Plug
                                                 ui.vertical(|ui|{
                                                     // Modulator section 1
                                                     //////////////////////////////////////////////////////////////////////////////////
@@ -4996,11 +5027,12 @@ impl Plugin for Actuate {
                                                         let mod_1_knob = ui_knob::ArcKnob::for_param(
                                                             &params.mod_amount_knob_1,
                                                             setter,
-                                                            12.0)
-                                                            .preset_style(ui_knob::KnobStyle::NewPresets2)
-                                                            .set_fill_color(SYNTH_BARS_PURPLE)
-                                                            .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                            .set_show_label(false);
+                                                            12.0,
+                                                            KnobLayout::SquareNoLabel)
+                                                                .preset_style(ui_knob::KnobStyle::Preset2)
+                                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                .set_line_color(TEAL_GREEN)
+                                                                .set_show_label(false);
                                                         ui.add(mod_1_knob);
                                                         ui.separator();
                                                         egui::ComboBox::new("mod_source_supported", "")
@@ -5037,8 +5069,7 @@ impl Plugin for Actuate {
                                                                 }
                                                             }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK));
+                                                            .font(FONT));
                                                         egui::ComboBox::new("mod_dest_1_ID", "")
                                                             .selected_text(format!("{:?}", *mod_dest_1_tracker.lock().unwrap()))
                                                             .width(100.0)
@@ -5081,10 +5112,11 @@ impl Plugin for Actuate {
                                                         let mod_2_knob = ui_knob::ArcKnob::for_param(
                                                             &params.mod_amount_knob_2,
                                                             setter,
-                                                            12.0)
-                                                            .preset_style(ui_knob::KnobStyle::NewPresets2)
-                                                            .set_fill_color(SYNTH_BARS_PURPLE)
-                                                            .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                            12.0,
+                                                            KnobLayout::SquareNoLabel)
+                                                            .preset_style(ui_knob::KnobStyle::Preset2)
+                                                            .set_fill_color(DARK_GREY_UI_COLOR)
+                                                            .set_line_color(TEAL_GREEN)
                                                             .set_show_label(false);
                                                         ui.add(mod_2_knob);
                                                         ui.separator();
@@ -5110,8 +5142,7 @@ impl Plugin for Actuate {
                                                             }
                                                         }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK));
+                                                            .font(FONT));
                                                         egui::ComboBox::new("mod_dest_2_ID", "")
                                                             .selected_text(format!("{:?}", *mod_dest_2_tracker.lock().unwrap()))
                                                             .width(100.0)
@@ -5154,10 +5185,11 @@ impl Plugin for Actuate {
                                                         let mod_3_knob = ui_knob::ArcKnob::for_param(
                                                             &params.mod_amount_knob_3,
                                                             setter,
-                                                            12.0)
-                                                            .preset_style(ui_knob::KnobStyle::NewPresets2)
-                                                            .set_fill_color(SYNTH_BARS_PURPLE)
-                                                            .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                            12.0,
+                                                            KnobLayout::SquareNoLabel)
+                                                            .preset_style(ui_knob::KnobStyle::Preset2)
+                                                            .set_fill_color(DARK_GREY_UI_COLOR)
+                                                            .set_line_color(TEAL_GREEN)
                                                             .set_show_label(false);
                                                         ui.add(mod_3_knob);
                                                         ui.separator();
@@ -5183,8 +5215,7 @@ impl Plugin for Actuate {
                                                             }
                                                         }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK));
+                                                            .font(FONT));
                                                         egui::ComboBox::new("mod_dest_3_ID", "")
                                                             .selected_text(format!("{:?}", *mod_dest_3_tracker.lock().unwrap()))
                                                             .width(100.0)
@@ -5227,10 +5258,11 @@ impl Plugin for Actuate {
                                                         let mod_4_knob = ui_knob::ArcKnob::for_param(
                                                             &params.mod_amount_knob_4,
                                                             setter,
-                                                            12.0)
-                                                            .preset_style(ui_knob::KnobStyle::NewPresets2)
-                                                            .set_fill_color(SYNTH_BARS_PURPLE)
-                                                            .set_line_color(A_KNOB_OUTSIDE_COLOR)
+                                                            12.0,
+                                                            KnobLayout::SquareNoLabel)
+                                                            .preset_style(ui_knob::KnobStyle::Preset2)
+                                                            .set_fill_color(DARK_GREY_UI_COLOR)
+                                                            .set_line_color(TEAL_GREEN)
                                                             .set_show_label(false);
                                                         ui.add(mod_4_knob);
                                                         ui.separator();
@@ -5256,9 +5288,7 @@ impl Plugin for Actuate {
                                                             }
                                                         }
                                                         ui.label(RichText::new("Mods")
-                                                            .font(SMALLER_FONT)
-                                                            .color(Color32::BLACK));
-                                                        egui::ComboBox::new("mod_dest_4_ID", "")
+                                                            .font(FONT));                                                        egui::ComboBox::new("mod_dest_4_ID", "")
                                                         .selected_text(format!("{:?}", *mod_dest_4_tracker.lock().unwrap()))
                                                         .width(100.0)
                                                         .show_ui(ui, |ui|{
@@ -5301,7 +5331,7 @@ impl Plugin for Actuate {
                                                         egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
                                                             .interactive(true)
                                                             .hint_text("Preset Name")
-                                                            .desired_width(120.0));
+                                                            .desired_width(150.0));
                                                     if text_response.clicked() {
                                                         let mut temp_lock = arc_preset_name.lock().unwrap();
 
@@ -5311,13 +5341,12 @@ impl Plugin for Actuate {
                                                             None => {},
                                                         }
                                                     }
-                                                    ui.label(RichText::new("Type")
+                                                    ui.label(RichText::new("Category:")
                                                             .font(FONT)
-                                                            .size(12.0)
-                                                            .color(Color32::BLACK));
+                                                            .size(12.0));
                                                         egui::ComboBox::new("preset_category", "")
                                                         .selected_text(format!("{:?}", *preset_category_tracker.lock().unwrap()))
-                                                        .width(100.0)
+                                                        .width(150.0)
                                                         .show_ui(ui, |ui|{
                                                             ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Select, "Select");
                                                             ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Atmosphere, "Atmosphere");
@@ -5349,8 +5378,8 @@ impl Plugin for Actuate {
                                                         egui::TextEdit::multiline(&mut *arc_preset_info.lock().unwrap())
                                                             .interactive(true)
                                                             .hint_text("Preset Info")
-                                                            .desired_width(120.0)
-                                                            .desired_rows(5)
+                                                            .desired_width(150.0)
+                                                            .desired_rows(6)
                                                             .lock_focus(true));
                                                     if text_info_response.clicked() {
                                                         let mut temp_lock = arc_preset_info.lock().unwrap();
@@ -5361,84 +5390,77 @@ impl Plugin for Actuate {
                                                             None => {},
                                                         }
                                                     }
-                                                    ScrollArea::vertical()
-                                                        .max_height(220.0)
-                                                        .max_width(164.0)
-                                                        //.always_show_scroll(true)
-                                                        .show(ui, |ui|{
-                                                            ui.vertical(|ui|{
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_acid = BoolButton::BoolButton::for_param(&params.tag_acid, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_acid);
-                                                                    let tag_analog = BoolButton::BoolButton::for_param(&params.tag_analog, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_analog);
-                                                                    let tag_bright = BoolButton::BoolButton::for_param(&params.tag_bright, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_bright);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_chord = BoolButton::BoolButton::for_param(&params.tag_chord, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_chord);
-                                                                    let tag_crisp = BoolButton::BoolButton::for_param(&params.tag_crisp, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_crisp);
-                                                                    let tag_deep = BoolButton::BoolButton::for_param(&params.tag_deep, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_deep);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_delicate = BoolButton::BoolButton::for_param(&params.tag_delicate, setter, 2.7, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_delicate);
-                                                                    let tag_hard = BoolButton::BoolButton::for_param(&params.tag_hard, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_hard);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_harsh = BoolButton::BoolButton::for_param(&params.tag_harsh, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_harsh);
-                                                                    let tag_lush = BoolButton::BoolButton::for_param(&params.tag_lush, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_lush);
-                                                                    let tag_mellow = BoolButton::BoolButton::for_param(&params.tag_mellow, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_mellow);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_resonant = BoolButton::BoolButton::for_param(&params.tag_resonant, setter, 2.7, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_resonant);
-                                                                    let tag_rich = BoolButton::BoolButton::for_param(&params.tag_rich, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_rich);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_sharp = BoolButton::BoolButton::for_param(&params.tag_sharp, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_sharp);
-                                                                    let tag_silky = BoolButton::BoolButton::for_param(&params.tag_silky, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_silky);
-                                                                    let tag_smooth = BoolButton::BoolButton::for_param(&params.tag_smooth, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_smooth);
-                                                                });
-                                                                ui.horizontal(|ui|{
-                                                                    let tag_soft = BoolButton::BoolButton::for_param(&params.tag_soft, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_soft);
-                                                                    let tag_stab = BoolButton::BoolButton::for_param(&params.tag_stab, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_stab);
-                                                                    let tag_warm = BoolButton::BoolButton::for_param(&params.tag_warm, setter, 2.0, 0.9, SMALLER_FONT);
-                                                                    ui.add(tag_warm);
-                                                                });
-                                                            });
+                                                    ui.vertical(|ui|{
+                                                        ui.horizontal(|ui|{
+                                                            let tag_acid = BoolButton::BoolButton::for_param(&params.tag_acid, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_acid);
+                                                            let tag_analog = BoolButton::BoolButton::for_param(&params.tag_analog, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_analog);
+                                                            let tag_bright = BoolButton::BoolButton::for_param(&params.tag_bright, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_bright);
+                                                            let tag_chord = BoolButton::BoolButton::for_param(&params.tag_chord, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_chord);
+                                                            let tag_crisp = BoolButton::BoolButton::for_param(&params.tag_crisp, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_crisp);
                                                         });
+                                                        ui.horizontal(|ui|{
+                                                            
+                                                            let tag_deep = BoolButton::BoolButton::for_param(&params.tag_deep, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_deep);
+                                                            let tag_delicate = BoolButton::BoolButton::for_param(&params.tag_delicate, setter, 2.7, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_delicate);
+                                                            let tag_hard = BoolButton::BoolButton::for_param(&params.tag_hard, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_hard);
+                                                            let tag_harsh = BoolButton::BoolButton::for_param(&params.tag_harsh, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_harsh);
+                                                        });
+                                                        ui.horizontal(|ui|{
+                                                            let tag_lush = BoolButton::BoolButton::for_param(&params.tag_lush, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_lush);
+                                                            let tag_mellow = BoolButton::BoolButton::for_param(&params.tag_mellow, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_mellow);
+                                                            let tag_resonant = BoolButton::BoolButton::for_param(&params.tag_resonant, setter, 2.7, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_resonant);
+                                                            let tag_rich = BoolButton::BoolButton::for_param(&params.tag_rich, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_rich);
+                                                            let tag_sharp = BoolButton::BoolButton::for_param(&params.tag_sharp, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_sharp);
+                                                        });
+                                                        ui.horizontal(|ui|{
+                                                            let tag_silky = BoolButton::BoolButton::for_param(&params.tag_silky, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_silky);
+                                                            let tag_smooth = BoolButton::BoolButton::for_param(&params.tag_smooth, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_smooth);
+                                                            let tag_soft = BoolButton::BoolButton::for_param(&params.tag_soft, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_soft);
+                                                            let tag_stab = BoolButton::BoolButton::for_param(&params.tag_stab, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_stab);
+                                                            let tag_warm = BoolButton::BoolButton::for_param(&params.tag_warm, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            ui.add(tag_warm);
+                                                        });
+                                                    });
                                                 });
+                                                ui.separator();
                                                 ui.horizontal(|ui| {
-                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 4.9, 0.9, SMALLER_FONT)
+                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 1.2, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(update_current_preset);
-                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 4.9, 0.9, SMALLER_FONT)
+                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 5.0, 1.2, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(import_preset);
-                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 4.9, 0.9, SMALLER_FONT)
+                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 5.0, 1.2, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(export_preset);
+                                                    ui.separator();
+                                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.8, 1.2, FONT);
+                                                    ui.add(use_fx_toggle);
                                                 });
                                             },
                                             LFOSelect::FX => {
                                                 ScrollArea::vertical()
+                                                    .auto_shrink([false; 2])
                                                     .max_height(200.0)
-                                                    .max_width(270.0)
-                                                    //.always_show_scroll(true)
+                                                    .max_width(320.0)
                                                     .show(ui, |ui|{
                                                         ui.vertical(|ui|{
                                                             // Equalizer
@@ -5446,7 +5468,6 @@ impl Plugin for Actuate {
                                                                 ui.vertical(|ui|{
                                                                     ui.label(RichText::new("EQ")
                                                                         .font(FONT)
-                                                                        .color(Color32::BLACK)
                                                                     )
                                                                         .on_hover_text("non interleaved EQ from Interleaf");
                                                                     let use_eq_toggle = toggle_switch::ToggleSwitch::for_param(&params.pre_use_eq, setter);
@@ -5455,334 +5476,284 @@ impl Plugin for Actuate {
                                                                 ui.vertical(|ui|{
                                                                     ui.add(
                                                                         VerticalParamSlider::for_param(&params.pre_low_gain, setter)
-                                                                            .with_width(VERT_BAR_WIDTH * 2.2)
-                                                                            .with_height(VERT_BAR_HEIGHT * 0.6)
+                                                                            .with_width(VERT_BAR_WIDTH * 2.5)
+                                                                            .with_height(VERT_BAR_HEIGHT * 0.8)
                                                                             .set_reversed(true)
                                                                             .override_colors(
-                                                                                SYNTH_BARS_PURPLE,
-                                                                                A_KNOB_OUTSIDE_COLOR,
+                                                                                DARK_GREY_UI_COLOR,
+                                                                                TEAL_GREEN,
                                                                             ),
                                                                     );
                                                                     let low_freq_knob = ui_knob::ArcKnob::for_param(
                                                                         &params.pre_low_freq,
                                                                         setter,
-                                                                        KNOB_SIZE * 0.6)
-                                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                        .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                        .set_text_size(TEXT_SIZE)
+                                                                        BKNOB_SIZE,
+                                                                        KnobLayout::Vertical)
+                                                                        .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                        .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                        .set_line_color(TEAL_GREEN)
+                                                                        .set_text_size(BTEXT_SIZE)
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(low_freq_knob);
                                                                 });
                                                                 ui.vertical(|ui|{
                                                                     ui.add(
                                                                         VerticalParamSlider::for_param(&params.pre_mid_gain, setter)
-                                                                            .with_width(VERT_BAR_WIDTH * 2.2)
-                                                                            .with_height(VERT_BAR_HEIGHT * 0.6)
+                                                                            .with_width(VERT_BAR_WIDTH * 2.5)
+                                                                            .with_height(VERT_BAR_HEIGHT * 0.8)
                                                                             .set_reversed(true)
                                                                             .override_colors(
-                                                                                SYNTH_BARS_PURPLE,
-                                                                                A_KNOB_OUTSIDE_COLOR,
+                                                                                DARK_GREY_UI_COLOR,
+                                                                                TEAL_GREEN,
                                                                             ),
                                                                     );
                                                                     let mid_freq_knob = ui_knob::ArcKnob::for_param(
                                                                         &params.pre_mid_freq,
                                                                         setter,
-                                                                        KNOB_SIZE * 0.6)
-                                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                        .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                        .set_text_size(TEXT_SIZE)
+                                                                        BKNOB_SIZE,
+                                                                        KnobLayout::Vertical)
+                                                                        .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                        .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                        .set_line_color(TEAL_GREEN)
+                                                                        .set_text_size(BTEXT_SIZE)
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(mid_freq_knob);
                                                                 });
                                                                 ui.vertical(|ui|{
                                                                     ui.add(
                                                                         VerticalParamSlider::for_param(&params.pre_high_gain, setter)
-                                                                            .with_width(VERT_BAR_WIDTH * 2.2)
-                                                                            .with_height(VERT_BAR_HEIGHT * 0.6)
+                                                                            .with_width(VERT_BAR_WIDTH * 2.5)
+                                                                            .with_height(VERT_BAR_HEIGHT * 0.8)
                                                                             .set_reversed(true)
                                                                             .override_colors(
-                                                                                SYNTH_BARS_PURPLE,
-                                                                                A_KNOB_OUTSIDE_COLOR,
+                                                                                DARK_GREY_UI_COLOR,
+                                                                                TEAL_GREEN,
                                                                             ),
                                                                     );
                                                                     let high_freq_knob = ui_knob::ArcKnob::for_param(
                                                                         &params.pre_high_freq,
                                                                         setter,
-                                                                        KNOB_SIZE * 0.6)
-                                                                        .preset_style(ui_knob::KnobStyle::NewPresets1)
-                                                                        .set_fill_color(SYNTH_BARS_PURPLE)
-                                                                        .set_line_color(A_KNOB_OUTSIDE_COLOR)
-                                                                        .set_text_size(TEXT_SIZE)
+                                                                        BKNOB_SIZE,
+                                                                        KnobLayout::Vertical)
+                                                                        .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                        .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                        .set_line_color(TEAL_GREEN)
+                                                                        .set_text_size(BTEXT_SIZE)
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(high_freq_knob);
                                                                 });
                                                                 ui.separator();
                                                             });
+                                                            ui.separator();
                                                             // Compressor
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Compressor")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_comp_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_compressor, setter);
                                                                 ui.add(use_comp_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_amt, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_atk, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_rel, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_drive, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // ABass
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("ABass Algorithm")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_abass_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_abass, setter);
                                                                 ui.add(use_abass_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.abass_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Saturation
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Saturation")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_sat_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_saturation, setter);
                                                                 ui.add(use_sat_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_type, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_amt, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Phaser
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Phaser")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_phaser_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_phaser, setter);
                                                                 ui.add(use_phaser_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_depth, setter)
                                                                     .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_rate, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Flanger
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Flanger")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_flanger_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_flanger, setter);
                                                                 ui.add(use_flanger_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_depth, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_rate, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_feedback, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Buffer Modulator
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Buffer Modulator")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_buffermod_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_buffermod, setter);
                                                                 ui.add(use_buffermod_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_depth, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_rate, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_spread, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_timing, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Delay
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Delay")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_delay_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_delay, setter);
                                                                 ui.add(use_delay_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_time, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_decay, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_type, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Reverb
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Reverb")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_reverb_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_reverb, setter);
                                                                 ui.add(use_reverb_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_amount, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_size, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_feedback, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                             });
                                                             ui.separator();
                                                             // Limiter
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Limiter")
-                                                                    .font(FONT)
-                                                                    .color(Color32::BLACK));
+                                                                    .font(FONT));
                                                                 let use_limiter_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_limiter, setter);
                                                                 ui.add(use_limiter_toggle);
                                                             });
                                                             ui.vertical(|ui|{
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_threshold, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_knee, setter)
-                                                                    .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(140.0));
+                                                                    .with_width(285.0));
                                                             });
                                                         });
-                                                    })
-                                                    .inner;
+                                                    }).inner;
                                             }
                                         }
                                     });
                                 });
                             });
-
-                            // Synth Bars on left and right
-                            ui.painter().rect_filled(
-                                Rect::from_x_y_ranges(
-                                    RangeInclusive::new(WIDTH as f32 - synth_bar_space, WIDTH as f32),
-                                    RangeInclusive::new(0.0, HEIGHT as f32)),
-                                Rounding::none(),
-                                SYNTH_BARS_PURPLE
-                            );
-
-                            // Screws for that vintage look
-                            let screw_space = 16.0;
-                            ui.painter().circle_filled(Pos2::new(screw_space,screw_space), 4.0, Color32::LIGHT_GRAY);
-                            ui.painter().circle_filled(Pos2::new(screw_space,HEIGHT as f32 - screw_space), 4.0, Color32::LIGHT_GRAY);
-                            ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,screw_space), 4.0, Color32::LIGHT_GRAY);
-                            ui.painter().circle_filled(Pos2::new(WIDTH as f32 - screw_space,HEIGHT as f32 - screw_space), 4.0, Color32::LIGHT_GRAY);
-                        });
 
                         if params.loading.value() || loading.load(Ordering::Relaxed) {
                             // Create the loading popup here.
@@ -6004,7 +5975,6 @@ impl Actuate {
                 .pick_file();
             if Option::is_some(&sample_file) {
                 self.audio_module_1
-                    .as_ref()
                     .lock()
                     .unwrap()
                     .load_new_sample(sample_file.unwrap());
@@ -6017,7 +5987,6 @@ impl Actuate {
                 .pick_file();
             if Option::is_some(&sample_file) {
                 self.audio_module_2
-                    .as_ref()
                     .lock()
                     .unwrap()
                     .load_new_sample(sample_file.unwrap());
@@ -6030,7 +5999,6 @@ impl Actuate {
                 .pick_file();
             if Option::is_some(&sample_file) {
                 self.audio_module_3
-                    .as_ref()
                     .lock()
                     .unwrap()
                     .load_new_sample(sample_file.unwrap());
@@ -6256,6 +6224,21 @@ impl Actuate {
                     .lock()
                     .unwrap()
                     .consume_params(self.params.clone(), 3);
+                // Fix Auto restretch/repitch behavior
+                if self.prev_restretch_1.load(Ordering::Relaxed) != self.params.restretch_1.value() {
+                    self.prev_restretch_1.store(self.params.restretch_1.value(), Ordering::Relaxed);
+                    self.audio_module_1.lock().unwrap().regenerate_samples();
+                }
+                if self.prev_restretch_2.load(Ordering::Relaxed) != self.params.restretch_2.value() {
+                    self.prev_restretch_2.store(self.params.restretch_2.value(), Ordering::Relaxed);
+                    
+                    self.audio_module_2.lock().unwrap().regenerate_samples();
+                }
+                if self.prev_restretch_3.load(Ordering::Relaxed) != self.params.restretch_3.value() {
+                    self.prev_restretch_3.store(self.params.restretch_3.value(), Ordering::Relaxed);
+                    self.audio_module_3.lock().unwrap().regenerate_samples();
+                }
+
                 self.update_something.store(false, Ordering::Relaxed);
             }
 
@@ -7302,63 +7285,63 @@ impl Actuate {
                 AMFilterRouting::Bypass => {
                     left_output += wave1_l;
                     right_output += wave1_r;
-                }
+                },
                 AMFilterRouting::Filter1 => {
                     left_output_filter1 += wave1_l;
                     right_output_filter1 += wave1_r;
-                }
+                },
                 AMFilterRouting::Filter2 => {
                     left_output_filter2 += wave1_l;
                     right_output_filter2 += wave1_r;
-                }
+                },
                 AMFilterRouting::Both => {
                     left_output_filter1 += wave1_l;
                     right_output_filter1 += wave1_r;
                     left_output_filter2 += wave1_l;
                     right_output_filter2 += wave1_r;
-                }
+                },
             }
-            #[allow(unused_assignments)]
+            //#[allow(unused_assignments)]
             match self.params.audio_module_2_routing.value() {
                 AMFilterRouting::Bypass => {
                     left_output += wave2_l;
                     right_output += wave2_r;
-                }
+                },
                 AMFilterRouting::Filter1 => {
                     left_output_filter1 += wave2_l;
                     right_output_filter1 += wave2_r;
-                }
+                },
                 AMFilterRouting::Filter2 => {
                     left_output_filter2 += wave2_l;
                     right_output_filter2 += wave2_r;
-                }
+                },
                 AMFilterRouting::Both => {
                     left_output_filter1 += wave2_l;
                     right_output_filter1 += wave2_r;
                     left_output_filter2 += wave2_l;
                     right_output_filter2 += wave2_r;
-                }
+                },
             }
-            #[allow(unused_assignments)]
+            //#[allow(unused_assignments)]
             match self.params.audio_module_3_routing.value() {
                 AMFilterRouting::Bypass => {
                     left_output += wave3_l;
                     right_output += wave3_r;
-                }
+                },
                 AMFilterRouting::Filter1 => {
                     left_output_filter1 += wave3_l;
                     right_output_filter1 += wave3_r;
-                }
+                },
                 AMFilterRouting::Filter2 => {
-                    left_output_filter1 += wave3_l;
+                    left_output_filter2 += wave3_l;
                     right_output_filter2 += wave3_r;
-                }
+                },
                 AMFilterRouting::Both => {
                     left_output_filter1 += wave3_l;
                     right_output_filter1 += wave3_r;
                     left_output_filter2 += wave3_l;
                     right_output_filter2 += wave3_r;
-                }
+                },
             }
 
             let mut filter1_processed_l: f32 = 0.0;
@@ -7767,6 +7750,7 @@ impl Actuate {
                     tag_warm: false,
                     mod1_audio_module_type: AudioModuleType::Osc,
                     mod1_audio_module_level: 1.0,
+                    mod1_audio_module_routing: AMFilterRouting::Filter1,
                     mod1_loaded_sample: vec![vec![0.0, 0.0]],
                     mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod1_loop_wavetable: false,
@@ -7796,6 +7780,7 @@ impl Actuate {
 
                     mod2_audio_module_type: AudioModuleType::Off,
                     mod2_audio_module_level: 1.0,
+                    mod2_audio_module_routing: AMFilterRouting::Filter1,
                     mod2_loaded_sample: vec![vec![0.0, 0.0]],
                     mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod2_loop_wavetable: false,
@@ -7825,6 +7810,7 @@ impl Actuate {
 
                     mod3_audio_module_type: AudioModuleType::Off,
                     mod3_audio_module_level: 1.0,
+                    mod3_audio_module_routing: AMFilterRouting::Filter1,
                     mod3_loaded_sample: vec![vec![0.0, 0.0]],
                     mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
                     mod3_loop_wavetable: false,
@@ -7860,7 +7846,7 @@ impl Actuate {
                     filter_hp_amount: 0.0,
                     filter_bp_amount: 0.0,
                     filter_env_peak: 0.0,
-                    filter_env_attack: 0.0,
+                    filter_env_attack: 0.0001,
                     filter_env_decay: 0.0001,
                     filter_env_sustain: 999.9,
                     filter_env_release: 5.0,
@@ -7878,7 +7864,7 @@ impl Actuate {
                     filter_hp_amount_2: 0.0,
                     filter_bp_amount_2: 0.0,
                     filter_env_peak_2: 0.0,
-                    filter_env_attack_2: 0.0,
+                    filter_env_attack_2: 0.0001,
                     filter_env_decay_2: 0.0001,
                     filter_env_sustain_2: 999.9,
                     filter_env_release_2: 5.0,
@@ -7897,9 +7883,9 @@ impl Actuate {
                     pitch_env_atk_curve: SmoothStyle::Linear,
                     pitch_env_dec_curve: SmoothStyle::Linear,
                     pitch_env_rel_curve: SmoothStyle::Linear,
-                    pitch_env_attack: 0.0,
+                    pitch_env_attack: 0.0001,
                     pitch_env_decay: 300.0,
-                    pitch_env_release: 0.0,
+                    pitch_env_release: 0.0001,
                     pitch_env_sustain: 0.0,
                     pitch_routing: PitchRouting::Osc1,
 
@@ -7908,9 +7894,9 @@ impl Actuate {
                     pitch_env_atk_curve_2: SmoothStyle::Linear,
                     pitch_env_dec_curve_2: SmoothStyle::Linear,
                     pitch_env_rel_curve_2: SmoothStyle::Linear,
-                    pitch_env_attack_2: 0.0,
+                    pitch_env_attack_2: 0.0001,
                     pitch_env_decay_2: 300.0,
-                    pitch_env_release_2: 0.0,
+                    pitch_env_release_2: 0.0001,
                     pitch_env_sustain_2: 0.0,
                     pitch_routing_2: PitchRouting::Osc1,
 
@@ -7980,15 +7966,15 @@ impl Actuate {
                     sat_type: SaturationType::Tape,
 
                     use_delay: false,
-                    delay_amount: 0.0,
+                    delay_amount: 0.5,
                     delay_time: DelaySnapValues::Quarter,
-                    delay_decay: 0.0,
+                    delay_decay: 0.5,
                     delay_type: DelayType::Stereo,
 
                     use_reverb: false,
-                    reverb_amount: 0.5,
-                    reverb_size: 0.5,
-                    reverb_feedback: 0.5,
+                    reverb_amount: 0.85,
+                    reverb_size: 1.0,
+                    reverb_feedback: 0.28,
 
                     use_phaser: false,
                     phaser_amount: 0.5,
@@ -8017,13 +8003,19 @@ impl Actuate {
             // Attempt to load the previous version preset type
             if unserialized.preset_name.contains("Error") {
                 // Try loading the previous preset struct version
-                unserialized = load_unserialized_v114(file_string_data.clone());
-            }
+                unserialized = load_unserialized_v122(file_string_data.clone());
 
-            // Attempt to load the oldest preset type
-            if unserialized.preset_name.contains("Error") {
-                // Try loading the previous preset struct version
-                unserialized = load_unserialized_old(file_string_data.clone());
+                // Attempt to load the previous version preset type
+                if unserialized.preset_name.contains("Error") {
+                    // Try loading the previous preset struct version
+                    unserialized = load_unserialized_v114(file_string_data.clone());
+
+                    // Attempt to load the oldest preset type
+                    if unserialized.preset_name.contains("Error") {
+                        // Try loading the previous preset struct version
+                        unserialized = load_unserialized_old(file_string_data.clone());
+                    }
+                }
             }
 
             return (return_name, Some(unserialized));
@@ -8088,6 +8080,7 @@ impl Actuate {
                         tag_warm: false,
                         mod1_audio_module_type: AudioModuleType::Osc,
                         mod1_audio_module_level: 1.0,
+                        mod1_audio_module_routing: AMFilterRouting::Filter1,
                         mod1_loaded_sample: vec![vec![0.0, 0.0]],
                         mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
                         mod1_loop_wavetable: false,
@@ -8117,6 +8110,7 @@ impl Actuate {
 
                         mod2_audio_module_type: AudioModuleType::Off,
                         mod2_audio_module_level: 1.0,
+                        mod2_audio_module_routing: AMFilterRouting::Filter1,
                         mod2_loaded_sample: vec![vec![0.0, 0.0]],
                         mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
                         mod2_loop_wavetable: false,
@@ -8146,6 +8140,7 @@ impl Actuate {
 
                         mod3_audio_module_type: AudioModuleType::Off,
                         mod3_audio_module_level: 1.0,
+                        mod3_audio_module_routing: AMFilterRouting::Filter1,
                         mod3_loaded_sample: vec![vec![0.0, 0.0]],
                         mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
                         mod3_loop_wavetable: false,
@@ -8300,15 +8295,15 @@ impl Actuate {
                         sat_type: SaturationType::Tape,
 
                         use_delay: false,
-                        delay_amount: 0.0,
+                        delay_amount: 0.5,
                         delay_time: DelaySnapValues::Quarter,
-                        delay_decay: 0.0,
+                        delay_decay: 0.5,
                         delay_type: DelayType::Stereo,
 
                         use_reverb: false,
-                        reverb_amount: 0.5,
-                        reverb_size: 0.5,
-                        reverb_feedback: 0.5,
+                        reverb_amount: 0.85,
+                        reverb_size: 1.0,
+                        reverb_feedback: 0.28,
 
                         use_phaser: false,
                         phaser_amount: 0.5,
@@ -8362,9 +8357,9 @@ impl Actuate {
         PresetType,
     ) {
         // Create mutex locks for AudioModule
-        let mut AMod1 = AMod1.as_ref().lock().unwrap();
-        let mut AMod2 = AMod2.as_ref().lock().unwrap();
-        let mut AMod3 = AMod3.as_ref().lock().unwrap();
+        let mut AMod1 = AMod1.lock().unwrap();
+        let mut AMod2 = AMod2.lock().unwrap();
+        let mut AMod3 = AMod3.lock().unwrap();
 
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset.lock().unwrap()[current_preset_index as usize];
@@ -8376,6 +8371,10 @@ impl Actuate {
         setter.set_parameter(
             &params.audio_module_1_level,
             loaded_preset.mod1_audio_module_level,
+        );
+        setter.set_parameter(
+            &params.audio_module_1_routing,
+            loaded_preset.mod1_audio_module_routing.clone(),
         );
         setter.set_parameter(&params.loop_sample_1, loaded_preset.mod1_loop_wavetable);
         setter.set_parameter(&params.single_cycle_1, loaded_preset.mod1_single_cycle);
@@ -8415,6 +8414,10 @@ impl Actuate {
             &params.audio_module_2_level,
             loaded_preset.mod2_audio_module_level,
         );
+        setter.set_parameter(
+            &params.audio_module_2_routing,
+            loaded_preset.mod2_audio_module_routing.clone(),
+        );
         setter.set_parameter(&params.loop_sample_2, loaded_preset.mod2_loop_wavetable);
         setter.set_parameter(&params.single_cycle_2, loaded_preset.mod2_single_cycle);
         setter.set_parameter(&params.restretch_2, loaded_preset.mod2_restretch);
@@ -8452,6 +8455,10 @@ impl Actuate {
         setter.set_parameter(
             &params.audio_module_3_level,
             loaded_preset.mod3_audio_module_level,
+        );
+        setter.set_parameter(
+            &params.audio_module_3_routing,
+            loaded_preset.mod3_audio_module_routing.clone(),
         );
         setter.set_parameter(&params.loop_sample_3, loaded_preset.mod3_loop_wavetable);
         setter.set_parameter(&params.single_cycle_3, loaded_preset.mod3_single_cycle);
@@ -8930,6 +8937,7 @@ impl Actuate {
                 ///////////////////////////////////////////////////////////
                 mod1_audio_module_type: self.params._audio_module_1_type.value(),
                 mod1_audio_module_level: self.params.audio_module_1_level.value(),
+                mod1_audio_module_routing: self.params.audio_module_1_routing.value(),
                 // Granulizer/Sampler
                 mod1_loaded_sample: AM1.loaded_sample.clone(),
                 mod1_sample_lib: AM1.sample_lib.clone(),
@@ -8964,6 +8972,7 @@ impl Actuate {
                 ///////////////////////////////////////////////////////////
                 mod2_audio_module_type: self.params._audio_module_2_type.value(),
                 mod2_audio_module_level: self.params.audio_module_2_level.value(),
+                mod2_audio_module_routing: self.params.audio_module_2_routing.value(),
                 // Granulizer/Sampler
                 mod2_loaded_sample: AM2.loaded_sample.clone(),
                 mod2_sample_lib: AM2.sample_lib.clone(),
@@ -8998,6 +9007,7 @@ impl Actuate {
                 ///////////////////////////////////////////////////////////
                 mod3_audio_module_type: self.params._audio_module_3_type.value(),
                 mod3_audio_module_level: self.params.audio_module_3_level.value(),
+                mod3_audio_module_routing: self.params.audio_module_3_routing.value(),
                 // Granulizer/Sampler
                 mod3_loaded_sample: AM3.loaded_sample.clone(),
                 mod3_sample_lib: AM3.sample_lib.clone(),

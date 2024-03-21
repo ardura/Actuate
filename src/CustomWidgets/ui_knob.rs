@@ -186,25 +186,35 @@ pub struct ArcKnob<'a, P: Param> {
     swap_label_and_value: bool,
     text_color_override: Color32,
     readable_box: bool,
+    layout: KnobLayout,
+    arc_start: f32,
+    arc_end: f32,
 }
 
 #[allow(dead_code)]
 pub enum KnobStyle {
-    // Knob_line old presets
-    SmallTogether,
-    MediumThin,
-    LargeMedium,
-    SmallLarge,
-    SmallMedium,
-    SmallSmallOutline,
-    // Newer presets
-    NewPresets1,
-    NewPresets2,
+    Preset1,
+    Preset2,
+}
+
+#[allow(dead_code)]
+#[derive(Copy, Clone, PartialEq)]
+pub enum KnobLayout {
+    Vertical,
+    Horizonal,
+    HorizontalInline,
+    SquareNoLabel,
+    Default,
 }
 
 #[allow(dead_code)]
 impl<'a, P: Param> ArcKnob<'a, P> {
-    pub fn for_param(param: &'a P, param_setter: &'a ParamSetter, radius: f32) -> Self {
+    pub fn for_param(
+        param: &'a P,
+        param_setter: &'a ParamSetter,
+        radius: f32,
+        layout: KnobLayout,
+    ) -> Self {
         ArcKnob {
             slider_region: SliderRegion::new(param, param_setter),
             radius: radius,
@@ -223,7 +233,22 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             show_label: true,
             swap_label_and_value: true,
             text_color_override: Color32::TEMPORARY_COLOR,
-            readable_box: true,
+            readable_box: false,
+            layout: layout,
+            arc_start: match layout {
+                KnobLayout::Default => 0.75,
+                KnobLayout::SquareNoLabel => 0.625,
+                KnobLayout::Vertical => 0.625,
+                KnobLayout::Horizonal => 0.625,
+                KnobLayout::HorizontalInline => 0.625,
+            },
+            arc_end: match layout {
+                KnobLayout::Default => -1.0,
+                KnobLayout::SquareNoLabel => -0.75,
+                KnobLayout::Vertical => -0.75,
+                KnobLayout::Horizonal => -0.75,
+                KnobLayout::HorizontalInline => -0.75,
+            },
         }
     }
 
@@ -326,44 +351,15 @@ impl<'a, P: Param> ArcKnob<'a, P> {
     pub fn preset_style(mut self, style_id: KnobStyle) -> Self {
         // These are all calculated off radius to scale better
         match style_id {
-            KnobStyle::SmallTogether => {
-                self.center_size = self.radius / 4.0;
-                self.line_width = self.radius / 2.0;
-                self.center_to_line_space = 0.0;
-            }
-            KnobStyle::MediumThin => {
-                self.center_size = self.radius / 2.0;
-                self.line_width = self.radius / 8.0;
-                self.center_to_line_space = self.radius / 4.0;
-            }
-            KnobStyle::LargeMedium => {
-                self.center_size = self.radius / 1.333;
-                self.line_width = self.radius / 4.0;
-                self.center_to_line_space = self.radius / 8.0;
-            }
-            KnobStyle::SmallLarge => {
-                self.center_size = self.radius / 8.0;
-                self.line_width = self.radius / 1.333;
-                self.center_to_line_space = self.radius / 2.0;
-            }
-            KnobStyle::SmallMedium => {
-                self.center_size = self.radius / 4.0;
-                self.line_width = self.radius / 2.666;
-                self.center_to_line_space = self.radius / 1.666;
-            }
-            KnobStyle::SmallSmallOutline => {
-                self.center_size = self.radius / 4.0;
-                self.line_width = self.radius / 4.0;
-                self.center_to_line_space = self.radius / 4.0;
-                self.outline = true;
-            }
-            KnobStyle::NewPresets1 => {
-                self.center_size = self.radius * 0.6;
-                self.line_width = self.radius * 0.4;
-                self.center_to_line_space = self.radius * 0.0125;
+            KnobStyle::Preset1 => {
+                self.center_size = self.radius * 0.7;
+                self.line_width = self.radius * 0.3;
+                self.center_to_line_space = self.radius * 0.012;
                 self.padding = 0.0;
+                self.outline = true;
+                self.hover_text = true;
             }
-            KnobStyle::NewPresets2 => {
+            KnobStyle::Preset2 => {
                 self.center_size = self.radius * 0.5;
                 self.line_width = self.radius * 0.5;
                 self.center_to_line_space = self.radius * 0.0125;
@@ -377,44 +373,119 @@ impl<'a, P: Param> ArcKnob<'a, P> {
 impl<'a, P: Param> Widget for ArcKnob<'a, P> {
     fn ui(mut self, ui: &mut Ui) -> Response {
         // Figure out the size to reserve on screen for widget
-        let desired_size = egui::vec2(
-            self.padding + self.radius * 2.0,
-            self.padding + self.radius * 2.0,
-        );
+        let desired_size: Vec2 = match self.layout {
+            KnobLayout::Horizonal => egui::vec2(
+                self.padding + self.radius * 4.0,
+                self.padding + self.radius * 2.0,
+            ),
+            KnobLayout::Vertical => egui::vec2(
+                self.padding + self.radius * 2.0,
+                self.padding + self.radius * 3.0,
+            ),
+            KnobLayout::HorizontalInline => egui::vec2(
+                self.padding + self.radius * 9.0,
+                self.padding + self.radius * 2.0,
+            ),
+            KnobLayout::SquareNoLabel => egui::vec2(
+                self.padding + self.radius * 2.0,
+                self.padding + self.radius * 2.0,
+            ),
+            KnobLayout::Default => egui::vec2(
+                self.padding + self.radius * 2.0,
+                self.padding + self.radius * 2.0,
+            ),
+        };
+
         let mut response = ui.allocate_response(desired_size, Sense::click_and_drag());
         let value = self.slider_region.handle_response(&ui, &mut response);
 
         ui.vertical(|ui| {
             let painter = ui.painter_at(response.rect);
-            let center = response.rect.center();
+            let center = match self.layout {
+                KnobLayout::Default | KnobLayout::SquareNoLabel => response.rect.center(),
+                KnobLayout::Vertical => response.rect.center(),
+                KnobLayout::Horizonal => Pos2 {
+                    x: response.rect.left_center().x + self.radius,
+                    y: response.rect.left_center().y,
+                },
+                KnobLayout::HorizontalInline => Pos2 {
+                    x: response.rect.left_center().x + self.radius,
+                    y: response.rect.left_center().y,
+                },
+            };
+
+            // Background Rect
+            ui.painter().rect_filled(
+                response.rect,
+                Rounding::from(4.0),
+                Color32::BLACK.linear_multiply(0.1),
+            );
+            ui.painter().rect_filled(
+                response.rect,
+                Rounding::from(4.0),
+                self.fill_color.linear_multiply(0.4),
+            );
+
+            // Draw the outside ring around the control
+            if self.outline {
+                let outline_stroke = Stroke::new(1.0, self.fill_color.linear_multiply(0.7));
+                let outline_shape = Shape::Path(PathShape {
+                    points: get_arc_points(
+                        self.arc_start,
+                        self.arc_end,
+                        center,
+                        self.center_size + self.center_to_line_space + (self.line_width / 2.0),
+                        1.0,
+                        0.03,
+                    ),
+                    closed: false,
+                    fill: self.fill_color.linear_multiply(0.7),
+                    stroke: outline_stroke,
+                });
+                painter.add(outline_shape);
+            }
 
             // Draw the arc
             let arc_radius = self.center_size + self.center_to_line_space;
             let arc_stroke = Stroke::new(self.line_width, self.line_color);
             let shape = Shape::Path(PathShape {
-                points: get_arc_points(center, arc_radius, value, 0.03),
+                points: get_arc_points(
+                    self.arc_start,
+                    self.arc_end,
+                    center,
+                    arc_radius,
+                    value,
+                    0.03,
+                ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
                 stroke: arc_stroke,
             });
             painter.add(shape);
 
-            // Draw the outside ring around the control
-            if self.outline {
-                let outline_stroke = Stroke::new(1.0, self.fill_color);
-                let outline_shape = Shape::Path(PathShape {
-                    points: get_arc_points(
-                        center,
-                        self.center_to_line_space + self.line_width,
-                        1.0,
-                        0.03,
-                    ),
-                    closed: false,
-                    fill: Color32::TRANSPARENT,
-                    stroke: outline_stroke,
-                });
-                painter.add(outline_shape);
-            }
+            // Arc Balls
+            let ball_width = self.line_width / 5.0;
+            let ball_line_stroke = Stroke::new(ball_width, self.line_color);
+            let start_ball = Shape::Circle(CircleShape {
+                center: get_start_point(self.arc_start, center, arc_radius + ball_width),
+                radius: ball_width,
+                fill: self.line_color,
+                stroke: ball_line_stroke,
+            });
+            painter.add(start_ball);
+            let end_ball = Shape::Circle(CircleShape {
+                center: get_end_point(
+                    self.arc_start,
+                    self.arc_end,
+                    center,
+                    arc_radius + ball_width,
+                    value,
+                ),
+                radius: ball_width,
+                fill: self.line_color,
+                stroke: ball_line_stroke,
+            });
+            painter.add(end_ball);
 
             //reset stroke here so we only have fill
             let line_stroke = Stroke::new(0.0, Color32::TRANSPARENT);
@@ -428,6 +499,393 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             });
             painter.add(circle_shape);
 
+            /*
+            Not enough processing power yet
+            // Gradient values
+            let g2 = value - 0.04;
+            let g3 = value - 0.08;
+            let g4 = value - 0.12;
+            let g5 = value - 0.16;
+            let g6 = value - 0.20;
+            let g7 = value - 0.24;
+            let g8 = value - 0.28;
+            let g9 = value - 0.32;
+            let g10 = value - 0.36;
+            let g11 = value - 0.40;
+            let g12 = value - 0.44;
+            let g13 = value - 0.48;
+            let g14 = value - 0.52;
+            let g15 = value - 0.56;
+            let g16 = value - 0.60;
+            let g17 = value - 0.64;
+            let g18 = value - 0.68;
+
+            // Draw our marker lines/gradient
+            let visual_end = self.arc_start - 1.375;
+            let line_shape2 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g2,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g2 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.017)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape2);
+            let line_shape3 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g3,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g3 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.016)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape3);
+            let line_shape3 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g4,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g4 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.015)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape3);
+            let line_shape4 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g5,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g5 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.014)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape4);
+            let line_shape5 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g6,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g6 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.013)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape5);
+            let line_shape6 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g7,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g7 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.012)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape6);
+            let line_shape7 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g8,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g8 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.011)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape7);
+            let line_shape8 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g9,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g9 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.010)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape8);
+            let line_shape9 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g10,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g10 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.009)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape9);
+            let line_shape10 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g11,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g11 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.008)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape10);
+            let line_shape11 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g12,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g12 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.007)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape11);
+            let line_shape11 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g13,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g13 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.006)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape11);
+            let line_shape12 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g14,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g14 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.005)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape12);
+            let line_shape13 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g15,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g15 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.004)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape13);
+            let line_shape14 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g16,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g16 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.003)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape14);
+            let line_shape15 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g17,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g17 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.002)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape15);
+            let line_shape16 = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    visual_end,
+                    center,
+                    arc_radius + ball_width,
+                    g18,
+                ),
+                closed: false,
+                fill: Color32::TRANSPARENT,
+                stroke: Stroke::new(
+                    ball_width * 3.0,
+                    if g18 > 0.0 {
+                        Color32::DARK_GRAY.linear_multiply(0.001)
+                    } else {
+                        Color32::TRANSPARENT
+                    },
+                ),
+            });
+            painter.add(line_shape16);
+            */
+
+            let line_shape = Shape::Path(PathShape {
+                points: get_pointer_points(
+                    self.arc_start,
+                    self.arc_end,
+                    center,
+                    arc_radius + ball_width,
+                    value,
+                ),
+                closed: false,
+                fill: self.line_color,
+                stroke: Stroke::new(ball_width * 3.0, self.line_color),
+            });
+            painter.add(line_shape);
+
+            let center_ball = Shape::Circle(CircleShape {
+                center: center,
+                radius: ball_width,
+                fill: self.line_color,
+                stroke: ball_line_stroke,
+            });
+            painter.add(center_ball);
+
             // Hover text of value
             if self.hover_text {
                 if self.hover_text_content.is_empty() {
@@ -437,7 +895,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                     Rect::from_center_size(center, Vec2::new(self.radius * 2.0, self.radius * 2.0)),
                     Sense::hover(),
                 )
-                .on_hover_text(self.hover_text_content);
+                .on_hover_text_at_pointer(self.hover_text_content);
             }
 
             // Label text from response rect bound
@@ -449,20 +907,63 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             if self.show_label {
                 let value_pos: Pos2;
                 let label_pos: Pos2;
-                if self.swap_label_and_value {
-                    // Newer rearranged positions to put value at bottom of knob
-                    value_pos = Pos2::new(
-                        response.rect.center_bottom().x,
-                        response.rect.center_bottom().y - label_y,
-                    );
-                    label_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
-                } else {
-                    // The old value and label positions
-                    label_pos = Pos2::new(
-                        response.rect.center_bottom().x,
-                        response.rect.center_bottom().y - label_y,
-                    );
-                    value_pos = Pos2::new(response.rect.center().x, response.rect.center().y);
+                match self.layout {
+                    KnobLayout::SquareNoLabel => {
+                        // This isn't indended to be a possibility but it has to be here since
+                        // it's in the enum. Hence these making no sense
+                        value_pos = response.rect.center();
+                        label_pos = response.rect.center();
+                    },
+                    KnobLayout::Default => {
+                        if self.swap_label_and_value {
+                            // Newer rearranged positions to put value at bottom of knob
+                            value_pos = Pos2::new(
+                                response.rect.center_bottom().x,
+                                response.rect.center_bottom().y - label_y,
+                            );
+                            label_pos =
+                                Pos2::new(response.rect.center().x, response.rect.center().y);
+                        } else {
+                            // The old value and label positions
+                            label_pos = Pos2::new(
+                                response.rect.center_bottom().x,
+                                response.rect.center_bottom().y - label_y,
+                            );
+                            value_pos =
+                                Pos2::new(response.rect.center().x, response.rect.center().y);
+                        }
+                    }
+                    // GUI Rewrite for Actuate made these
+                    KnobLayout::Vertical => {
+                        label_pos = Pos2::new(
+                            response.rect.center_top().x,
+                            response.rect.center_top().y + label_y * 1.5,
+                        );
+                        value_pos = Pos2::new(
+                            response.rect.center_bottom().x,
+                            response.rect.center_bottom().y - label_y * 1.5,
+                        );
+                    }
+                    KnobLayout::Horizonal => {
+                        label_pos = Pos2::new(
+                            response.rect.center().x + self.radius / 1.5,
+                            response.rect.right_center().y - label_y,
+                        );
+                        value_pos = Pos2::new(
+                            response.rect.center().x + self.radius / 1.5,
+                            response.rect.right_center().y + label_y,
+                        );
+                    }
+                    KnobLayout::HorizontalInline => {
+                        label_pos = Pos2::new(
+                            response.rect.center().x + self.radius / 1.5,
+                            response.rect.right_center().y,
+                        );
+                        value_pos = Pos2::new(
+                            response.rect.center().x + self.radius / 1.5,
+                            response.rect.right_center().y,
+                        );
+                    }
                 }
 
                 if self.readable_box {
@@ -490,35 +991,101 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 }
 
                 if self.label_text.is_empty() {
-                    painter.text(
-                        value_pos,
-                        Align2::CENTER_CENTER,
-                        self.slider_region.get_string(),
-                        FontId::proportional(self.text_size),
-                        text_color,
-                    );
-                    painter.text(
-                        label_pos,
-                        Align2::CENTER_CENTER,
-                        self.slider_region.param.name(),
-                        FontId::proportional(self.text_size),
-                        text_color,
-                    );
+                    if self.layout == KnobLayout::HorizontalInline {
+                        painter.text(
+                            label_pos,
+                            Align2::CENTER_CENTER,
+                            self.slider_region.param.name().to_owned()
+                                + ": "
+                                + &self.slider_region.get_string(),
+                            FontId::proportional(self.text_size),
+                            Color32::BLACK.linear_multiply(0.2),
+                        );
+                        painter.text(
+                            label_pos,
+                            Align2::CENTER_CENTER,
+                            self.slider_region.param.name().to_owned()
+                                + ": "
+                                + &self.slider_region.get_string(),
+                            FontId::proportional(self.text_size),
+                            text_color.linear_multiply(0.4),
+                        );
+                    } else {
+                        painter.text(
+                            value_pos,
+                            Align2::CENTER_CENTER,
+                            self.slider_region.get_string(),
+                            FontId::proportional(self.text_size),
+                            Color32::WHITE.linear_multiply(0.1),
+                        );
+                        painter.text(
+                            value_pos,
+                            Align2::CENTER_CENTER,
+                            self.slider_region.get_string(),
+                            FontId::proportional(self.text_size),
+                            text_color,
+                        );
+                        painter.text(
+                            label_pos,
+                            Align2::CENTER_CENTER,
+                            self.slider_region.param.name(),
+                            FontId::proportional(self.text_size),
+                            Color32::BLACK.linear_multiply(0.2),
+                        );
+                        painter.text(
+                            label_pos,
+                            Align2::CENTER_CENTER,
+                            self.slider_region.param.name(),
+                            FontId::proportional(self.text_size),
+                            text_color.linear_multiply(0.4),
+                        );
+                    }
                 } else {
-                    painter.text(
-                        value_pos,
-                        Align2::CENTER_CENTER,
-                        self.label_text,
-                        FontId::proportional(self.text_size),
-                        text_color,
-                    );
-                    painter.text(
-                        label_pos,
-                        Align2::CENTER_CENTER,
-                        self.slider_region.param.name(),
-                        FontId::proportional(self.text_size),
-                        text_color,
-                    );
+                    if self.layout == KnobLayout::HorizontalInline {
+                        painter.text(
+                            label_pos,
+                            Align2::CENTER_CENTER,
+                            self.label_text.to_string() + ": " + &self.slider_region.param.name(),
+                            FontId::proportional(self.text_size),
+                            Color32::BLACK.linear_multiply(0.2),
+                        );
+                        painter.text(
+                            label_pos,
+                            Align2::CENTER_CENTER,
+                            self.label_text.to_string() + ": " + &self.slider_region.param.name(),
+                            FontId::proportional(self.text_size),
+                            text_color.linear_multiply(0.4),
+                        );
+                    } else {
+                        painter.text(
+                            value_pos,
+                            Align2::CENTER_CENTER,
+                            self.label_text.to_string(),
+                            FontId::proportional(self.text_size),
+                            Color32::WHITE.linear_multiply(0.1),
+                        );
+                        painter.text(
+                            value_pos,
+                            Align2::CENTER_CENTER,
+                            self.label_text,
+                            FontId::proportional(self.text_size),
+                            text_color,
+                        );
+                        painter.text(
+                            label_pos,
+                            Align2::CENTER_CENTER,
+                            self.slider_region.param.name(),
+                            FontId::proportional(self.text_size),
+                            Color32::BLACK.linear_multiply(0.2),
+                        );
+                        painter.text(
+                            label_pos,
+                            Align2::CENTER_CENTER,
+                            self.slider_region.param.name(),
+                            FontId::proportional(self.text_size),
+                            text_color.linear_multiply(0.4),
+                        );
+                    }
                 }
             }
         });
@@ -526,9 +1093,48 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
     }
 }
 
-fn get_arc_points(center: Pos2, radius: f32, value: f32, max_arc_distance: f32) -> Vec<Pos2> {
-    let start_turns: f32 = 0.625;
-    let arc_length = lerp(0.0, -0.75, value);
+fn get_start_point(start: f32, center: Pos2, radius: f32) -> Pos2 {
+    let start_turns: f32 = start;
+    let angle = start_turns * TAU;
+    let x = center.x + radius * angle.cos();
+    let y = center.y + -radius * angle.sin();
+    pos2(x, y)
+}
+
+fn get_end_point(start: f32, end: f32, center: Pos2, radius: f32, value: f32) -> Pos2 {
+    let start_turns: f32 = start;
+    let arc_length = lerp(0.0, end, value);
+    let end_turns = start_turns + arc_length;
+
+    let angle = end_turns * TAU;
+    let x = center.x + radius * angle.cos();
+    let y = center.y + -radius * angle.sin();
+    pos2(x, y)
+}
+
+fn get_pointer_points(start: f32, end: f32, center: Pos2, radius: f32, value: f32) -> Vec<Pos2> {
+    let start_turns: f32 = start;
+    let arc_length = lerp(0.0, end, value);
+    let end_turns = start_turns + arc_length;
+
+    let angle = end_turns * TAU;
+    let x = center.x + radius * angle.cos();
+    let y = center.y + -radius * angle.sin();
+    let short_x = center.x + (radius * 0.04) * angle.cos();
+    let short_y = center.y + (-radius * 0.04) * angle.sin();
+    vec![pos2(short_x, short_y), pos2(x, y)]
+}
+
+fn get_arc_points(
+    start: f32,
+    end: f32,
+    center: Pos2,
+    radius: f32,
+    value: f32,
+    max_arc_distance: f32,
+) -> Vec<Pos2> {
+    let start_turns: f32 = start;
+    let arc_length = lerp(0.0, end, value);
     let end_turns = start_turns + arc_length;
 
     let points = (arc_length.abs() / max_arc_distance).ceil() as usize;
