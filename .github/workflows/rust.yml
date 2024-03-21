@@ -1,4 +1,4 @@
-name: rust_bundle
+name: macos_build
 
 on:
   push:
