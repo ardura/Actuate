@@ -10,6 +10,9 @@ Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura
 ![image](https://github.com/ardura/Actuate/assets/31751444/c14cfbc2-dec2-4bc1-9e29-32416859e513)
 
 ## Features
+Hover over any knob (or some labels) for an explanation!
+![image](https://github.com/ardura/Actuate/assets/31751444/6c455635-8f03-49b5-bce1-c665d437d2fe)
+
 - Two SVF Filters, a VCF inspired filter, and Tilt inspired filters that can be parallel, serial, or bypassed with ADSR Envelopes
 - Pitch modulation with ASDR
 ![image](https://github.com/ardura/Actuate/assets/31751444/accd4727-975a-4266-a82a-180c55db628d)
