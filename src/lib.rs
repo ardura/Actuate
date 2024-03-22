@@ -5460,8 +5460,9 @@ VCF: Voltage Controlled Filter model".to_string());
                                                 ScrollArea::vertical()
                                                     .auto_shrink([false; 2])
                                                     .max_height(200.0)
-                                                    .max_width(320.0)
+                                                    .max_width(400.0)
                                                     .show(ui, |ui|{
+                                                        ui.set_min_width(400.0);
                                                         ui.vertical(|ui|{
                                                             // Equalizer
                                                             ui.horizontal(|ui|{
@@ -5469,7 +5470,7 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                     ui.label(RichText::new("EQ")
                                                                         .font(FONT)
                                                                     )
-                                                                        .on_hover_text("non interleaved EQ from Interleaf");
+                                                                        .on_hover_text("An standard Biquad Equalizer implementation");
                                                                     let use_eq_toggle = toggle_switch::ToggleSwitch::for_param(&params.pre_use_eq, setter);
                                                                     ui.add(use_eq_toggle);
                                                                 });
@@ -5556,25 +5557,25 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_amt, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_atk, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_rel, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.comp_drive, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                             });
                                                             ui.separator();
                                                             // ABass
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("ABass Algorithm")
-                                                                    .font(FONT));
+                                                                    .font(FONT)).on_hover_text("Bass enhancement inspired by a plugin of renaissance that made waves");
                                                                 let use_abass_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_abass, setter);
                                                                 ui.add(use_abass_toggle);
                                                             });
@@ -5582,7 +5583,7 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.abass_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                             });
                                                             ui.separator();
                                                             // Saturation
@@ -5596,11 +5597,11 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_type, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_amt, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                             });
                                                             ui.separator();
                                                             // Phaser
@@ -5614,16 +5615,16 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_depth, setter)
                                                                     .slimmer(0.7)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.phaser_rate, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                             });
                                                             ui.separator();
                                                             // Flanger
@@ -5637,25 +5638,25 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_depth, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_rate, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.flanger_feedback, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                             });
                                                             ui.separator();
                                                             // Buffer Modulator
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Buffer Modulator")
-                                                                    .font(FONT));
+                                                                    .font(FONT)).on_hover_text("Weird buffer modulation based off a reverb that didn't work right");
                                                                 let use_buffermod_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_buffermod, setter);
                                                                 ui.add(use_buffermod_toggle);
                                                             });
@@ -5663,23 +5664,23 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_depth, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_rate, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_spread, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.buffermod_timing, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                             });
                                                             ui.separator();
                                                             // Delay
@@ -5693,25 +5694,25 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_time, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_decay, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.delay_type, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                             });
                                                             ui.separator();
                                                             // Reverb
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Reverb")
-                                                                    .font(FONT));
+                                                                    .font(FONT)).on_hover_text("A tapped delay line reverb implementation");
                                                                 let use_reverb_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_reverb, setter);
                                                                 ui.add(use_reverb_toggle);
                                                             });
@@ -5719,21 +5720,21 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_size, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_feedback, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                             });
                                                             ui.separator();
                                                             // Limiter
                                                             ui.horizontal(|ui|{
                                                                 ui.label(RichText::new("Limiter")
-                                                                    .font(FONT));
+                                                                    .font(FONT)).on_hover_text("A basic limiter with knee adjustment");
                                                                 let use_limiter_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_limiter, setter);
                                                                 ui.add(use_limiter_toggle);
                                                             });
@@ -5741,11 +5742,11 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_threshold, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.limiter_knee, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
-                                                                    .with_width(285.0));
+                                                                    .with_width(268.0));
                                                             });
                                                         });
                                                     }).inner;

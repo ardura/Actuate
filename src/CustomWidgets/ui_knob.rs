@@ -499,8 +499,6 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             });
             painter.add(circle_shape);
 
-            /*
-            Not enough processing power yet
             // Gradient values
             let g2 = value - 0.04;
             let g3 = value - 0.08;
@@ -512,13 +510,6 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             let g9 = value - 0.32;
             let g10 = value - 0.36;
             let g11 = value - 0.40;
-            let g12 = value - 0.44;
-            let g13 = value - 0.48;
-            let g14 = value - 0.52;
-            let g15 = value - 0.56;
-            let g16 = value - 0.60;
-            let g17 = value - 0.64;
-            let g18 = value - 0.68;
 
             // Draw our marker lines/gradient
             let visual_end = self.arc_start - 1.375;
@@ -535,7 +526,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g2 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.017)
+                        Color32::DARK_GRAY.gamma_multiply(0.20)
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -555,7 +546,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g3 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.016)
+                        Color32::DARK_GRAY.gamma_multiply(0.18)
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -575,7 +566,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g4 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.015)
+                        Color32::DARK_GRAY.gamma_multiply(0.16)
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -595,7 +586,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g5 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.014)
+                        Color32::DARK_GRAY.gamma_multiply(0.14)
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -615,7 +606,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g6 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.013)
+                        Color32::DARK_GRAY.gamma_multiply(0.12)
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -635,7 +626,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g7 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.012)
+                        Color32::DARK_GRAY.gamma_multiply(0.10)
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -655,7 +646,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g8 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.011)
+                        Color32::DARK_GRAY.gamma_multiply(0.08)
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -675,7 +666,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g9 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.010)
+                        Color32::DARK_GRAY.gamma_multiply(0.06)
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -695,7 +686,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g10 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.009)
+                        Color32::DARK_GRAY.gamma_multiply(0.04)
                     } else {
                         Color32::TRANSPARENT
                     },
@@ -715,154 +706,13 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 stroke: Stroke::new(
                     ball_width * 3.0,
                     if g11 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.008)
+                        Color32::DARK_GRAY.gamma_multiply(0.02)
                     } else {
                         Color32::TRANSPARENT
                     },
                 ),
             });
             painter.add(line_shape10);
-            let line_shape11 = Shape::Path(PathShape {
-                points: get_pointer_points(
-                    self.arc_start,
-                    visual_end,
-                    center,
-                    arc_radius + ball_width,
-                    g12,
-                ),
-                closed: false,
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
-                    ball_width * 3.0,
-                    if g12 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.007)
-                    } else {
-                        Color32::TRANSPARENT
-                    },
-                ),
-            });
-            painter.add(line_shape11);
-            let line_shape11 = Shape::Path(PathShape {
-                points: get_pointer_points(
-                    self.arc_start,
-                    visual_end,
-                    center,
-                    arc_radius + ball_width,
-                    g13,
-                ),
-                closed: false,
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
-                    ball_width * 3.0,
-                    if g13 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.006)
-                    } else {
-                        Color32::TRANSPARENT
-                    },
-                ),
-            });
-            painter.add(line_shape11);
-            let line_shape12 = Shape::Path(PathShape {
-                points: get_pointer_points(
-                    self.arc_start,
-                    visual_end,
-                    center,
-                    arc_radius + ball_width,
-                    g14,
-                ),
-                closed: false,
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
-                    ball_width * 3.0,
-                    if g14 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.005)
-                    } else {
-                        Color32::TRANSPARENT
-                    },
-                ),
-            });
-            painter.add(line_shape12);
-            let line_shape13 = Shape::Path(PathShape {
-                points: get_pointer_points(
-                    self.arc_start,
-                    visual_end,
-                    center,
-                    arc_radius + ball_width,
-                    g15,
-                ),
-                closed: false,
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
-                    ball_width * 3.0,
-                    if g15 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.004)
-                    } else {
-                        Color32::TRANSPARENT
-                    },
-                ),
-            });
-            painter.add(line_shape13);
-            let line_shape14 = Shape::Path(PathShape {
-                points: get_pointer_points(
-                    self.arc_start,
-                    visual_end,
-                    center,
-                    arc_radius + ball_width,
-                    g16,
-                ),
-                closed: false,
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
-                    ball_width * 3.0,
-                    if g16 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.003)
-                    } else {
-                        Color32::TRANSPARENT
-                    },
-                ),
-            });
-            painter.add(line_shape14);
-            let line_shape15 = Shape::Path(PathShape {
-                points: get_pointer_points(
-                    self.arc_start,
-                    visual_end,
-                    center,
-                    arc_radius + ball_width,
-                    g17,
-                ),
-                closed: false,
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
-                    ball_width * 3.0,
-                    if g17 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.002)
-                    } else {
-                        Color32::TRANSPARENT
-                    },
-                ),
-            });
-            painter.add(line_shape15);
-            let line_shape16 = Shape::Path(PathShape {
-                points: get_pointer_points(
-                    self.arc_start,
-                    visual_end,
-                    center,
-                    arc_radius + ball_width,
-                    g18,
-                ),
-                closed: false,
-                fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
-                    ball_width * 3.0,
-                    if g18 > 0.0 {
-                        Color32::DARK_GRAY.linear_multiply(0.001)
-                    } else {
-                        Color32::TRANSPARENT
-                    },
-                ),
-            });
-            painter.add(line_shape16);
-            */
 
             let line_shape = Shape::Path(PathShape {
                 points: get_pointer_points(
