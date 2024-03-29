@@ -590,11 +590,8 @@ pub struct Actuate {
 
     // Modules
     audio_module_1: Arc<Mutex<AudioModule>>,
-    _audio_module_1_type: AudioModuleType,
     audio_module_2: Arc<Mutex<AudioModule>>,
-    _audio_module_2_type: AudioModuleType,
     audio_module_3: Arc<Mutex<AudioModule>>,
-    _audio_module_3_type: AudioModuleType,
 
     // SVF Filters
     filter_l_1: StateVariableFilter,
@@ -734,11 +731,8 @@ impl Default for Actuate {
 
             // Module 1
             audio_module_1: Arc::new(Mutex::new(AudioModule::default())),
-            _audio_module_1_type: AudioModuleType::Osc,
             audio_module_2: Arc::new(Mutex::new(AudioModule::default())),
-            _audio_module_2_type: AudioModuleType::Off,
             audio_module_3: Arc::new(Mutex::new(AudioModule::default())),
-            _audio_module_3_type: AudioModuleType::Off,
 
             // SVF Filters
             filter_l_2: StateVariableFilter::default().set_oversample(4),
@@ -1141,6 +1135,12 @@ impl Default for Actuate {
 pub struct ActuateParams {
     #[persist = "editor-state"]
     editor_state: Arc<EguiState>,
+    #[persist = "AM1_Sample"]
+    am1_sample: Mutex<Vec<Vec<f32>>>,
+    #[persist = "AM2_Sample"]
+    am2_sample: Mutex<Vec<Vec<f32>>>,
+    #[persist = "AM3_Sample"]
+    am3_sample: Mutex<Vec<Vec<f32>>>,
 
     // Synth-level settings
     #[id = "Master Level"]
@@ -1150,11 +1150,11 @@ pub struct ActuateParams {
 
     // This audio module is what switches between functions for generators in the synth
     #[id = "audio_module_1_type"]
-    pub _audio_module_1_type: EnumParam<AudioModuleType>,
+    pub audio_module_1_type: EnumParam<AudioModuleType>,
     #[id = "audio_module_2_type"]
-    pub _audio_module_2_type: EnumParam<AudioModuleType>,
+    pub audio_module_2_type: EnumParam<AudioModuleType>,
     #[id = "audio_module_3_type"]
-    pub _audio_module_3_type: EnumParam<AudioModuleType>,
+    pub audio_module_3_type: EnumParam<AudioModuleType>,
 
     // Audio Module Gains
     #[id = "audio_module_1_level"]
@@ -1706,6 +1706,9 @@ impl ActuateParams {
     ) -> Self {
         Self {
             editor_state: EguiState::from_size(WIDTH, HEIGHT),
+            am1_sample: Mutex::new(vec![vec![0.0, 0.0]]),
+            am2_sample: Mutex::new(vec![vec![0.0, 0.0]]),
+            am3_sample: Mutex::new(vec![vec![0.0, 0.0]]),
 
             // Top Level objects
             ////////////////////////////////////////////////////////////////////////////////////
@@ -1714,15 +1717,15 @@ impl ActuateParams {
                 .with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 64, IntRange::Linear { min: 1, max: 512 }),
 
-            _audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc).with_callback({
+            audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc).with_callback({
                 let clear_voices = clear_voices.clone();
                 Arc::new(move |_| clear_voices.store(true, Ordering::Relaxed))
             }),
-            _audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
+            audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
                 let clear_voices = clear_voices.clone();
                 Arc::new(move |_| clear_voices.store(true, Ordering::Relaxed))
             }),
-            _audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
+            audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
                 let clear_voices = clear_voices.clone();
                 Arc::new(move |_| clear_voices.store(true, Ordering::Relaxed))
             }),
@@ -3364,6 +3367,63 @@ impl Plugin for Actuate {
                         let mod_dest_4_tracker = mod_dest_4_tracker_outside.clone();
                         let preset_category_tracker = preset_category_tracker_outside.clone();
 
+                        // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
+                        // It runs if there is peristent sample data but not sample data in the audio module
+                        // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
+                        // This would cause a deadlock and break Actuate :|
+                        // Maybe in future this will become nicer
+                        if (params.am1_sample.lock().unwrap()[0].len() > 1 && 
+                           AM1.lock().unwrap().loaded_sample[0][0] == 0.0 &&
+                           AM1.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
+                           (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                            AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)) ||
+                            (params.am2_sample.lock().unwrap()[0].len() > 1 && 
+                           AM2.lock().unwrap().loaded_sample[0][0] == 0.0 &&
+                           AM2.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
+                           (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                            AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)) ||
+                            (params.am3_sample.lock().unwrap()[0].len() > 1 && 
+                           AM3.lock().unwrap().loaded_sample[0][0] == 0.0 &&
+                           AM3.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
+                           (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                            AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer))
+                           {
+                            // This is manually here to make sure it appears for long loads from different threads
+                            // Create the loading popup here.
+                            let screen_size = Rect::from_x_y_ranges(
+                                RangeInclusive::new(0.0, WIDTH as f32),
+                                RangeInclusive::new(0.0, HEIGHT as f32));
+                            let popup_size = Vec2::new(400.0, 200.0);
+                            let popup_pos = screen_size.center();
+
+                            // Draw the loading popup content here.
+                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+
+                            let mut AM1_Lock = AM1.lock().unwrap();
+                            let mut AM2_Lock = AM2.lock().unwrap();
+                            let mut AM3_Lock = AM3.lock().unwrap();
+
+                            AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
+                            AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
+                            AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
+
+                            AM1_Lock.regenerate_samples();
+                            AM2_Lock.regenerate_samples();
+                            AM3_Lock.regenerate_samples();
+                            /*
+
+                            // Update our displayed info
+                            let temp_current_preset = arc_preset.lock().unwrap()[current_preset_index as usize].clone();
+                            *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
+                            *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
+                            *arc_preset_category.lock().unwrap() = temp_current_preset.preset_category.clone();
+
+                            // This is set for the process thread
+                            // *reload_entire_preset.lock().unwrap() = true;
+                            */
+                        }
+
                         // Reset our buttons
                         if params.param_next_preset.value() {
                             if current_preset_index < (PRESET_BANK_SIZE - 1) as u32 {
@@ -3752,7 +3812,7 @@ impl Plugin for Actuate {
                                         ui.horizontal(|ui|{
                                             ui.add_space(4.0);
                                             let audio_module_1_knob = ui_knob::ArcKnob::for_param(
-                                                &params._audio_module_1_type,
+                                                &params.audio_module_1_type,
                                                 setter,
                                                 KNOB_SIZE,
                                                 KnobLayout::Vertical)
@@ -3789,7 +3849,7 @@ impl Plugin for Actuate {
                                         ui.horizontal(|ui|{
                                             ui.add_space(4.0);
                                             let audio_module_2_knob = ui_knob::ArcKnob::for_param(
-                                                &params._audio_module_2_type,
+                                                &params.audio_module_2_type,
                                                 setter,
                                                 KNOB_SIZE,
                                                 KnobLayout::Vertical)
@@ -3824,7 +3884,7 @@ impl Plugin for Actuate {
                                         ui.horizontal(|ui| {
                                             ui.add_space(4.0);
                                             let audio_module_3_knob = ui_knob::ArcKnob::for_param(
-                                                &params._audio_module_3_type,
+                                                &params.audio_module_3_type,
                                                 setter,
                                                 KNOB_SIZE,
                                                 KnobLayout::Vertical)
@@ -5768,6 +5828,14 @@ VCF: Voltage Controlled Filter model".to_string());
                             ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
                             ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
                         }
+
+                        // Sanity resetting inbetween channel processing
+                        if params.param_next_preset.value() {
+                            setter.set_parameter(&params.param_next_preset, false);
+                        }
+                        if params.param_prev_preset.value() {
+                            setter.set_parameter(&params.param_prev_preset, false);
+                        }
                     });
             },
             // This is the end of create_egui_editor()
@@ -6141,6 +6209,29 @@ impl Actuate {
                 self.file_open_buffer_timer.store(1, Ordering::Relaxed);
                 self.update_current_preset();
                 self.update_current_preset.store(false, Ordering::Relaxed);
+
+                // Save persistent sample data
+                let am1_lock = self.audio_module_1.lock().unwrap();
+                let am2_lock = self.audio_module_2.lock().unwrap();
+                let am3_lock = self.audio_module_3.lock().unwrap();
+                match am1_lock.audio_module_type {
+                    AudioModuleType::Sampler | AudioModuleType::Granulizer => {
+                        *self.params.am1_sample.lock().unwrap() = am1_lock.loaded_sample.clone();
+                    },
+                    _ => {},
+                }
+                match am2_lock.audio_module_type {
+                    AudioModuleType::Sampler | AudioModuleType::Granulizer => {
+                        *self.params.am2_sample.lock().unwrap() = am2_lock.loaded_sample.clone();
+                    },
+                    _ => {},
+                }
+                match am3_lock.audio_module_type {
+                    AudioModuleType::Sampler | AudioModuleType::Granulizer => {
+                        *self.params.am3_sample.lock().unwrap() = am3_lock.loaded_sample.clone();
+                    },
+                    _ => {},
+                }
             }
 
             // Prevent processing if our file dialog is open!!!
@@ -7161,7 +7252,7 @@ impl Actuate {
 
             // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::Relaxed)
-                && self.params._audio_module_1_type.value() != AudioModuleType::Off
+                && self.params.audio_module_1_type.value() != AudioModuleType::Off
             {
                 // We send our sample_id position, params, current midi event, module index, current voice max, and whether any params have changed
                 (
@@ -7191,7 +7282,7 @@ impl Actuate {
                 wave1_r *= self.params.audio_module_1_level.value() * 0.33;
             }
             if !self.file_dialog.load(Ordering::Relaxed)
-                && self.params._audio_module_2_type.value() != AudioModuleType::Off
+                && self.params.audio_module_2_type.value() != AudioModuleType::Off
             {
                 (
                     wave2_l,
@@ -7219,7 +7310,7 @@ impl Actuate {
                 wave2_r *= self.params.audio_module_2_level.value() * 0.33;
             }
             if !self.file_dialog.load(Ordering::Relaxed)
-                && self.params._audio_module_3_type.value() != AudioModuleType::Off
+                && self.params.audio_module_3_type.value() != AudioModuleType::Off
             {
                 (
                     wave3_l,
@@ -8366,7 +8457,7 @@ impl Actuate {
         let loaded_preset = &arc_preset.lock().unwrap()[current_preset_index as usize];
 
         setter.set_parameter(
-            &params._audio_module_1_type,
+            &params.audio_module_1_type,
             loaded_preset.mod1_audio_module_type,
         );
         setter.set_parameter(
@@ -8408,7 +8499,7 @@ impl Actuate {
         setter.set_parameter(&params.end_position_1, loaded_preset.mod1_end_position);
         // loaded sample, sample_lib, and prev restretch are controlled differently
         setter.set_parameter(
-            &params._audio_module_2_type,
+            &params.audio_module_2_type,
             loaded_preset.mod2_audio_module_type,
         );
         setter.set_parameter(
@@ -8450,7 +8541,7 @@ impl Actuate {
         setter.set_parameter(&params.end_position_2, loaded_preset.mod2_end_position);
         // loaded sample, sample_lib, and prev restretch are controlled differently
         setter.set_parameter(
-            &params._audio_module_3_type,
+            &params.audio_module_3_type,
             loaded_preset.mod3_audio_module_type,
         );
         setter.set_parameter(
@@ -8780,6 +8871,26 @@ impl Actuate {
         AMod2.regenerate_samples();
         AMod3.regenerate_samples();
 
+        // Save persistent sample data
+        match AMod1.audio_module_type {
+            AudioModuleType::Sampler | AudioModuleType::Granulizer => {
+                *params.am1_sample.lock().unwrap() = AMod1.loaded_sample.clone();
+            },
+            _ => {},
+        }
+        match AMod2.audio_module_type {
+            AudioModuleType::Sampler | AudioModuleType::Granulizer => {
+                *params.am2_sample.lock().unwrap() = AMod2.loaded_sample.clone();
+            },
+            _ => {},
+        }
+        match AMod3.audio_module_type {
+            AudioModuleType::Sampler | AudioModuleType::Granulizer => {
+                *params.am3_sample.lock().unwrap() = AMod3.loaded_sample.clone();
+            },
+            _ => {},
+        }
+
         (
             mod_source_1_override,
             mod_source_2_override,
@@ -8936,7 +9047,7 @@ impl Actuate {
                 tag_warm: self.params.tag_warm.value(),
                 // Modules 1
                 ///////////////////////////////////////////////////////////
-                mod1_audio_module_type: self.params._audio_module_1_type.value(),
+                mod1_audio_module_type: self.params.audio_module_1_type.value(),
                 mod1_audio_module_level: self.params.audio_module_1_level.value(),
                 mod1_audio_module_routing: self.params.audio_module_1_routing.value(),
                 // Granulizer/Sampler
@@ -8971,7 +9082,7 @@ impl Actuate {
 
                 // Modules 2
                 ///////////////////////////////////////////////////////////
-                mod2_audio_module_type: self.params._audio_module_2_type.value(),
+                mod2_audio_module_type: self.params.audio_module_2_type.value(),
                 mod2_audio_module_level: self.params.audio_module_2_level.value(),
                 mod2_audio_module_routing: self.params.audio_module_2_routing.value(),
                 // Granulizer/Sampler
@@ -9006,7 +9117,7 @@ impl Actuate {
 
                 // Modules 3
                 ///////////////////////////////////////////////////////////
-                mod3_audio_module_type: self.params._audio_module_3_type.value(),
+                mod3_audio_module_type: self.params.audio_module_3_type.value(),
                 mod3_audio_module_level: self.params.audio_module_3_level.value(),
                 mod3_audio_module_routing: self.params.audio_module_3_routing.value(),
                 // Granulizer/Sampler
