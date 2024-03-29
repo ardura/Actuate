@@ -1572,18 +1572,28 @@ Random: Sample uses a new random position every note".to_string());
                                         let mut rng = rand::thread_rng();
                                         // Prevent panic when no sample loaded yet
                                         if self.sample_lib.len() > 1 {
-                                            new_phase = rng.gen_range(
-                                                0.0..self.sample_lib[note as usize][0].len() as f32,
-                                            );
+                                            if self.sample_lib[note as usize][0].len() > 0 {
+                                                new_phase = rng.gen_range(
+                                                    0.0..self.sample_lib[note as usize][0].len() as f32,
+                                                );
+                                            } else {
+                                                // There's probably no sample loaded
+                                                new_phase = 0.0;
+                                            }
                                         }
                                     }
                                     AudioModuleType::Granulizer => {
                                         let mut rng = rand::thread_rng();
                                         // Prevent panic when no sample loaded yet
                                         if self.sample_lib.len() > 1 {
-                                            new_phase = rng.gen_range(
-                                                0.0..self.sample_lib[note as usize][0].len() as f32,
-                                            );
+                                            if self.sample_lib[note as usize][0].len() > 0 {
+                                                new_phase = rng.gen_range(
+                                                    0.0..self.sample_lib[note as usize][0].len() as f32,
+                                                );
+                                            } else {
+                                                // There's probably no sample loaded
+                                                new_phase = 0.0;
+                                            }
                                         }
                                     }
                                     _ => {}

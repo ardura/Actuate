@@ -3372,21 +3372,11 @@ impl Plugin for Actuate {
                         // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
                         // This would cause a deadlock and break Actuate :|
                         // Maybe in future this will become nicer
-                        if (params.am1_sample.lock().unwrap()[0].len() > 1 && 
+                        if params.am1_sample.lock().unwrap()[0].len() > 1 && 
                            AM1.lock().unwrap().loaded_sample[0][0] == 0.0 &&
                            AM1.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                            AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)) ||
-                            (params.am2_sample.lock().unwrap()[0].len() > 1 && 
-                           AM2.lock().unwrap().loaded_sample[0][0] == 0.0 &&
-                           AM2.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
-                           (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                            AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)) ||
-                            (params.am3_sample.lock().unwrap()[0].len() > 1 && 
-                           AM3.lock().unwrap().loaded_sample[0][0] == 0.0 &&
-                           AM3.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
-                           (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                            AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer))
+                            AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
                            {
                             // This is manually here to make sure it appears for long loads from different threads
                             // Create the loading popup here.
@@ -3401,27 +3391,58 @@ impl Plugin for Actuate {
                             ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
 
                             let mut AM1_Lock = AM1.lock().unwrap();
-                            let mut AM2_Lock = AM2.lock().unwrap();
-                            let mut AM3_Lock = AM3.lock().unwrap();
 
                             AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
-                            AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
-                            AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
 
                             AM1_Lock.regenerate_samples();
+                        }
+                        if params.am2_sample.lock().unwrap()[0].len() > 1 && 
+                           AM2.lock().unwrap().loaded_sample[0][0] == 0.0 &&
+                           AM2.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
+                           (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                            AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                           {
+                            // This is manually here to make sure it appears for long loads from different threads
+                            // Create the loading popup here.
+                            let screen_size = Rect::from_x_y_ranges(
+                                RangeInclusive::new(0.0, WIDTH as f32),
+                                RangeInclusive::new(0.0, HEIGHT as f32));
+                            let popup_size = Vec2::new(400.0, 200.0);
+                            let popup_pos = screen_size.center();
+
+                            // Draw the loading popup content here.
+                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+
+                            let mut AM2_Lock = AM2.lock().unwrap();
+
+                            AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
+
                             AM2_Lock.regenerate_samples();
+                        }
+                        if params.am3_sample.lock().unwrap()[0].len() > 1 && 
+                           AM3.lock().unwrap().loaded_sample[0][0] == 0.0 &&
+                           AM3.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
+                           (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                            AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                           {
+                            // This is manually here to make sure it appears for long loads from different threads
+                            // Create the loading popup here.
+                            let screen_size = Rect::from_x_y_ranges(
+                                RangeInclusive::new(0.0, WIDTH as f32),
+                                RangeInclusive::new(0.0, HEIGHT as f32));
+                            let popup_size = Vec2::new(400.0, 200.0);
+                            let popup_pos = screen_size.center();
+
+                            // Draw the loading popup content here.
+                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+
+                            let mut AM3_Lock = AM3.lock().unwrap();
+
+                            AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
+
                             AM3_Lock.regenerate_samples();
-                            /*
-
-                            // Update our displayed info
-                            let temp_current_preset = arc_preset.lock().unwrap()[current_preset_index as usize].clone();
-                            *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
-                            *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
-                            *arc_preset_category.lock().unwrap() = temp_current_preset.preset_category.clone();
-
-                            // This is set for the process thread
-                            // *reload_entire_preset.lock().unwrap() = true;
-                            */
                         }
 
                         // Reset our buttons
@@ -6047,6 +6068,7 @@ impl Actuate {
                     .lock()
                     .unwrap()
                     .load_new_sample(sample_file.unwrap());
+                *self.params.am1_sample.lock().unwrap() = self.audio_module_1.lock().unwrap().loaded_sample.clone();
             }
         } else if self.params.load_sample_2.value() && self.file_dialog.load(Ordering::Relaxed) {
             self.file_dialog.store(true, Ordering::Relaxed);
@@ -6059,6 +6081,7 @@ impl Actuate {
                     .lock()
                     .unwrap()
                     .load_new_sample(sample_file.unwrap());
+                *self.params.am2_sample.lock().unwrap() = self.audio_module_2.lock().unwrap().loaded_sample.clone();
             }
         } else if self.params.load_sample_3.value() && self.file_dialog.load(Ordering::Relaxed) {
             self.file_dialog.store(true, Ordering::Relaxed);
@@ -6071,6 +6094,7 @@ impl Actuate {
                     .lock()
                     .unwrap()
                     .load_new_sample(sample_file.unwrap());
+                *self.params.am3_sample.lock().unwrap() = self.audio_module_3.lock().unwrap().loaded_sample.clone();
             }
         }
 
