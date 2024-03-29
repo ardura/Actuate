@@ -345,7 +345,7 @@ impl AudioModule {
         let grain_gap;
         match index {
             1 => {
-                am_type = &params._audio_module_1_type;
+                am_type = &params.audio_module_1_type;
                 osc_voice = &params.osc_1_type;
                 osc_retrigger = &params.osc_1_retrigger;
                 osc_octave = &params.osc_1_octave;
@@ -372,7 +372,7 @@ impl AudioModule {
                 grain_gap = &params.grain_gap_1;
             },
             2 => {
-                am_type = &params._audio_module_2_type;
+                am_type = &params.audio_module_2_type;
                 osc_voice = &params.osc_2_type;
                 osc_retrigger = &params.osc_2_retrigger;
                 osc_octave = &params.osc_2_octave;
@@ -399,7 +399,7 @@ impl AudioModule {
                 grain_gap = &params.grain_gap_2;
             },
             3 => {
-                am_type = &params._audio_module_3_type;
+                am_type = &params.audio_module_3_type;
                 osc_voice = &params.osc_3_type;
                 osc_retrigger = &params.osc_3_retrigger;
                 osc_octave = &params.osc_3_octave;
@@ -1056,7 +1056,7 @@ Random: Sample uses a new random position every note".to_string());
     pub fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) {
         match voice_index {
             1 => {
-                self.audio_module_type = params._audio_module_1_type.value();
+                self.audio_module_type = params.audio_module_1_type.value();
                 self.osc_type = params.osc_1_type.value();
                 if self.osc_octave != params.osc_1_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_1_octave.value();
@@ -1138,7 +1138,7 @@ Random: Sample uses a new random position every note".to_string());
                 self.grain_crossfade = params.grain_crossfade_1.value();
             }
             2 => {
-                self.audio_module_type = params._audio_module_2_type.value();
+                self.audio_module_type = params.audio_module_2_type.value();
                 self.osc_type = params.osc_2_type.value();
                 if self.osc_octave != params.osc_2_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_2_octave.value();
@@ -1220,7 +1220,7 @@ Random: Sample uses a new random position every note".to_string());
                 self.grain_crossfade = params.grain_crossfade_2.value();
             }
             3 => {
-                self.audio_module_type = params._audio_module_3_type.value();
+                self.audio_module_type = params.audio_module_3_type.value();
                 self.osc_type = params.osc_3_type.value();
                 if self.osc_octave != params.osc_3_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_3_octave.value();
