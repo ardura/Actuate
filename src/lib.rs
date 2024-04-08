@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.2.3
+Version 1.2.4
 
 #####################################
 
@@ -37,7 +37,7 @@ use nih_plug_egui::{
 };
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
-use std::{fmt, io::Read};
+use std::{fmt::{self, Debug}, io::Read};
 use std::{
     fs::File,
     io::Write,
@@ -55,21 +55,9 @@ use audio_module::{
     Oscillator::{self, OscState, RetriggerStyle, SmoothStyle, VoiceType},
 };
 use fx::{
-    abass::a_bass_saturation,
-    biquad_filters::{self, FilterType},
-    buffermodulator::BufferModulator,
-    compressor::Compressor,
-    delay::{Delay, DelaySnapValues, DelayType},
-    flanger::StereoFlanger,
-    limiter::StereoLimiter,
-    phaser::StereoPhaser,
-    reverb::StereoReverb,
-    saturation::{Saturation, SaturationType},
-    ArduraFilter::{self, ResponseType},
-    StateVariableFilter::{ResonanceType, StateVariableFilter},
-    VCFilter::ResponseType as VCResponseType,
+    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType, StateVariableFilter}, VCFilter::ResponseType as VCResponseType
 };
-use old_preset_structs::{load_unserialized_old, load_unserialized_v114, load_unserialized_v122};
+use old_preset_structs::{load_unserialized_old, load_unserialized_v114, load_unserialized_v122, load_unserialized_v123, ActuatePresetV123};
 use CustomWidgets::{
     toggle_switch, ui_knob::{self, KnobLayout}, BoolButton, CustomParamSlider,
     CustomVerticalSlider::ParamSlider as VerticalParamSlider,
@@ -83,7 +71,8 @@ mod fx;
 mod old_preset_structs;
 
 // This holds our current sample/granulizer sample (L,R) per sample
-pub struct LoadedSample(Vec<Vec<f32>>);
+//pub struct LoadedSample(Vec<Vec<f32>>);
+pub struct LoadedSample();
 
 // Plugin sizing
 const WIDTH: u32 = 920;
@@ -195,30 +184,29 @@ pub enum PresetType {
     Other,
 }
 
-// These let us output ToString for the ComboBox stuff + Nih-Plug
+// Reverb options
+#[derive(Debug, Enum, PartialEq, Clone, Serialize, Deserialize)]
+pub enum ReverbModel {
+    Default,
+    Galactic,
+}
+
+// These let us output ToString for the ComboBox stuff + Nih-Plug or string usage
 impl fmt::Display for PresetType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
-        // or, alternatively:
-        // fmt::Debug::fmt(self, f)
     }
 }
 
-// These let us output ToString for the ComboBox stuff + Nih-Plug
 impl fmt::Display for ModulationSource {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
-        // or, alternatively:
-        // fmt::Debug::fmt(self, f)
     }
 }
 
-// These let us output ToString for the ComboBox stuff + Nih-Plug
 impl fmt::Display for ModulationDestination {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
-        // or, alternatively:
-        // fmt::Debug::fmt(self, f)
     }
 }
 
@@ -532,6 +520,7 @@ pub struct ActuatePreset {
     delay_type: DelayType,
 
     use_reverb: bool,
+    reverb_model: ReverbModel,
     reverb_amount: f32,
     reverb_size: f32,
     reverb_feedback: f32,
@@ -572,6 +561,7 @@ pub struct Actuate {
     reload_entire_preset: Arc<Mutex<bool>>,
     file_dialog: Arc<AtomicBool>,
     file_open_buffer_timer: Arc<AtomicU32>,
+    browsing_presets: Arc<AtomicBool>,
     // Using this like a state: 0 = Closed, 1 = Opening, 2 = Open
     current_preset: Arc<AtomicU32>,
 
@@ -666,6 +656,7 @@ pub struct Actuate {
 
     // Reverb
     reverb: [StereoReverb; 8],
+    galactic_reverb: GalacticReverb,
 
     // Phaser
     phaser: StereoPhaser,
@@ -678,6 +669,27 @@ pub struct Actuate {
 
     // Limiter
     limiter: StereoLimiter,
+
+    // Preset browser stuff
+    filter_acid: Arc<Mutex<bool>>,
+    filter_analog: Arc<Mutex<bool>>,
+    filter_bright: Arc<Mutex<bool>>,
+    filter_chord: Arc<Mutex<bool>>,
+    filter_crisp: Arc<Mutex<bool>>,
+    filter_deep: Arc<Mutex<bool>>,
+    filter_delicate: Arc<Mutex<bool>>,
+    filter_hard: Arc<Mutex<bool>>,
+    filter_harsh: Arc<Mutex<bool>>,
+    filter_lush: Arc<Mutex<bool>>,
+    filter_mellow: Arc<Mutex<bool>>,
+    filter_resonant: Arc<Mutex<bool>>,
+    filter_rich: Arc<Mutex<bool>>,
+    filter_sharp: Arc<Mutex<bool>>,
+    filter_silky: Arc<Mutex<bool>>,
+    filter_smooth: Arc<Mutex<bool>>,
+    filter_soft: Arc<Mutex<bool>>,
+    filter_stab: Arc<Mutex<bool>>,
+    filter_warm: Arc<Mutex<bool>>,
 }
 
 impl Default for Actuate {
@@ -688,6 +700,7 @@ impl Default for Actuate {
         let reload_entire_preset = Arc::new(Mutex::new(false));
         let file_dialog = Arc::new(AtomicBool::new(false));
         let file_open_buffer_timer = Arc::new(AtomicU32::new(0));
+        let browsing_presets = Arc::new(AtomicBool::new(false));
         let current_preset = Arc::new(AtomicU32::new(0));
 
         let load_bank = Arc::new(Mutex::new(false));
@@ -715,6 +728,7 @@ impl Default for Actuate {
             reload_entire_preset: reload_entire_preset,
             file_dialog: file_dialog,
             file_open_buffer_timer: file_open_buffer_timer,
+            browsing_presets: browsing_presets,
             current_preset: current_preset,
 
             load_bank: load_bank,
@@ -806,281 +820,7 @@ impl Default for Actuate {
             preset_info: Arc::new(Mutex::new(String::new())),
             preset_category: Arc::new(Mutex::new(PresetType::Select)),
             preset_lib: Arc::new(Mutex::new(vec![
-                ActuatePreset {
-                    preset_name: "Default".to_string(),
-                    preset_info: "Info".to_string(),
-                    preset_category: PresetType::Select,
-                    tag_acid: false,
-                    tag_analog: false,
-                    tag_bright: false,
-                    tag_chord: false,
-                    tag_crisp: false,
-                    tag_deep: false,
-                    tag_delicate: false,
-                    tag_hard: false,
-                    tag_harsh: false,
-                    tag_lush: false,
-                    tag_mellow: false,
-                    tag_resonant: false,
-                    tag_rich: false,
-                    tag_sharp: false,
-                    tag_silky: false,
-                    tag_smooth: false,
-                    tag_soft: false,
-                    tag_stab: false,
-                    tag_warm: false,
-                    mod1_audio_module_type: AudioModuleType::Osc,
-                    mod1_audio_module_level: 1.0,
-                    mod1_audio_module_routing: AMFilterRouting::Filter1,
-                    mod1_loaded_sample: vec![vec![0.0, 0.0]],
-                    mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                    mod1_loop_wavetable: false,
-                    mod1_single_cycle: false,
-                    mod1_restretch: true,
-                    mod1_prev_restretch: false,
-                    mod1_grain_hold: 200,
-                    mod1_grain_gap: 200,
-                    mod1_start_position: 0.0,
-                    mod1_end_position: 1.0,
-                    mod1_grain_crossfade: 50,
-                    mod1_osc_type: VoiceType::Sine,
-                    mod1_osc_octave: 0,
-                    mod1_osc_semitones: 0,
-                    mod1_osc_detune: 0.0,
-                    mod1_osc_attack: 0.0001,
-                    mod1_osc_decay: 0.0001,
-                    mod1_osc_sustain: 999.9,
-                    mod1_osc_release: 5.0,
-                    mod1_osc_retrigger: RetriggerStyle::Retrigger,
-                    mod1_osc_atk_curve: SmoothStyle::Linear,
-                    mod1_osc_dec_curve: SmoothStyle::Linear,
-                    mod1_osc_rel_curve: SmoothStyle::Linear,
-                    mod1_osc_unison: 1,
-                    mod1_osc_unison_detune: 0.0,
-                    mod1_osc_stereo: 0.0,
-
-                    mod2_audio_module_type: AudioModuleType::Off,
-                    mod2_audio_module_level: 1.0,
-                    mod2_audio_module_routing: AMFilterRouting::Filter1,
-                    mod2_loaded_sample: vec![vec![0.0, 0.0]],
-                    mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                    mod2_loop_wavetable: false,
-                    mod2_single_cycle: false,
-                    mod2_restretch: true,
-                    mod2_prev_restretch: false,
-                    mod2_grain_hold: 200,
-                    mod2_grain_gap: 200,
-                    mod2_start_position: 0.0,
-                    mod2_end_position: 1.0,
-                    mod2_grain_crossfade: 50,
-                    mod2_osc_type: VoiceType::Sine,
-                    mod2_osc_octave: 0,
-                    mod2_osc_semitones: 0,
-                    mod2_osc_detune: 0.0,
-                    mod2_osc_attack: 0.0001,
-                    mod2_osc_decay: 0.0001,
-                    mod2_osc_sustain: 999.9,
-                    mod2_osc_release: 5.0,
-                    mod2_osc_retrigger: RetriggerStyle::Retrigger,
-                    mod2_osc_atk_curve: SmoothStyle::Linear,
-                    mod2_osc_dec_curve: SmoothStyle::Linear,
-                    mod2_osc_rel_curve: SmoothStyle::Linear,
-                    mod2_osc_unison: 1,
-                    mod2_osc_unison_detune: 0.0,
-                    mod2_osc_stereo: 0.0,
-
-                    mod3_audio_module_type: AudioModuleType::Off,
-                    mod3_audio_module_level: 1.0,
-                    mod3_audio_module_routing: AMFilterRouting::Filter1,
-                    mod3_loaded_sample: vec![vec![0.0, 0.0]],
-                    mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                    mod3_loop_wavetable: false,
-                    mod3_single_cycle: false,
-                    mod3_restretch: true,
-                    mod3_prev_restretch: false,
-                    mod3_grain_hold: 200,
-                    mod3_grain_gap: 200,
-                    mod3_start_position: 0.0,
-                    mod3_end_position: 1.0,
-                    mod3_grain_crossfade: 50,
-                    mod3_osc_type: VoiceType::Sine,
-                    mod3_osc_octave: 0,
-                    mod3_osc_semitones: 0,
-                    mod3_osc_detune: 0.0,
-                    mod3_osc_attack: 0.0001,
-                    mod3_osc_decay: 0.0001,
-                    mod3_osc_sustain: 999.9,
-                    mod3_osc_release: 5.0,
-                    mod3_osc_retrigger: RetriggerStyle::Retrigger,
-                    mod3_osc_atk_curve: SmoothStyle::Linear,
-                    mod3_osc_dec_curve: SmoothStyle::Linear,
-                    mod3_osc_rel_curve: SmoothStyle::Linear,
-                    mod3_osc_unison: 1,
-                    mod3_osc_unison_detune: 0.0,
-                    mod3_osc_stereo: 0.0,
-
-                    filter_wet: 1.0,
-                    filter_cutoff: 20000.0,
-                    filter_resonance: 1.0,
-                    filter_res_type: ResonanceType::Default,
-                    filter_lp_amount: 1.0,
-                    filter_hp_amount: 0.0,
-                    filter_bp_amount: 0.0,
-                    filter_env_peak: 0.0,
-                    filter_env_attack: 0.0001,
-                    filter_env_decay: 0.0001,
-                    filter_env_sustain: 999.9,
-                    filter_env_release: 5.0,
-                    filter_env_atk_curve: SmoothStyle::Linear,
-                    filter_env_dec_curve: SmoothStyle::Linear,
-                    filter_env_rel_curve: SmoothStyle::Linear,
-                    filter_alg_type: FilterAlgorithms::SVF,
-                    tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
-
-                    filter_wet_2: 1.0,
-                    filter_cutoff_2: 20000.0,
-                    filter_resonance_2: 1.0,
-                    filter_res_type_2: ResonanceType::Default,
-                    filter_lp_amount_2: 1.0,
-                    filter_hp_amount_2: 0.0,
-                    filter_bp_amount_2: 0.0,
-                    filter_env_peak_2: 0.0,
-                    filter_env_attack_2: 0.0001,
-                    filter_env_decay_2: 0.0001,
-                    filter_env_sustain_2: 999.9,
-                    filter_env_release_2: 5.0,
-                    filter_env_atk_curve_2: SmoothStyle::Linear,
-                    filter_env_dec_curve_2: SmoothStyle::Linear,
-                    filter_env_rel_curve_2: SmoothStyle::Linear,
-                    filter_alg_type_2: FilterAlgorithms::SVF,
-                    tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
-
-                    filter_routing: FilterRouting::Parallel,
-                    filter_cutoff_link: false,
-
-                    // Pitch Routing
-                    pitch_enable: false,
-                    pitch_routing: PitchRouting::Osc1,
-                    pitch_env_peak: 0.0,
-                    pitch_env_attack: 0.0001,
-                    pitch_env_decay: 300.0,
-                    pitch_env_sustain: 0.0,
-                    pitch_env_release: 0.0001,
-                    pitch_env_atk_curve: SmoothStyle::Linear,
-                    pitch_env_dec_curve: SmoothStyle::Linear,
-                    pitch_env_rel_curve: SmoothStyle::Linear,
-
-                    pitch_enable_2: false,
-                    pitch_routing_2: PitchRouting::Osc1,
-                    pitch_env_peak_2: 0.0,
-                    pitch_env_attack_2: 0.0001,
-                    pitch_env_decay_2: 300.0,
-                    pitch_env_sustain_2: 0.0,
-                    pitch_env_release_2: 0.0001,
-                    pitch_env_atk_curve_2: SmoothStyle::Linear,
-                    pitch_env_dec_curve_2: SmoothStyle::Linear,
-                    pitch_env_rel_curve_2: SmoothStyle::Linear,
-
-                    // LFOs
-                    lfo1_enable: false,
-                    lfo2_enable: false,
-                    lfo3_enable: false,
-
-                    lfo1_freq: 2.0,
-                    lfo1_retrigger: LFOController::LFORetrigger::None,
-                    lfo1_sync: true,
-                    lfo1_snap: LFOController::LFOSnapValues::Half,
-                    lfo1_waveform: LFOController::Waveform::Sine,
-                    lfo1_phase: 0.0,
-
-                    lfo2_freq: 2.0,
-                    lfo2_retrigger: LFOController::LFORetrigger::None,
-                    lfo2_sync: true,
-                    lfo2_snap: LFOController::LFOSnapValues::Half,
-                    lfo2_waveform: LFOController::Waveform::Sine,
-                    lfo2_phase: 0.0,
-
-                    lfo3_freq: 2.0,
-                    lfo3_retrigger: LFOController::LFORetrigger::None,
-                    lfo3_sync: true,
-                    lfo3_snap: LFOController::LFOSnapValues::Half,
-                    lfo3_waveform: LFOController::Waveform::Sine,
-                    lfo3_phase: 0.0,
-
-                    // Modulations
-                    mod_source_1: ModulationSource::None,
-                    mod_source_2: ModulationSource::None,
-                    mod_source_3: ModulationSource::None,
-                    mod_source_4: ModulationSource::None,
-                    mod_dest_1: ModulationDestination::None,
-                    mod_dest_2: ModulationDestination::None,
-                    mod_dest_3: ModulationDestination::None,
-                    mod_dest_4: ModulationDestination::None,
-                    mod_amount_1: 0.0,
-                    mod_amount_2: 0.0,
-                    mod_amount_3: 0.0,
-                    mod_amount_4: 0.0,
-
-                    // EQ
-                    pre_use_eq: false,
-                    pre_low_freq: 800.0,
-                    pre_mid_freq: 3000.0,
-                    pre_high_freq: 10000.0,
-                    pre_low_gain: 0.0,
-                    pre_mid_gain: 0.0,
-                    pre_high_gain: 0.0,
-
-                    //FX
-                    use_fx: true,
-
-                    use_compressor: false,
-
-                    comp_amt: 0.5,
-                    comp_atk: 0.5,
-                    comp_rel: 0.5,
-                    comp_drive: 0.5,
-
-                    use_abass: false,
-                    abass_amount: 0.0011,
-
-                    use_saturation: false,
-                    sat_amount: 0.0,
-                    sat_type: SaturationType::Tape,
-
-                    use_delay: false,
-                    delay_amount: 0.5,
-                    delay_time: DelaySnapValues::Quarter,
-                    delay_decay: 0.5,
-                    delay_type: DelayType::Stereo,
-
-                    use_reverb: false,
-                    reverb_amount: 0.85,
-                    reverb_size: 1.0,
-                    reverb_feedback: 0.28,
-
-                    use_phaser: false,
-                    phaser_amount: 0.5,
-                    phaser_depth: 0.5,
-                    phaser_rate: 0.5,
-                    phaser_feedback: 0.5,
-
-                    use_buffermod: false,
-                    buffermod_amount: 0.5,
-                    buffermod_depth: 0.5,
-                    buffermod_rate: 0.5,
-                    buffermod_spread: 0.0,
-                    buffermod_timing: 620.0,
-
-                    use_flanger: false,
-                    flanger_amount: 0.5,
-                    flanger_depth: 0.5,
-                    flanger_rate: 0.5,
-                    flanger_feedback: 0.5,
-
-                    use_limiter: false,
-                    limiter_threshold: 0.5,
-                    limiter_knee: 0.5,
-                };
+                DEFAULT_PRESET.clone();
                 PRESET_BANK_SIZE
             ])),
 
@@ -1114,6 +854,7 @@ impl Default for Actuate {
                 StereoReverb::new(44100.0, 0.5, 0.5),
                 StereoReverb::new(44100.0, 0.5, 0.5),
             ],
+            galactic_reverb: GalacticReverb::new(44100.0, 1.0, 0.76, 0.5),
 
             // Buffer Modulator
             buffermod: BufferModulator::new(44100.0, 0.5, 10.0),
@@ -1126,6 +867,27 @@ impl Default for Actuate {
 
             // Limiter
             limiter: StereoLimiter::new(0.5, 0.5),
+
+            // Preset browser stuff
+            filter_acid: Arc::new(Mutex::new(false)),
+            filter_analog: Arc::new(Mutex::new(false)),
+            filter_bright: Arc::new(Mutex::new(false)),
+            filter_chord: Arc::new(Mutex::new(false)),
+            filter_crisp: Arc::new(Mutex::new(false)),
+            filter_deep: Arc::new(Mutex::new(false)),
+            filter_delicate: Arc::new(Mutex::new(false)),
+            filter_hard: Arc::new(Mutex::new(false)),
+            filter_harsh: Arc::new(Mutex::new(false)),
+            filter_lush: Arc::new(Mutex::new(false)),
+            filter_mellow: Arc::new(Mutex::new(false)),
+            filter_resonant: Arc::new(Mutex::new(false)),
+            filter_rich: Arc::new(Mutex::new(false)),
+            filter_sharp: Arc::new(Mutex::new(false)),
+            filter_silky: Arc::new(Mutex::new(false)),
+            filter_smooth: Arc::new(Mutex::new(false)),
+            filter_soft: Arc::new(Mutex::new(false)),
+            filter_stab: Arc::new(Mutex::new(false)),
+            filter_warm: Arc::new(Mutex::new(false)),
         }
     }
 }
@@ -1581,6 +1343,8 @@ pub struct ActuateParams {
 
     #[id = "use_reverb"]
     pub use_reverb: BoolParam,
+    #[id = "reverb_model"]
+    pub reverb_model: EnumParam<ReverbModel>,
     #[id = "reverb_amount"]
     pub reverb_amount: FloatParam,
     #[id = "reverb_size"]
@@ -3074,6 +2838,7 @@ impl ActuateParams {
             delay_type: EnumParam::new("Type", DelayType::Stereo),
 
             use_reverb: BoolParam::new("Reverb", false),
+            reverb_model: EnumParam::new("Model", ReverbModel::Default),
             reverb_amount: FloatParam::new(
                 "Amount",
                 0.85,
@@ -3301,6 +3066,7 @@ impl Plugin for Actuate {
         let arc_preset_category: Arc<Mutex<PresetType>> = Arc::clone(&self.preset_category);
         let clear_voices: Arc<AtomicBool> = Arc::clone(&self.clear_voices);
         let reload_entire_preset: Arc<Mutex<bool>> = Arc::clone(&self.reload_entire_preset);
+        let browse_preset_active: Arc<AtomicBool> = Arc::clone(&self.browsing_presets);
         let current_preset: Arc<AtomicU32> = Arc::clone(&self.current_preset);
         let AM1: Arc<Mutex<AudioModule>> = Arc::clone(&self.audio_module_1);
         let AM2: Arc<Mutex<AudioModule>> = Arc::clone(&self.audio_module_2);
@@ -3345,6 +3111,26 @@ impl Plugin for Actuate {
         let mod_dest_override_3 = self.mod_override_dest_3.clone();
         let mod_dest_override_4 = self.mod_override_dest_4.clone();
         let preset_category_override = self.preset_category_override.clone();
+
+        let filter_acid = self.filter_acid.clone();
+        let filter_analog = self.filter_analog.clone();
+        let filter_bright = self.filter_bright.clone();
+        let filter_chord = self.filter_chord.clone();
+        let filter_crisp = self.filter_crisp.clone();
+        let filter_deep = self.filter_deep.clone();
+        let filter_delicate = self.filter_delicate.clone();
+        let filter_hard = self.filter_hard.clone();
+        let filter_harsh = self.filter_harsh.clone();
+        let filter_lush = self.filter_lush.clone();
+        let filter_mellow = self.filter_mellow.clone();
+        let filter_resonant = self.filter_resonant.clone();
+        let filter_rich = self.filter_rich.clone();
+        let filter_sharp = self.filter_sharp.clone();
+        let filter_silky = self.filter_silky.clone();
+        let filter_smooth = self.filter_smooth.clone();
+        let filter_soft = self.filter_soft.clone();
+        let filter_stab = self.filter_stab.clone();
+        let filter_warm = self.filter_warm.clone();
 
         // Do our GUI stuff. Store this to later get parent window handle from it
         create_egui_editor(
@@ -3791,11 +3577,412 @@ impl Plugin for Actuate {
                                     ui.add(next_preset_button);
 
                                     ui.separator();
-                                    ui.button(RichText::new("Browse Presets")
+                                    let browse = ui.button(RichText::new("Browse Presets")
                                         .font(SMALLER_FONT)
                                         .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
-                                    ).on_hover_text("Coming soon!");
+                                    );
+                                    if browse.clicked() {
+                                        browse_preset_active.store(true, Ordering::Relaxed);
+                                    }
+                                    if browse_preset_active.load(Ordering::Relaxed) {
+                                        let window = egui::Window::new("Preset Browser")
+                                            .id(egui::Id::new("browse_presets_window"))
+                                            .resizable(false)
+                                            .constrain(true)
+                                            .collapsible(false)
+                                            .title_bar(true)
+                                            .fixed_pos(Pos2::new(
+                                                (WIDTH as f32/ 2.0) - 330.0,
+                                                (HEIGHT as f32/ 2.0) - 250.0))
+                                            .fixed_size(Vec2::new(660.0, 500.0))
+                                            .scroll2([true, true])
+                                            .enabled(true);
+                                        window.show(egui_ctx, |ui| {
+                                            let max_rows = PRESET_BANK_SIZE;
+                                            let mut filter_acid = filter_acid.lock().unwrap();
+                                            let mut filter_analog = filter_analog.lock().unwrap();
+                                            let mut filter_bright = filter_bright.lock().unwrap();
+                                            let mut filter_chord = filter_chord.lock().unwrap();
+                                            let mut filter_crisp = filter_crisp.lock().unwrap();
+                                            let mut filter_deep = filter_deep.lock().unwrap();
+                                            let mut filter_delicate = filter_delicate.lock().unwrap();
+                                            let mut filter_hard = filter_hard.lock().unwrap();
+                                            let mut filter_harsh = filter_harsh.lock().unwrap();
+                                            let mut filter_lush = filter_lush.lock().unwrap();
+                                            let mut filter_mellow = filter_mellow.lock().unwrap();
+                                            let mut filter_resonant = filter_resonant.lock().unwrap();
+                                            let mut filter_rich = filter_rich.lock().unwrap();
+                                            let mut filter_sharp = filter_sharp.lock().unwrap();
+                                            let mut filter_silky = filter_silky.lock().unwrap();
+                                            let mut filter_smooth = filter_smooth.lock().unwrap();
+                                            let mut filter_soft = filter_soft.lock().unwrap();
+                                            let mut filter_stab = filter_stab.lock().unwrap();
+                                            let mut filter_warm = filter_warm.lock().unwrap();
+
+                                            ui.vertical_centered(|ui| {
+                                                let close_button = ui.button(RichText::new("Cancel")
+                                                    .font(FONT)
+                                                    .background_color(A_BACKGROUND_COLOR_TOP)
+                                                    .color(FONT_COLOR)
+                                                ).on_hover_text("Close this window without doing anything");
+                                                if close_button.clicked() {
+                                                    browse_preset_active.store(false, Ordering::Relaxed);
+                                                }
+                                                ui.horizontal(|ui|{
+                                                    ui.label(RichText::new("Tags:")
+                                                        .font(FONT)
+                                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                                        .color(FONT_COLOR));
+                                                    ui.checkbox(&mut filter_acid, "Acid");
+                                                    ui.checkbox(&mut filter_analog, "Analog");
+                                                    ui.checkbox(&mut filter_bright, "Bright");
+                                                    ui.checkbox(&mut filter_chord, "Chord");
+                                                    ui.checkbox(&mut filter_crisp, "Crisp");
+                                                    ui.checkbox(&mut filter_deep, "Deep");
+                                                    ui.checkbox(&mut filter_delicate, "Delicate");
+                                                    ui.checkbox(&mut filter_hard, "Hard");
+                                                    ui.checkbox(&mut filter_harsh, "Harsh");
+                                                    ui.checkbox(&mut filter_lush, "Lush");
+                                                });
+                                                ui.horizontal(|ui|{
+                                                    ui.add_space(34.0);
+                                                    ui.checkbox(&mut filter_mellow, "Mellow");
+                                                    ui.checkbox(&mut filter_resonant, "Resonant");
+                                                    ui.checkbox(&mut filter_rich, "Rich");
+                                                    ui.checkbox(&mut filter_sharp, "Sharp");
+                                                    ui.checkbox(&mut filter_silky, "Silky");
+                                                    ui.checkbox(&mut filter_smooth, "Smooth");
+                                                    ui.checkbox(&mut filter_soft, "Soft");
+                                                    ui.checkbox(&mut filter_stab, "Stab");
+                                                    ui.checkbox(&mut filter_warm, "Warm");
+                                                });
+                                            });
+
+                                            ui.separator();
+
+                                            egui::Grid::new("preset_table")
+                                                .striped(true)
+                                                .num_columns(5)
+                                                .min_col_width(2.0)
+                                                .max_col_width(200.0)
+                                                .show(ui, |ui| {
+                                                    ui.label(RichText::new("Load")
+                                                        .font(FONT)
+                                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                                        .color(FONT_COLOR));
+                                                    ui.label(RichText::new("Preset Name")
+                                                        .font(FONT)
+                                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                                        .color(FONT_COLOR));
+                                                    ui.label(RichText::new("Category")
+                                                        .font(FONT)
+                                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                                        .color(FONT_COLOR));
+                                                    ui.label(RichText::new("Tags")
+                                                        .font(FONT)
+                                                        .background_color(A_BACKGROUND_COLOR_TOP)
+                                                        .color(FONT_COLOR));
+                                                    ui.end_row();
+                                                    // No filters are checked
+                                                    if  !*filter_acid &&
+                                                        !*filter_analog &&
+                                                        !*filter_bright &&
+                                                        !*filter_chord &&
+                                                        !*filter_crisp &&
+                                                        !*filter_deep &&
+                                                        !*filter_delicate &&
+                                                        !*filter_hard &&
+                                                        !*filter_harsh &&
+                                                        !*filter_lush &&
+                                                        !*filter_mellow &&
+                                                        !*filter_resonant &&
+                                                        !*filter_rich &&
+                                                        !*filter_sharp &&
+                                                        !*filter_silky &&
+                                                        !*filter_smooth &&
+                                                        !*filter_soft &&
+                                                        !*filter_stab &&
+                                                        !*filter_warm
+                                                        {
+                                                            for row in 0..=(max_rows-1) {
+                                                                if ui.button(format!("Load Preset {row}")).clicked() {
+                                                                    loading.store(true, Ordering::Relaxed);
+                                                                    setter.set_parameter(&params.loading, true);
+        
+                                                                    current_preset.store(row as u32, Ordering::Relaxed);
+                                                                    clear_voices.store(true, Ordering::Relaxed);
+        
+                                                                    // Move to info tab on preset change
+                                                                    *lfo_select.lock().unwrap() = LFOSelect::INFO;
+        
+                                                                    // This is manually here to make sure it appears for long loads from different threads
+                                                                    // Create the loading popup here.
+                                                                    let screen_size = Rect::from_x_y_ranges(
+                                                                    RangeInclusive::new(0.0, WIDTH as f32),
+                                                                    RangeInclusive::new(0.0, HEIGHT as f32));
+                                                                    let popup_size = Vec2::new(400.0, 200.0);
+                                                                    let popup_pos = screen_size.center();
+        
+                                                                    // Draw the loading popup content here.
+                                                                    ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                                                                    ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+        
+                                                                    // GUI thread misses this without this call here for some reason
+                                                                    (
+                                                                        *mod_source_override_1.lock().unwrap(),
+                                                                        *mod_source_override_2.lock().unwrap(),
+                                                                        *mod_source_override_3.lock().unwrap(),
+                                                                        *mod_source_override_4.lock().unwrap(),
+                                                                        *mod_dest_override_1.lock().unwrap(),
+                                                                        *mod_dest_override_2.lock().unwrap(),
+                                                                        *mod_dest_override_3.lock().unwrap(),
+                                                                        *mod_dest_override_4.lock().unwrap(),
+                                                                        *preset_category_override.lock().unwrap(),
+                                                                    ) = Actuate::reload_entire_preset(
+                                                                        setter,
+                                                                        params.clone(),
+                                                                        row,
+                                                                        arc_preset.clone(),
+                                                                        AM1.clone(),
+                                                                        AM2.clone(),
+                                                                        AM3.clone(),);
+        
+                                                                    // This is the gui value only - the preset type itself is loaded in the preset already
+                                                                    // Update our displayed info
+                                                                    let temp_current_preset = arc_preset.lock().unwrap()[row].clone();
+                                                                    *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
+                                                                    *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
+                                                                    *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
+        
+                                                                    // This is set for the process thread
+                                                                    *reload_entire_preset.lock().unwrap() = true;
+                                                                    setter.set_parameter(&params.loading, false);
+                                                                }
+                                                                ui.label(arc_preset.lock().unwrap()[row].preset_name.clone().trim());
+                                                                ui.label(format!("{:?}",arc_preset.lock().unwrap()[row].preset_category.clone()).trim());
+                                                                // Tags
+                                                                ui.horizontal(|ui|{
+                                                                    if arc_preset.lock().unwrap()[row].tag_acid {
+                                                                        ui.label("Acid");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_analog {
+                                                                        ui.label("Analog");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_bright {
+                                                                        ui.label("Bright");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_chord {
+                                                                        ui.label("Chord");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_crisp {
+                                                                        ui.label("Crisp");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_deep {
+                                                                        ui.label("Deep");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_delicate {
+                                                                        ui.label("Delicate");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_hard {
+                                                                        ui.label("Hard");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_harsh {
+                                                                        ui.label("Harsh");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_lush {
+                                                                        ui.label("Lush");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_mellow {
+                                                                        ui.label("Mellow");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_resonant {
+                                                                        ui.label("Resonant");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_rich {
+                                                                        ui.label("Rich");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_sharp {
+                                                                        ui.label("Sharp");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_silky {
+                                                                        ui.label("Silky");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_smooth {
+                                                                        ui.label("Smooth");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_soft {
+                                                                        ui.label("Soft");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_stab {
+                                                                        ui.label("Stab");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[row].tag_warm {
+                                                                        ui.label("Warm");
+                                                                    }
+                                                                });
+                                                                ui.end_row();
+                                                            }
+                                                        } else {
+                                                            // Filter results
+                                                            let results: Vec<ActuatePreset>  = arc_preset.lock().unwrap().clone();
+                                                            let mut filtered_results: Vec<usize> = Vec::new();
+                                                            for (index, preset) in results.iter().enumerate() {
+                                                                if (*filter_acid && preset.tag_acid == true) ||
+                                                                   (*filter_analog && preset.tag_analog == true) ||
+                                                                   (*filter_bright && preset.tag_bright == true) ||
+                                                                   (*filter_chord && preset.tag_chord == true) ||
+                                                                   (*filter_crisp && preset.tag_crisp == true) ||
+                                                                   (*filter_deep && preset.tag_deep == true) ||
+                                                                   (*filter_delicate && preset.tag_delicate == true) ||
+                                                                   (*filter_hard && preset.tag_hard == true) ||
+                                                                   (*filter_harsh && preset.tag_harsh == true) ||
+                                                                   (*filter_lush && preset.tag_lush == true) ||
+                                                                   (*filter_mellow && preset.tag_mellow == true) ||
+                                                                   (*filter_resonant && preset.tag_resonant == true) ||
+                                                                   (*filter_rich && preset.tag_rich == true) ||
+                                                                   (*filter_sharp && preset.tag_sharp == true) ||
+                                                                   (*filter_silky && preset.tag_silky == true) ||
+                                                                   (*filter_smooth && preset.tag_smooth == true) ||
+                                                                   (*filter_soft && preset.tag_soft == true) ||
+                                                                   (*filter_stab && preset.tag_stab == true) ||
+                                                                   (*filter_warm && preset.tag_warm == true) {
+                                                                     filtered_results.push(index);
+                                                                }
+                                                            }
+                                                            for r_index in filtered_results.iter() {
+                                                                if ui.button(format!("Load Preset {r_index}")).clicked() {
+                                                                    loading.store(true, Ordering::Relaxed);
+                                                                    setter.set_parameter(&params.loading, true);
+        
+                                                                    current_preset.store(*r_index as u32, Ordering::Relaxed);
+                                                                    clear_voices.store(true, Ordering::Relaxed);
+        
+                                                                    // Move to info tab on preset change
+                                                                    *lfo_select.lock().unwrap() = LFOSelect::INFO;
+        
+                                                                    // This is manually here to make sure it appears for long loads from different threads
+                                                                    // Create the loading popup here.
+                                                                    let screen_size = Rect::from_x_y_ranges(
+                                                                    RangeInclusive::new(0.0, WIDTH as f32),
+                                                                    RangeInclusive::new(0.0, HEIGHT as f32));
+                                                                    let popup_size = Vec2::new(400.0, 200.0);
+                                                                    let popup_pos = screen_size.center();
+        
+                                                                    // Draw the loading popup content here.
+                                                                    ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                                                                    ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+        
+                                                                    // GUI thread misses this without this call here for some reason
+                                                                    (
+                                                                        *mod_source_override_1.lock().unwrap(),
+                                                                        *mod_source_override_2.lock().unwrap(),
+                                                                        *mod_source_override_3.lock().unwrap(),
+                                                                        *mod_source_override_4.lock().unwrap(),
+                                                                        *mod_dest_override_1.lock().unwrap(),
+                                                                        *mod_dest_override_2.lock().unwrap(),
+                                                                        *mod_dest_override_3.lock().unwrap(),
+                                                                        *mod_dest_override_4.lock().unwrap(),
+                                                                        *preset_category_override.lock().unwrap(),
+                                                                    ) = Actuate::reload_entire_preset(
+                                                                        setter,
+                                                                        params.clone(),
+                                                                        *r_index,
+                                                                        arc_preset.clone(),
+                                                                        AM1.clone(),
+                                                                        AM2.clone(),
+                                                                        AM3.clone(),);
+        
+                                                                    // This is the gui value only - the preset type itself is loaded in the preset already
+                                                                    // Update our displayed info
+                                                                    let temp_current_preset = arc_preset.lock().unwrap()[*r_index].clone();
+                                                                    *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
+                                                                    *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
+                                                                    *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
+        
+                                                                    // This is set for the process thread
+                                                                    *reload_entire_preset.lock().unwrap() = true;
+                                                                    setter.set_parameter(&params.loading, false);
+                                                                }
+                                                                ui.label(arc_preset.lock().unwrap()[*r_index].preset_name.clone().trim());
+                                                                ui.label(format!("{:?}",arc_preset.lock().unwrap()[*r_index].preset_category.clone()).trim());
+                                                                // Tags
+                                                                ui.horizontal(|ui|{
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_acid {
+                                                                        ui.label("Acid");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_analog {
+                                                                        ui.label("Analog");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_bright {
+                                                                        ui.label("Bright");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_chord {
+                                                                        ui.label("Chord");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_crisp {
+                                                                        ui.label("Crisp");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_deep {
+                                                                        ui.label("Deep");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_delicate {
+                                                                        ui.label("Delicate");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_hard {
+                                                                        ui.label("Hard");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_harsh {
+                                                                        ui.label("Harsh");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_lush {
+                                                                        ui.label("Lush");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_mellow {
+                                                                        ui.label("Mellow");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_resonant {
+                                                                        ui.label("Resonant");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_rich {
+                                                                        ui.label("Rich");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_sharp {
+                                                                        ui.label("Sharp");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_silky {
+                                                                        ui.label("Silky");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_smooth {
+                                                                        ui.label("Smooth");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_soft {
+                                                                        ui.label("Soft");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_stab {
+                                                                        ui.label("Stab");
+                                                                    }
+                                                                    if arc_preset.lock().unwrap()[*r_index].tag_warm {
+                                                                        ui.label("Warm");
+                                                                    }
+                                                                });
+                                                                ui.end_row();
+                                                            }
+                                                        }
+                                                });
+
+                                            ui.vertical_centered(|ui| {
+                                                let close_button = ui.button(RichText::new("Cancel")
+                                                    .font(FONT)
+                                                    .background_color(A_BACKGROUND_COLOR_TOP)
+                                                    .color(FONT_COLOR)
+                                                ).on_hover_text("Close this window without doing anything");
+                                                if close_button.clicked() {
+                                                    browse_preset_active.store(false, Ordering::Relaxed);
+                                                }
+                                            });
+                                        });
+                                    }
                                     ui.separator();
                                     let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.5, 1.0, FONT);
                                     ui.add(use_fx_toggle).on_hover_text("Enable or disable FX processing");
@@ -5798,6 +5985,10 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(use_reverb_toggle);
                                                             });
                                                             ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_model, setter)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.reverb_amount, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
@@ -7741,29 +7932,38 @@ impl Actuate {
                 // Reverb
                 if self.params.use_reverb.value() {
                     // Stacked TDLs to make reverb
-                    self.reverb[0].set_size(self.params.reverb_size.value(), self.sample_rate);
-                    self.reverb[1]
-                        .set_size(self.params.reverb_size.value() * 0.546, self.sample_rate);
-                    self.reverb[2]
-                        .set_size(self.params.reverb_size.value() * 0.251, self.sample_rate);
-                    self.reverb[3]
-                        .set_size(self.params.reverb_size.value() * 0.735, self.sample_rate);
-                    self.reverb[4]
-                        .set_size(self.params.reverb_size.value() * 0.669, self.sample_rate);
-                    self.reverb[5]
-                        .set_size(self.params.reverb_size.value() * 0.374, self.sample_rate);
-                    self.reverb[6]
-                        .set_size(self.params.reverb_size.value() * 0.8, self.sample_rate);
-                    self.reverb[7]
-                        .set_size(self.params.reverb_size.value() * 0.4, self.sample_rate);
-
-                    for verb in self.reverb.iter_mut() {
-                        verb.set_feedback(self.params.reverb_feedback.value());
-                        (left_output, right_output) = verb.process_tdl(
-                            left_output,
-                            right_output,
-                            self.params.reverb_amount.value(),
-                        );
+                    if self.params.reverb_model.value() == ReverbModel::Default {
+                        self.reverb[0]
+                            .set_size(self.params.reverb_size.value(), self.sample_rate);
+                        self.reverb[1]
+                            .set_size(self.params.reverb_size.value() * 0.546, self.sample_rate);
+                        self.reverb[2]
+                            .set_size(self.params.reverb_size.value() * 0.251, self.sample_rate);
+                        self.reverb[3]
+                            .set_size(self.params.reverb_size.value() * 0.735, self.sample_rate);
+                        self.reverb[4]
+                            .set_size(self.params.reverb_size.value() * 0.669, self.sample_rate);
+                        self.reverb[5]
+                            .set_size(self.params.reverb_size.value() * 0.374, self.sample_rate);
+                        self.reverb[6]
+                            .set_size(self.params.reverb_size.value() * 0.8, self.sample_rate);
+                        self.reverb[7]
+                            .set_size(self.params.reverb_size.value() * 0.4, self.sample_rate);
+                        for verb in self.reverb.iter_mut() {
+                            verb.set_feedback(self.params.reverb_feedback.value());
+                            (left_output, right_output) = verb.process_tdl(
+                                left_output,
+                                right_output,
+                                self.params.reverb_amount.value());                    
+                        }
+                    } else {
+                        // Use Galactic!
+                        self.galactic_reverb.update(
+                            self.sample_rate,
+                            self.params.reverb_size.value() / 2.0,
+                            self.params.reverb_feedback.value(),
+                            self.params.reverb_amount.value());
+                        (left_output, right_output) = self.galactic_reverb.process(left_output, right_output);
                     }
                 }
                 // Limiter
@@ -7841,295 +8041,26 @@ impl Actuate {
 
             // Deserialize into ActuatePreset - return default empty lib if error
             let mut unserialized: ActuatePreset = rmp_serde::from_slice(&file_string_data)
-                .unwrap_or(ActuatePreset {
-                    preset_name: "Error Importing".to_string(),
-                    preset_info: "Corrupted preset or incompatible version".to_string(),
-                    preset_category: PresetType::Select,
-                    tag_acid: false,
-                    tag_analog: false,
-                    tag_bright: false,
-                    tag_chord: false,
-                    tag_crisp: false,
-                    tag_deep: false,
-                    tag_delicate: false,
-                    tag_hard: false,
-                    tag_harsh: false,
-                    tag_lush: false,
-                    tag_mellow: false,
-                    tag_resonant: false,
-                    tag_rich: false,
-                    tag_sharp: false,
-                    tag_silky: false,
-                    tag_smooth: false,
-                    tag_soft: false,
-                    tag_stab: false,
-                    tag_warm: false,
-                    mod1_audio_module_type: AudioModuleType::Osc,
-                    mod1_audio_module_level: 1.0,
-                    mod1_audio_module_routing: AMFilterRouting::Filter1,
-                    mod1_loaded_sample: vec![vec![0.0, 0.0]],
-                    mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                    mod1_loop_wavetable: false,
-                    mod1_single_cycle: false,
-                    mod1_restretch: true,
-                    mod1_prev_restretch: false,
-                    mod1_grain_hold: 200,
-                    mod1_grain_gap: 200,
-                    mod1_start_position: 0.0,
-                    mod1_end_position: 1.0,
-                    mod1_grain_crossfade: 50,
-                    mod1_osc_type: VoiceType::Sine,
-                    mod1_osc_octave: 0,
-                    mod1_osc_semitones: 0,
-                    mod1_osc_detune: 0.0,
-                    mod1_osc_attack: 0.0001,
-                    mod1_osc_decay: 0.0001,
-                    mod1_osc_sustain: 999.9,
-                    mod1_osc_release: 5.0,
-                    mod1_osc_retrigger: RetriggerStyle::Retrigger,
-                    mod1_osc_atk_curve: SmoothStyle::Linear,
-                    mod1_osc_dec_curve: SmoothStyle::Linear,
-                    mod1_osc_rel_curve: SmoothStyle::Linear,
-                    mod1_osc_unison: 1,
-                    mod1_osc_unison_detune: 0.0,
-                    mod1_osc_stereo: 0.0,
+                .unwrap_or(ERROR_PRESET.clone());
 
-                    mod2_audio_module_type: AudioModuleType::Off,
-                    mod2_audio_module_level: 1.0,
-                    mod2_audio_module_routing: AMFilterRouting::Filter1,
-                    mod2_loaded_sample: vec![vec![0.0, 0.0]],
-                    mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                    mod2_loop_wavetable: false,
-                    mod2_single_cycle: false,
-                    mod2_restretch: true,
-                    mod2_prev_restretch: false,
-                    mod2_grain_hold: 200,
-                    mod2_grain_gap: 200,
-                    mod2_start_position: 0.0,
-                    mod2_end_position: 1.0,
-                    mod2_grain_crossfade: 50,
-                    mod2_osc_type: VoiceType::Sine,
-                    mod2_osc_octave: 0,
-                    mod2_osc_semitones: 0,
-                    mod2_osc_detune: 0.0,
-                    mod2_osc_attack: 0.0001,
-                    mod2_osc_decay: 0.0001,
-                    mod2_osc_sustain: 999.9,
-                    mod2_osc_release: 5.0,
-                    mod2_osc_retrigger: RetriggerStyle::Retrigger,
-                    mod2_osc_atk_curve: SmoothStyle::Linear,
-                    mod2_osc_dec_curve: SmoothStyle::Linear,
-                    mod2_osc_rel_curve: SmoothStyle::Linear,
-                    mod2_osc_unison: 1,
-                    mod2_osc_unison_detune: 0.0,
-                    mod2_osc_stereo: 0.0,
-
-                    mod3_audio_module_type: AudioModuleType::Off,
-                    mod3_audio_module_level: 1.0,
-                    mod3_audio_module_routing: AMFilterRouting::Filter1,
-                    mod3_loaded_sample: vec![vec![0.0, 0.0]],
-                    mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                    mod3_loop_wavetable: false,
-                    mod3_single_cycle: false,
-                    mod3_restretch: true,
-                    mod3_prev_restretch: false,
-                    mod3_grain_hold: 200,
-                    mod3_grain_gap: 200,
-                    mod3_start_position: 0.0,
-                    mod3_end_position: 1.0,
-                    mod3_grain_crossfade: 50,
-                    mod3_osc_type: VoiceType::Sine,
-                    mod3_osc_octave: 0,
-                    mod3_osc_semitones: 0,
-                    mod3_osc_detune: 0.0,
-                    mod3_osc_attack: 0.0001,
-                    mod3_osc_decay: 0.0001,
-                    mod3_osc_sustain: 999.9,
-                    mod3_osc_release: 5.0,
-                    mod3_osc_retrigger: RetriggerStyle::Retrigger,
-                    mod3_osc_atk_curve: SmoothStyle::Linear,
-                    mod3_osc_dec_curve: SmoothStyle::Linear,
-                    mod3_osc_rel_curve: SmoothStyle::Linear,
-                    mod3_osc_unison: 1,
-                    mod3_osc_unison_detune: 0.0,
-                    mod3_osc_stereo: 0.0,
-
-                    filter_wet: 1.0,
-                    filter_cutoff: 20000.0,
-                    filter_resonance: 1.0,
-                    filter_res_type: ResonanceType::Default,
-                    filter_lp_amount: 1.0,
-                    filter_hp_amount: 0.0,
-                    filter_bp_amount: 0.0,
-                    filter_env_peak: 0.0,
-                    filter_env_attack: 0.0001,
-                    filter_env_decay: 0.0001,
-                    filter_env_sustain: 999.9,
-                    filter_env_release: 5.0,
-                    filter_env_atk_curve: SmoothStyle::Linear,
-                    filter_env_dec_curve: SmoothStyle::Linear,
-                    filter_env_rel_curve: SmoothStyle::Linear,
-                    filter_alg_type: FilterAlgorithms::SVF,
-                    tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
-
-                    filter_wet_2: 1.0,
-                    filter_cutoff_2: 20000.0,
-                    filter_resonance_2: 1.0,
-                    filter_res_type_2: ResonanceType::Default,
-                    filter_lp_amount_2: 1.0,
-                    filter_hp_amount_2: 0.0,
-                    filter_bp_amount_2: 0.0,
-                    filter_env_peak_2: 0.0,
-                    filter_env_attack_2: 0.0001,
-                    filter_env_decay_2: 0.0001,
-                    filter_env_sustain_2: 999.9,
-                    filter_env_release_2: 5.0,
-                    filter_env_atk_curve_2: SmoothStyle::Linear,
-                    filter_env_dec_curve_2: SmoothStyle::Linear,
-                    filter_env_rel_curve_2: SmoothStyle::Linear,
-                    filter_alg_type_2: FilterAlgorithms::SVF,
-                    tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
-
-                    filter_routing: FilterRouting::Parallel,
-                    filter_cutoff_link: false,
-
-                    // Pitch
-                    pitch_enable: false,
-                    pitch_env_peak: 0.0,
-                    pitch_env_atk_curve: SmoothStyle::Linear,
-                    pitch_env_dec_curve: SmoothStyle::Linear,
-                    pitch_env_rel_curve: SmoothStyle::Linear,
-                    pitch_env_attack: 0.0001,
-                    pitch_env_decay: 300.0,
-                    pitch_env_release: 0.0001,
-                    pitch_env_sustain: 0.0,
-                    pitch_routing: PitchRouting::Osc1,
-
-                    pitch_enable_2: false,
-                    pitch_env_peak_2: 0.0,
-                    pitch_env_atk_curve_2: SmoothStyle::Linear,
-                    pitch_env_dec_curve_2: SmoothStyle::Linear,
-                    pitch_env_rel_curve_2: SmoothStyle::Linear,
-                    pitch_env_attack_2: 0.0001,
-                    pitch_env_decay_2: 300.0,
-                    pitch_env_release_2: 0.0001,
-                    pitch_env_sustain_2: 0.0,
-                    pitch_routing_2: PitchRouting::Osc1,
-
-                    // LFOs
-                    lfo1_enable: false,
-                    lfo2_enable: false,
-                    lfo3_enable: false,
-
-                    lfo1_freq: 2.0,
-                    lfo1_retrigger: LFOController::LFORetrigger::None,
-                    lfo1_sync: true,
-                    lfo1_snap: LFOController::LFOSnapValues::Half,
-                    lfo1_waveform: LFOController::Waveform::Sine,
-                    lfo1_phase: 0.0,
-
-                    lfo2_freq: 2.0,
-                    lfo2_retrigger: LFOController::LFORetrigger::None,
-                    lfo2_sync: true,
-                    lfo2_snap: LFOController::LFOSnapValues::Half,
-                    lfo2_waveform: LFOController::Waveform::Sine,
-                    lfo2_phase: 0.0,
-
-                    lfo3_freq: 2.0,
-                    lfo3_retrigger: LFOController::LFORetrigger::None,
-                    lfo3_sync: true,
-                    lfo3_snap: LFOController::LFOSnapValues::Half,
-                    lfo3_waveform: LFOController::Waveform::Sine,
-                    lfo3_phase: 0.0,
-
-                    // Modulations
-                    mod_source_1: ModulationSource::None,
-                    mod_source_2: ModulationSource::None,
-                    mod_source_3: ModulationSource::None,
-                    mod_source_4: ModulationSource::None,
-                    mod_dest_1: ModulationDestination::None,
-                    mod_dest_2: ModulationDestination::None,
-                    mod_dest_3: ModulationDestination::None,
-                    mod_dest_4: ModulationDestination::None,
-                    mod_amount_1: 0.0,
-                    mod_amount_2: 0.0,
-                    mod_amount_3: 0.0,
-                    mod_amount_4: 0.0,
-
-                    // EQ
-                    pre_use_eq: false,
-                    pre_low_freq: 800.0,
-                    pre_mid_freq: 3000.0,
-                    pre_high_freq: 10000.0,
-                    pre_low_gain: 0.0,
-                    pre_mid_gain: 0.0,
-                    pre_high_gain: 0.0,
-
-                    // FX
-                    use_fx: true,
-
-                    use_compressor: false,
-                    comp_amt: 0.5,
-                    comp_atk: 0.5,
-                    comp_rel: 0.5,
-                    comp_drive: 0.5,
-
-                    use_abass: false,
-                    abass_amount: 0.0011,
-
-                    use_saturation: false,
-                    sat_amount: 0.0,
-                    sat_type: SaturationType::Tape,
-
-                    use_delay: false,
-                    delay_amount: 0.5,
-                    delay_time: DelaySnapValues::Quarter,
-                    delay_decay: 0.5,
-                    delay_type: DelayType::Stereo,
-
-                    use_reverb: false,
-                    reverb_amount: 0.85,
-                    reverb_size: 1.0,
-                    reverb_feedback: 0.28,
-
-                    use_phaser: false,
-                    phaser_amount: 0.5,
-                    phaser_depth: 0.5,
-                    phaser_rate: 0.5,
-                    phaser_feedback: 0.5,
-
-                    use_buffermod: false,
-                    buffermod_amount: 0.5,
-                    buffermod_depth: 0.5,
-                    buffermod_rate: 0.5,
-                    buffermod_spread: 0.0,
-                    buffermod_timing: 620.0,
-
-                    use_flanger: false,
-                    flanger_amount: 0.5,
-                    flanger_depth: 0.5,
-                    flanger_rate: 0.5,
-                    flanger_feedback: 0.5,
-
-                    use_limiter: false,
-                    limiter_threshold: 0.5,
-                    limiter_knee: 0.5,
-                });
-
-            // Attempt to load the previous version preset type
             if unserialized.preset_name.contains("Error") {
-                // Try loading the previous preset struct version
-                unserialized = load_unserialized_v122(file_string_data.clone());
-
                 // Attempt to load the previous version preset type
+                unserialized = load_unserialized_v123(file_string_data.clone());
+
                 if unserialized.preset_name.contains("Error") {
                     // Try loading the previous preset struct version
-                    unserialized = load_unserialized_v114(file_string_data.clone());
+                    unserialized = load_unserialized_v122(file_string_data.clone());
 
-                    // Attempt to load the oldest preset type
+                    // Attempt to load the previous version preset type
                     if unserialized.preset_name.contains("Error") {
                         // Try loading the previous preset struct version
-                        unserialized = load_unserialized_old(file_string_data.clone());
+                        unserialized = load_unserialized_v114(file_string_data.clone());
+
+                        // Attempt to load the oldest preset type
+                        if unserialized.preset_name.contains("Error") {
+                            // Try loading the previous preset struct version
+                            unserialized = load_unserialized_old(file_string_data.clone());
+                        }
                     }
                 }
             }
@@ -8171,281 +8102,24 @@ impl Actuate {
             // Deserialize into ActuatePreset - return default empty lib if error
             let unserialized: Vec<ActuatePreset> = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(vec![
-                    ActuatePreset {
-                        preset_name: "Default".to_string(),
-                        preset_info: "Info".to_string(),
-                        preset_category: PresetType::Select,
-                        tag_acid: false,
-                        tag_analog: false,
-                        tag_bright: false,
-                        tag_chord: false,
-                        tag_crisp: false,
-                        tag_deep: false,
-                        tag_delicate: false,
-                        tag_hard: false,
-                        tag_harsh: false,
-                        tag_lush: false,
-                        tag_mellow: false,
-                        tag_resonant: false,
-                        tag_rich: false,
-                        tag_sharp: false,
-                        tag_silky: false,
-                        tag_smooth: false,
-                        tag_soft: false,
-                        tag_stab: false,
-                        tag_warm: false,
-                        mod1_audio_module_type: AudioModuleType::Osc,
-                        mod1_audio_module_level: 1.0,
-                        mod1_audio_module_routing: AMFilterRouting::Filter1,
-                        mod1_loaded_sample: vec![vec![0.0, 0.0]],
-                        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                        mod1_loop_wavetable: false,
-                        mod1_single_cycle: false,
-                        mod1_restretch: true,
-                        mod1_prev_restretch: false,
-                        mod1_grain_hold: 200,
-                        mod1_grain_gap: 200,
-                        mod1_start_position: 0.0,
-                        mod1_end_position: 1.0,
-                        mod1_grain_crossfade: 50,
-                        mod1_osc_type: VoiceType::Sine,
-                        mod1_osc_octave: 0,
-                        mod1_osc_semitones: 0,
-                        mod1_osc_detune: 0.0,
-                        mod1_osc_attack: 0.0001,
-                        mod1_osc_decay: 0.0001,
-                        mod1_osc_sustain: 999.9,
-                        mod1_osc_release: 5.0,
-                        mod1_osc_retrigger: RetriggerStyle::Retrigger,
-                        mod1_osc_atk_curve: SmoothStyle::Linear,
-                        mod1_osc_dec_curve: SmoothStyle::Linear,
-                        mod1_osc_rel_curve: SmoothStyle::Linear,
-                        mod1_osc_unison: 1,
-                        mod1_osc_unison_detune: 0.0,
-                        mod1_osc_stereo: 0.0,
-
-                        mod2_audio_module_type: AudioModuleType::Off,
-                        mod2_audio_module_level: 1.0,
-                        mod2_audio_module_routing: AMFilterRouting::Filter1,
-                        mod2_loaded_sample: vec![vec![0.0, 0.0]],
-                        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                        mod2_loop_wavetable: false,
-                        mod2_single_cycle: false,
-                        mod2_restretch: true,
-                        mod2_prev_restretch: false,
-                        mod2_grain_hold: 200,
-                        mod2_grain_gap: 200,
-                        mod2_start_position: 0.0,
-                        mod2_end_position: 1.0,
-                        mod2_grain_crossfade: 50,
-                        mod2_osc_type: VoiceType::Sine,
-                        mod2_osc_octave: 0,
-                        mod2_osc_semitones: 0,
-                        mod2_osc_detune: 0.0,
-                        mod2_osc_attack: 0.0001,
-                        mod2_osc_decay: 0.0001,
-                        mod2_osc_sustain: 999.9,
-                        mod2_osc_release: 5.0,
-                        mod2_osc_retrigger: RetriggerStyle::Retrigger,
-                        mod2_osc_atk_curve: SmoothStyle::Linear,
-                        mod2_osc_dec_curve: SmoothStyle::Linear,
-                        mod2_osc_rel_curve: SmoothStyle::Linear,
-                        mod2_osc_unison: 1,
-                        mod2_osc_unison_detune: 0.0,
-                        mod2_osc_stereo: 0.0,
-
-                        mod3_audio_module_type: AudioModuleType::Off,
-                        mod3_audio_module_level: 1.0,
-                        mod3_audio_module_routing: AMFilterRouting::Filter1,
-                        mod3_loaded_sample: vec![vec![0.0, 0.0]],
-                        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-                        mod3_loop_wavetable: false,
-                        mod3_single_cycle: false,
-                        mod3_restretch: true,
-                        mod3_prev_restretch: false,
-                        mod3_grain_hold: 200,
-                        mod3_grain_gap: 200,
-                        mod3_start_position: 0.0,
-                        mod3_end_position: 1.0,
-                        mod3_grain_crossfade: 50,
-                        mod3_osc_type: VoiceType::Sine,
-                        mod3_osc_octave: 0,
-                        mod3_osc_semitones: 0,
-                        mod3_osc_detune: 0.0,
-                        mod3_osc_attack: 0.0001,
-                        mod3_osc_decay: 0.0001,
-                        mod3_osc_sustain: 999.9,
-                        mod3_osc_release: 5.0,
-                        mod3_osc_retrigger: RetriggerStyle::Retrigger,
-                        mod3_osc_atk_curve: SmoothStyle::Linear,
-                        mod3_osc_dec_curve: SmoothStyle::Linear,
-                        mod3_osc_rel_curve: SmoothStyle::Linear,
-                        mod3_osc_unison: 1,
-                        mod3_osc_unison_detune: 0.0,
-                        mod3_osc_stereo: 0.0,
-
-                        filter_wet: 1.0,
-                        filter_cutoff: 20000.0,
-                        filter_resonance: 1.0,
-                        filter_res_type: ResonanceType::Default,
-                        filter_lp_amount: 1.0,
-                        filter_hp_amount: 0.0,
-                        filter_bp_amount: 0.0,
-                        filter_env_peak: 0.0,
-                        filter_env_attack: 0.0,
-                        filter_env_decay: 0.0001,
-                        filter_env_sustain: 999.9,
-                        filter_env_release: 5.0,
-                        filter_env_atk_curve: SmoothStyle::Linear,
-                        filter_env_dec_curve: SmoothStyle::Linear,
-                        filter_env_rel_curve: SmoothStyle::Linear,
-                        filter_alg_type: FilterAlgorithms::SVF,
-                        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
-
-                        filter_wet_2: 1.0,
-                        filter_cutoff_2: 20000.0,
-                        filter_resonance_2: 1.0,
-                        filter_res_type_2: ResonanceType::Default,
-                        filter_lp_amount_2: 1.0,
-                        filter_hp_amount_2: 0.0,
-                        filter_bp_amount_2: 0.0,
-                        filter_env_peak_2: 0.0,
-                        filter_env_attack_2: 0.0,
-                        filter_env_decay_2: 0.0001,
-                        filter_env_sustain_2: 999.9,
-                        filter_env_release_2: 5.0,
-                        filter_env_atk_curve_2: SmoothStyle::Linear,
-                        filter_env_dec_curve_2: SmoothStyle::Linear,
-                        filter_env_rel_curve_2: SmoothStyle::Linear,
-                        filter_alg_type_2: FilterAlgorithms::SVF,
-                        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
-
-                        filter_routing: FilterRouting::Parallel,
-                        filter_cutoff_link: false,
-
-                        pitch_enable: false,
-                        pitch_env_atk_curve: SmoothStyle::Linear,
-                        pitch_env_dec_curve: SmoothStyle::Linear,
-                        pitch_env_rel_curve: SmoothStyle::Linear,
-                        pitch_env_attack: 0.0,
-                        pitch_env_decay: 300.0,
-                        pitch_env_sustain: 0.0,
-                        pitch_env_release: 0.0,
-                        pitch_env_peak: 0.0,
-                        pitch_routing: PitchRouting::Osc1,
-
-                        pitch_enable_2: false,
-                        pitch_env_peak_2: 0.0,
-                        pitch_env_atk_curve_2: SmoothStyle::Linear,
-                        pitch_env_dec_curve_2: SmoothStyle::Linear,
-                        pitch_env_rel_curve_2: SmoothStyle::Linear,
-                        pitch_env_attack_2: 0.0,
-                        pitch_env_decay_2: 300.0,
-                        pitch_env_release_2: 0.0,
-                        pitch_env_sustain_2: 0.0,
-                        pitch_routing_2: PitchRouting::Osc1,
-
-                        // LFOs
-                        lfo1_enable: false,
-                        lfo2_enable: false,
-                        lfo3_enable: false,
-
-                        lfo1_freq: 2.0,
-                        lfo1_retrigger: LFOController::LFORetrigger::None,
-                        lfo1_sync: true,
-                        lfo1_snap: LFOController::LFOSnapValues::Half,
-                        lfo1_waveform: LFOController::Waveform::Sine,
-                        lfo1_phase: 0.0,
-
-                        lfo2_freq: 2.0,
-                        lfo2_retrigger: LFOController::LFORetrigger::None,
-                        lfo2_sync: true,
-                        lfo2_snap: LFOController::LFOSnapValues::Half,
-                        lfo2_waveform: LFOController::Waveform::Sine,
-                        lfo2_phase: 0.0,
-
-                        lfo3_freq: 2.0,
-                        lfo3_retrigger: LFOController::LFORetrigger::None,
-                        lfo3_sync: true,
-                        lfo3_snap: LFOController::LFOSnapValues::Half,
-                        lfo3_waveform: LFOController::Waveform::Sine,
-                        lfo3_phase: 0.0,
-
-                        // Modulations
-                        mod_source_1: ModulationSource::None,
-                        mod_source_2: ModulationSource::None,
-                        mod_source_3: ModulationSource::None,
-                        mod_source_4: ModulationSource::None,
-                        mod_dest_1: ModulationDestination::None,
-                        mod_dest_2: ModulationDestination::None,
-                        mod_dest_3: ModulationDestination::None,
-                        mod_dest_4: ModulationDestination::None,
-                        mod_amount_1: 0.0,
-                        mod_amount_2: 0.0,
-                        mod_amount_3: 0.0,
-                        mod_amount_4: 0.0,
-
-                        // EQ
-                        pre_use_eq: false,
-                        pre_low_freq: 800.0,
-                        pre_mid_freq: 3000.0,
-                        pre_high_freq: 10000.0,
-                        pre_low_gain: 0.0,
-                        pre_mid_gain: 0.0,
-                        pre_high_gain: 0.0,
-
-                        // FX
-                        use_fx: true,
-
-                        use_compressor: false,
-                        comp_amt: 0.5,
-                        comp_atk: 0.5,
-                        comp_rel: 0.5,
-                        comp_drive: 0.5,
-
-                        use_abass: false,
-                        abass_amount: 0.0011,
-
-                        use_saturation: false,
-                        sat_amount: 0.0,
-                        sat_type: SaturationType::Tape,
-
-                        use_delay: false,
-                        delay_amount: 0.5,
-                        delay_time: DelaySnapValues::Quarter,
-                        delay_decay: 0.5,
-                        delay_type: DelayType::Stereo,
-
-                        use_reverb: false,
-                        reverb_amount: 0.85,
-                        reverb_size: 1.0,
-                        reverb_feedback: 0.28,
-
-                        use_phaser: false,
-                        phaser_amount: 0.5,
-                        phaser_depth: 0.5,
-                        phaser_rate: 0.5,
-                        phaser_feedback: 0.5,
-
-                        use_buffermod: false,
-                        buffermod_amount: 0.5,
-                        buffermod_depth: 0.5,
-                        buffermod_rate: 0.5,
-                        buffermod_spread: 0.0,
-                        buffermod_timing: 620.0,
-
-                        use_flanger: false,
-                        flanger_amount: 0.5,
-                        flanger_depth: 0.5,
-                        flanger_rate: 0.5,
-                        flanger_feedback: 0.5,
-
-                        use_limiter: false,
-                        limiter_threshold: 0.5,
-                        limiter_knee: 0.5,
-                    };
+                    ERROR_PRESET.clone();
                     PRESET_BANK_SIZE
                 ]);
+
+            // Attempt loading an older bank
+            if unserialized[0].preset_name.contains("Error") {
+                let unserialized: Vec<ActuatePresetV123> = rmp_serde::from_slice(&file_string_data)
+                .unwrap_or(vec![
+                    ERROR_PRESETV123.clone();
+                    PRESET_BANK_SIZE
+                ]);
+                // Convert each v1.2.3 entry into a 1.2.4 bank
+                let mut converted: Vec<ActuatePreset> = Vec::new();
+                for v123_preset in unserialized.iter() {
+                    converted.push(old_preset_structs::convert_preset_v123(v123_preset.clone()));
+                }
+                return (return_name, converted);
+            }
 
             return (return_name, unserialized);
         }
@@ -8673,6 +8347,7 @@ impl Actuate {
         setter.set_parameter(&params.delay_decay, loaded_preset.delay_decay);
         setter.set_parameter(&params.delay_time, loaded_preset.delay_time.clone());
         setter.set_parameter(&params.use_reverb, loaded_preset.use_reverb);
+        setter.set_parameter(&params.reverb_model, loaded_preset.reverb_model.clone());
         setter.set_parameter(&params.reverb_size, loaded_preset.reverb_size);
         setter.set_parameter(&params.reverb_amount, loaded_preset.reverb_amount);
         setter.set_parameter(&params.reverb_feedback, loaded_preset.reverb_feedback);
@@ -9301,6 +8976,7 @@ impl Actuate {
                 delay_decay: self.params.delay_decay.value(),
                 delay_type: self.params.delay_type.value(),
                 use_reverb: self.params.use_reverb.value(),
+                reverb_model: self.params.reverb_model.value(),
                 reverb_amount: self.params.reverb_amount.value(),
                 reverb_size: self.params.reverb_size.value(),
                 reverb_feedback: self.params.reverb_feedback.value(),
@@ -9833,3 +9509,832 @@ fn adv_scale_value(input: f32, in_min: f32, in_max: f32, out_min: f32, out_max: 
 
     scaled_value
 }
+
+
+lazy_static::lazy_static!(
+    static ref ERROR_PRESETV123: ActuatePresetV123 = ActuatePresetV123 {
+        preset_name: String::from("Error Loading"),
+        preset_info: String::from("Corrupt or incompatible versions"),
+        preset_category: PresetType::Select,
+        tag_acid: false,
+        tag_analog: false,
+        tag_bright: false,
+        tag_chord: false,
+        tag_crisp: false,
+        tag_deep: false,
+        tag_delicate: false,
+        tag_hard: false,
+        tag_harsh: false,
+        tag_lush: false,
+        tag_mellow: false,
+        tag_resonant: false,
+        tag_rich: false,
+        tag_sharp: false,
+        tag_silky: false,
+        tag_smooth: false,
+        tag_soft: false,
+        tag_stab: false,
+        tag_warm: false,
+        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_level: 1.0,
+        mod1_audio_module_routing: AMFilterRouting::Filter1,
+        mod1_loaded_sample: vec![vec![0.0, 0.0]],
+        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod1_loop_wavetable: false,
+        mod1_single_cycle: false,
+        mod1_restretch: true,
+        mod1_prev_restretch: false,
+        mod1_grain_hold: 200,
+        mod1_grain_gap: 200,
+        mod1_start_position: 0.0,
+        mod1_end_position: 1.0,
+        mod1_grain_crossfade: 50,
+        mod1_osc_type: VoiceType::Sine,
+        mod1_osc_octave: 0,
+        mod1_osc_semitones: 0,
+        mod1_osc_detune: 0.0,
+        mod1_osc_attack: 0.0001,
+        mod1_osc_decay: 0.0001,
+        mod1_osc_sustain: 999.9,
+        mod1_osc_release: 5.0,
+        mod1_osc_retrigger: RetriggerStyle::Retrigger,
+        mod1_osc_atk_curve: SmoothStyle::Linear,
+        mod1_osc_dec_curve: SmoothStyle::Linear,
+        mod1_osc_rel_curve: SmoothStyle::Linear,
+        mod1_osc_unison: 1,
+        mod1_osc_unison_detune: 0.0,
+        mod1_osc_stereo: 0.0,
+
+        mod2_audio_module_type: AudioModuleType::Off,
+        mod2_audio_module_level: 1.0,
+        mod2_audio_module_routing: AMFilterRouting::Filter1,
+        mod2_loaded_sample: vec![vec![0.0, 0.0]],
+        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod2_loop_wavetable: false,
+        mod2_single_cycle: false,
+        mod2_restretch: true,
+        mod2_prev_restretch: false,
+        mod2_grain_hold: 200,
+        mod2_grain_gap: 200,
+        mod2_start_position: 0.0,
+        mod2_end_position: 1.0,
+        mod2_grain_crossfade: 50,
+        mod2_osc_type: VoiceType::Sine,
+        mod2_osc_octave: 0,
+        mod2_osc_semitones: 0,
+        mod2_osc_detune: 0.0,
+        mod2_osc_attack: 0.0001,
+        mod2_osc_decay: 0.0001,
+        mod2_osc_sustain: 999.9,
+        mod2_osc_release: 5.0,
+        mod2_osc_retrigger: RetriggerStyle::Retrigger,
+        mod2_osc_atk_curve: SmoothStyle::Linear,
+        mod2_osc_dec_curve: SmoothStyle::Linear,
+        mod2_osc_rel_curve: SmoothStyle::Linear,
+        mod2_osc_unison: 1,
+        mod2_osc_unison_detune: 0.0,
+        mod2_osc_stereo: 0.0,
+
+        mod3_audio_module_type: AudioModuleType::Off,
+        mod3_audio_module_level: 1.0,
+        mod3_audio_module_routing: AMFilterRouting::Filter1,
+        mod3_loaded_sample: vec![vec![0.0, 0.0]],
+        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod3_loop_wavetable: false,
+        mod3_single_cycle: false,
+        mod3_restretch: true,
+        mod3_prev_restretch: false,
+        mod3_grain_hold: 200,
+        mod3_grain_gap: 200,
+        mod3_start_position: 0.0,
+        mod3_end_position: 1.0,
+        mod3_grain_crossfade: 50,
+        mod3_osc_type: VoiceType::Sine,
+        mod3_osc_octave: 0,
+        mod3_osc_semitones: 0,
+        mod3_osc_detune: 0.0,
+        mod3_osc_attack: 0.0001,
+        mod3_osc_decay: 0.0001,
+        mod3_osc_sustain: 999.9,
+        mod3_osc_release: 5.0,
+        mod3_osc_retrigger: RetriggerStyle::Retrigger,
+        mod3_osc_atk_curve: SmoothStyle::Linear,
+        mod3_osc_dec_curve: SmoothStyle::Linear,
+        mod3_osc_rel_curve: SmoothStyle::Linear,
+        mod3_osc_unison: 1,
+        mod3_osc_unison_detune: 0.0,
+        mod3_osc_stereo: 0.0,
+
+        filter_wet: 1.0,
+        filter_cutoff: 20000.0,
+        filter_resonance: 1.0,
+        filter_res_type: ResonanceType::Default,
+        filter_lp_amount: 1.0,
+        filter_hp_amount: 0.0,
+        filter_bp_amount: 0.0,
+        filter_env_peak: 0.0,
+        filter_env_attack: 0.0,
+        filter_env_decay: 0.0001,
+        filter_env_sustain: 999.9,
+        filter_env_release: 5.0,
+        filter_env_atk_curve: SmoothStyle::Linear,
+        filter_env_dec_curve: SmoothStyle::Linear,
+        filter_env_rel_curve: SmoothStyle::Linear,
+        filter_alg_type: FilterAlgorithms::SVF,
+        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+
+        filter_wet_2: 1.0,
+        filter_cutoff_2: 20000.0,
+        filter_resonance_2: 1.0,
+        filter_res_type_2: ResonanceType::Default,
+        filter_lp_amount_2: 1.0,
+        filter_hp_amount_2: 0.0,
+        filter_bp_amount_2: 0.0,
+        filter_env_peak_2: 0.0,
+        filter_env_attack_2: 0.0,
+        filter_env_decay_2: 0.0001,
+        filter_env_sustain_2: 999.9,
+        filter_env_release_2: 5.0,
+        filter_env_atk_curve_2: SmoothStyle::Linear,
+        filter_env_dec_curve_2: SmoothStyle::Linear,
+        filter_env_rel_curve_2: SmoothStyle::Linear,
+        filter_alg_type_2: FilterAlgorithms::SVF,
+        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+
+        filter_routing: FilterRouting::Parallel,
+        filter_cutoff_link: false,
+
+        pitch_enable: false,
+        pitch_env_atk_curve: SmoothStyle::Linear,
+        pitch_env_dec_curve: SmoothStyle::Linear,
+        pitch_env_rel_curve: SmoothStyle::Linear,
+        pitch_env_attack: 0.0,
+        pitch_env_decay: 300.0,
+        pitch_env_sustain: 0.0,
+        pitch_env_release: 0.0,
+        pitch_env_peak: 0.0,
+        pitch_routing: PitchRouting::Osc1,
+
+        pitch_enable_2: false,
+        pitch_env_peak_2: 0.0,
+        pitch_env_atk_curve_2: SmoothStyle::Linear,
+        pitch_env_dec_curve_2: SmoothStyle::Linear,
+        pitch_env_rel_curve_2: SmoothStyle::Linear,
+        pitch_env_attack_2: 0.0,
+        pitch_env_decay_2: 300.0,
+        pitch_env_release_2: 0.0,
+        pitch_env_sustain_2: 0.0,
+        pitch_routing_2: PitchRouting::Osc1,
+
+        // LFOs
+        lfo1_enable: false,
+        lfo2_enable: false,
+        lfo3_enable: false,
+
+        lfo1_freq: 2.0,
+        lfo1_retrigger: LFOController::LFORetrigger::None,
+        lfo1_sync: true,
+        lfo1_snap: LFOController::LFOSnapValues::Half,
+        lfo1_waveform: LFOController::Waveform::Sine,
+        lfo1_phase: 0.0,
+
+        lfo2_freq: 2.0,
+        lfo2_retrigger: LFOController::LFORetrigger::None,
+        lfo2_sync: true,
+        lfo2_snap: LFOController::LFOSnapValues::Half,
+        lfo2_waveform: LFOController::Waveform::Sine,
+        lfo2_phase: 0.0,
+
+        lfo3_freq: 2.0,
+        lfo3_retrigger: LFOController::LFORetrigger::None,
+        lfo3_sync: true,
+        lfo3_snap: LFOController::LFOSnapValues::Half,
+        lfo3_waveform: LFOController::Waveform::Sine,
+        lfo3_phase: 0.0,
+
+        // Modulations
+        mod_source_1: ModulationSource::None,
+        mod_source_2: ModulationSource::None,
+        mod_source_3: ModulationSource::None,
+        mod_source_4: ModulationSource::None,
+        mod_dest_1: ModulationDestination::None,
+        mod_dest_2: ModulationDestination::None,
+        mod_dest_3: ModulationDestination::None,
+        mod_dest_4: ModulationDestination::None,
+        mod_amount_1: 0.0,
+        mod_amount_2: 0.0,
+        mod_amount_3: 0.0,
+        mod_amount_4: 0.0,
+
+        // EQ
+        pre_use_eq: false,
+        pre_low_freq: 800.0,
+        pre_mid_freq: 3000.0,
+        pre_high_freq: 10000.0,
+        pre_low_gain: 0.0,
+        pre_mid_gain: 0.0,
+        pre_high_gain: 0.0,
+
+        // FX
+        use_fx: true,
+
+        use_compressor: false,
+        comp_amt: 0.5,
+        comp_atk: 0.5,
+        comp_rel: 0.5,
+        comp_drive: 0.5,
+
+        use_abass: false,
+        abass_amount: 0.0011,
+
+        use_saturation: false,
+        sat_amount: 0.0,
+        sat_type: SaturationType::Tape,
+
+        use_delay: false,
+        delay_amount: 0.5,
+        delay_time: DelaySnapValues::Quarter,
+        delay_decay: 0.5,
+        delay_type: DelayType::Stereo,
+
+        use_reverb: false,
+        reverb_amount: 0.85,
+        reverb_size: 1.0,
+        reverb_feedback: 0.28,
+
+        use_phaser: false,
+        phaser_amount: 0.5,
+        phaser_depth: 0.5,
+        phaser_rate: 0.5,
+        phaser_feedback: 0.5,
+
+        use_buffermod: false,
+        buffermod_amount: 0.5,
+        buffermod_depth: 0.5,
+        buffermod_rate: 0.5,
+        buffermod_spread: 0.0,
+        buffermod_timing: 620.0,
+
+        use_flanger: false,
+        flanger_amount: 0.5,
+        flanger_depth: 0.5,
+        flanger_rate: 0.5,
+        flanger_feedback: 0.5,
+
+        use_limiter: false,
+        limiter_threshold: 0.5,
+        limiter_knee: 0.5,
+    };
+
+    static ref ERROR_PRESET: ActuatePreset = ActuatePreset {
+        preset_name: String::from("Error Loading"),
+        preset_info: String::from("Corrupt or incompatible versions"),
+        preset_category: PresetType::Select,
+        tag_acid: false,
+        tag_analog: false,
+        tag_bright: false,
+        tag_chord: false,
+        tag_crisp: false,
+        tag_deep: false,
+        tag_delicate: false,
+        tag_hard: false,
+        tag_harsh: false,
+        tag_lush: false,
+        tag_mellow: false,
+        tag_resonant: false,
+        tag_rich: false,
+        tag_sharp: false,
+        tag_silky: false,
+        tag_smooth: false,
+        tag_soft: false,
+        tag_stab: false,
+        tag_warm: false,
+        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_level: 1.0,
+        mod1_audio_module_routing: AMFilterRouting::Filter1,
+        mod1_loaded_sample: vec![vec![0.0, 0.0]],
+        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod1_loop_wavetable: false,
+        mod1_single_cycle: false,
+        mod1_restretch: true,
+        mod1_prev_restretch: false,
+        mod1_grain_hold: 200,
+        mod1_grain_gap: 200,
+        mod1_start_position: 0.0,
+        mod1_end_position: 1.0,
+        mod1_grain_crossfade: 50,
+        mod1_osc_type: VoiceType::Sine,
+        mod1_osc_octave: 0,
+        mod1_osc_semitones: 0,
+        mod1_osc_detune: 0.0,
+        mod1_osc_attack: 0.0001,
+        mod1_osc_decay: 0.0001,
+        mod1_osc_sustain: 999.9,
+        mod1_osc_release: 5.0,
+        mod1_osc_retrigger: RetriggerStyle::Retrigger,
+        mod1_osc_atk_curve: SmoothStyle::Linear,
+        mod1_osc_dec_curve: SmoothStyle::Linear,
+        mod1_osc_rel_curve: SmoothStyle::Linear,
+        mod1_osc_unison: 1,
+        mod1_osc_unison_detune: 0.0,
+        mod1_osc_stereo: 0.0,
+
+        mod2_audio_module_type: AudioModuleType::Off,
+        mod2_audio_module_level: 1.0,
+        mod2_audio_module_routing: AMFilterRouting::Filter1,
+        mod2_loaded_sample: vec![vec![0.0, 0.0]],
+        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod2_loop_wavetable: false,
+        mod2_single_cycle: false,
+        mod2_restretch: true,
+        mod2_prev_restretch: false,
+        mod2_grain_hold: 200,
+        mod2_grain_gap: 200,
+        mod2_start_position: 0.0,
+        mod2_end_position: 1.0,
+        mod2_grain_crossfade: 50,
+        mod2_osc_type: VoiceType::Sine,
+        mod2_osc_octave: 0,
+        mod2_osc_semitones: 0,
+        mod2_osc_detune: 0.0,
+        mod2_osc_attack: 0.0001,
+        mod2_osc_decay: 0.0001,
+        mod2_osc_sustain: 999.9,
+        mod2_osc_release: 5.0,
+        mod2_osc_retrigger: RetriggerStyle::Retrigger,
+        mod2_osc_atk_curve: SmoothStyle::Linear,
+        mod2_osc_dec_curve: SmoothStyle::Linear,
+        mod2_osc_rel_curve: SmoothStyle::Linear,
+        mod2_osc_unison: 1,
+        mod2_osc_unison_detune: 0.0,
+        mod2_osc_stereo: 0.0,
+
+        mod3_audio_module_type: AudioModuleType::Off,
+        mod3_audio_module_level: 1.0,
+        mod3_audio_module_routing: AMFilterRouting::Filter1,
+        mod3_loaded_sample: vec![vec![0.0, 0.0]],
+        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod3_loop_wavetable: false,
+        mod3_single_cycle: false,
+        mod3_restretch: true,
+        mod3_prev_restretch: false,
+        mod3_grain_hold: 200,
+        mod3_grain_gap: 200,
+        mod3_start_position: 0.0,
+        mod3_end_position: 1.0,
+        mod3_grain_crossfade: 50,
+        mod3_osc_type: VoiceType::Sine,
+        mod3_osc_octave: 0,
+        mod3_osc_semitones: 0,
+        mod3_osc_detune: 0.0,
+        mod3_osc_attack: 0.0001,
+        mod3_osc_decay: 0.0001,
+        mod3_osc_sustain: 999.9,
+        mod3_osc_release: 5.0,
+        mod3_osc_retrigger: RetriggerStyle::Retrigger,
+        mod3_osc_atk_curve: SmoothStyle::Linear,
+        mod3_osc_dec_curve: SmoothStyle::Linear,
+        mod3_osc_rel_curve: SmoothStyle::Linear,
+        mod3_osc_unison: 1,
+        mod3_osc_unison_detune: 0.0,
+        mod3_osc_stereo: 0.0,
+
+        filter_wet: 1.0,
+        filter_cutoff: 20000.0,
+        filter_resonance: 1.0,
+        filter_res_type: ResonanceType::Default,
+        filter_lp_amount: 1.0,
+        filter_hp_amount: 0.0,
+        filter_bp_amount: 0.0,
+        filter_env_peak: 0.0,
+        filter_env_attack: 0.0,
+        filter_env_decay: 0.0001,
+        filter_env_sustain: 999.9,
+        filter_env_release: 5.0,
+        filter_env_atk_curve: SmoothStyle::Linear,
+        filter_env_dec_curve: SmoothStyle::Linear,
+        filter_env_rel_curve: SmoothStyle::Linear,
+        filter_alg_type: FilterAlgorithms::SVF,
+        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+
+        filter_wet_2: 1.0,
+        filter_cutoff_2: 20000.0,
+        filter_resonance_2: 1.0,
+        filter_res_type_2: ResonanceType::Default,
+        filter_lp_amount_2: 1.0,
+        filter_hp_amount_2: 0.0,
+        filter_bp_amount_2: 0.0,
+        filter_env_peak_2: 0.0,
+        filter_env_attack_2: 0.0,
+        filter_env_decay_2: 0.0001,
+        filter_env_sustain_2: 999.9,
+        filter_env_release_2: 5.0,
+        filter_env_atk_curve_2: SmoothStyle::Linear,
+        filter_env_dec_curve_2: SmoothStyle::Linear,
+        filter_env_rel_curve_2: SmoothStyle::Linear,
+        filter_alg_type_2: FilterAlgorithms::SVF,
+        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+
+        filter_routing: FilterRouting::Parallel,
+        filter_cutoff_link: false,
+
+        pitch_enable: false,
+        pitch_env_atk_curve: SmoothStyle::Linear,
+        pitch_env_dec_curve: SmoothStyle::Linear,
+        pitch_env_rel_curve: SmoothStyle::Linear,
+        pitch_env_attack: 0.0,
+        pitch_env_decay: 300.0,
+        pitch_env_sustain: 0.0,
+        pitch_env_release: 0.0,
+        pitch_env_peak: 0.0,
+        pitch_routing: PitchRouting::Osc1,
+
+        pitch_enable_2: false,
+        pitch_env_peak_2: 0.0,
+        pitch_env_atk_curve_2: SmoothStyle::Linear,
+        pitch_env_dec_curve_2: SmoothStyle::Linear,
+        pitch_env_rel_curve_2: SmoothStyle::Linear,
+        pitch_env_attack_2: 0.0,
+        pitch_env_decay_2: 300.0,
+        pitch_env_release_2: 0.0,
+        pitch_env_sustain_2: 0.0,
+        pitch_routing_2: PitchRouting::Osc1,
+
+        // LFOs
+        lfo1_enable: false,
+        lfo2_enable: false,
+        lfo3_enable: false,
+
+        lfo1_freq: 2.0,
+        lfo1_retrigger: LFOController::LFORetrigger::None,
+        lfo1_sync: true,
+        lfo1_snap: LFOController::LFOSnapValues::Half,
+        lfo1_waveform: LFOController::Waveform::Sine,
+        lfo1_phase: 0.0,
+
+        lfo2_freq: 2.0,
+        lfo2_retrigger: LFOController::LFORetrigger::None,
+        lfo2_sync: true,
+        lfo2_snap: LFOController::LFOSnapValues::Half,
+        lfo2_waveform: LFOController::Waveform::Sine,
+        lfo2_phase: 0.0,
+
+        lfo3_freq: 2.0,
+        lfo3_retrigger: LFOController::LFORetrigger::None,
+        lfo3_sync: true,
+        lfo3_snap: LFOController::LFOSnapValues::Half,
+        lfo3_waveform: LFOController::Waveform::Sine,
+        lfo3_phase: 0.0,
+
+        // Modulations
+        mod_source_1: ModulationSource::None,
+        mod_source_2: ModulationSource::None,
+        mod_source_3: ModulationSource::None,
+        mod_source_4: ModulationSource::None,
+        mod_dest_1: ModulationDestination::None,
+        mod_dest_2: ModulationDestination::None,
+        mod_dest_3: ModulationDestination::None,
+        mod_dest_4: ModulationDestination::None,
+        mod_amount_1: 0.0,
+        mod_amount_2: 0.0,
+        mod_amount_3: 0.0,
+        mod_amount_4: 0.0,
+
+        // EQ
+        pre_use_eq: false,
+        pre_low_freq: 800.0,
+        pre_mid_freq: 3000.0,
+        pre_high_freq: 10000.0,
+        pre_low_gain: 0.0,
+        pre_mid_gain: 0.0,
+        pre_high_gain: 0.0,
+
+        // FX
+        use_fx: true,
+
+        use_compressor: false,
+        comp_amt: 0.5,
+        comp_atk: 0.5,
+        comp_rel: 0.5,
+        comp_drive: 0.5,
+
+        use_abass: false,
+        abass_amount: 0.0011,
+
+        use_saturation: false,
+        sat_amount: 0.0,
+        sat_type: SaturationType::Tape,
+
+        use_delay: false,
+        delay_amount: 0.5,
+        delay_time: DelaySnapValues::Quarter,
+        delay_decay: 0.5,
+        delay_type: DelayType::Stereo,
+
+        use_reverb: false,
+        reverb_model: ReverbModel::Default,
+        reverb_amount: 0.85,
+        reverb_size: 1.0,
+        reverb_feedback: 0.28,
+
+        use_phaser: false,
+        phaser_amount: 0.5,
+        phaser_depth: 0.5,
+        phaser_rate: 0.5,
+        phaser_feedback: 0.5,
+
+        use_buffermod: false,
+        buffermod_amount: 0.5,
+        buffermod_depth: 0.5,
+        buffermod_rate: 0.5,
+        buffermod_spread: 0.0,
+        buffermod_timing: 620.0,
+
+        use_flanger: false,
+        flanger_amount: 0.5,
+        flanger_depth: 0.5,
+        flanger_rate: 0.5,
+        flanger_feedback: 0.5,
+
+        use_limiter: false,
+        limiter_threshold: 0.5,
+        limiter_knee: 0.5,
+    };
+
+    static ref DEFAULT_PRESET: ActuatePreset = ActuatePreset {
+        preset_name: "Default".to_string(),
+        preset_info: "Info".to_string(),
+        preset_category: PresetType::Select,
+        tag_acid: false,
+        tag_analog: false,
+        tag_bright: false,
+        tag_chord: false,
+        tag_crisp: false,
+        tag_deep: false,
+        tag_delicate: false,
+        tag_hard: false,
+        tag_harsh: false,
+        tag_lush: false,
+        tag_mellow: false,
+        tag_resonant: false,
+        tag_rich: false,
+        tag_sharp: false,
+        tag_silky: false,
+        tag_smooth: false,
+        tag_soft: false,
+        tag_stab: false,
+        tag_warm: false,
+        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_level: 1.0,
+        mod1_audio_module_routing: AMFilterRouting::Filter1,
+        mod1_loaded_sample: vec![vec![0.0, 0.0]],
+        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod1_loop_wavetable: false,
+        mod1_single_cycle: false,
+        mod1_restretch: true,
+        mod1_prev_restretch: false,
+        mod1_grain_hold: 200,
+        mod1_grain_gap: 200,
+        mod1_start_position: 0.0,
+        mod1_end_position: 1.0,
+        mod1_grain_crossfade: 50,
+        mod1_osc_type: VoiceType::Sine,
+        mod1_osc_octave: 0,
+        mod1_osc_semitones: 0,
+        mod1_osc_detune: 0.0,
+        mod1_osc_attack: 0.0001,
+        mod1_osc_decay: 0.0001,
+        mod1_osc_sustain: 999.9,
+        mod1_osc_release: 5.0,
+        mod1_osc_retrigger: RetriggerStyle::Retrigger,
+        mod1_osc_atk_curve: SmoothStyle::Linear,
+        mod1_osc_dec_curve: SmoothStyle::Linear,
+        mod1_osc_rel_curve: SmoothStyle::Linear,
+        mod1_osc_unison: 1,
+        mod1_osc_unison_detune: 0.0,
+        mod1_osc_stereo: 0.0,
+
+        mod2_audio_module_type: AudioModuleType::Off,
+        mod2_audio_module_level: 1.0,
+        mod2_audio_module_routing: AMFilterRouting::Filter1,
+        mod2_loaded_sample: vec![vec![0.0, 0.0]],
+        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod2_loop_wavetable: false,
+        mod2_single_cycle: false,
+        mod2_restretch: true,
+        mod2_prev_restretch: false,
+        mod2_grain_hold: 200,
+        mod2_grain_gap: 200,
+        mod2_start_position: 0.0,
+        mod2_end_position: 1.0,
+        mod2_grain_crossfade: 50,
+        mod2_osc_type: VoiceType::Sine,
+        mod2_osc_octave: 0,
+        mod2_osc_semitones: 0,
+        mod2_osc_detune: 0.0,
+        mod2_osc_attack: 0.0001,
+        mod2_osc_decay: 0.0001,
+        mod2_osc_sustain: 999.9,
+        mod2_osc_release: 5.0,
+        mod2_osc_retrigger: RetriggerStyle::Retrigger,
+        mod2_osc_atk_curve: SmoothStyle::Linear,
+        mod2_osc_dec_curve: SmoothStyle::Linear,
+        mod2_osc_rel_curve: SmoothStyle::Linear,
+        mod2_osc_unison: 1,
+        mod2_osc_unison_detune: 0.0,
+        mod2_osc_stereo: 0.0,
+
+        mod3_audio_module_type: AudioModuleType::Off,
+        mod3_audio_module_level: 1.0,
+        mod3_audio_module_routing: AMFilterRouting::Filter1,
+        mod3_loaded_sample: vec![vec![0.0, 0.0]],
+        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod3_loop_wavetable: false,
+        mod3_single_cycle: false,
+        mod3_restretch: true,
+        mod3_prev_restretch: false,
+        mod3_grain_hold: 200,
+        mod3_grain_gap: 200,
+        mod3_start_position: 0.0,
+        mod3_end_position: 1.0,
+        mod3_grain_crossfade: 50,
+        mod3_osc_type: VoiceType::Sine,
+        mod3_osc_octave: 0,
+        mod3_osc_semitones: 0,
+        mod3_osc_detune: 0.0,
+        mod3_osc_attack: 0.0001,
+        mod3_osc_decay: 0.0001,
+        mod3_osc_sustain: 999.9,
+        mod3_osc_release: 5.0,
+        mod3_osc_retrigger: RetriggerStyle::Retrigger,
+        mod3_osc_atk_curve: SmoothStyle::Linear,
+        mod3_osc_dec_curve: SmoothStyle::Linear,
+        mod3_osc_rel_curve: SmoothStyle::Linear,
+        mod3_osc_unison: 1,
+        mod3_osc_unison_detune: 0.0,
+        mod3_osc_stereo: 0.0,
+
+        filter_wet: 1.0,
+        filter_cutoff: 20000.0,
+        filter_resonance: 1.0,
+        filter_res_type: ResonanceType::Default,
+        filter_lp_amount: 1.0,
+        filter_hp_amount: 0.0,
+        filter_bp_amount: 0.0,
+        filter_env_peak: 0.0,
+        filter_env_attack: 0.0001,
+        filter_env_decay: 0.0001,
+        filter_env_sustain: 999.9,
+        filter_env_release: 5.0,
+        filter_env_atk_curve: SmoothStyle::Linear,
+        filter_env_dec_curve: SmoothStyle::Linear,
+        filter_env_rel_curve: SmoothStyle::Linear,
+        filter_alg_type: FilterAlgorithms::SVF,
+        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+
+        filter_wet_2: 1.0,
+        filter_cutoff_2: 20000.0,
+        filter_resonance_2: 1.0,
+        filter_res_type_2: ResonanceType::Default,
+        filter_lp_amount_2: 1.0,
+        filter_hp_amount_2: 0.0,
+        filter_bp_amount_2: 0.0,
+        filter_env_peak_2: 0.0,
+        filter_env_attack_2: 0.0001,
+        filter_env_decay_2: 0.0001,
+        filter_env_sustain_2: 999.9,
+        filter_env_release_2: 5.0,
+        filter_env_atk_curve_2: SmoothStyle::Linear,
+        filter_env_dec_curve_2: SmoothStyle::Linear,
+        filter_env_rel_curve_2: SmoothStyle::Linear,
+        filter_alg_type_2: FilterAlgorithms::SVF,
+        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+
+        filter_routing: FilterRouting::Parallel,
+        filter_cutoff_link: false,
+
+        // Pitch Routing
+        pitch_enable: false,
+        pitch_routing: PitchRouting::Osc1,
+        pitch_env_peak: 0.0,
+        pitch_env_attack: 0.0001,
+        pitch_env_decay: 300.0,
+        pitch_env_sustain: 0.0,
+        pitch_env_release: 0.0001,
+        pitch_env_atk_curve: SmoothStyle::Linear,
+        pitch_env_dec_curve: SmoothStyle::Linear,
+        pitch_env_rel_curve: SmoothStyle::Linear,
+
+        pitch_enable_2: false,
+        pitch_routing_2: PitchRouting::Osc1,
+        pitch_env_peak_2: 0.0,
+        pitch_env_attack_2: 0.0001,
+        pitch_env_decay_2: 300.0,
+        pitch_env_sustain_2: 0.0,
+        pitch_env_release_2: 0.0001,
+        pitch_env_atk_curve_2: SmoothStyle::Linear,
+        pitch_env_dec_curve_2: SmoothStyle::Linear,
+        pitch_env_rel_curve_2: SmoothStyle::Linear,
+
+        // LFOs
+        lfo1_enable: false,
+        lfo2_enable: false,
+        lfo3_enable: false,
+
+        lfo1_freq: 2.0,
+        lfo1_retrigger: LFOController::LFORetrigger::None,
+        lfo1_sync: true,
+        lfo1_snap: LFOController::LFOSnapValues::Half,
+        lfo1_waveform: LFOController::Waveform::Sine,
+        lfo1_phase: 0.0,
+
+        lfo2_freq: 2.0,
+        lfo2_retrigger: LFOController::LFORetrigger::None,
+        lfo2_sync: true,
+        lfo2_snap: LFOController::LFOSnapValues::Half,
+        lfo2_waveform: LFOController::Waveform::Sine,
+        lfo2_phase: 0.0,
+
+        lfo3_freq: 2.0,
+        lfo3_retrigger: LFOController::LFORetrigger::None,
+        lfo3_sync: true,
+        lfo3_snap: LFOController::LFOSnapValues::Half,
+        lfo3_waveform: LFOController::Waveform::Sine,
+        lfo3_phase: 0.0,
+
+        // Modulations
+        mod_source_1: ModulationSource::None,
+        mod_source_2: ModulationSource::None,
+        mod_source_3: ModulationSource::None,
+        mod_source_4: ModulationSource::None,
+        mod_dest_1: ModulationDestination::None,
+        mod_dest_2: ModulationDestination::None,
+        mod_dest_3: ModulationDestination::None,
+        mod_dest_4: ModulationDestination::None,
+        mod_amount_1: 0.0,
+        mod_amount_2: 0.0,
+        mod_amount_3: 0.0,
+        mod_amount_4: 0.0,
+
+        // EQ
+        pre_use_eq: false,
+        pre_low_freq: 800.0,
+        pre_mid_freq: 3000.0,
+        pre_high_freq: 10000.0,
+        pre_low_gain: 0.0,
+        pre_mid_gain: 0.0,
+        pre_high_gain: 0.0,
+
+        //FX
+        use_fx: true,
+
+        use_compressor: false,
+
+        comp_amt: 0.5,
+        comp_atk: 0.5,
+        comp_rel: 0.5,
+        comp_drive: 0.5,
+
+        use_abass: false,
+        abass_amount: 0.0011,
+
+        use_saturation: false,
+        sat_amount: 0.0,
+        sat_type: SaturationType::Tape,
+
+        use_delay: false,
+        delay_amount: 0.5,
+        delay_time: DelaySnapValues::Quarter,
+        delay_decay: 0.5,
+        delay_type: DelayType::Stereo,
+
+        use_reverb: false,
+        reverb_model: ReverbModel::Default,
+        reverb_amount: 0.85,
+        reverb_size: 1.0,
+        reverb_feedback: 0.28,
+
+        use_phaser: false,
+        phaser_amount: 0.5,
+        phaser_depth: 0.5,
+        phaser_rate: 0.5,
+        phaser_feedback: 0.5,
+
+        use_buffermod: false,
+        buffermod_amount: 0.5,
+        buffermod_depth: 0.5,
+        buffermod_rate: 0.5,
+        buffermod_spread: 0.0,
+        buffermod_timing: 620.0,
+
+        use_flanger: false,
+        flanger_amount: 0.5,
+        flanger_depth: 0.5,
+        flanger_rate: 0.5,
+        flanger_feedback: 0.5,
+
+        use_limiter: false,
+        limiter_threshold: 0.5,
+        limiter_knee: 0.5,
+    };
+);

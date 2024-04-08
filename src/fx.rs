@@ -10,4 +10,5 @@ pub(crate) mod flanger;
 pub(crate) mod limiter;
 pub(crate) mod phaser;
 pub(crate) mod reverb;
+pub(crate) mod aw_galactic_reverb;
 pub(crate) mod saturation;
