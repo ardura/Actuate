@@ -60,13 +60,13 @@ Hover over any knob (or some labels) for an explanation!
 ![actuate_flow](https://github.com/ardura/Actuate/assets/31751444/45ce1d56-d6c1-47b2-8bae-09633ecbbd2e)
 
 ## Roadmap
-- [ ] Create a Preset Browser
-- [ ] Add more reverb styles
+- [x] Create a Preset Browser
+- [x] Add more reverb styles
 - [ ] Add more decay styles
 - [ ] Fix some bandpass glitching on certain filter types
 - [ ] Create different stereo spreading algorithms
 - [x] Make the GUI nicer - see Discussion https://github.com/ardura/Actuate/discussions/26
-- [ ] Look into making the preset loading more reliable
+- [x] Look into making the preset loading more reliable
 - [ ] Fix text input not working (right now it's a OS safe workaround)
 - [ ] Fix file dialog in the process thread (right now it's a OS safe workaround)
 
