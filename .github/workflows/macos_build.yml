@@ -10,10 +10,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  build_macos:
     runs-on: macos-latest
-
     steps:
     - uses: actions/checkout@v3
     - name: Run bundler
@@ -25,17 +23,27 @@ jobs:
         if-no-files-found: warn
   build_linux:
     runs-on: ubuntu-latest
-
     steps:
     - uses: ConorMacBride/install-package@v1.1.0
       with:
         # Packages to install with apt on Linux
-        apt: libgl1-mesa-dev
+        apt: libgl1-mesa-dev libxcursor-dev libxkbcommon-x11-dev
     - uses: actions/checkout@v3
     - name: Run bundler
       run: cargo xtask bundle Actuate --profile release
     - uses: actions/upload-artifact@v4
       with:
-        name: macos_build
+        name: linux_build
+        path: target/bundled/Actuate.vst3
+        if-no-files-found: warn
+  build_windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run bundler
+      run: cargo xtask bundle Actuate --profile release
+    - uses: actions/upload-artifact@v4
+      with:
+        name: windows_build
         path: target/bundled/Actuate.vst3
         if-no-files-found: warn
