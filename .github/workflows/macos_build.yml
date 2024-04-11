@@ -27,6 +27,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - uses: ConorMacBride/install-package@v1.1.0
+      with:
+        # Packages to install with apt on Linux
+        apt: x11
     - uses: actions/checkout@v3
     - name: Run bundler
       run: cargo xtask bundle Actuate --profile release
