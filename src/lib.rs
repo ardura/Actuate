@@ -53,11 +53,32 @@ use tinyfiledialogs;
 use audio_module::{
     AudioModule, AudioModuleType,
     Oscillator::{self, OscState, RetriggerStyle, SmoothStyle, VoiceType},
+    frequency_modulation,
 };
 use fx::{
-    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType, StateVariableFilter}, VCFilter::ResponseType as VCResponseType
+    abass::a_bass_saturation, 
+    aw_galactic_reverb::GalacticReverb, 
+    biquad_filters::{self, FilterType}, 
+    buffermodulator::BufferModulator, 
+    compressor::Compressor, 
+    delay::{Delay, DelaySnapValues, DelayType}, 
+    flanger::StereoFlanger, 
+    limiter::StereoLimiter, 
+    phaser::StereoPhaser, 
+    reverb::StereoReverb, 
+    saturation::{Saturation, SaturationType}, 
+    ArduraFilter::{self, ResponseType}, 
+    StateVariableFilter::{ResonanceType, StateVariableFilter}, 
+    VCFilter::ResponseType as VCResponseType
 };
-use old_preset_structs::{load_unserialized_old, load_unserialized_v114, load_unserialized_v122, load_unserialized_v123, ActuatePresetV123};
+use old_preset_structs::{
+    load_unserialized_old, 
+    load_unserialized_v114,
+    load_unserialized_v122,
+    load_unserialized_v123,
+    load_unserialized_v125,
+    ActuatePresetV123, ActuatePresetV125
+};
 use CustomWidgets::{
     toggle_switch, ui_knob::{self, KnobLayout}, BoolButton, CustomParamSlider,
     CustomVerticalSlider::ParamSlider as VerticalParamSlider,
@@ -114,6 +135,7 @@ enum LFOSelect {
     Modulation,
     Misc,
     FX,
+    FM,
 }
 
 // Sources that can modulate a value
@@ -254,7 +276,7 @@ pub struct ModulationStruct {
 
 /// This is the structure that represents a storable preset value
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ActuatePreset {
+pub struct ActuatePresetV126 {
     // Information
     preset_name: String,
     preset_info: String,
@@ -488,6 +510,18 @@ pub struct ActuatePreset {
     mod_amount_3: f32,
     mod_amount_4: f32,
 
+    // FM
+    fm_one_to_two: f32,
+    fm_one_to_three: f32,
+    fm_two_to_three: f32,
+    fm_attack: f32,
+    fm_decay: f32,
+    fm_sustain: f32,
+    fm_release: f32,
+    fm_attack_curve: Oscillator::SmoothStyle,
+    fm_decay_curve: Oscillator::SmoothStyle,
+    fm_release_curve: Oscillator::SmoothStyle,
+
     // EQ
     pre_use_eq: bool,
     pre_low_freq: f32,
@@ -634,7 +668,7 @@ pub struct Actuate {
     preset_name: Arc<Mutex<String>>,
     preset_info: Arc<Mutex<String>>,
     preset_category: Arc<Mutex<PresetType>>,
-    preset_lib: Arc<Mutex<Vec<ActuatePreset>>>,
+    preset_lib: Arc<Mutex<Vec<ActuatePresetV126>>>,
 
     // Used for DC Offset calculations
     dc_filter_l: StateVariableFilter,
@@ -1393,6 +1427,28 @@ pub struct ActuateParams {
     pub limiter_threshold: FloatParam,
     #[id = "limiter_knee"]
     pub limiter_knee: FloatParam,
+
+    // FM
+    #[id = "fm_one_to_two"]
+    pub fm_one_to_two: FloatParam,
+    #[id = "fm_one_to_three"]
+    pub fm_one_to_three: FloatParam,
+    #[id = "fm_two_to_three"]
+    pub fm_two_to_three: FloatParam,
+    #[id = "fm_attack"]
+    pub fm_attack: FloatParam,
+    #[id = "fm_decay"]
+    pub fm_decay: FloatParam,
+    #[id = "fm_sustain"]
+    pub fm_sustain: FloatParam,
+    #[id = "fm_release"]
+    pub fm_release: FloatParam,
+    #[id = "fm_attack_curve"]
+    pub fm_attack_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "fm_decay_curve"]
+    pub fm_decay_curve: EnumParam<Oscillator::SmoothStyle>,
+    #[id = "fm_release_curve"]
+    pub fm_release_curve: EnumParam<Oscillator::SmoothStyle>,
 
     // UI Non-param Params
     #[id = "param_load_bank"]
@@ -2808,14 +2864,14 @@ impl ActuateParams {
             use_abass: BoolParam::new("ABass", false),
             abass_amount: FloatParam::new(
                 "Amount",
-                0.0011,
+                0.000668,
                 FloatRange::Skewed {
                     min: 0.0,
                     max: 1.0,
-                    factor: 0.3,
+                    factor: 0.2,
                 },
             )
-            .with_value_to_string(formatters::v2s_f32_rounded(4)),
+            .with_value_to_string(formatters::v2s_f32_rounded(5)),
 
             use_saturation: BoolParam::new("Saturation", false),
             sat_amt: FloatParam::new("Amount", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
@@ -2874,8 +2930,8 @@ impl ActuateParams {
                 "Rate",
                 1.0,
                 FloatRange::Linear {
-                    min: 0.1,
-                    max: 100.0,
+                    min: 0.001,
+                    max: 16.0,
                 },
             )
             .with_step_size(0.1)
@@ -2947,7 +3003,7 @@ impl ActuateParams {
                 "Rate",
                 5.0,
                 FloatRange::Linear {
-                    min: 0.01,
+                    min: 0.001,
                     max: 24.0,
                 },
             )
@@ -2969,6 +3025,91 @@ impl ActuateParams {
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
             limiter_knee: FloatParam::new("Knee", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
+            
+            // FM
+            fm_one_to_two: FloatParam::new("FM 1 to 2", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(4)),
+            
+            fm_one_to_three: FloatParam::new("FM 1 to 3", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(4)),
+            
+            fm_two_to_three: FloatParam::new("FM 2 to 3", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(4)),
+            fm_attack: FloatParam::new(
+                    "FM Attack",
+                    0.0001,
+                    FloatRange::Skewed {
+                        min: 0.0001,
+                        max: 999.9,
+                        factor: 0.2,
+                    },
+                )
+                .with_value_to_string(format_nothing())
+                .with_unit("A")
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            fm_decay: FloatParam::new(
+                    "FM Decay",
+                    300.0,
+                    FloatRange::Skewed {
+                        min: 0.0001,
+                        max: 999.9,
+                        factor: 0.2,
+                    },
+                )
+                .with_value_to_string(format_nothing())
+                .with_unit("D")
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            fm_sustain: FloatParam::new(
+                    "FM Sustain",
+                    0.0001,
+                    FloatRange::Skewed {
+                        min: 0.0001,
+                        max: 999.9,
+                        factor: 0.2,
+                    },
+                )
+                .with_value_to_string(format_nothing())
+                .with_unit("S")
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            fm_release: FloatParam::new(
+                    "FM Release",
+                    0.0001,
+                    FloatRange::Skewed {
+                        min: 0.0001,
+                        max: 999.9,
+                        factor: 0.2,
+                    },
+                )
+                .with_value_to_string(format_nothing())
+                .with_unit("R")
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            fm_attack_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            fm_decay_curve: EnumParam::new("Dec Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
+            fm_release_curve: EnumParam::new("Rel Curve", Oscillator::SmoothStyle::Linear)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::Relaxed))
+                }),
 
             // UI Non-Param Params
             ////////////////////////////////////////////////////////////////////////////////////
@@ -3060,7 +3201,7 @@ impl Plugin for Actuate {
     // This draws our GUI with egui library
     fn editor(&mut self, _async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = self.params.clone();
-        let arc_preset: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib); //Arc<Mutex<Vec<ActuatePreset>>>
+        let arc_preset: Arc<Mutex<Vec<ActuatePresetV126>>> = Arc::clone(&self.preset_lib);
         let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&self.preset_name);
         let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&self.preset_info);
         let arc_preset_category: Arc<Mutex<PresetType>> = Arc::clone(&self.preset_category);
@@ -3486,7 +3627,7 @@ impl Plugin for Actuate {
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32),
                                 RangeInclusive::new(0.0, (HEIGHT as f32)*0.65)),
-                            Rounding::none(),
+                            Rounding::ZERO,
                             DARK_GREY_UI_COLOR);
 
                         // Draw top bar background
@@ -3494,7 +3635,7 @@ impl Plugin for Actuate {
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32),
                                 RangeInclusive::new(0.0, HEIGHT as f32 * 0.05)),
-                            Rounding::none(),
+                            Rounding::ZERO,
                             DARKER_GREY_UI_COLOR
                         );
 
@@ -3825,7 +3966,7 @@ impl Plugin for Actuate {
                                                             }
                                                         } else {
                                                             // Filter results
-                                                            let results: Vec<ActuatePreset>  = arc_preset.lock().unwrap().clone();
+                                                            let results: Vec<ActuatePresetV126>  = arc_preset.lock().unwrap().clone();
                                                             let mut filtered_results: Vec<usize> = Vec::new();
                                                             for (index, preset) in results.iter().enumerate() {
                                                                 if (*filter_acid && preset.tag_acid == true) ||
@@ -4147,6 +4288,7 @@ impl Plugin for Actuate {
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FM, RichText::new("FM").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Modulation").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
@@ -5286,7 +5428,83 @@ VCF: Voltage Controlled Filter model".to_string());
                                                     let filter_cutoff_link = toggle_switch::ToggleSwitch::for_param(&params.filter_cutoff_link, setter);
                                                     ui.add(filter_cutoff_link);
                                                 });
-                                            }
+                                            },
+                                            LFOSelect::FM => {
+                                                ui.horizontal(|ui|{
+                                                    let fm_one_to_two = ui_knob::ArcKnob::for_param(
+                                                        &params.fm_one_to_two,
+                                                        setter,
+                                                        36.0,
+                                                        KnobLayout::Vertical)
+                                                            .preset_style(ui_knob::KnobStyle::Preset1)
+                                                            .set_fill_color(DARK_GREY_UI_COLOR)
+                                                            .set_line_color(TEAL_GREEN)
+                                                            .set_show_label(true);
+                                                    ui.add(fm_one_to_two);
+                                                    let fm_one_to_three = ui_knob::ArcKnob::for_param(
+                                                        &params.fm_one_to_three,
+                                                        setter,
+                                                        36.0,
+                                                        KnobLayout::Vertical)
+                                                            .preset_style(ui_knob::KnobStyle::Preset1)
+                                                            .set_fill_color(DARK_GREY_UI_COLOR)
+                                                            .set_line_color(TEAL_GREEN)
+                                                            .set_show_label(true);
+                                                    ui.add(fm_one_to_three);
+                                                    let fm_two_to_three = ui_knob::ArcKnob::for_param(
+                                                        &params.fm_two_to_three,
+                                                        setter,
+                                                        36.0,
+                                                        KnobLayout::Vertical)
+                                                            .preset_style(ui_knob::KnobStyle::Preset1)
+                                                            .set_fill_color(DARK_GREY_UI_COLOR)
+                                                            .set_line_color(TEAL_GREEN)
+                                                            .set_show_label(true);
+                                                    ui.add(fm_two_to_three);
+
+                                                    // ADSR for FM Signal
+                                                    ui.add(
+                                                        VerticalParamSlider::for_param(&params.fm_attack, setter)
+                                                            .with_width(VERT_BAR_WIDTH)
+                                                            .with_height(VERT_BAR_HEIGHT)
+                                                            .set_reversed(true)
+                                                            .override_colors(
+                                                                LIGHTER_GREY_UI_COLOR,
+                                                                TEAL_GREEN,
+                                                            ),
+                                                    );
+                                                    ui.add(
+                                                        VerticalParamSlider::for_param(&params.fm_decay, setter)
+                                                            .with_width(VERT_BAR_WIDTH)
+                                                            .with_height(VERT_BAR_HEIGHT)
+                                                            .set_reversed(true)
+                                                            .override_colors(
+                                                                LIGHTER_GREY_UI_COLOR,
+                                                                TEAL_GREEN,
+                                                            ),
+                                                    );
+                                                    ui.add(
+                                                        VerticalParamSlider::for_param(&params.fm_sustain, setter)
+                                                            .with_width(VERT_BAR_WIDTH)
+                                                            .with_height(VERT_BAR_HEIGHT)
+                                                            .set_reversed(true)
+                                                            .override_colors(
+                                                                LIGHTER_GREY_UI_COLOR,
+                                                                TEAL_GREEN,
+                                                            ),
+                                                    );
+                                                    ui.add(
+                                                        VerticalParamSlider::for_param(&params.fm_release, setter)
+                                                            .with_width(VERT_BAR_WIDTH)
+                                                            .with_height(VERT_BAR_HEIGHT)
+                                                            .set_reversed(true)
+                                                            .override_colors(
+                                                                LIGHTER_GREY_UI_COLOR,
+                                                                TEAL_GREEN,
+                                                            ),
+                                                    );
+                                                });
+                                            },
                                             LFOSelect::Modulation => {
                                                 ui.vertical(|ui|{
                                                     // Modulator section 1
@@ -5596,7 +5814,7 @@ VCF: Voltage Controlled Filter model".to_string());
                                             LFOSelect::INFO => {
                                                 ui.horizontal(|ui| {
                                                     let text_response = ui.add(
-                                                        egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
+                                                        nih_plug_egui::egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
                                                             .interactive(true)
                                                             .hint_text("Preset Name")
                                                             .desired_width(150.0));
@@ -6315,11 +6533,11 @@ impl Actuate {
                 // This is here again purposefully
                 *self.reload_entire_preset.lock().unwrap() = true;
 
-                let unserialized: Option<ActuatePreset>;
+                let unserialized: Option<ActuatePresetV126>;
                 (_, unserialized) = Actuate::import_preset();
 
                 if unserialized.is_some() {
-                    let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
+                    let arc_lib: Arc<Mutex<Vec<ActuatePresetV126>>> = Arc::clone(&self.preset_lib);
                     let mut locked_lib = arc_lib.lock().unwrap();
                     locked_lib[self.current_preset.load(Ordering::Relaxed) as usize] =
                         unserialized.unwrap();
@@ -6355,10 +6573,10 @@ impl Actuate {
                 // Load the preset bank
                 self.file_dialog.store(true, Ordering::Relaxed);
                 self.file_open_buffer_timer.store(1, Ordering::Relaxed);
-                let unserialized: Vec<ActuatePreset>;
+                let unserialized: Vec<ActuatePresetV126>;
                 (self.preset_lib_name, unserialized) = Actuate::load_preset_bank();
 
-                let arc_lib: Arc<Mutex<Vec<ActuatePreset>>> = Arc::clone(&self.preset_lib);
+                let arc_lib: Arc<Mutex<Vec<ActuatePresetV126>>> = Arc::clone(&self.preset_lib);
                 let mut locked_lib = arc_lib.lock().unwrap();
 
                 // Load our items into our library from the unserialized save file
@@ -7465,6 +7683,8 @@ impl Actuate {
             // Audio Module Processing of Audio kicks off here
             /////////////////////////////////////////////////////////////////////////////////////////////////
 
+            let mut fm_wave_1: f32 = 0.0;
+            let mut fm_wave_2: f32 = 0.0;
             // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::Relaxed)
                 && self.params.audio_module_1_type.value() != AudioModuleType::Off
@@ -7492,6 +7712,8 @@ impl Actuate {
                     temp_mod_gain_1,
                     temp_mod_lfo_gain_1,
                 );
+                // Sum to MONO
+                fm_wave_1 = (wave1_l + wave1_r)/2.0;
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
                 wave1_l *= self.params.audio_module_1_level.value() * 0.33;
                 wave1_r *= self.params.audio_module_1_level.value() * 0.33;
@@ -7521,6 +7743,9 @@ impl Actuate {
                     temp_mod_gain_2,
                     temp_mod_lfo_gain_2,
                 );
+                // Sum to MONO
+                fm_wave_2 = (wave2_l + wave2_r)/2.0;
+                // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
                 wave2_l *= self.params.audio_module_2_level.value() * 0.33;
                 wave2_r *= self.params.audio_module_2_level.value() * 0.33;
             }
@@ -7549,8 +7774,26 @@ impl Actuate {
                     temp_mod_gain_3,
                     temp_mod_lfo_gain_3,
                 );
+                // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
                 wave3_l *= self.params.audio_module_3_level.value() * 0.33;
                 wave3_r *= self.params.audio_module_3_level.value() * 0.33;
+            }
+
+            // FM Calculations
+            let one_to_two = self.params.fm_one_to_two.value();
+            let one_to_three = self.params.fm_one_to_three.value();
+            let two_to_three = self.params.fm_two_to_three.value();
+            if one_to_two > 0.0 {
+                wave2_l = frequency_modulation::frequency_modulation(fm_wave_1, wave2_l, one_to_two);
+                wave2_r = frequency_modulation::frequency_modulation(fm_wave_1, wave2_r, one_to_two);
+            }
+            if one_to_three > 0.0 {
+                wave3_l = frequency_modulation::frequency_modulation(fm_wave_1, wave3_l, one_to_three);
+                wave3_r = frequency_modulation::frequency_modulation(fm_wave_1, wave3_r, one_to_three);
+            }
+            if two_to_three > 0.0 {
+                wave3_l = frequency_modulation::frequency_modulation(fm_wave_2, wave3_l, two_to_three);
+                wave3_r = frequency_modulation::frequency_modulation(fm_wave_2, wave3_r, two_to_three);
             }
 
             /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -8008,7 +8251,7 @@ impl Actuate {
     }
 
     // import_preset() uses message packing with serde
-    fn import_preset() -> (String, Option<ActuatePreset>) {
+    fn import_preset() -> (String, Option<ActuatePresetV126>) {
         let imported_preset = FileDialog::new()
             .add_filter("actuate", &["actuate"])
             .pick_file();
@@ -8039,27 +8282,30 @@ impl Actuate {
             // Deserialize the MessagePack data
             let file_string_data = decompressed_data.unwrap();
 
-            // Deserialize into ActuatePreset - return default empty lib if error
-            let mut unserialized: ActuatePreset = rmp_serde::from_slice(&file_string_data)
+            // Deserialize into preset struct - return default empty lib if error
+            let mut unserialized: ActuatePresetV126 = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(ERROR_PRESET.clone());
 
             if unserialized.preset_name.contains("Error") {
-                // Attempt to load the previous version preset type
-                unserialized = load_unserialized_v123(file_string_data.clone());
-
+                unserialized = load_unserialized_v125(file_string_data.clone());
                 if unserialized.preset_name.contains("Error") {
-                    // Try loading the previous preset struct version
-                    unserialized = load_unserialized_v122(file_string_data.clone());
-
                     // Attempt to load the previous version preset type
+                    unserialized = load_unserialized_v123(file_string_data.clone());
+
                     if unserialized.preset_name.contains("Error") {
                         // Try loading the previous preset struct version
-                        unserialized = load_unserialized_v114(file_string_data.clone());
+                        unserialized = load_unserialized_v122(file_string_data.clone());
 
-                        // Attempt to load the oldest preset type
+                        // Attempt to load the previous version preset type
                         if unserialized.preset_name.contains("Error") {
                             // Try loading the previous preset struct version
-                            unserialized = load_unserialized_old(file_string_data.clone());
+                            unserialized = load_unserialized_v114(file_string_data.clone());
+
+                            // Attempt to load the oldest preset type
+                            if unserialized.preset_name.contains("Error") {
+                                // Try loading the previous preset struct version
+                                unserialized = load_unserialized_old(file_string_data.clone());
+                            }
                         }
                     }
                 }
@@ -8071,7 +8317,7 @@ impl Actuate {
     }
 
     // Load presets uses message packing with serde
-    fn load_preset_bank() -> (String, Vec<ActuatePreset>) {
+    fn load_preset_bank() -> (String, Vec<ActuatePresetV126>) {
         let loading_bank = FileDialog::new()
             .add_filter("actuatebank", &["actuatebank"]) // Use the same filter as in save_preset_bank
             .pick_file();
@@ -8099,24 +8345,39 @@ impl Actuate {
             // Deserialize the MessagePack data
             let file_string_data = decompressed_data.unwrap();
 
-            // Deserialize into ActuatePreset - return default empty lib if error
-            let unserialized: Vec<ActuatePreset> = rmp_serde::from_slice(&file_string_data)
+            // Deserialize into preset struct - return default empty lib if error
+            let unserialized: Vec<ActuatePresetV126> = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(vec![
                     ERROR_PRESET.clone();
                     PRESET_BANK_SIZE
                 ]);
 
-            // Attempt loading an older bank
+            // Attempt loading 1.2.5 bank if error
             if unserialized[0].preset_name.contains("Error") {
-                let unserialized: Vec<ActuatePresetV123> = rmp_serde::from_slice(&file_string_data)
-                .unwrap_or(vec![
-                    ERROR_PRESETV123.clone();
-                    PRESET_BANK_SIZE
-                ]);
-                // Convert each v1.2.3 entry into a 1.2.4 bank
-                let mut converted: Vec<ActuatePreset> = Vec::new();
-                for v123_preset in unserialized.iter() {
-                    converted.push(old_preset_structs::convert_preset_v123(v123_preset.clone()));
+                let unserialized: Vec<ActuatePresetV125> = rmp_serde::from_slice(&file_string_data)
+                    .unwrap_or(vec![
+                        ERROR_PRESETV125.clone();
+                        PRESET_BANK_SIZE
+                    ]);
+                // Convert each v1.2.3 entry into latest
+                let mut converted: Vec<ActuatePresetV126> = Vec::new();
+                for v125_preset in unserialized.iter() {
+                    converted.push(old_preset_structs::convert_preset_v125(v125_preset.clone()));
+                }
+
+                // Attempt loading 1.2.3 bank if error
+                if unserialized[0].preset_name.contains("Error") {
+                    let unserialized: Vec<ActuatePresetV123> = rmp_serde::from_slice(&file_string_data)
+                        .unwrap_or(vec![
+                            ERROR_PRESETV123.clone();
+                            PRESET_BANK_SIZE
+                        ]);
+                    // Convert each v1.2.3 entry into latest
+                    let mut converted: Vec<ActuatePresetV126> = Vec::new();
+                    for v123_preset in unserialized.iter() {
+                        converted.push(old_preset_structs::convert_preset_v123(v123_preset.clone()));
+                    }
+                    return (return_name, converted);
                 }
                 return (return_name, converted);
             }
@@ -8131,7 +8392,7 @@ impl Actuate {
         setter: &ParamSetter,
         params: Arc<ActuateParams>,
         current_preset_index: usize,
-        arc_preset: Arc<Mutex<Vec<ActuatePreset>>>,
+        arc_preset: Arc<Mutex<Vec<ActuatePresetV126>>>,
         AMod1: Arc<Mutex<AudioModule>>,
         AMod2: Arc<Mutex<AudioModule>>,
         AMod3: Arc<Mutex<AudioModule>>,
@@ -8627,7 +8888,7 @@ impl Actuate {
                 loaded_preset.mod3_sample_lib.clear();
 
                 // Serialize to MessagePack bytes
-                let serialized_data = rmp_serde::to_vec::<ActuatePreset>(&loaded_preset);
+                let serialized_data = rmp_serde::to_vec::<ActuatePresetV126>(&loaded_preset);
 
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
@@ -8674,7 +8935,7 @@ impl Actuate {
 
                 // Serialize to MessagePack bytes
                 let serialized_data =
-                    rmp_serde::to_vec::<&Vec<ActuatePreset>>(&preset_lock.as_ref());
+                    rmp_serde::to_vec::<&Vec<ActuatePresetV126>>(&preset_lock.as_ref());
 
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
@@ -8721,7 +8982,7 @@ impl Actuate {
         let AM2 = AM2c.lock().unwrap();
         let AM3 = AM3c.lock().unwrap();
         arc_lib.lock().unwrap()[self.current_preset.load(Ordering::Acquire) as usize] =
-            ActuatePreset {
+            ActuatePresetV126 {
                 preset_name: self.preset_name.lock().unwrap().clone(),
                 preset_info: self.preset_info.lock().unwrap().clone(),
                 preset_category: self.params.preset_category.value(),
@@ -8950,6 +9211,17 @@ impl Actuate {
                 mod_amount_2: self.params.mod_amount_knob_2.value(),
                 mod_amount_3: self.params.mod_amount_knob_3.value(),
                 mod_amount_4: self.params.mod_amount_knob_4.value(),
+
+                fm_one_to_two: self.params.fm_one_to_two.value(),
+                fm_one_to_three: self.params.fm_one_to_three.value(),
+                fm_two_to_three: self.params.fm_two_to_three.value(),
+                fm_attack: self.params.fm_attack.value(),
+                fm_decay: self.params.fm_decay.value(),
+                fm_sustain: self.params.fm_sustain.value(),
+                fm_release: self.params.fm_release.value(),
+                fm_attack_curve: self.params.fm_attack_curve.value(),
+                fm_decay_curve: self.params.fm_decay_curve.value(),
+                fm_release_curve: self.params.fm_release_curve.value(),
 
                 pre_use_eq: self.params.pre_use_eq.value(),
                 pre_low_freq: self.params.pre_low_freq.value(),
@@ -9786,7 +10058,7 @@ lazy_static::lazy_static!(
         limiter_knee: 0.5,
     };
 
-    static ref ERROR_PRESET: ActuatePreset = ActuatePreset {
+    static ref ERROR_PRESETV125: ActuatePresetV125 = ActuatePresetV125 {
         preset_name: String::from("Error Loading"),
         preset_info: String::from("Corrupt or incompatible versions"),
         preset_category: PresetType::Select,
@@ -10061,7 +10333,295 @@ lazy_static::lazy_static!(
         limiter_knee: 0.5,
     };
 
-    static ref DEFAULT_PRESET: ActuatePreset = ActuatePreset {
+    static ref ERROR_PRESET: ActuatePresetV126 = ActuatePresetV126 {
+        preset_name: String::from("Error Loading"),
+        preset_info: String::from("Corrupt or incompatible versions"),
+        preset_category: PresetType::Select,
+        tag_acid: false,
+        tag_analog: false,
+        tag_bright: false,
+        tag_chord: false,
+        tag_crisp: false,
+        tag_deep: false,
+        tag_delicate: false,
+        tag_hard: false,
+        tag_harsh: false,
+        tag_lush: false,
+        tag_mellow: false,
+        tag_resonant: false,
+        tag_rich: false,
+        tag_sharp: false,
+        tag_silky: false,
+        tag_smooth: false,
+        tag_soft: false,
+        tag_stab: false,
+        tag_warm: false,
+        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_level: 1.0,
+        mod1_audio_module_routing: AMFilterRouting::Filter1,
+        mod1_loaded_sample: vec![vec![0.0, 0.0]],
+        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod1_loop_wavetable: false,
+        mod1_single_cycle: false,
+        mod1_restretch: true,
+        mod1_prev_restretch: false,
+        mod1_grain_hold: 200,
+        mod1_grain_gap: 200,
+        mod1_start_position: 0.0,
+        mod1_end_position: 1.0,
+        mod1_grain_crossfade: 50,
+        mod1_osc_type: VoiceType::Sine,
+        mod1_osc_octave: 0,
+        mod1_osc_semitones: 0,
+        mod1_osc_detune: 0.0,
+        mod1_osc_attack: 0.0001,
+        mod1_osc_decay: 0.0001,
+        mod1_osc_sustain: 999.9,
+        mod1_osc_release: 5.0,
+        mod1_osc_retrigger: RetriggerStyle::Retrigger,
+        mod1_osc_atk_curve: SmoothStyle::Linear,
+        mod1_osc_dec_curve: SmoothStyle::Linear,
+        mod1_osc_rel_curve: SmoothStyle::Linear,
+        mod1_osc_unison: 1,
+        mod1_osc_unison_detune: 0.0,
+        mod1_osc_stereo: 0.0,
+
+        mod2_audio_module_type: AudioModuleType::Off,
+        mod2_audio_module_level: 1.0,
+        mod2_audio_module_routing: AMFilterRouting::Filter1,
+        mod2_loaded_sample: vec![vec![0.0, 0.0]],
+        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod2_loop_wavetable: false,
+        mod2_single_cycle: false,
+        mod2_restretch: true,
+        mod2_prev_restretch: false,
+        mod2_grain_hold: 200,
+        mod2_grain_gap: 200,
+        mod2_start_position: 0.0,
+        mod2_end_position: 1.0,
+        mod2_grain_crossfade: 50,
+        mod2_osc_type: VoiceType::Sine,
+        mod2_osc_octave: 0,
+        mod2_osc_semitones: 0,
+        mod2_osc_detune: 0.0,
+        mod2_osc_attack: 0.0001,
+        mod2_osc_decay: 0.0001,
+        mod2_osc_sustain: 999.9,
+        mod2_osc_release: 5.0,
+        mod2_osc_retrigger: RetriggerStyle::Retrigger,
+        mod2_osc_atk_curve: SmoothStyle::Linear,
+        mod2_osc_dec_curve: SmoothStyle::Linear,
+        mod2_osc_rel_curve: SmoothStyle::Linear,
+        mod2_osc_unison: 1,
+        mod2_osc_unison_detune: 0.0,
+        mod2_osc_stereo: 0.0,
+
+        mod3_audio_module_type: AudioModuleType::Off,
+        mod3_audio_module_level: 1.0,
+        mod3_audio_module_routing: AMFilterRouting::Filter1,
+        mod3_loaded_sample: vec![vec![0.0, 0.0]],
+        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod3_loop_wavetable: false,
+        mod3_single_cycle: false,
+        mod3_restretch: true,
+        mod3_prev_restretch: false,
+        mod3_grain_hold: 200,
+        mod3_grain_gap: 200,
+        mod3_start_position: 0.0,
+        mod3_end_position: 1.0,
+        mod3_grain_crossfade: 50,
+        mod3_osc_type: VoiceType::Sine,
+        mod3_osc_octave: 0,
+        mod3_osc_semitones: 0,
+        mod3_osc_detune: 0.0,
+        mod3_osc_attack: 0.0001,
+        mod3_osc_decay: 0.0001,
+        mod3_osc_sustain: 999.9,
+        mod3_osc_release: 5.0,
+        mod3_osc_retrigger: RetriggerStyle::Retrigger,
+        mod3_osc_atk_curve: SmoothStyle::Linear,
+        mod3_osc_dec_curve: SmoothStyle::Linear,
+        mod3_osc_rel_curve: SmoothStyle::Linear,
+        mod3_osc_unison: 1,
+        mod3_osc_unison_detune: 0.0,
+        mod3_osc_stereo: 0.0,
+
+        filter_wet: 1.0,
+        filter_cutoff: 20000.0,
+        filter_resonance: 1.0,
+        filter_res_type: ResonanceType::Default,
+        filter_lp_amount: 1.0,
+        filter_hp_amount: 0.0,
+        filter_bp_amount: 0.0,
+        filter_env_peak: 0.0,
+        filter_env_attack: 0.0,
+        filter_env_decay: 0.0001,
+        filter_env_sustain: 999.9,
+        filter_env_release: 5.0,
+        filter_env_atk_curve: SmoothStyle::Linear,
+        filter_env_dec_curve: SmoothStyle::Linear,
+        filter_env_rel_curve: SmoothStyle::Linear,
+        filter_alg_type: FilterAlgorithms::SVF,
+        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+
+        filter_wet_2: 1.0,
+        filter_cutoff_2: 20000.0,
+        filter_resonance_2: 1.0,
+        filter_res_type_2: ResonanceType::Default,
+        filter_lp_amount_2: 1.0,
+        filter_hp_amount_2: 0.0,
+        filter_bp_amount_2: 0.0,
+        filter_env_peak_2: 0.0,
+        filter_env_attack_2: 0.0,
+        filter_env_decay_2: 0.0001,
+        filter_env_sustain_2: 999.9,
+        filter_env_release_2: 5.0,
+        filter_env_atk_curve_2: SmoothStyle::Linear,
+        filter_env_dec_curve_2: SmoothStyle::Linear,
+        filter_env_rel_curve_2: SmoothStyle::Linear,
+        filter_alg_type_2: FilterAlgorithms::SVF,
+        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+
+        filter_routing: FilterRouting::Parallel,
+        filter_cutoff_link: false,
+
+        pitch_enable: false,
+        pitch_env_atk_curve: SmoothStyle::Linear,
+        pitch_env_dec_curve: SmoothStyle::Linear,
+        pitch_env_rel_curve: SmoothStyle::Linear,
+        pitch_env_attack: 0.0,
+        pitch_env_decay: 300.0,
+        pitch_env_sustain: 0.0,
+        pitch_env_release: 0.0,
+        pitch_env_peak: 0.0,
+        pitch_routing: PitchRouting::Osc1,
+
+        pitch_enable_2: false,
+        pitch_env_peak_2: 0.0,
+        pitch_env_atk_curve_2: SmoothStyle::Linear,
+        pitch_env_dec_curve_2: SmoothStyle::Linear,
+        pitch_env_rel_curve_2: SmoothStyle::Linear,
+        pitch_env_attack_2: 0.0,
+        pitch_env_decay_2: 300.0,
+        pitch_env_release_2: 0.0,
+        pitch_env_sustain_2: 0.0,
+        pitch_routing_2: PitchRouting::Osc1,
+
+        // LFOs
+        lfo1_enable: false,
+        lfo2_enable: false,
+        lfo3_enable: false,
+
+        lfo1_freq: 2.0,
+        lfo1_retrigger: LFOController::LFORetrigger::None,
+        lfo1_sync: true,
+        lfo1_snap: LFOController::LFOSnapValues::Half,
+        lfo1_waveform: LFOController::Waveform::Sine,
+        lfo1_phase: 0.0,
+
+        lfo2_freq: 2.0,
+        lfo2_retrigger: LFOController::LFORetrigger::None,
+        lfo2_sync: true,
+        lfo2_snap: LFOController::LFOSnapValues::Half,
+        lfo2_waveform: LFOController::Waveform::Sine,
+        lfo2_phase: 0.0,
+
+        lfo3_freq: 2.0,
+        lfo3_retrigger: LFOController::LFORetrigger::None,
+        lfo3_sync: true,
+        lfo3_snap: LFOController::LFOSnapValues::Half,
+        lfo3_waveform: LFOController::Waveform::Sine,
+        lfo3_phase: 0.0,
+
+        // Modulations
+        mod_source_1: ModulationSource::None,
+        mod_source_2: ModulationSource::None,
+        mod_source_3: ModulationSource::None,
+        mod_source_4: ModulationSource::None,
+        mod_dest_1: ModulationDestination::None,
+        mod_dest_2: ModulationDestination::None,
+        mod_dest_3: ModulationDestination::None,
+        mod_dest_4: ModulationDestination::None,
+        mod_amount_1: 0.0,
+        mod_amount_2: 0.0,
+        mod_amount_3: 0.0,
+        mod_amount_4: 0.0,
+
+        // 1.2.6
+        fm_one_to_two: 0.0,
+        fm_one_to_three: 0.0,
+        fm_two_to_three: 0.0,
+        fm_attack: 0.0001,
+        fm_decay: 0.0001,
+        fm_sustain: 999.9,
+        fm_release: 0.0001,
+        fm_attack_curve: SmoothStyle::Linear,
+        fm_decay_curve: SmoothStyle::Linear,
+        fm_release_curve: SmoothStyle::Linear,
+        // 1.2.6
+
+        // EQ
+        pre_use_eq: false,
+        pre_low_freq: 800.0,
+        pre_mid_freq: 3000.0,
+        pre_high_freq: 10000.0,
+        pre_low_gain: 0.0,
+        pre_mid_gain: 0.0,
+        pre_high_gain: 0.0,
+
+        // FX
+        use_fx: true,
+
+        use_compressor: false,
+        comp_amt: 0.5,
+        comp_atk: 0.5,
+        comp_rel: 0.5,
+        comp_drive: 0.5,
+
+        use_abass: false,
+        abass_amount: 0.0011,
+
+        use_saturation: false,
+        sat_amount: 0.0,
+        sat_type: SaturationType::Tape,
+
+        use_delay: false,
+        delay_amount: 0.5,
+        delay_time: DelaySnapValues::Quarter,
+        delay_decay: 0.5,
+        delay_type: DelayType::Stereo,
+
+        use_reverb: false,
+        reverb_model: ReverbModel::Default,
+        reverb_amount: 0.85,
+        reverb_size: 1.0,
+        reverb_feedback: 0.28,
+
+        use_phaser: false,
+        phaser_amount: 0.5,
+        phaser_depth: 0.5,
+        phaser_rate: 0.5,
+        phaser_feedback: 0.5,
+
+        use_buffermod: false,
+        buffermod_amount: 0.5,
+        buffermod_depth: 0.5,
+        buffermod_rate: 0.5,
+        buffermod_spread: 0.0,
+        buffermod_timing: 620.0,
+
+        use_flanger: false,
+        flanger_amount: 0.5,
+        flanger_depth: 0.5,
+        flanger_rate: 0.5,
+        flanger_feedback: 0.5,
+
+        use_limiter: false,
+        limiter_threshold: 0.5,
+        limiter_knee: 0.5,
+    };
+
+    static ref DEFAULT_PRESET: ActuatePresetV126 = ActuatePresetV126 {
         preset_name: "Default".to_string(),
         preset_info: "Info".to_string(),
         preset_category: PresetType::Select,
@@ -10275,6 +10835,19 @@ lazy_static::lazy_static!(
         mod_amount_2: 0.0,
         mod_amount_3: 0.0,
         mod_amount_4: 0.0,
+
+        // 1.2.6
+        fm_one_to_two: 0.0,
+        fm_one_to_three: 0.0,
+        fm_two_to_three: 0.0,
+        fm_attack: 0.0001,
+        fm_decay: 0.0001,
+        fm_sustain: 999.9,
+        fm_release: 0.0001,
+        fm_attack_curve: SmoothStyle::Linear,
+        fm_decay_curve: SmoothStyle::Linear,
+        fm_release_curve: SmoothStyle::Linear,
+        // 1.2.6
 
         // EQ
         pre_use_eq: false,

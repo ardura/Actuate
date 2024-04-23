@@ -3,6 +3,40 @@
 
 use nih_plug::util;
 
+// My updated 2024 Algorithm used in Subhoofer
+pub fn a_bass_saturation(signal: f32, harmonic_strength: f32) -> f32 {
+    let mut output = custom_sincos_saturation(
+        signal,
+        harmonic_strength * 31.422043, 
+        harmonic_strength * 189.29568, 
+        harmonic_strength * 25.0, 
+        harmonic_strength * 26.197401
+    );
+    let h_l = (output * 2.0) - output.powf(2.0);
+    output += h_l * 0.0070118904;
+
+    chebyshev_tape(output, 0.0093) * util::db_to_gain(-2.9)
+}
+
+fn custom_sincos_saturation(signal: f32, harmonic_strength1: f32, harmonic_strength2: f32, harmonic_strength3: f32, harmonic_strength4: f32) -> f32 {
+    let mut summed: f32 = 0.0;
+
+    let harmonic_component: f32 = harmonic_strength1 * (signal * 1.0).cos() - signal;
+    summed += harmonic_component;
+
+    let harmonic_component: f32 = harmonic_strength2 * (signal * 2.0).sin() - signal;
+    summed += harmonic_component;
+
+    let harmonic_component: f32 = harmonic_strength3 * (signal * 3.0).cos() - signal;
+    summed += harmonic_component;
+
+    let harmonic_component2: f32 = harmonic_strength4 * (signal * 4.0).sin() - signal;
+    summed += harmonic_component2;
+
+    summed
+}
+
+/* Older Subhoofer Algorithm
 // Subhoofer's default harmonic_strength was 0.0011 and hardness 0.04
 pub fn a_bass_saturation(signal: f32, harmonic_strength: f32) -> f32 {
     let num_harmonics: usize = 4;
@@ -38,6 +72,7 @@ pub fn a_bass_saturation(signal: f32, harmonic_strength: f32) -> f32 {
         0.0
     }
 }
+*/
 
 // Modified function from Duro Console for different behavior - hoof hardness
 fn chebyshev_tape(sample: f32, drive: f32) -> f32 {

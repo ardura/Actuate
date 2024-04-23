@@ -1,10 +1,6 @@
-// Ardura 2023 - ui_knob.rs - egui + nih-plug parameter widget with customization
+// Ardura 2024 update - ui_knob.rs - egui + nih-plug parameter widget with customization
 //  this ui_knob.rs is built off a2aaron's knob base as part of nyasynth and Robbert's ParamSlider code
 // https://github.com/a2aaron/nyasynth/blob/canon/src/ui_knob.rs
-
-// This is the older style of ui_knob code for older nih_plug + egui with some updates added in
-// If you want the latest, egui version for nih-plug check Interleaf's version!
-// https://github.com/ardura/Interleaf/blob/main/src/ui_knob.rs
 
 use std::{
     f32::consts::TAU,
@@ -158,6 +154,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         }
         if response.drag_released() {
             self.param_setter.end_set_parameter(self.param);
+            Self::set_drag_amount_memory(ui, 0.0);
         }
         self.normalized_value()
     }
@@ -232,7 +229,7 @@ impl<'a, P: Param> ArcKnob<'a, P> {
             padding: 10.0,
             show_label: true,
             swap_label_and_value: true,
-            text_color_override: Color32::TEMPORARY_COLOR,
+            text_color_override: Color32::PLACEHOLDER,
             readable_box: false,
             layout: layout,
             arc_start: match layout {
@@ -834,7 +831,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
 
                 let text_color: Color32;
                 // Setting text color
-                if self.text_color_override != Color32::TEMPORARY_COLOR {
+                if self.text_color_override != Color32::PLACEHOLDER {
                     text_color = self.text_color_override;
                 } else {
                     text_color = self.line_color;

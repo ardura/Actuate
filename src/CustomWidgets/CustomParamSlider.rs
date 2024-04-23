@@ -2,13 +2,11 @@
 // Needed to make some weird import changes to get this to work...Definitely should find a better way to do this in future...
 // Ardura
 use std::sync::Arc;
-
-use crate::egui::{vec2, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
 use nih_plug::{
     prelude::{Param, ParamSetter},
     wrapper::clap::lazy_static,
 };
-use nih_plug_egui::egui::{self, Color32};
+use nih_plug_egui::egui::{self, vec2, Color32, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
 use nih_plug_egui::widgets::util as nUtil;
 use parking_lot::Mutex;
 
@@ -67,8 +65,8 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             slider_width: None,
             // Added in reversed function to have bar drawn other way
             reversed: false,
-            background_set_color: Color32::TEMPORARY_COLOR,
-            bar_set_color: Color32::TEMPORARY_COLOR,
+            background_set_color: Color32::PLACEHOLDER,
+            bar_set_color: Color32::PLACEHOLDER,
             left_sided_label: false,
             label_width: 50.0,
 
@@ -294,13 +292,13 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 // Added to reverse filling - Ardura
                 if self.reversed {
                     let filled_bg = if response.dragged() {
-                        if self.bar_set_color == Color32::TEMPORARY_COLOR {
+                        if self.bar_set_color == Color32::PLACEHOLDER {
                             nUtil::add_hsv(ui.visuals().selection.bg_fill, 0.0, -0.1, 0.1)
                         } else {
                             nUtil::add_hsv(self.bar_set_color, 0.0, -0.1, 0.1)
                         }
                     } else {
-                        if self.bar_set_color == Color32::TEMPORARY_COLOR {
+                        if self.bar_set_color == Color32::PLACEHOLDER {
                             ui.visuals().selection.bg_fill
                         } else {
                             self.bar_set_color
@@ -317,7 +315,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 }
             }
 
-            if self.background_set_color == Color32::TEMPORARY_COLOR {
+            if self.background_set_color == Color32::PLACEHOLDER {
                 ui.painter().rect_stroke(
                     response.rect,
                     0.0,
@@ -412,7 +410,11 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 .layout()
                 .align_size_within_rect(text.size(), response.rect.shrink2(padding))
                 .min;
-            text.paint_with_visuals(ui.painter(), text_pos, &visuals);
+            ui.painter().add(egui::epaint::TextShape::new(
+                text_pos,
+                text,
+                visuals.fg_stroke.color,
+            ));
         }
         //}
     }
