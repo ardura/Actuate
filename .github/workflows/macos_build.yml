@@ -11,7 +11,7 @@ env:
 
 jobs:
   build_macos:
-    runs-on: macos-latest
+    runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
     - name: Run bundler
@@ -19,7 +19,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: macos_build
-        path: target/bundled/Actuate.vst3
+        path: target/bundled/*
         if-no-files-found: warn
   build_linux:
     runs-on: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: linux_build
-        path: target/bundled/Actuate.vst3
+        path: target/bundled/*
         if-no-files-found: warn
   build_windows:
     runs-on: windows-latest
@@ -45,5 +45,5 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: windows_build
-        path: target/bundled/Actuate.vst3
+        path: target/bundled/*
         if-no-files-found: warn
