@@ -15,7 +15,8 @@ pub fn a_bass_saturation(signal: f32, harmonic_strength: f32) -> f32 {
     let h_l = (output * 2.0) - output.powf(2.0);
     output += h_l * 0.0070118904;
 
-    chebyshev_tape(output, 0.0093) * util::db_to_gain(-2.9)
+    // I used -9.0 here instead of Subhoofer's value because Actuate signal often runs hotter/louder
+    chebyshev_tape(output, 0.0093) * util::db_to_gain(-9.0)
 }
 
 fn custom_sincos_saturation(signal: f32, harmonic_strength1: f32, harmonic_strength2: f32, harmonic_strength3: f32, harmonic_strength4: f32) -> f32 {

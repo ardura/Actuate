@@ -514,6 +514,7 @@ pub struct ActuatePresetV126 {
     fm_one_to_two: f32,
     fm_one_to_three: f32,
     fm_two_to_three: f32,
+    fm_cycles: i32,
     fm_attack: f32,
     fm_decay: f32,
     fm_sustain: f32,
@@ -673,6 +674,17 @@ pub struct Actuate {
     // Used for DC Offset calculations
     dc_filter_l: StateVariableFilter,
     dc_filter_r: StateVariableFilter,
+
+    fm_state: OscState,
+    fm_atk_smoother_1: Smoother<f32>,
+    fm_dec_smoother_1: Smoother<f32>,
+    fm_rel_smoother_1: Smoother<f32>,
+    fm_atk_smoother_2: Smoother<f32>,
+    fm_dec_smoother_2: Smoother<f32>,
+    fm_rel_smoother_2: Smoother<f32>,
+    fm_atk_smoother_3: Smoother<f32>,
+    fm_dec_smoother_3: Smoother<f32>,
+    fm_rel_smoother_3: Smoother<f32>,
 
     // EQ Structs
     // I'm not using the Interleaved ones since in Interleaf
@@ -857,6 +869,17 @@ impl Default for Actuate {
                 DEFAULT_PRESET.clone();
                 PRESET_BANK_SIZE
             ])),
+
+            fm_state: OscState::Off,
+            fm_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
+            fm_dec_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
+            fm_rel_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
+            fm_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
+            fm_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
+            fm_rel_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
+            fm_atk_smoother_3: Smoother::new(SmoothingStyle::Linear(300.0)),
+            fm_dec_smoother_3: Smoother::new(SmoothingStyle::Linear(300.0)),
+            fm_rel_smoother_3: Smoother::new(SmoothingStyle::Linear(300.0)),
 
             dc_filter_l: StateVariableFilter::default().set_oversample(2),
             dc_filter_r: StateVariableFilter::default().set_oversample(2),
@@ -1435,6 +1458,8 @@ pub struct ActuateParams {
     pub fm_one_to_three: FloatParam,
     #[id = "fm_two_to_three"]
     pub fm_two_to_three: FloatParam,
+    #[id = "fm_cycles"]
+    pub fm_cycles: IntParam,
     #[id = "fm_attack"]
     pub fm_attack: FloatParam,
     #[id = "fm_decay"]
@@ -3027,14 +3052,15 @@ impl ActuateParams {
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
             
             // FM
-            fm_one_to_two: FloatParam::new("FM 1 to 2", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
-                .with_value_to_string(formatters::v2s_f32_rounded(4)),
+            fm_one_to_two: FloatParam::new("FM 1 to 2", 0.0, FloatRange::Skewed { min: 0.0, max: 20.0, factor: 0.3 })
+                .with_value_to_string(formatters::v2s_f32_rounded(5)),
             
-            fm_one_to_three: FloatParam::new("FM 1 to 3", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
-                .with_value_to_string(formatters::v2s_f32_rounded(4)),
+            fm_one_to_three: FloatParam::new("FM 1 to 3", 0.0, FloatRange::Skewed { min: 0.0, max: 20.0, factor: 0.3 })
+                .with_value_to_string(formatters::v2s_f32_rounded(5)),
             
-            fm_two_to_three: FloatParam::new("FM 2 to 3", 0.0, FloatRange::Linear { min: 0.0, max: 1.0 })
-                .with_value_to_string(formatters::v2s_f32_rounded(4)),
+            fm_two_to_three: FloatParam::new("FM 2 to 3", 0.0, FloatRange::Skewed { min: 0.0, max: 20.0, factor: 0.3 })
+                .with_value_to_string(formatters::v2s_f32_rounded(5)),
+            fm_cycles: IntParam::new("Cycles", 1, IntRange::Linear { min: 1, max: 3 }),
             fm_attack: FloatParam::new(
                     "FM Attack",
                     0.0001,
@@ -3052,7 +3078,7 @@ impl ActuateParams {
                 }),
             fm_decay: FloatParam::new(
                     "FM Decay",
-                    300.0,
+                    0.0001,
                     FloatRange::Skewed {
                         min: 0.0001,
                         max: 999.9,
@@ -3067,7 +3093,7 @@ impl ActuateParams {
                 }),
             fm_sustain: FloatParam::new(
                     "FM Sustain",
-                    0.0001,
+                    999.9,
                     FloatRange::Skewed {
                         min: 0.0001,
                         max: 999.9,
@@ -5431,37 +5457,44 @@ VCF: Voltage Controlled Filter model".to_string());
                                             },
                                             LFOSelect::FM => {
                                                 ui.horizontal(|ui|{
-                                                    let fm_one_to_two = ui_knob::ArcKnob::for_param(
-                                                        &params.fm_one_to_two,
-                                                        setter,
-                                                        36.0,
-                                                        KnobLayout::Vertical)
-                                                            .preset_style(ui_knob::KnobStyle::Preset1)
-                                                            .set_fill_color(DARK_GREY_UI_COLOR)
-                                                            .set_line_color(TEAL_GREEN)
-                                                            .set_show_label(true);
-                                                    ui.add(fm_one_to_two);
-                                                    let fm_one_to_three = ui_knob::ArcKnob::for_param(
-                                                        &params.fm_one_to_three,
-                                                        setter,
-                                                        36.0,
-                                                        KnobLayout::Vertical)
-                                                            .preset_style(ui_knob::KnobStyle::Preset1)
-                                                            .set_fill_color(DARK_GREY_UI_COLOR)
-                                                            .set_line_color(TEAL_GREEN)
-                                                            .set_show_label(true);
-                                                    ui.add(fm_one_to_three);
-                                                    let fm_two_to_three = ui_knob::ArcKnob::for_param(
-                                                        &params.fm_two_to_three,
-                                                        setter,
-                                                        36.0,
-                                                        KnobLayout::Vertical)
-                                                            .preset_style(ui_knob::KnobStyle::Preset1)
-                                                            .set_fill_color(DARK_GREY_UI_COLOR)
-                                                            .set_line_color(TEAL_GREEN)
-                                                            .set_show_label(true);
-                                                    ui.add(fm_two_to_three);
-
+                                                    ui.vertical(|ui|{
+                                                        let fm_one_to_two = ui_knob::ArcKnob::for_param(
+                                                            &params.fm_one_to_two,
+                                                            setter,
+                                                            28.0,
+                                                            KnobLayout::Horizonal)
+                                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                .set_line_color(TEAL_GREEN)
+                                                                .set_show_label(true)
+                                                                .set_text_size(10.0)
+                                                                .set_hover_text("The amount Generator 1 modulates generator 2".to_string());
+                                                        ui.add(fm_one_to_two);
+                                                        let fm_one_to_three = ui_knob::ArcKnob::for_param(
+                                                            &params.fm_one_to_three,
+                                                            setter,
+                                                            28.0,
+                                                            KnobLayout::Horizonal)
+                                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                .set_line_color(TEAL_GREEN)
+                                                                .set_show_label(true)
+                                                                .set_text_size(10.0)
+                                                                .set_hover_text("The amount Generator 1 modulates generator 3".to_string());
+                                                        ui.add(fm_one_to_three);
+                                                        let fm_two_to_three = ui_knob::ArcKnob::for_param(
+                                                            &params.fm_two_to_three,
+                                                            setter,
+                                                            28.0,
+                                                            KnobLayout::Horizonal)
+                                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                .set_line_color(TEAL_GREEN)
+                                                                .set_show_label(true)
+                                                                .set_text_size(10.0)
+                                                                .set_hover_text("The amount Generator 2 modulates generator 3".to_string());
+                                                        ui.add(fm_two_to_three);
+                                                    });
                                                     // ADSR for FM Signal
                                                     ui.add(
                                                         VerticalParamSlider::for_param(&params.fm_attack, setter)
@@ -5503,6 +5536,60 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 TEAL_GREEN,
                                                             ),
                                                     );
+                                                    ui.vertical(|ui|{
+                                                        ui.add(
+                                                            BeizerButton::BeizerButton::for_param(
+                                                                &params.fm_attack_curve,
+                                                                setter,
+                                                                5.1,
+                                                                2.0,
+                                                                ButtonLayout::HorizontalInline,
+                                                            )
+                                                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                            .with_line_color(YELLOW_MUSTARD),
+                                                        ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
+                                                        ui.add(
+                                                            BeizerButton::BeizerButton::for_param(
+                                                                &params.fm_decay_curve,
+                                                                setter,
+                                                                5.1,
+                                                                2.0,
+                                                                ButtonLayout::HorizontalInline,
+                                                            )
+                                                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                            .with_line_color(YELLOW_MUSTARD),
+                                                        ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
+                                                        ui.add(
+                                                            BeizerButton::BeizerButton::for_param(
+                                                                &params.fm_release_curve,
+                                                                setter,
+                                                                5.1,
+                                                                2.0,
+                                                                ButtonLayout::HorizontalInline,
+                                                            )
+                                                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                                            .with_line_color(YELLOW_MUSTARD),
+                                                        ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                                                        let fm_cycle_knob = ui_knob::ArcKnob::for_param(
+                                                            &params.fm_cycles,
+                                                            setter,
+                                                            26.0,
+                                                            KnobLayout::Horizonal)
+                                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                .set_line_color(TEAL_GREEN)
+                                                                .set_show_label(true)
+                                                                .set_text_size(10.0)
+                                                                .set_hover_text("The amount of FM iterations".to_string());
+                                                        ui.add(fm_cycle_knob);
+                                                        ui.label("Hover for help")
+                                                            .on_hover_text_at_pointer("HIGHLY Recommend putting a limiter after Actuate for FM!
+
+The FM knobs let a signal modulate another signal.
+Turning any FM knob enables FM Processing, then the knob alters the phase of the FM as you turn it further.
+The ADSR envelope here controls the behavior of the FM amount(knobs) sent at a time.
+For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
+                                                    });
                                                 });
                                             },
                                             LFOSelect::Modulation => {
@@ -5531,18 +5618,6 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
                                                                 ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
                                                             });
-                                                        /*
-                                                        CustomComboBox::ComboBox::new("mod_source_1_ID",params.mod_source_1.value().to_string(), true, 5)
-                                                            .selected_text(format!("{:?}", *mod_source_1_tracker.lock().unwrap()))
-                                                            .width(70.0)
-                                                            .show_ui(ui, |ui|{
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::None, "None");
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
-                                                            });
-                                                            */
                                                             // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
                                                             if *mod_source_override_1.lock().unwrap() != ModulationSource::UnsetModulation {
                                                                 // This happens on plugin preset load
@@ -7783,17 +7858,221 @@ impl Actuate {
             let one_to_two = self.params.fm_one_to_two.value();
             let one_to_three = self.params.fm_one_to_three.value();
             let two_to_three = self.params.fm_two_to_three.value();
+
+            // If a note is ending and we should enter releasing
+            if note_off_filter_controller1
+                || note_off_filter_controller2
+                || note_off_filter_controller3
+            {
+                self.fm_state = OscState::Releasing;
+                self.fm_rel_smoother_1 = match self.params.fm_release_curve.value() {
+                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
+                        self.params.fm_release.value(),
+                    )),
+                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                        self.params.fm_release.value(),
+                    )),
+                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                        self.params.fm_release.value(),
+                    )),
+                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
+                        self.params.fm_release.value(),
+                    )),
+                };
+                self.fm_rel_smoother_2 = self.fm_rel_smoother_1.clone();
+                self.fm_rel_smoother_3 = self.fm_rel_smoother_1.clone();
+                // Reset our filter release to be at sustain level to start
+                self.fm_rel_smoother_1.reset(
+                    self.params.fm_one_to_two.value() * (self.params.fm_sustain.value() / 999.9),
+                );
+                self.fm_rel_smoother_2.reset(
+                    self.params.fm_one_to_three.value() * (self.params.fm_sustain.value() / 999.9),
+                );
+                self.fm_rel_smoother_3.reset(
+                    self.params.fm_two_to_three.value() * (self.params.fm_sustain.value() / 999.9),
+                );
+                // Move release to the cutoff to end
+                self.fm_rel_smoother_1
+                    .set_target(self.sample_rate, self.params.fm_one_to_two.value());
+                self.fm_rel_smoother_2
+                    .set_target(self.sample_rate, self.params.fm_one_to_three.value());
+                self.fm_rel_smoother_3
+                    .set_target(self.sample_rate, self.params.fm_two_to_three.value());
+            }
+            // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
+            if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
+                // Set our filter in attack state
+                self.fm_state = OscState::Attacking;
+                // Consume our params for smoothing
+                self.fm_atk_smoother_1 = match self.params.fm_attack_curve.value() {
+                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
+                        self.params.fm_attack.value(),
+                    )),
+                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                        self.params.fm_attack.value(),
+                    )),
+                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                        self.params.fm_attack.value(),
+                    )),
+                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
+                        self.params.fm_attack.value(),
+                    )),
+                };
+                self.fm_atk_smoother_2 = self.fm_atk_smoother_1.clone();
+                self.fm_atk_smoother_3 = self.fm_atk_smoother_1.clone();
+                // Reset our attack to start from 0.0
+                if self.params.fm_attack_curve.value() == SmoothStyle::Linear {
+                    self.fm_atk_smoother_1.reset(0.0);
+                    self.fm_atk_smoother_2.reset(0.0);
+                    self.fm_atk_smoother_3.reset(0.0);
+                } else {
+                    self.fm_atk_smoother_1.reset(0.0001);
+                    self.fm_atk_smoother_2.reset(0.0001);
+                    self.fm_atk_smoother_3.reset(0.0001);
+                }
+                // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
+                self.fm_atk_smoother_1.set_target(
+                    self.sample_rate, self.params.fm_one_to_two.value()
+                );
+                self.fm_atk_smoother_2.set_target(
+                    self.sample_rate, self.params.fm_one_to_three.value()
+                );
+                self.fm_atk_smoother_3.set_target(
+                    self.sample_rate, self.params.fm_two_to_three.value()
+                );
+            }
+            // If our attack has finished
+            if self.fm_atk_smoother_1.steps_left() == 0
+                && self.fm_state == OscState::Attacking
+            {
+                self.fm_state = OscState::Decaying;
+                self.fm_dec_smoother_1 = match self.params.fm_decay_curve.value() {
+                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
+                        self.params.fm_decay.value()
+                    )),
+                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
+                        self.params.fm_decay.value(),
+                    )),
+                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
+                        self.params.fm_decay.value(),
+                    )),
+                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
+                        self.params.fm_decay.value(),
+                    )),
+                };
+                self.fm_dec_smoother_2 = self.fm_dec_smoother_1.clone();
+                self.fm_dec_smoother_3 = self.fm_dec_smoother_1.clone();
+                // This makes our fm decay start at env peak point
+                self.fm_dec_smoother_1.reset(self.params.fm_one_to_two.value());
+                self.fm_dec_smoother_2.reset(self.params.fm_one_to_three.value());
+                self.fm_dec_smoother_3.reset(self.params.fm_two_to_three.value());
+                // Set up the smoother for our filter movement to go from our decay point to our sustain point
+                self.fm_dec_smoother_1.set_target(
+                    self.sample_rate,
+                    self.params.fm_sustain.value() / 999.9,
+                );
+                self.fm_dec_smoother_2.set_target(
+                    self.sample_rate,
+                    self.params.fm_sustain.value() / 999.9,
+                );
+                self.fm_dec_smoother_3.set_target(
+                    self.sample_rate,
+                    self.params.fm_sustain.value() / 999.9,
+                );
+            }
+            // If our decay has finished move to sustain state
+            if self.fm_dec_smoother_1.steps_left() == 0
+                && self.fm_state == OscState::Decaying
+            {
+                self.fm_state = OscState::Sustaining;
+            }
+            let next_fm_step_1 = match self.fm_state {
+                OscState::Attacking => {
+                    self.fm_atk_smoother_1.next()
+                },
+                OscState::Decaying | OscState::Sustaining => {
+                    self.fm_dec_smoother_1.next()
+                },
+                OscState::Releasing => {
+                    self.fm_rel_smoother_1.next()
+                },
+                OscState::Off => {0.0},
+            };
+            let next_fm_step_2 = match self.fm_state {
+                OscState::Attacking => {
+                    self.fm_atk_smoother_2.next()
+                },
+                OscState::Decaying | OscState::Sustaining => {
+                    self.fm_dec_smoother_2.next()
+                },
+                OscState::Releasing => {
+                    self.fm_rel_smoother_2.next()
+                },
+                OscState::Off => {0.0},
+            };
+            let next_fm_step_3 = match self.fm_state {
+                OscState::Attacking => {
+                    self.fm_atk_smoother_3.next()
+                },
+                OscState::Decaying | OscState::Sustaining => {
+                    self.fm_dec_smoother_3.next()
+                },
+                OscState::Releasing => {
+                    self.fm_rel_smoother_3.next()
+                },
+                OscState::Off => {0.0},
+            };
+            let current_cycles = self.params.fm_cycles.value();
             if one_to_two > 0.0 {
-                wave2_l = frequency_modulation::frequency_modulation(fm_wave_1, wave2_l, one_to_two);
-                wave2_r = frequency_modulation::frequency_modulation(fm_wave_1, wave2_r, one_to_two);
+                match current_cycles {
+                    1 => {
+                        wave2_l = frequency_modulation::frequency_modulation(fm_wave_1, wave2_l, next_fm_step_1);
+                        wave2_r = frequency_modulation::frequency_modulation(fm_wave_1, wave2_r, next_fm_step_1);
+                    },
+                    2 => {
+                        wave2_l = frequency_modulation::double_modulation(fm_wave_1, wave2_l, next_fm_step_1);
+                        wave2_r = frequency_modulation::double_modulation(fm_wave_1, wave2_r, next_fm_step_1);
+                    },
+                    3 => {
+                        wave2_l = frequency_modulation::triple_modulation(fm_wave_1, wave2_l, next_fm_step_1);
+                        wave2_r = frequency_modulation::triple_modulation(fm_wave_1, wave2_r, next_fm_step_1);
+                    },
+                    _ => {}
+                }
             }
             if one_to_three > 0.0 {
-                wave3_l = frequency_modulation::frequency_modulation(fm_wave_1, wave3_l, one_to_three);
-                wave3_r = frequency_modulation::frequency_modulation(fm_wave_1, wave3_r, one_to_three);
+                match current_cycles {
+                    1 => {
+                        wave3_l = frequency_modulation::frequency_modulation(fm_wave_1, wave3_l, next_fm_step_2);
+                        wave3_r = frequency_modulation::frequency_modulation(fm_wave_1, wave3_r, next_fm_step_2);
+                    },
+                    2 => {
+                        wave3_l = frequency_modulation::double_modulation(fm_wave_1, wave3_l, next_fm_step_2);
+                        wave3_r = frequency_modulation::double_modulation(fm_wave_1, wave3_r, next_fm_step_2);
+                    },
+                    3 => {
+                        wave3_l = frequency_modulation::triple_modulation(fm_wave_1, wave3_l, next_fm_step_2);
+                        wave3_r = frequency_modulation::triple_modulation(fm_wave_1, wave3_r, next_fm_step_2);
+                    },
+                    _ => {}
+                }
             }
             if two_to_three > 0.0 {
-                wave3_l = frequency_modulation::frequency_modulation(fm_wave_2, wave3_l, two_to_three);
-                wave3_r = frequency_modulation::frequency_modulation(fm_wave_2, wave3_r, two_to_three);
+                match current_cycles {
+                    1 => {
+                        wave3_l = frequency_modulation::frequency_modulation(fm_wave_2, wave3_l, next_fm_step_3);
+                        wave3_r = frequency_modulation::frequency_modulation(fm_wave_2, wave3_r, next_fm_step_3);
+                    },
+                    2 => {
+                        wave3_l = frequency_modulation::double_modulation(fm_wave_2, wave3_l, next_fm_step_3);
+                        wave3_r = frequency_modulation::double_modulation(fm_wave_2, wave3_r, next_fm_step_3);
+                    },
+                    3 => {
+                        wave3_l = frequency_modulation::triple_modulation(fm_wave_2, wave3_l, next_fm_step_3);
+                        wave3_r = frequency_modulation::triple_modulation(fm_wave_2, wave3_r, next_fm_step_3);
+                    },
+                    _ => {}
+                }
             }
 
             /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -8790,6 +9069,19 @@ impl Actuate {
             loaded_preset.pitch_routing_2.clone(),
         );
 
+        // FM Update 1.2.6
+        setter.set_parameter(&params.fm_one_to_two, loaded_preset.fm_one_to_two);
+        setter.set_parameter(&params.fm_one_to_three, loaded_preset.fm_one_to_three);
+        setter.set_parameter(&params.fm_two_to_three, loaded_preset.fm_two_to_three);
+        setter.set_parameter(&params.fm_cycles, loaded_preset.fm_cycles);
+        setter.set_parameter(&params.fm_attack, loaded_preset.fm_attack);
+        setter.set_parameter(&params.fm_decay, loaded_preset.fm_decay);
+        setter.set_parameter(&params.fm_sustain, loaded_preset.fm_sustain);
+        setter.set_parameter(&params.fm_release, loaded_preset.fm_release);
+        setter.set_parameter(&params.fm_attack_curve, loaded_preset.fm_attack_curve);
+        setter.set_parameter(&params.fm_decay_curve, loaded_preset.fm_decay_curve);
+        setter.set_parameter(&params.fm_release_curve, loaded_preset.fm_release_curve);
+
         // Assign the preset tags
         setter.set_parameter(&params.tag_acid, loaded_preset.tag_acid);
         setter.set_parameter(&params.tag_analog, loaded_preset.tag_analog);
@@ -9215,6 +9507,7 @@ impl Actuate {
                 fm_one_to_two: self.params.fm_one_to_two.value(),
                 fm_one_to_three: self.params.fm_one_to_three.value(),
                 fm_two_to_three: self.params.fm_two_to_three.value(),
+                fm_cycles: self.params.fm_cycles.value(),
                 fm_attack: self.params.fm_attack.value(),
                 fm_decay: self.params.fm_decay.value(),
                 fm_sustain: self.params.fm_sustain.value(),
@@ -10551,6 +10844,7 @@ lazy_static::lazy_static!(
         fm_one_to_two: 0.0,
         fm_one_to_three: 0.0,
         fm_two_to_three: 0.0,
+        fm_cycles: 1,
         fm_attack: 0.0001,
         fm_decay: 0.0001,
         fm_sustain: 999.9,
@@ -10840,6 +11134,7 @@ lazy_static::lazy_static!(
         fm_one_to_two: 0.0,
         fm_one_to_three: 0.0,
         fm_two_to_three: 0.0,
+        fm_cycles: 1,
         fm_attack: 0.0001,
         fm_decay: 0.0001,
         fm_sustain: 999.9,
@@ -10863,13 +11158,13 @@ lazy_static::lazy_static!(
 
         use_compressor: false,
 
-        comp_amt: 0.5,
-        comp_atk: 0.5,
-        comp_rel: 0.5,
-        comp_drive: 0.5,
+        comp_amt: 0.3,
+        comp_atk: 0.8,
+        comp_rel: 0.3,
+        comp_drive: 0.3,
 
         use_abass: false,
-        abass_amount: 0.0011,
+        abass_amount: 0.00067,
 
         use_saturation: false,
         sat_amount: 0.0,
