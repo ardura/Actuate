@@ -32,6 +32,7 @@ use std::{collections::VecDeque, f32::consts::SQRT_2, path::PathBuf, sync::Arc};
 
 // Audio module files
 pub(crate) mod Oscillator;
+pub(crate) mod frequency_modulation;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 #[allow(unused_imports)]
 use crate::{

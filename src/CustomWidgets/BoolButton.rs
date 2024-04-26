@@ -69,7 +69,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         ui.painter().rect(
             rect,
             0.5,
-            if self.background_color == Color32::TEMPORARY_COLOR {
+            if self.background_color == Color32::PLACEHOLDER {
                 visuals.bg_fill.linear_multiply(0.8)
             } else {
                 self.background_color
@@ -94,7 +94,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
             Align2::CENTER_CENTER,
             self.param.name(),
             self.font.clone(),
-            if self.text_color == Color32::TEMPORARY_COLOR {
+            if self.text_color == Color32::PLACEHOLDER {
                 visuals.text_color()
             } else {
                 self.text_color
@@ -130,8 +130,8 @@ impl<'a, P: Param> BoolButton<'a, P> {
                 param,
                 param_setter,
                 font,
-                Color32::TEMPORARY_COLOR,
-                Color32::TEMPORARY_COLOR,
+                Color32::PLACEHOLDER,
+                Color32::PLACEHOLDER,
             ),
             scaling_x: x_scaling,
             scaling_y: y_scaling,

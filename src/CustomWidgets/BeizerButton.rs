@@ -206,7 +206,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                 }
             },
             Rounding::from(4.0),
-            if self.background_color == Color32::TEMPORARY_COLOR {
+            if self.background_color == Color32::PLACEHOLDER {
                 visuals.bg_fill.linear_multiply(0.8)
             } else {
                 self.background_color
@@ -216,7 +216,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         ui.painter().rect(
             rect,
             Rounding::from(4.0),
-            if self.background_color == Color32::TEMPORARY_COLOR {
+            if self.background_color == Color32::PLACEHOLDER {
                 visuals.bg_fill.linear_multiply(0.8)
             } else {
                 self.background_color.linear_multiply(0.8)
@@ -244,7 +244,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
             Color32::TRANSPARENT,
             Stroke::new(
                 3.0,
-                if self.line_color == Color32::TEMPORARY_COLOR {
+                if self.line_color == Color32::PLACEHOLDER {
                     visuals.fg_stroke.color
                 } else {
                     self.line_color
@@ -312,8 +312,8 @@ impl<'a, P: Param> BeizerButton<'a, P> {
             slider_region: SliderRegion::new(
                 param,
                 param_setter,
-                Color32::TEMPORARY_COLOR,
-                Color32::TEMPORARY_COLOR,
+                Color32::PLACEHOLDER,
+                Color32::PLACEHOLDER,
                 button_layout,
             ),
             scaling_x: x_scaling,

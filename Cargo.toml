@@ -1,6 +1,6 @@
 [package]
 name = "Actuate"
-version = "1.2.5"
+version = "1.2.6"
 edition = "2021"
 authors = ["Ardura <azviscarra@gmail.com>"]
 license = "GPL-3.0-or-later"
@@ -33,8 +33,12 @@ lazy_static = "1.4.0"
 #nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "4d28fb251422bdabfc65641beedb490bdf35c297" }
 
 # My branch - new 2024
-nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "96d413756faa145dc063fc9ca609d86bc7d2e3e7", features = ["assert_process_allocs"] }
-nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "96d413756faa145dc063fc9ca609d86bc7d2e3e7" }
+#nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "96d413756faa145dc063fc9ca609d86bc7d2e3e7", features = ["assert_process_allocs"] }
+#nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "96d413756faa145dc063fc9ca609d86bc7d2e3e7" }
+
+# Nih plug update
+nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "fed302db1fcfb374f9af90bb872be0edd3ee0568", features = ["assert_process_allocs"] }
+nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "fed302db1fcfb374f9af90bb872be0edd3ee0568" }
 
 # Local
 #nih_plug = { path = "../../nih-plug", features = ["assert_process_allocs"] }
