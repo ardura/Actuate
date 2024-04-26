@@ -73,7 +73,7 @@ Hover over any knob (or some labels) for an explanation!
 ## DAWS and compatibility
 - Compatible with Windows 10 and up
 - Compatible with Linux
-- Compatible with Mac(?)
+- Compatible with Mac
 - DAWS
     - FL Studio tested compatible
     - Ableton tested compatible
@@ -82,5 +82,12 @@ Hover over any knob (or some labels) for an explanation!
     - Bitwig tested compatible
     - Cantibile tested **uncompatible and has issues**
     - VSTHost tested **compatible but has gui issues**
+ 
+## Other Build information
+The builds on GitHub and KVR are VST3 and CLAP format, and are compiled on the following machine types:
+- Ubuntu 22.04
+- Windows' 2022 build (Win10? The Github runner just lists "Windows-2022")
+- MacOS 12 (Other MacOS versions are available but I picked 12 for compatibility for now. I have not tested on M1 Macs.)
+
 ## Known Issues
 - Naming presets and info may be unstable in non-windows environments as I have not tested those sorry
