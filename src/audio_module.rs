@@ -21,6 +21,7 @@ This is intended to be a generic implementation that can be extended for other a
 #####################################
 */
 
+use egui_file::{FileDialog, State};
 use nih_plug::{
     params::enums::Enum, prelude::{NoteEvent, ParamSetter, Smoother, SmoothingStyle}, util
 };
@@ -28,28 +29,16 @@ use nih_plug_egui::egui::{Pos2, Rect, RichText, Rounding, Ui};
 use pitch_shift::PitchShifter;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, f32::consts::SQRT_2, path::PathBuf, sync::Arc};
+use std::{collections::VecDeque, f32::consts::SQRT_2, path::PathBuf, sync::{Arc}};
 
 // Audio module files
 pub(crate) mod Oscillator;
 pub(crate) mod frequency_modulation;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
-#[allow(unused_imports)]
 use crate::{
-    toggle_switch,
-    ui_knob,
-    ui_knob::KnobLayout,
-    ActuateParams,
-    CustomWidgets::{CustomParamSlider, CustomVerticalSlider},
-    PitchRouting,
-    A_BACKGROUND_COLOR_TOP,
-    DARK_GREY_UI_COLOR,
-    FONT_COLOR,
-    LIGHTER_GREY_UI_COLOR,
-    MEDIUM_GREY_UI_COLOR,
-    SMALLER_FONT,
-    // UI Colors
-    YELLOW_MUSTARD,
+    ActuateParams, 
+    CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, 
+    PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, YELLOW_MUSTARD
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
@@ -315,9 +304,14 @@ impl AudioModule {
     // Passing the params here is not the nicest thing but we have to move things around to get past the threading stuff + egui's gui separation
     pub fn draw_module(
         ui: &mut Ui,
+        egui_ctx: &nih_plug_egui::egui::Context,
         setter: &ParamSetter<'_>,
         params: Arc<ActuateParams>,
+        dialog: &mut FileDialog,
         index: u8,
+        module1: &Arc<std::sync::Mutex<AudioModule>>,
+        module2: &Arc<std::sync::Mutex<AudioModule>>,
+        module3: &Arc<std::sync::Mutex<AudioModule>>,
     ) {
         let am_type;
         let osc_voice;
@@ -430,9 +424,9 @@ impl AudioModule {
             _ => !unreachable!(),
         }
         // Resetting from the draw thread since setter is valid here - I recognize this is ugly/bad practice
-        if load_sample.value() {
-            setter.set_parameter(load_sample, false);
-        }
+        //if load_sample.value() {
+        //    setter.set_parameter(load_sample, false);
+        //}
 
         const VERT_BAR_HEIGHT: f32 = 76.0;
         const VERT_BAR_WIDTH: f32 = 12.0;
@@ -667,7 +661,64 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 1.0, SMALLER_FONT);
-                        ui.add(load_sample_boolButton);
+                        if ui.add(load_sample_boolButton).clicked() || params.load_sample_1.value() || params.load_sample_2.value() || params.load_sample_3.value() {
+                            dialog.open();
+                            let mut dvar = Some(dialog);
+                            
+                            if let Some(dialog) = &mut dvar {
+                                if dialog.show(egui_ctx).selected() {
+                                  if let Some(file) = dialog.path() {
+                                    let opened_file = Some(file.to_path_buf());
+                                    if Option::is_some(&opened_file) {
+                                        match index {
+                                            1 => {
+                                                module1
+                                                    .lock()
+                                                    .unwrap()
+                                                    .load_new_sample(opened_file.unwrap());
+                                                *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
+                                                setter.set_parameter(&params.load_sample_1, false);
+                                            },
+                                            2 => {
+                                                module2
+                                                    .lock()
+                                                    .unwrap()
+                                                    .load_new_sample(opened_file.unwrap());
+                                                *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
+                                                setter.set_parameter(&params.load_sample_2, false);
+                                            },
+                                            3 => {
+                                                module3
+                                                    .lock()
+                                                    .unwrap()
+                                                    .load_new_sample(opened_file.unwrap());
+                                                *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
+                                                setter.set_parameter(&params.load_sample_3, false);
+                                            },
+                                            _ => {}
+                                        }
+                                    }
+                                  }
+                                }
+                                match dialog.state() {
+                                    State::Cancelled | State::Closed => {
+                                        match index {
+                                            1 => {
+                                                setter.set_parameter(&params.load_sample_1, false);
+                                            },
+                                            2 => {
+                                                setter.set_parameter(&params.load_sample_2, false);
+                                            },
+                                            3 => {
+                                                setter.set_parameter(&params.load_sample_3, false);
+                                            },
+                                            _ => {}
+                                        }
+                                    },
+                                    _ => {}
+                                }
+                            }
+                        }
                         let restretch_button = BoolButton::BoolButton::for_param(restretch, setter, 3.5, 1.0, SMALLER_FONT);
                         ui.add(restretch_button);
                         let loop_toggle = BoolButton::BoolButton::for_param(loop_sample, setter, 3.5, 1.0, SMALLER_FONT);
@@ -719,6 +770,19 @@ Random: Sample uses a new random position every note".to_string());
                         .set_text_size(TEXT_SIZE)
                         .set_hover_text("Adjust the MIDI input by semitone".to_string());
                         ui.add(osc_1_semitones_knob);
+                        let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
+                            osc_unison,
+                            setter,
+                            KNOB_SIZE,
+                            KnobLayout::Horizonal,
+                        )
+                        .preset_style(ui_knob::KnobStyle::Preset1)
+                        .set_fill_color(DARK_GREY_UI_COLOR)
+                        .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                        .use_outline(true)
+                        .set_text_size(TEXT_SIZE)
+                        .set_hover_text("How many voices should play in unison".to_string());
+                        ui.add(osc_1_unison_knob);
                     });
                     ui.vertical(|ui| {
                         let start_position_1_knob = ui_knob::ArcKnob::for_param(
@@ -838,7 +902,64 @@ Random: Sample uses a new random position every note".to_string());
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
                         let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 0.8, SMALLER_FONT);
-                        ui.add(load_sample_boolButton);
+                        if ui.add(load_sample_boolButton).clicked() || params.load_sample_1.value() || params.load_sample_2.value() || params.load_sample_3.value() {
+                            dialog.open();
+                            let mut dvar = Some(dialog);
+                            
+                            if let Some(dialog) = &mut dvar {
+                                if dialog.show(egui_ctx).selected() {
+                                  if let Some(file) = dialog.path() {
+                                    let opened_file = Some(file.to_path_buf());
+                                    if Option::is_some(&opened_file) {
+                                        match index {
+                                            1 => {
+                                                module1
+                                                    .lock()
+                                                    .unwrap()
+                                                    .load_new_sample(opened_file.unwrap());
+                                                *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
+                                                setter.set_parameter(&params.load_sample_1, false);
+                                            },
+                                            2 => {
+                                                module2
+                                                    .lock()
+                                                    .unwrap()
+                                                    .load_new_sample(opened_file.unwrap());
+                                                *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
+                                                setter.set_parameter(&params.load_sample_2, false);
+                                            },
+                                            3 => {
+                                                module3
+                                                    .lock()
+                                                    .unwrap()
+                                                    .load_new_sample(opened_file.unwrap());
+                                                *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
+                                                setter.set_parameter(&params.load_sample_3, false);
+                                            },
+                                            _ => {}
+                                        }
+                                    }
+                                  }
+                                }
+                                match dialog.state() {
+                                    State::Cancelled | State::Closed => {
+                                        match index {
+                                            1 => {
+                                                setter.set_parameter(&params.load_sample_1, false);
+                                            },
+                                            2 => {
+                                                setter.set_parameter(&params.load_sample_2, false);
+                                            },
+                                            3 => {
+                                                setter.set_parameter(&params.load_sample_3, false);
+                                            },
+                                            _ => {}
+                                        }
+                                    },
+                                    _ => {}
+                                }
+                            }
+                        }
                         let loop_toggle = BoolButton::BoolButton::for_param(loop_sample, setter, 3.5, 0.8, SMALLER_FONT);
                         ui.add(loop_toggle);
 
@@ -1824,7 +1945,7 @@ Random: Sample uses a new random position every note".to_string());
                         self.playing_voices.voices.push_back(new_voice);
 
                         // Add unison voices to our voice tracking deque
-                        if self.osc_unison > 1 && self.audio_module_type == AudioModuleType::Osc {
+                        if self.osc_unison > 1 && ( self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler ) {
                             let unison_even_voices = if self.osc_unison % 2 == 0 {
                                 self.osc_unison
                             } else {
@@ -1839,8 +1960,32 @@ Random: Sample uses a new random position every note".to_string());
                             for unison_voice in 0..(self.osc_unison as usize - 1) {
                                 let uni_phase = match self.osc_retrigger {
                                     RetriggerStyle::UniRandom => {
-                                        let mut rng = rand::thread_rng();
-                                        rng.gen_range(0.0..1.0)
+                                        match self.audio_module_type {
+                                            AudioModuleType::Osc => {
+                                                let mut rng = rand::thread_rng();
+                                                rng.gen_range(0.0..1.0)
+                                            },
+                                            AudioModuleType::Sampler | AudioModuleType::Granulizer=> {
+                                                let mut rng = rand::thread_rng();
+                                                // Prevent panic when no sample loaded yet
+                                                if self.sample_lib.len() > 1 {
+                                                    if self.sample_lib[note as usize][0].len() > 0 {
+                                                        rng.gen_range(
+                                                            0.0..self.sample_lib[note as usize][0].len() as f32,
+                                                        ).floor()
+                                                    } else {
+                                                        // There's probably no sample loaded
+                                                        0.0
+                                                    }
+                                                } else {
+                                                    0.0
+                                                }
+                                            },
+                                            AudioModuleType::Off => {
+                                                0.0
+                                            },
+                                        }
+                                        
                                     }
                                     _ => new_phase,
                                 };
@@ -1882,7 +2027,17 @@ Random: Sample uses a new random position every note".to_string());
                                     _retrigger: self.osc_retrigger,
                                     _voice_type: self.osc_type,
                                     _angle: unison_angles[unison_voice],
-                                    sample_pos: 0,
+                                    sample_pos: match self.audio_module_type {
+                                        AudioModuleType::Osc => {
+                                            0
+                                        },
+                                        AudioModuleType::Granulizer | AudioModuleType::Sampler => {
+                                            uni_phase as usize
+                                        },
+                                        AudioModuleType::Off => {
+                                            0
+                                        },
+                                    },
                                     grain_start_pos: 0,
                                     loop_it: self.loop_wavetable,
                                     _granular_gap: 200,
@@ -1954,7 +2109,7 @@ Random: Sample uses a new random position every note".to_string());
                                 },
                             );
 
-                            if self.osc_unison > 1 && self.audio_module_type == AudioModuleType::Osc
+                            if self.osc_unison > 1 && ( self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler )
                             {
                                 self.unison_voices.voices.resize(
                                     voice_max as usize,
@@ -2015,32 +2170,11 @@ Random: Sample uses a new random position every note".to_string());
                             voice.state != OscState::Off &&
                             !(voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0)
                         });
-                        if self.audio_module_type == AudioModuleType::Osc {
+                        if self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler {
                             self.unison_voices.voices.retain(|unison_voice| {
                                 unison_voice.state != OscState::Off
-                                //&& !(unison_voice.grain_state == GrainState::Releasing && unison_voice.grain_release.steps_left() == 0)
                             });
                         }
-                        /*
-                        for (i, voice) in self.playing_voices.voices.clone().iter().enumerate() {
-                            if voice.state == OscState::Off {
-                                self.playing_voices.voices.remove(i);
-                            } else if voice.grain_state == GrainState::Releasing
-                                && voice.grain_release.steps_left() == 0
-                            {
-                                self.playing_voices.voices.remove(i);
-                            }
-                        }
-                        if self.audio_module_type == AudioModuleType::Osc {
-                            for (i, unison_voice) in
-                                self.unison_voices.voices.clone().iter().enumerate()
-                            {
-                                if unison_voice.state == OscState::Off {
-                                    self.unison_voices.voices.remove(i);
-                                }
-                            }
-                        }
-                        */
                     }
                     ////////////////////////////////////////////////////////////
                     // MIDI EVENT NOTE OFF
@@ -2071,7 +2205,7 @@ Random: Sample uses a new random position every note".to_string());
                             _ => shifted_note + semi_shift,
                         };
 
-                        if self.audio_module_type == AudioModuleType::Osc {
+                        if self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler {
                             // Update the matching unison voices
                             for unison_voice in self.unison_voices.voices.iter_mut() {
                                 if unison_voice.note == shifted_note
@@ -2195,30 +2329,11 @@ Random: Sample uses a new random position every note".to_string());
             voice.state != OscState::Off &&
             !(voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0)
         });
-        if self.audio_module_type == AudioModuleType::Osc {
+        if self.audio_module_type != AudioModuleType::Off {
             self.unison_voices.voices.retain(|unison_voice| {
                 unison_voice.state != OscState::Off
-                //&& !(unison_voice.grain_state == GrainState::Releasing && unison_voice.grain_release.steps_left() == 0)
             });
         }
-        /*
-        for (i, voice) in self.playing_voices.voices.clone().iter().enumerate() {
-            if voice.state == OscState::Off {
-                self.playing_voices.voices.remove(i);
-            } else if voice.grain_state == GrainState::Releasing
-                && voice.grain_release.steps_left() == 0
-            {
-                self.playing_voices.voices.remove(i);
-            }
-        }
-        if self.audio_module_type == AudioModuleType::Osc {
-            for (i, unison_voice) in self.unison_voices.voices.clone().iter().enumerate() {
-                if unison_voice.state == OscState::Off {
-                    self.unison_voices.voices.remove(i);
-                }
-            }
-        }
-        */
 
         ////////////////////////////////////////////////////////////
         // Update our voices before output
@@ -2894,6 +3009,10 @@ Random: Sample uses a new random position every note".to_string());
                 summed_voices_l += stereo_voices_l / (self.osc_unison - 1).clamp(1, 9) as f32;
                 summed_voices_r += stereo_voices_r / (self.osc_unison - 1).clamp(1, 9) as f32;
 
+                // Blending
+                summed_voices_l = (summed_voices_l + summed_voices_r * 0.8)/2.0;
+                summed_voices_r = (summed_voices_r + summed_voices_l * 0.8)/2.0;
+
                 // Stereo Spreading code
                 let width_coeff = self.osc_stereo * 0.5;
                 let mid = (summed_voices_l + summed_voices_r) * 0.5;
@@ -2907,6 +3026,10 @@ Random: Sample uses a new random position every note".to_string());
             AudioModuleType::Sampler => {
                 let mut summed_voices_l: f32 = 0.0;
                 let mut summed_voices_r: f32 = 0.0;
+                let mut center_voices_l: f32 = 0.0;
+                let mut center_voices_r: f32 = 0.0;
+                let mut stereo_voices_l: f32 = 0.0;
+                let mut stereo_voices_r: f32 = 0.0;
                 for voice in self.playing_voices.voices.iter_mut() {
                     // Get our current gain amount for use in match below
                     let temp_osc_gain_multiplier: f32 = match voice.state {
@@ -2933,9 +3056,9 @@ Random: Sample uses a new random position every note".to_string());
                                 // Get our channels of sample vectors
                                 let NoteVector = &self.sample_lib[usize_note];
                                 // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
-                                summed_voices_l +=
+                                center_voices_l +=
                                     NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier;
-                                summed_voices_r +=
+                                center_voices_r +=
                                     NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier;
                             }
                         }
@@ -2959,6 +3082,97 @@ Random: Sample uses a new random position every note".to_string());
                         }
                     }
                 }
+
+                let mut temp_unison_voice_l = 0.0;
+                let mut temp_unison_voice_r = 0.0;
+                // Stereo applies to unison voices
+                for unison_voice in self.unison_voices.voices.iter_mut() {
+                    // Get our current gain amount for use in match below
+                    let temp_osc_gain_multiplier: f32 = match unison_voice.state {
+                        OscState::Attacking => unison_voice.osc_attack.next(),
+                        OscState::Decaying => unison_voice.osc_decay.next(),
+                        OscState::Sustaining => self.osc_sustain / 999.9,
+                        OscState::Releasing => unison_voice.osc_release.next(),
+                        OscState::Off => 0.0,
+                    };
+                    unison_voice.amp_current = temp_osc_gain_multiplier;
+
+                    let usize_note = unison_voice.note as usize;
+
+                    // If we even have valid samples loaded
+                    if self.sample_lib[0][0].len() > 1
+                        && self.loaded_sample[0].len() > 1
+                        && self.sample_lib.len() > 1
+                    {
+                        // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
+                        // If our note is valid 0-127
+                        if usize_note < self.sample_lib.len() {
+                            // If our sample position is valid for our note
+                            if unison_voice.sample_pos < self.sample_lib[usize_note][0].len() {
+                                // Get our channels of sample vectors
+                                let NoteVector = &self.sample_lib[usize_note];
+                                // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
+                                temp_unison_voice_l +=
+                                    NoteVector[0][unison_voice.sample_pos] * temp_osc_gain_multiplier;
+                                temp_unison_voice_r +=
+                                    NoteVector[1][unison_voice.sample_pos] * temp_osc_gain_multiplier;
+                            }
+                        }
+
+                        let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32
+                            * self.start_position)
+                            .floor() as usize;
+                        let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32
+                            * self._end_position)
+                            .floor() as usize;
+                        // Sampler moves position
+                        unison_voice.sample_pos += 1;
+                        if unison_voice.loop_it
+                            && (unison_voice.sample_pos > self.sample_lib[usize_note][0].len()
+                                || unison_voice.sample_pos > scaled_end_position)
+                        {
+                            unison_voice.sample_pos = scaled_start_position;
+                        } else if unison_voice.sample_pos > scaled_end_position {
+                            unison_voice.sample_pos = self.sample_lib[usize_note][0].len();
+                            unison_voice.state = OscState::Off;
+                        }
+                    }
+                        // Create our stereo pan for unison
+
+                        // Our angle comes back as radians
+                        let pan = unison_voice._angle;
+                                            
+                        // Precompute sine and cosine of the angle
+                        let cos_pan = pan.cos();
+                        let sin_pan = pan.sin();
+                                            
+                        // Calculate the amplitudes for the panned voice using vector operations
+                        let scale = SQRT_2 / 2.0;
+                        let temp_unison_voice_scaled_l = scale * temp_unison_voice_l;
+                        let temp_unison_voice_scaled_r = scale * temp_unison_voice_r;
+                                            
+                        let left_amp = temp_unison_voice_scaled_l * (cos_pan + sin_pan);
+                        let right_amp = temp_unison_voice_scaled_r * (cos_pan - sin_pan);
+
+                        // Add the voice to the sum of stereo voices
+                        stereo_voices_l += left_amp;
+                        stereo_voices_r += right_amp;
+                }
+
+                // Sum our voices for output
+                summed_voices_l += center_voices_l;
+                summed_voices_r += center_voices_r;
+                // Scaling of output based on stereo voices and unison
+                summed_voices_l += stereo_voices_l / (self.osc_unison - 1).clamp(1, 9) as f32;
+                summed_voices_r += stereo_voices_r / (self.osc_unison - 1).clamp(1, 9) as f32;
+
+                // Stereo Spreading code
+                let width_coeff = self.osc_stereo * 0.5;
+                let mid = (summed_voices_l + summed_voices_r) * 0.5;
+                let stereo = (summed_voices_r - summed_voices_l) * width_coeff;
+                summed_voices_l = mid - stereo;
+                summed_voices_r = mid + stereo;
+
                 (summed_voices_l, summed_voices_r)
             }
             AudioModuleType::Off => {
@@ -3248,13 +3462,9 @@ Random: Sample uses a new random position every note".to_string());
         if num_voices == 2 {
             // multiplied by sign of stereo flipper to avoid pan
             return if voice_index == 0 {
+                self.two_voice_stereo_flipper = !self.two_voice_stereo_flipper;
                 -0.25 * std::f32::consts::PI * sign // First voice panned left
             } else {
-                if self.two_voice_stereo_flipper {
-                    self.two_voice_stereo_flipper = false;
-                } else {
-                    self.two_voice_stereo_flipper = true;
-                }
                 0.25 * std::f32::consts::PI * sign // Second voice panned right
             };
         }
@@ -3263,11 +3473,7 @@ Random: Sample uses a new random position every note".to_string());
         if num_voices == 3 {
             return match voice_index {
                 0 => {
-                    if self.two_voice_stereo_flipper {
-                        self.two_voice_stereo_flipper = false;
-                    } else {
-                        self.two_voice_stereo_flipper = true;
-                    }
+                    self.two_voice_stereo_flipper = !self.two_voice_stereo_flipper;
                     -0.25 * std::f32::consts::PI * sign
                 } // First voice panned left
                 1 => 0.0,                                // Second voice panned center
@@ -3286,11 +3492,7 @@ Random: Sample uses a new random position every note".to_string());
             base_angle
         };
         if voice_index == 0 {
-            if self.two_voice_stereo_flipper {
-                self.two_voice_stereo_flipper = false;
-            } else {
-                self.two_voice_stereo_flipper = true;
-            }
+            self.two_voice_stereo_flipper = !self.two_voice_stereo_flipper;
         }
 
         angle * std::f32::consts::PI * sign // Use full scale for other cases
