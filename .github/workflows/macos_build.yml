@@ -10,12 +10,23 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  build_mac_m1:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run bundler
+      run: cargo xtask bundle scrollscope --profile release
+    - uses: actions/upload-artifact@v4
+      with:
+        name: macos_m1_build
+        path: target/bundled/*
+        if-no-files-found: warn
   build_macos:
     runs-on: macos-12
     steps:
     - uses: actions/checkout@v3
     - name: Run bundler
-      run: cargo xtask bundle Actuate --profile release
+      run: cargo xtask bundle scrollscope --profile release
     - uses: actions/upload-artifact@v4
       with:
         name: macos_build
