@@ -4,3 +4,5 @@ pub(crate) mod CustomParamSlider;
 pub(crate) mod CustomVerticalSlider;
 pub(crate) mod toggle_switch;
 pub(crate) mod ui_knob;
+pub(crate) mod slim_checkbox;
+

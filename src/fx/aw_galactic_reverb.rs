@@ -71,24 +71,6 @@ const DELAY_SIZING: [usize;12] = [6480, 3660, 1720, 680, 9700, 6000, 2320, 940, 
 const DELAY_M: usize = 256;
 const MYRAND: f32 = 83.0 * 0.0000000000618;
 
-
-/*
-const SIZE_IL: usize = 6479;
-const SIZE_JL: usize = 3659;
-const SIZE_KL: usize = 1719;
-const SIZE_LL: usize = 679;
-
-const SIZE_AL: usize = 9699;
-const SIZE_BL: usize = 5999;
-const SIZE_CL: usize = 2319;
-const SIZE_DL: usize = 939;
-
-const SIZE_EL: usize = 15219;
-const SIZE_FL: usize = 8459;
-const SIZE_GL: usize = 4539;
-const SIZE_HL: usize = 3199;
-*/
-
 impl GalacticReverb {
     pub fn new(sample_rate: f32, size_input: f32, feedback: f32, wet: f32) -> Self {
         // My settings

@@ -1,6 +1,6 @@
 [package]
 name = "Actuate"
-version = "1.2.6"
+version = "1.2.7"
 edition = "2021"
 authors = ["Ardura <azviscarra@gmail.com>"]
 license = "GPL-3.0-or-later"
@@ -23,22 +23,12 @@ lazy_static = "1.4.0"
 # Uncomment the below line to disable the on-by-default VST3 feature to remove
 # the GPL compatibility requirement
 
-
-# Original
-#nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "252ab3c5becabcd7d2a7a75a8ef04de37d5f8418", features = ["assert_process_allocs"] }
-#nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git", rev = "252ab3c5becabcd7d2a7a75a8ef04de37d5f8418"}
-
-# My branch
-#nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "4d28fb251422bdabfc65641beedb490bdf35c297", features = ["assert_process_allocs"] }
-#nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "4d28fb251422bdabfc65641beedb490bdf35c297" }
-
-# My branch - new 2024
-#nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "96d413756faa145dc063fc9ca609d86bc7d2e3e7", features = ["assert_process_allocs"] }
-#nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "96d413756faa145dc063fc9ca609d86bc7d2e3e7" }
-
 # Nih plug update
 nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "fed302db1fcfb374f9af90bb872be0edd3ee0568", features = ["assert_process_allocs"] }
 nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "fed302db1fcfb374f9af90bb872be0edd3ee0568" }
+
+# egui_file fork for nih-plug
+egui_file = { git = "https://github.com/ardura/egui_file.git"}
 
 # Local
 #nih_plug = { path = "../../nih-plug", features = ["assert_process_allocs"] }
@@ -51,11 +41,11 @@ parking_lot = "0.12.1"
 pitch_shift = "1.0.0"
 rand = "0.8.5"
 rand_pcg = "0.3.1"
-rfd = "0.11.4"
 rmp-serde = "1.1.2"
 serde = "1.0.188"
 serde_json = "1.0.107"
 tinyfiledialogs = "3.9.1"
+dirs = "5.0.1"
 
 [profile.release]
 opt-level = 3
