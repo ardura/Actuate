@@ -9,6 +9,7 @@ Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura
 
 ![image](https://github.com/ardura/Actuate/assets/31751444/9b4cb9fe-de11-4242-a5c0-a0c5b724443d)
 
+[Shortcut to troubleshooting section](##Troubleshooting)
 
 ## Features
 Hover over any knob (or some labels) for an explanation!
@@ -58,6 +59,20 @@ Hover over any knob (or some labels) for an explanation!
 
 ## Signal Path
 ![actuate_flow](https://github.com/ardura/Actuate/assets/31751444/45ce1d56-d6c1-47b2-8bae-09633ecbbd2e)
+
+## Troubleshooting
+Since Actuate 1.2.8 the new file browser and UI use native text editing. This created some issues in some DAWs outlined here:
+
+- **FL Studio:** No issues!
+- **Ardour:** No issues!
+- **Bitwig:** When using text input you need to use **<shift + spacebar>** for space key input
+- **Reaper:** VST3 and CLAP text input works if you use "send all keyboard input to plugin" in the FX menu
+
+![image](https://github.com/ardura/Actuate/assets/31751444/1664ef3f-ec4c-453b-81e8-d0b7e13a5811)
+
+- **Ableton:** 
+  - Text input works if you add "-_EnsureKeyMessagesForPlugins" to Options.txt in preferences. See https://forum.ableton.com/viewtopic.php?t=97318
+  - Unfortunately I don't know where this would be on Linux or Mac so I'm open to help from Ableton users!
 
 ## Roadmap
 - [x] Create a Preset Browser
