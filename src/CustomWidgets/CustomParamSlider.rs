@@ -345,30 +345,73 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         // Either show the parameter's label, or show a text entry field if the parameter's label
         // has been clicked on
 
-        let keyboard_focus_id = self.keyboard_focus_id.unwrap();
-        if self.keyboard_entry_active(ui) {
-            let value_entry_mutex = ui
-                .memory_mut(|mem|mem.data.get_persisted_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID).clone());
-            let mut value_entry = value_entry_mutex.lock();
+        let keyboard_focus_id = self.keyboard_focus_id;
+        let text;
+        if keyboard_focus_id.is_some() {
+            let keyboard_focus_id = keyboard_focus_id.unwrap();
+            if self.keyboard_entry_active(ui) {
+                let value_entry_mutex = ui
+                    .memory_mut(|mem|mem.data.get_persisted_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID).clone());
+                let mut value_entry = value_entry_mutex.lock();
+    
+                ui.add(
+                    TextEdit::singleline(&mut *value_entry)
+                        .id(keyboard_focus_id)
+                        .font(TextStyle::Monospace),
+                );
+                if ui.input(|reader|reader.key_pressed(Key::Escape)) {
+                    // Cancel when pressing escape
+                    ui.memory_mut(|mem|mem.surrender_focus(keyboard_focus_id));
+                } else if ui.input(|reader|reader.key_pressed(Key::Enter)) {
+                    // And try to set the value by string when pressing enter
+                    self.begin_drag();
+                    self.set_from_string(&value_entry);
+                    self.end_drag();
+    
+                    ui.memory_mut(|mem|mem.surrender_focus(keyboard_focus_id));
+                }
+            } else {
+                text = WidgetText::from(text_label).into_galley(
+                    ui,
+                    None,
+                    // Redid this as label_width
+                    //ui.available_width() - (padding.x * 2.0),
+                    self.label_width,
+                    TextStyle::Button,
+                );
 
-            ui.add(
-                TextEdit::singleline(&mut *value_entry)
-                    .id(keyboard_focus_id)
-                    .font(TextStyle::Monospace),
-            );
-            if ui.input(|reader|reader.key_pressed(Key::Escape)) {
-                // Cancel when pressing escape
-                ui.memory_mut(|mem|mem.surrender_focus(keyboard_focus_id));
-            } else if ui.input(|reader|reader.key_pressed(Key::Enter)) {
-                // And try to set the value by string when pressing enter
-                self.begin_drag();
-                self.set_from_string(&value_entry);
-                self.end_drag();
-
-                ui.memory_mut(|mem|mem.surrender_focus(keyboard_focus_id));
+                //let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
+                let response = ui.allocate_response(
+                    vec2(self.label_width, text.size().y) + (padding * 2.0),
+                    Sense::click(),
+                );
+                if response.clicked() {
+                    self.begin_keyboard_entry(ui);
+                }
+                if ui.is_rect_visible(response.rect) {
+                    if should_draw_frame {
+                        let fill = visuals.bg_fill;
+                        let stroke = visuals.bg_stroke;
+                        ui.painter().rect(
+                            response.rect.expand(visuals.expansion),
+                            visuals.rounding,
+                            fill,
+                            stroke,
+                        );
+                    }
+                    let text_pos = ui
+                        .layout()
+                        .align_size_within_rect(text.size(), response.rect.shrink2(padding))
+                        .min;
+                    ui.painter().add(egui::epaint::TextShape::new(
+                        text_pos,
+                        text,
+                        visuals.fg_stroke.color,
+                    ));
+                }
             }
         } else {
-            let text = WidgetText::from(text_label).into_galley(
+            text = WidgetText::from(text_label).into_galley(
                 ui,
                 None,
                 // Redid this as label_width
@@ -385,7 +428,6 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             if response.clicked() {
                 self.begin_keyboard_entry(ui);
             }
-
             if ui.is_rect_visible(response.rect) {
                 if should_draw_frame {
                     let fill = visuals.bg_fill;
@@ -397,7 +439,6 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                         stroke,
                     );
                 }
-
                 let text_pos = ui
                     .layout()
                     .align_size_within_rect(text.size(), response.rect.shrink2(padding))
@@ -411,6 +452,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         }
     }
 }
+
 
 impl<P: Param> Widget for ParamSlider<'_, P> {
     fn ui(mut self, ui: &mut Ui) -> Response {
