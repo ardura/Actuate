@@ -62,13 +62,13 @@ Hover over any knob (or some labels) for an explanation!
 ## Roadmap
 - [x] Create a Preset Browser
 - [x] Add more reverb styles
-- [ ] Add more decay styles
-- [ ] Fix some bandpass glitching on certain filter types
+- [ ] ~~Add more decay styles~~ Not doing
+- [ ] Fix some bandpass glitching on certain filter types (need to find these scenarios still)
 - [ ] Create different stereo spreading algorithms
 - [x] Make the GUI nicer - see Discussion https://github.com/ardura/Actuate/discussions/26
 - [x] Look into making the preset loading more reliable
-- [ ] Fix text input not working (right now it's a OS safe workaround)
-- [ ] Fix file dialog in the process thread (right now it's a OS safe workaround)
+- [x] Fix text input not working (right now it's a OS safe workaround)
+- [x] Fix file dialog in the process thread (right now it's a OS safe workaround)
 
 ## DAWS and compatibility
 - Compatible with Windows 10 and up
@@ -87,7 +87,8 @@ Hover over any knob (or some labels) for an explanation!
 The builds on GitHub and KVR are VST3 and CLAP format, and are compiled on the following machine types:
 - Ubuntu 22.04
 - Windows' 2022 build (Win10? The Github runner just lists "Windows-2022")
-- MacOS 12 (Other MacOS versions are available but I picked 12 for compatibility for now. I have not tested on M1 Macs.)
+- MacOS 12
+- The MacOS M1 build is on OS 14
 
 ## Known Issues
 - Naming presets and info may be unstable in non-windows environments as I have not tested those sorry

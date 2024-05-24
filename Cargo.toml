@@ -1,11 +1,11 @@
 [package]
 name = "Actuate"
-version = "1.2.7"
+version = "1.2.8"
 edition = "2021"
 authors = ["Ardura <azviscarra@gmail.com>"]
 license = "GPL-3.0-or-later"
 homepage = "https://github.com/ardura"
-description = "Compressor"
+description = "Sampler + Synth"
 
 [workspace]
 members = ["xtask"]
@@ -17,22 +17,13 @@ crate-type = ["cdylib","lib"]
 flate2 = "1.0.27"
 hound = "3.5.0"
 lazy_static = "1.4.0"
-# Remove the `assert_process_allocs` feature to allow allocations on the audio
-# thread in debug builds.
-
-# Uncomment the below line to disable the on-by-default VST3 feature to remove
-# the GPL compatibility requirement
 
 # Nih plug update
-nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "fed302db1fcfb374f9af90bb872be0edd3ee0568", features = ["assert_process_allocs"] }
-nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "fed302db1fcfb374f9af90bb872be0edd3ee0568" }
+nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "3e811735a4c4c17d936d076b5f1a1b1d4c566319", features = ["assert_process_allocs"] }
+nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "3e811735a4c4c17d936d076b5f1a1b1d4c566319" }
 
-# egui_file fork for nih-plug
-egui_file = { git = "https://github.com/ardura/egui_file.git"}
-
-# Local
-#nih_plug = { path = "../../nih-plug", features = ["assert_process_allocs"] }
-#nih_plug_egui = { path = "../../nih-plug/nih_plug_egui" }
+# egui_file fork for nih-plug/Actuate
+egui_file = { git = "https://github.com/ardura/egui_file.git", rev = "03dd37a395e08d7ed224dee8d05dcd55302d7d79" }
 
 num-complex = "0.4.4"
 num-traits = "0.2.17"
@@ -44,7 +35,6 @@ rand_pcg = "0.3.1"
 rmp-serde = "1.1.2"
 serde = "1.0.188"
 serde_json = "1.0.107"
-tinyfiledialogs = "3.9.1"
 dirs = "5.0.1"
 
 [profile.release]

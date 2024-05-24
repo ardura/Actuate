@@ -249,7 +249,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             self.reset_param();
             response.mark_changed();
         }
-        if response.drag_released() {
+        if response.drag_stopped() {
             self.end_drag();
         }
 

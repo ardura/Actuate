@@ -29,7 +29,7 @@ use nih_plug_egui::egui::{Pos2, Rect, RichText, Rounding, Ui};
 use pitch_shift::PitchShifter;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, f32::consts::SQRT_2, path::PathBuf, sync::{Arc}};
+use std::{collections::VecDeque, f32::consts::SQRT_2, path::{Path, PathBuf}, sync::Arc};
 
 // Audio module files
 pub(crate) mod Oscillator;
@@ -672,28 +672,40 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     if Option::is_some(&opened_file) {
                                         match index {
                                             1 => {
-                                                module1
+                                                if params.load_sample_1.value() {
+                                                    module1
                                                     .lock()
                                                     .unwrap()
                                                     .load_new_sample(opened_file.unwrap());
-                                                *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
-                                                setter.set_parameter(&params.load_sample_1, false);
+                                                    *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
+                                                    setter.set_parameter(&params.load_sample_1, false);
+                                                    dialog.set_path(dialog.directory().to_path_buf());
+                                                    dialog.deselect();
+                                                }
                                             },
                                             2 => {
-                                                module2
-                                                    .lock()
-                                                    .unwrap()
-                                                    .load_new_sample(opened_file.unwrap());
-                                                *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
-                                                setter.set_parameter(&params.load_sample_2, false);
+                                                if params.load_sample_2.value() {
+                                                    module2
+                                                        .lock()
+                                                        .unwrap()
+                                                        .load_new_sample(opened_file.unwrap());
+                                                    *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
+                                                    setter.set_parameter(&params.load_sample_2, false);
+                                                    dialog.set_path(dialog.directory().to_path_buf());
+                                                    dialog.deselect();
+                                                }
                                             },
                                             3 => {
-                                                module3
-                                                    .lock()
-                                                    .unwrap()
-                                                    .load_new_sample(opened_file.unwrap());
-                                                *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
-                                                setter.set_parameter(&params.load_sample_3, false);
+                                                if params.load_sample_3.value() {
+                                                    module3
+                                                        .lock()
+                                                        .unwrap()
+                                                        .load_new_sample(opened_file.unwrap());
+                                                    *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
+                                                    setter.set_parameter(&params.load_sample_3, false);
+                                                    dialog.set_path(dialog.directory().to_path_buf());
+                                                    dialog.deselect();
+                                                }
                                             },
                                             _ => {}
                                         }
@@ -705,12 +717,18 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                         match index {
                                             1 => {
                                                 setter.set_parameter(&params.load_sample_1, false);
+                                                dialog.set_path(dialog.directory().to_path_buf());
+                                                dialog.deselect();
                                             },
                                             2 => {
                                                 setter.set_parameter(&params.load_sample_2, false);
+                                                dialog.set_path(dialog.directory().to_path_buf());
+                                                dialog.deselect();
                                             },
                                             3 => {
                                                 setter.set_parameter(&params.load_sample_3, false);
+                                                dialog.set_path(dialog.directory().to_path_buf());
+                                                dialog.deselect();
                                             },
                                             _ => {}
                                         }
@@ -910,31 +928,43 @@ Random: Sample uses a new random position every note".to_string());
                                 if dialog.show(egui_ctx).selected() {
                                   if let Some(file) = dialog.path() {
                                     let opened_file = Some(file.to_path_buf());
-                                    if Option::is_some(&opened_file) {
+                                    if Option::is_some(&opened_file) && Path::is_file(file) {
                                         match index {
                                             1 => {
-                                                module1
-                                                    .lock()
-                                                    .unwrap()
-                                                    .load_new_sample(opened_file.unwrap());
-                                                *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
-                                                setter.set_parameter(&params.load_sample_1, false);
+                                                if params.load_sample_1.value() {
+                                                    module1
+                                                        .lock()
+                                                        .unwrap()
+                                                        .load_new_sample(opened_file.unwrap());
+                                                    *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
+                                                    setter.set_parameter(&params.load_sample_1, false);
+                                                    dialog.set_path(dialog.directory().to_path_buf());
+                                                    dialog.deselect();
+                                                }
                                             },
                                             2 => {
-                                                module2
-                                                    .lock()
-                                                    .unwrap()
-                                                    .load_new_sample(opened_file.unwrap());
-                                                *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
-                                                setter.set_parameter(&params.load_sample_2, false);
+                                                if params.load_sample_2.value() {
+                                                    module2
+                                                        .lock()
+                                                        .unwrap()
+                                                        .load_new_sample(opened_file.unwrap());
+                                                    *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
+                                                    setter.set_parameter(&params.load_sample_2, false);
+                                                    dialog.set_path(dialog.directory().to_path_buf());
+                                                    dialog.deselect();
+                                                }
                                             },
                                             3 => {
-                                                module3
-                                                    .lock()
-                                                    .unwrap()
-                                                    .load_new_sample(opened_file.unwrap());
-                                                *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
-                                                setter.set_parameter(&params.load_sample_3, false);
+                                                if params.load_sample_3.value() {
+                                                    module3
+                                                        .lock()
+                                                        .unwrap()
+                                                        .load_new_sample(opened_file.unwrap());
+                                                    *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
+                                                    setter.set_parameter(&params.load_sample_3, false);
+                                                    dialog.set_path(dialog.directory().to_path_buf());
+                                                    dialog.deselect();
+                                                }
                                             },
                                             _ => {}
                                         }
@@ -946,12 +976,18 @@ Random: Sample uses a new random position every note".to_string());
                                         match index {
                                             1 => {
                                                 setter.set_parameter(&params.load_sample_1, false);
+                                                dialog.set_path(dialog.directory().to_path_buf());
+                                                dialog.deselect();
                                             },
                                             2 => {
                                                 setter.set_parameter(&params.load_sample_2, false);
+                                                dialog.set_path(dialog.directory().to_path_buf());
+                                                dialog.deselect();
                                             },
                                             3 => {
                                                 setter.set_parameter(&params.load_sample_3, false);
+                                                dialog.set_path(dialog.directory().to_path_buf());
+                                                dialog.deselect();
                                             },
                                             _ => {}
                                         }

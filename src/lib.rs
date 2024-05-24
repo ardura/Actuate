@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.2.7
+Version 1.2.8
 
 #####################################
 
@@ -4767,7 +4767,16 @@ impl Actuate {
 
     
     fn export_preset(saving_preset: Option<PathBuf>, mut preset: ActuatePresetV126) {
-        if let Some(location) = saving_preset {
+        if let Some(mut location) = saving_preset {
+            if let Some(extension_check) = location.extension() {
+                let extension = extension_check.to_string_lossy().to_string();
+                // Add our extension if it's not there
+                if !extension.ends_with(".actuate") {
+                    location.set_extension("actuate");
+                }
+            } else {
+                location.set_extension("actuate");
+            }
             // Create our new save file
             let file = File::create(location.clone());
 
@@ -5416,7 +5425,16 @@ impl Actuate {
     }
 
     fn save_preset_bank(preset_store: &mut Vec<ActuatePresetV126>, saving_bank: Option<PathBuf>) {
-        if let Some(location) = saving_bank {
+        if let Some(mut location) = saving_bank {
+            if let Some(extension_check) = location.extension() {
+                let extension = extension_check.to_string_lossy().to_string();
+                // Add our extension if it's not there
+                if !extension.ends_with(".actuatebank") {
+                    location.set_extension("actuatebank");
+                }
+            } else {
+                location.set_extension("actuatebank");
+            }
             // Create our new save file
             let file = File::create(location.clone());
 

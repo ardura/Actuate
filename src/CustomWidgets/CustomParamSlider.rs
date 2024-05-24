@@ -1,12 +1,12 @@
 // Copy of ParamSlider made custom by adding reversed bool to reverse drawing bar and empty section
 // Needed to make some weird import changes to get this to work...Definitely should find a better way to do this in future...
 // Ardura
-use std::sync::Arc;
+use std::{sync::Arc};
 use nih_plug::{
     prelude::{Param, ParamSetter},
     wrapper::clap::lazy_static,
 };
-use nih_plug_egui::egui::{self, vec2, Color32, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
+use nih_plug_egui::egui::{self, vec2, Color32, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget, WidgetText};
 use nih_plug_egui::widgets::util as nUtil;
 use parking_lot::Mutex;
 
@@ -269,7 +269,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             self.reset_param();
             response.mark_changed();
         }
-        if response.drag_released() {
+        if response.drag_stopped() {
             self.end_drag();
         }
 
@@ -342,20 +342,13 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         }
 
         let text_label = self.param.name().to_string() + ":" + &self.string_value().to_string();
-
-        /*
-        // Same as the CustomVerticalSlider I had to remove this bit as it prevented program running for keyboard reference
-
         // Either show the parameter's label, or show a text entry field if the parameter's label
         // has been clicked on
 
         let keyboard_focus_id = self.keyboard_focus_id.unwrap();
         if self.keyboard_entry_active(ui) {
             let value_entry_mutex = ui
-                .memory()
-                .data
-                .get_temp_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID)
-                .clone();
+                .memory_mut(|mem|mem.data.get_persisted_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID).clone());
             let mut value_entry = value_entry_mutex.lock();
 
             ui.add(
@@ -363,60 +356,59 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     .id(keyboard_focus_id)
                     .font(TextStyle::Monospace),
             );
-            if ui.input().key_pressed(Key::Escape) {
+            if ui.input(|reader|reader.key_pressed(Key::Escape)) {
                 // Cancel when pressing escape
-                ui.memory().surrender_focus(keyboard_focus_id);
-            } else if ui.input().key_pressed(Key::Enter) {
+                ui.memory_mut(|mem|mem.surrender_focus(keyboard_focus_id));
+            } else if ui.input(|reader|reader.key_pressed(Key::Enter)) {
                 // And try to set the value by string when pressing enter
                 self.begin_drag();
                 self.set_from_string(&value_entry);
                 self.end_drag();
 
-                ui.memory().surrender_focus(keyboard_focus_id);
+                ui.memory_mut(|mem|mem.surrender_focus(keyboard_focus_id));
             }
         } else {
-            */
-        let text = WidgetText::from(text_label).into_galley(
-            ui,
-            None,
-            // Redid this as label_width
-            //ui.available_width() - (padding.x * 2.0),
-            self.label_width,
-            TextStyle::Button,
-        );
+            let text = WidgetText::from(text_label).into_galley(
+                ui,
+                None,
+                // Redid this as label_width
+                //ui.available_width() - (padding.x * 2.0),
+                self.label_width,
+                TextStyle::Button,
+            );
 
-        //let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
-        let response = ui.allocate_response(
-            vec2(self.label_width, text.size().y) + (padding * 2.0),
-            Sense::click(),
-        );
-        //if response.clicked() {
-        //self.begin_keyboard_entry(ui);
-        //}
-
-        if ui.is_rect_visible(response.rect) {
-            if should_draw_frame {
-                let fill = visuals.bg_fill;
-                let stroke = visuals.bg_stroke;
-                ui.painter().rect(
-                    response.rect.expand(visuals.expansion),
-                    visuals.rounding,
-                    fill,
-                    stroke,
-                );
+            //let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
+            let response = ui.allocate_response(
+                vec2(self.label_width, text.size().y) + (padding * 2.0),
+                Sense::click(),
+            );
+            if response.clicked() {
+                self.begin_keyboard_entry(ui);
             }
 
-            let text_pos = ui
-                .layout()
-                .align_size_within_rect(text.size(), response.rect.shrink2(padding))
-                .min;
-            ui.painter().add(egui::epaint::TextShape::new(
-                text_pos,
-                text,
-                visuals.fg_stroke.color,
-            ));
+            if ui.is_rect_visible(response.rect) {
+                if should_draw_frame {
+                    let fill = visuals.bg_fill;
+                    let stroke = visuals.bg_stroke;
+                    ui.painter().rect(
+                        response.rect.expand(visuals.expansion),
+                        visuals.rounding,
+                        fill,
+                        stroke,
+                    );
+                }
+
+                let text_pos = ui
+                    .layout()
+                    .align_size_within_rect(text.size(), response.rect.shrink2(padding))
+                    .min;
+                ui.painter().add(egui::epaint::TextShape::new(
+                    text_pos,
+                    text,
+                    visuals.fg_stroke.color,
+                ));
+            }
         }
-        //}
     }
 }
 

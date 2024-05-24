@@ -200,6 +200,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         let mod_dest_3_tracker = mod_dest_3_tracker_outside.clone();
                         let mod_dest_4_tracker = mod_dest_4_tracker_outside.clone();
                         let preset_category_tracker = preset_category_tracker_outside.clone();
+                        let preset_lib_name_tracker = arc_preset_lib_name.clone();
 
                         // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
                         // It runs if there is peristent sample data but not sample data in the audio module
@@ -495,145 +496,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         .on_hover_text("by Ardura!");
                                     ui.add_space(2.0);
                                     ui.separator();
-                                    let load_bank_button = BoolButton::BoolButton::for_param(&params.param_load_bank, setter, 3.5, 0.9, SMALLER_FONT)
-                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                    if ui.add(load_bank_button).clicked() || params.param_load_bank.value() {
-                                        // Move to info tab on preset change
-                                        *lfo_select.lock().unwrap() = LFOSelect::INFO;
-
-                                        // hehe
-                                        let bank_dialock = bank_dialog_main.clone();
-                                        let mut dialog = bank_dialock.lock().unwrap();
-                                        dialog.open();
-                                        let mut dvar = Some(dialog);
-                                        
-                                        if let Some(dialog) = &mut dvar {
-                                            if dialog.show(egui_ctx).selected() {
-                                              if let Some(file) = dialog.path() {
-                                                // This is manually here to make sure it appears for long loads from different threads
-                                                // Create the loading popup here.
-                                                let screen_size = Rect::from_x_y_ranges(
-                                                RangeInclusive::new(0.0, WIDTH as f32),
-                                                RangeInclusive::new(0.0, HEIGHT as f32));
-                                                let popup_size = Vec2::new(400.0, 200.0);
-                                                let popup_pos = screen_size.center();
-                                            
-                                                // Draw the loading popup content here.
-                                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
-                                                let opened_file = Some(file.to_path_buf());
-                                                let unserialized: Vec<ActuatePresetV126>;
-                                                (*arc_preset_lib_name.lock().unwrap(), unserialized) = Actuate::load_preset_bank(opened_file);
-                                                let temppath = arc_preset_lib_name.lock().unwrap().clone();
-                                                let path = Path::new(&temppath);
-                                                if let Some(filename) = path.file_name() {
-                                                    *arc_preset_lib_name.lock().unwrap() = filename.to_string_lossy().to_string();
-                                                }
-
-                                                let mut locked_lib = arc_preset.lock().unwrap();
-
-                                                // Load our items into our library from the unserialized save file
-                                                for (item_index, item) in unserialized.iter().enumerate() {
-                                                    // If our item exists then update it
-                                                    if let Some(existing_item) = locked_lib.get_mut(item_index) {
-                                                        *existing_item = item.clone();
-                                                    } else {
-                                                        // item_index is out of bounds in locked_lib
-                                                        // These get dropped as the preset size should be the same all around
-                                                    }
-                                                }
-
-                                                // Create missing samples on current preset
-                                                let mut AM1L = AM1.lock().unwrap();
-                                                let mut AM2L = AM2.lock().unwrap();
-                                                let mut AM3L = AM3.lock().unwrap();
-                                                AM1L.regenerate_samples();
-                                                AM2L.regenerate_samples();
-                                                AM3L.regenerate_samples();
-
-                                                let temp_preset = &locked_lib[current_preset_index as usize];
-                                                *arc_preset_name.lock().unwrap() =  temp_preset.preset_name.clone();
-                                                *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
-                                                *arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
-
-                                                drop(locked_lib);
-
-                                                (
-                                                    *mod_source_override_1.lock().unwrap(),
-                                                    *mod_source_override_2.lock().unwrap(),
-                                                    *mod_source_override_3.lock().unwrap(),
-                                                    *mod_source_override_4.lock().unwrap(),
-                                                    *mod_dest_override_1.lock().unwrap(),
-                                                    *mod_dest_override_2.lock().unwrap(),
-                                                    *mod_dest_override_3.lock().unwrap(),
-                                                    *mod_dest_override_4.lock().unwrap(),
-                                                    *preset_category_override.lock().unwrap(),
-                                                ) = Actuate::reload_entire_preset(
-                                                    setter,
-                                                    params.clone(),
-                                                    current_preset_index as usize,
-                                                    &arc_preset.lock().unwrap(),
-                                                    &mut AM1L,
-                                                    &mut AM2L,
-                                                    &mut AM3L,);
-                                                setter.set_parameter(&params.param_load_bank, false);
-                                              }
-                                            }
-
-                                            match dialog.state() {
-                                                State::Cancelled | State::Closed => {
-                                                    setter.set_parameter(&params.param_load_bank, false);
-                                                },
-                                                _ => {}
-                                            }
-                                        }
-                                    }
-                                    let save_bank_button = BoolButton::BoolButton::for_param(&params.param_save_bank, setter, 3.5, 0.9, SMALLER_FONT)
-                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                    if ui.add(save_bank_button).clicked() || params.param_save_bank.value() {
-                                        // Name the preset bank
-                                        let mut bank_name = arc_preset_lib_name.lock().unwrap();
-
-                                        // Only rename on click event
-                                        if !params.param_save_bank.value() {
-                                            //TFD
-                                            match tinyfiledialogs::input_box("Set Bank name to save", "Bank name:", &bank_name) {
-                                                Some(input) => *bank_name = input,
-                                                None => {},
-                                            }
-                                        }
-
-                                        // Add our extension if it's not there
-                                        if !bank_name.ends_with(".actuatebank") {
-                                            *bank_name += ".actuatebank";
-                                        }
-
-                                        let bank_save_dialock = bank_save_dialog_main.clone();
-                                        let mut save_dialog = bank_save_dialock.lock().unwrap();
-                                        save_dialog.default_filename(bank_name.replace(" ", "_"));
-                                        save_dialog.open();
-                                        let mut dvar = Some(save_dialog);
-                                        
-                                        if let Some(s_dialog) = &mut dvar {
-                                            if s_dialog.show(egui_ctx).selected() {
-                                              if let Some(file) = s_dialog.path() {
-                                                let saved_file = Some(file.to_path_buf());
-                                                let mut locked_lib = arc_preset.lock().unwrap();
-                                                Actuate::save_preset_bank(&mut locked_lib, saved_file);
-                                                drop(locked_lib);
-                                                setter.set_parameter(&params.param_save_bank, false);
-                                              }
-                                            }
-
-                                            match s_dialog.state() {
-                                                State::Cancelled | State::Closed => {
-                                                    setter.set_parameter(&params.param_save_bank, false);
-                                                },
-                                                _ => {}
-                                            }
-                                        }
-                                    }
 
                                     let prev_preset_button = BoolButton::BoolButton::for_param(&params.param_prev_preset, setter, 1.5, 0.9, FONT)
                                         .with_background_color(DARK_GREY_UI_COLOR);
@@ -2210,8 +2072,10 @@ VCF: Voltage Controlled Filter model".to_string());
 
                                     // LFO Box
                                     ui.vertical(|ui|{
+                                        // Got stuck in a doube nested deadlock so added this clone
+                                        let current_select = lfo_select.lock().unwrap().clone();
                                         //ui.separator();
-                                        match *lfo_select.lock().unwrap() {
+                                        match current_select {
                                             LFOSelect::LFO1 => {
                                                 ui.vertical(|ui|{
                                                     ui.horizontal(|ui|{
@@ -2797,20 +2661,12 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                             },
                                             LFOSelect::INFO => {
                                                 ui.horizontal(|ui| {
-                                                    let text_response = ui.add(
+                                                    ui.add(
                                                         nih_plug_egui::egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
                                                             .interactive(true)
                                                             .hint_text("Preset Name")
                                                             .desired_width(150.0));
-                                                    if text_response.clicked() {
-                                                        let mut temp_lock = arc_preset_name.lock().unwrap();
 
-                                                        //TFD
-                                                        match tinyfiledialogs::input_box("Rename preset", "Preset name:", &*temp_lock) {
-                                                            Some(input) => *temp_lock = input,
-                                                            None => {},
-                                                        }
-                                                    }
                                                     ui.label(RichText::new("Category:")
                                                             .font(FONT)
                                                             .size(12.0));
@@ -2844,22 +2700,14 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                 });
 
                                                 ui.horizontal(|ui|{
-                                                    let text_info_response = ui.add(
+                                                    ui.add(
                                                         egui::TextEdit::multiline(&mut *arc_preset_info.lock().unwrap())
                                                             .interactive(true)
                                                             .hint_text("Preset Info")
                                                             .desired_width(150.0)
                                                             .desired_rows(6)
                                                             .lock_focus(true));
-                                                    if text_info_response.clicked() {
-                                                        let mut temp_lock = arc_preset_info.lock().unwrap();
 
-                                                        //TFD
-                                                        match tinyfiledialogs::input_box("Update preset description", "Preset description:", &*temp_lock) {
-                                                            Some(input) => *temp_lock = input,
-                                                            None => {},
-                                                        }
-                                                    }
                                                     ui.vertical(|ui|{
                                                         ui.horizontal(|ui|{
                                                             let tag_acid = BoolButton::BoolButton::for_param(&params.tag_acid, setter, 2.0, 0.9, SMALLER_FONT);
@@ -2885,7 +2733,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                             ui.add(tag_harsh);
                                                         });
                                                         ui.horizontal(|ui|{
-                                                            let tag_lush = BoolButton::BoolButton::for_param(&params.tag_lush, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            let tag_lush = BoolButton::BoolButton::for_param(&params.tag_lush, setter, 1.8, 0.9, SMALLER_FONT);
                                                             ui.add(tag_lush);
                                                             let tag_mellow = BoolButton::BoolButton::for_param(&params.tag_mellow, setter, 2.0, 0.9, SMALLER_FONT);
                                                             ui.add(tag_mellow);
@@ -2893,7 +2741,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                             ui.add(tag_resonant);
                                                             let tag_rich = BoolButton::BoolButton::for_param(&params.tag_rich, setter, 2.0, 0.9, SMALLER_FONT);
                                                             ui.add(tag_rich);
-                                                            let tag_sharp = BoolButton::BoolButton::for_param(&params.tag_sharp, setter, 2.0, 0.9, SMALLER_FONT);
+                                                            let tag_sharp = BoolButton::BoolButton::for_param(&params.tag_sharp, setter, 1.8, 0.9, SMALLER_FONT);
                                                             ui.add(tag_sharp);
                                                         });
                                                         ui.horizontal(|ui|{
@@ -2991,13 +2839,10 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                     let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 5.0, 1.2, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     if ui.add(export_preset).clicked() || params.param_export_preset.value() {
-                                                        let temp_name = arc_preset_name.lock().unwrap().to_string();
                                                         let save_dialock = save_dialog_main.clone();
                                                         let mut save_dialog = save_dialock.lock().unwrap();
-                                                        save_dialog.default_filename(temp_name.replace(" ", "_") + ".actuate");
                                                         save_dialog.open();
                                                         let mut dvar = Some(save_dialog);
-                                                        
                                                         if let Some(s_dialog) = &mut dvar {
                                                             if s_dialog.show(egui_ctx).selected() {
                                                               if let Some(file) = s_dialog.path() {
@@ -3020,6 +2865,131 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                     ui.separator();
                                                     let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.8, 1.2, FONT);
                                                     ui.add(use_fx_toggle);
+                                                });
+                                                ui.horizontal(|ui|{
+                                                    ui.add_space(90.0);
+                                                    let load_bank_button = BoolButton::BoolButton::for_param(&params.param_load_bank, setter, 3.5, 1.2, FONT)
+                                                        .with_background_color(DARK_GREY_UI_COLOR);
+                                                    if ui.add(load_bank_button).clicked() || params.param_load_bank.value() {
+                                                        // Move to info tab on preset change
+                                                        *lfo_select.lock().unwrap() = LFOSelect::INFO;
+                                                    
+                                                        // hehe
+                                                        let bank_dialock = bank_dialog_main.clone();
+                                                        let mut dialog = bank_dialock.lock().unwrap();
+                                                        dialog.open();
+                                                        let mut dvar = Some(dialog);
+
+                                                        if let Some(dialog) = &mut dvar {
+                                                            if dialog.show(egui_ctx).selected() {
+                                                              if let Some(file) = dialog.path() {
+                                                                let default_name: String;
+                                                                // This is manually here to make sure it appears for long loads from different threads
+                                                                // Create the loading popup here.
+                                                                let screen_size = Rect::from_x_y_ranges(
+                                                                RangeInclusive::new(0.0, WIDTH as f32),
+                                                                RangeInclusive::new(0.0, HEIGHT as f32));
+                                                                let popup_size = Vec2::new(400.0, 200.0);
+                                                                let popup_pos = screen_size.center();
+                                                                
+                                                                // Draw the loading popup content here.
+                                                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
+                                                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
+                                                                
+                                                                let opened_file = Some(file.to_path_buf());
+                                                                let unserialized: Vec<ActuatePresetV126>;
+                                                                (default_name, unserialized) = Actuate::load_preset_bank(opened_file);
+                                                                let temppath = default_name.clone();
+                                                                let path = Path::new(&temppath);
+                                                                if let Some(filename) = path.file_name() {
+                                                                    let mut locked_lib = arc_preset.lock().unwrap();
+                                                            
+                                                                    // Load our items into our library from the unserialized save file
+                                                                    for (item_index, item) in unserialized.iter().enumerate() {
+                                                                        // If our item exists then update it
+                                                                        if let Some(existing_item) = locked_lib.get_mut(item_index) {
+                                                                            *existing_item = item.clone();
+                                                                        } else {
+                                                                            // item_index is out of bounds in locked_lib
+                                                                            // These get dropped as the preset size should be the same all around
+                                                                        }
+                                                                    }
+                                                                
+                                                                    // Create missing samples on current preset
+                                                                    let mut AM1L = AM1.lock().unwrap();
+                                                                    let mut AM2L = AM2.lock().unwrap();
+                                                                    let mut AM3L = AM3.lock().unwrap();
+                                                                    AM1L.regenerate_samples();
+                                                                    AM2L.regenerate_samples();
+                                                                    AM3L.regenerate_samples();
+                                                                
+                                                                    let temp_preset = &locked_lib[current_preset_index as usize];
+                                                                    *arc_preset_name.lock().unwrap() =  temp_preset.preset_name.clone();
+                                                                    *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
+                                                                    *arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
+                                                                
+                                                                    drop(locked_lib);
+                                                                
+                                                                    (
+                                                                        *mod_source_override_1.lock().unwrap(),
+                                                                        *mod_source_override_2.lock().unwrap(),
+                                                                        *mod_source_override_3.lock().unwrap(),
+                                                                        *mod_source_override_4.lock().unwrap(),
+                                                                        *mod_dest_override_1.lock().unwrap(),
+                                                                        *mod_dest_override_2.lock().unwrap(),
+                                                                        *mod_dest_override_3.lock().unwrap(),
+                                                                        *mod_dest_override_4.lock().unwrap(),
+                                                                        *preset_category_override.lock().unwrap(),
+                                                                    ) = Actuate::reload_entire_preset(
+                                                                        setter,
+                                                                        params.clone(),
+                                                                        current_preset_index as usize,
+                                                                        &arc_preset.lock().unwrap(),
+                                                                        &mut AM1L,
+                                                                        &mut AM2L,
+                                                                        &mut AM3L,);
+                                                                    setter.set_parameter(&params.param_load_bank, false);
+                                                                    *preset_lib_name_tracker.lock().unwrap() = filename.to_string_lossy().to_string();
+                                                                }
+                                                              }
+                                                            }
+                                                        
+                                                            match dialog.state() {
+                                                                State::Cancelled | State::Closed => {
+                                                                    setter.set_parameter(&params.param_load_bank, false);
+                                                                },
+                                                                _ => {}
+                                                            }
+                                                        }
+                                                    }
+                                                    let save_bank_button = BoolButton::BoolButton::for_param(&params.param_save_bank, setter, 3.5, 1.2, FONT)
+                                                        .with_background_color(DARK_GREY_UI_COLOR);
+                                                    if ui.add(save_bank_button).clicked() || params.param_save_bank.value() {
+                                                        // Name the preset bank
+                                                        let bank_save_dialock = bank_save_dialog_main.clone();
+                                                        let mut save_dialog = bank_save_dialock.lock().unwrap();
+                                                        save_dialog.open();
+                                                        let mut dvar = Some(save_dialog);
+
+                                                        if let Some(s_dialog) = &mut dvar {
+                                                            if s_dialog.show(egui_ctx).selected() {
+                                                              if let Some(file) = s_dialog.path() {
+                                                                let saved_file = Some(file.to_path_buf());
+                                                                let mut locked_lib = arc_preset.lock().unwrap();
+                                                                Actuate::save_preset_bank(&mut locked_lib, saved_file);
+                                                                drop(locked_lib);
+                                                                setter.set_parameter(&params.param_save_bank, false);
+                                                              }
+                                                            }
+                                                        
+                                                            match s_dialog.state() {
+                                                                State::Cancelled | State::Closed => {
+                                                                    setter.set_parameter(&params.param_save_bank, false);
+                                                                },
+                                                                _ => {}
+                                                            }
+                                                        }
+                                                    }
                                                 });
                                             },
                                             LFOSelect::FX => {

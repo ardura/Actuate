@@ -152,7 +152,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
             self.reset_param();
             response.mark_changed();
         }
-        if response.drag_released() {
+        if response.drag_stopped() {
             self.param_setter.end_set_parameter(self.param);
             Self::set_drag_amount_memory(ui, 0.0);
         }
