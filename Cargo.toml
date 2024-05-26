@@ -19,8 +19,8 @@ hound = "3.5.0"
 lazy_static = "1.4.0"
 
 # Nih plug update
-nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "3e811735a4c4c17d936d076b5f1a1b1d4c566319", features = ["assert_process_allocs"] }
-nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "3e811735a4c4c17d936d076b5f1a1b1d4c566319" }
+nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "cd1c66b054a8ff7d44084369b7022a0272ac690e", features = ["assert_process_allocs"] }
+nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "cd1c66b054a8ff7d44084369b7022a0272ac690e" }
 
 # egui_file fork for nih-plug/Actuate
 egui_file = { git = "https://github.com/ardura/egui_file.git", rev = "03dd37a395e08d7ed224dee8d05dcd55302d7d79" }
