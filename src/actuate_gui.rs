@@ -10,7 +10,7 @@ use nih_plug_egui::{create_egui_editor, egui::{self, Align2, Color32, Pos2, Rect
 use crate::{
     actuate_enums::{
         FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, 
-        actuate_structs::ActuatePresetV126, audio_module::{AudioModule, AudioModuleType}, 
+        actuate_structs::ActuatePresetV130, audio_module::{AudioModule, AudioModuleType}, 
         Actuate, ActuateParams, 
         CustomWidgets::{
             slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, 
@@ -34,7 +34,7 @@ use crate::{
 pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExecutor<Actuate>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = instance.params.clone();
         let arc_preset_lib_name: Arc<Mutex<String>> = Arc::clone(&instance.preset_lib_name);
-        let arc_preset: Arc<Mutex<Vec<ActuatePresetV126>>> = Arc::clone(&instance.preset_lib);
+        let arc_preset: Arc<Mutex<Vec<ActuatePresetV130>>> = Arc::clone(&instance.preset_lib);
         let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&instance.preset_name);
         let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&instance.preset_info);
         let arc_preset_category: Arc<Mutex<PresetType>> = Arc::clone(&instance.preset_category);
@@ -762,7 +762,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                             }
                                                         } else {
                                                             // Filter results
-                                                            let results: Vec<ActuatePresetV126>  = arc_preset.lock().unwrap().clone();
+                                                            let results: Vec<ActuatePresetV130>  = arc_preset.lock().unwrap().clone();
                                                             let mut filtered_results: Vec<usize> = Vec::new();
                                                             for (index, preset) in results.iter().enumerate() {
                                                                 if (filter_acid.load(Ordering::SeqCst) && preset.tag_acid == true) ||
@@ -2219,13 +2219,22 @@ VCF: Voltage Controlled Filter model".to_string());
                                                 });
                                             },
                                             LFOSelect::Misc => {
-                                                ui.horizontal(|ui|{
-                                                    ui.label(RichText::new("Link Cutoff 2 to Cutoff 1")
-                                                        .font(FONT)
-                                                    )
-                                                        .on_hover_text("Filter 1 will control both filter cutoff values");
-                                                    let filter_cutoff_link = toggle_switch::ToggleSwitch::for_param(&params.filter_cutoff_link, setter);
-                                                    ui.add(filter_cutoff_link);
+                                                ui.vertical(|ui|{
+                                                    ui.horizontal(|ui|{
+                                                        ui.label(RichText::new("Link Cutoff 2 to Cutoff 1")
+                                                            .font(FONT)
+                                                        )
+                                                            .on_hover_text("Filter 1 will control both filter cutoff values");
+                                                        let filter_cutoff_link = toggle_switch::ToggleSwitch::for_param(&params.filter_cutoff_link, setter);
+                                                        ui.add(filter_cutoff_link);
+                                                    });
+                                                    ui.horizontal(|ui|{
+                                                        ui.label(RichText::new("Stereo Behavior")
+                                                            .font(FONT)
+                                                        )
+                                                            .on_hover_text("The stereo algorithm to use for voice spreads");
+                                                        ui.add(ParamSlider::for_param(&params.stereo_algorithm, setter).with_width(180.0));
+                                                    }); 
                                                 });
                                             },
                                             LFOSelect::FM => {
@@ -2776,7 +2785,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                             if dialog.show(egui_ctx).selected() {
                                                               if let Some(file) = dialog.path() {
                                                                 let opened_file = Some(file.to_path_buf());
-                                                                let unserialized: Option<ActuatePresetV126>;
+                                                                let unserialized: Option<ActuatePresetV130>;
                                                                 (_, unserialized) = Actuate::import_preset(opened_file);
 
                                                                 if unserialized.is_some() {
@@ -2897,7 +2906,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                 ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
                                                                 
                                                                 let opened_file = Some(file.to_path_buf());
-                                                                let unserialized: Vec<ActuatePresetV126>;
+                                                                let unserialized: Vec<ActuatePresetV130>;
                                                                 (default_name, unserialized) = Actuate::load_preset_bank(opened_file);
                                                                 let temppath = default_name.clone();
                                                                 let path = Path::new(&temppath);
@@ -3135,6 +3144,29 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                     .set_label_width(84.0)
                                                                     .with_width(268.0));
                                                                 ui.add(CustomParamSlider::ParamSlider::for_param(&params.sat_amt, setter)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(268.0));
+                                                            });
+                                                            ui.separator();
+                                                            // Chorus
+                                                            ui.horizontal(|ui|{
+                                                                ui.label(RichText::new("Chorus")
+                                                                    .font(FONT));
+                                                                let use_chorus_toggle = toggle_switch::ToggleSwitch::for_param(&params.use_chorus, setter);
+                                                                ui.add(use_chorus_toggle);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.chorus_amount, setter)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(268.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.chorus_range, setter)
+                                                                    .slimmer(0.7)
+                                                                    .set_left_sided_label(true)
+                                                                    .set_label_width(84.0)
+                                                                    .with_width(268.0));
+                                                                ui.add(CustomParamSlider::ParamSlider::for_param(&params.chorus_speed, setter)
                                                                     .set_left_sided_label(true)
                                                                     .set_label_width(84.0)
                                                                     .with_width(268.0));

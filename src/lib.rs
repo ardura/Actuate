@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.2.8
+Version 1.3.0
 
 #####################################
 
@@ -25,8 +25,8 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 */
 
 #![allow(non_snake_case)]
-use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel};
-use actuate_structs::{ActuatePresetV126, ModulationStruct};
+use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
+use actuate_structs::{ActuatePresetV130, ModulationStruct};
 use flate2::{read::GzDecoder,write::GzEncoder,Compression};
 use nih_plug::prelude::*;
 use nih_plug_egui::{
@@ -47,21 +47,7 @@ use audio_module::{
     frequency_modulation,
 };
 use fx::{
-    abass::a_bass_saturation, 
-    aw_galactic_reverb::GalacticReverb,
-    simple_space_reverb::SimpleSpaceReverb,
-    biquad_filters::{self, FilterType}, 
-    buffermodulator::BufferModulator, 
-    compressor::Compressor, 
-    delay::{Delay, DelaySnapValues, DelayType}, 
-    flanger::StereoFlanger, 
-    limiter::StereoLimiter, 
-    phaser::StereoPhaser, 
-    reverb::StereoReverb, 
-    saturation::{Saturation, SaturationType}, 
-    ArduraFilter::{self, ResponseType}, 
-    StateVariableFilter::{ResonanceType, StateVariableFilter}, 
-    VCFilter::ResponseType as VCResponseType
+    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType, StateVariableFilter}, VCFilter::ResponseType as VCResponseType
 };
 
 use old_preset_structs::{
@@ -70,8 +56,10 @@ use old_preset_structs::{
     load_unserialized_v122,
     load_unserialized_v123,
     load_unserialized_v125,
+    load_unserialized_v126,
     ActuatePresetV123,
-    ActuatePresetV125
+    ActuatePresetV125,
+    ActuatePresetV126,
 };
 
 mod actuate_gui;
@@ -189,7 +177,7 @@ pub struct Actuate {
     preset_name: Arc<Mutex<String>>,
     preset_info: Arc<Mutex<String>>,
     preset_category: Arc<Mutex<PresetType>>,
-    preset_lib: Arc<Mutex<Vec<ActuatePresetV126>>>,
+    preset_lib: Arc<Mutex<Vec<ActuatePresetV130>>>,
 
     // Used for DC Offset calculations
     dc_filter_l: StateVariableFilter,
@@ -233,6 +221,9 @@ pub struct Actuate {
 
     // Flanger
     flanger: StereoFlanger,
+
+    // Chorus
+    chorus: ChorusEnsemble,
 
     // Limiter
     limiter: StereoLimiter,
@@ -434,6 +425,9 @@ impl Default for Actuate {
 
             // Phaser
             phaser: StereoPhaser::new(),
+
+            // Chorus
+            chorus: ChorusEnsemble::new(44100.0, 0.5, 0.5, 0.8),
 
             // Limiter
             limiter: StereoLimiter::new(0.5, 0.5),
@@ -957,6 +951,15 @@ pub struct ActuateParams {
     #[id = "flanger_feedback"]
     pub flanger_feedback: FloatParam,
 
+    #[id = "use_chorus"]
+    pub use_chorus: BoolParam,
+    #[id = "chorus_amount"]
+    pub chorus_amount: FloatParam,
+    #[id = "chorus_speed"]
+    pub chorus_speed: FloatParam,
+    #[id = "chorus_range"]
+    pub chorus_range: FloatParam,
+
     #[id = "use_limiter"]
     pub use_limiter: BoolParam,
     #[id = "limiter_threshold"]
@@ -987,6 +990,10 @@ pub struct ActuateParams {
     pub fm_decay_curve: EnumParam<Oscillator::SmoothStyle>,
     #[id = "fm_release_curve"]
     pub fm_release_curve: EnumParam<Oscillator::SmoothStyle>,
+
+    // Stereo Algorithm
+    #[id = "Stereo Algorithm"]
+    pub stereo_algorithm: EnumParam<StereoAlgorithm>,
 
     // UI Non-param Params
     #[id = "param_load_bank"]
@@ -2550,6 +2557,32 @@ impl ActuateParams {
             )
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
 
+            use_chorus: BoolParam::new("Chorus", false),
+            chorus_amount: FloatParam::new(
+                "Amount",
+                0.8,
+                FloatRange::Linear { min: 0.0, max: 1.0 },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(3)),
+            chorus_range: FloatParam::new(
+                "Range", 
+                0.5, 
+                FloatRange::Linear { 
+                    min: 0.0, 
+                    max: 1.0 
+                }
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(3)),
+            chorus_speed: FloatParam::new(
+                "Speed",
+                0.5,
+                FloatRange::Linear {
+                    min: 0.0,
+                    max: 1.0,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(3)),
+
             use_limiter: BoolParam::new("Limiter", false),
             limiter_threshold: FloatParam::new(
                 "Threshold",
@@ -2645,6 +2678,8 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
+            
+            stereo_algorithm: EnumParam::new("Stereo Behavior", StereoAlgorithm::Original),
 
             // UI Non-Param Params are dummy params for my buttons
             ////////////////////////////////////////////////////////////////////////////////////
@@ -4001,6 +4036,7 @@ impl Actuate {
                     temp_mod_uni_vel_sum,
                     temp_mod_gain_1,
                     temp_mod_lfo_gain_1,
+                    self.params.stereo_algorithm.value()
                 );
                 // Sum to MONO
                 fm_wave_1 = (wave1_l + wave1_r)/2.0;
@@ -4032,6 +4068,7 @@ impl Actuate {
                     temp_mod_uni_vel_sum,
                     temp_mod_gain_2,
                     temp_mod_lfo_gain_2,
+                    self.params.stereo_algorithm.value()
                 );
                 // Sum to MONO
                 fm_wave_2 = (wave2_l + wave2_r)/2.0;
@@ -4063,6 +4100,7 @@ impl Actuate {
                     temp_mod_uni_vel_sum,
                     temp_mod_gain_3,
                     temp_mod_lfo_gain_3,
+                    self.params.stereo_algorithm.value()
                 );
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
                 wave3_l *= self.params.audio_module_3_level.value() * 0.33;
@@ -4624,6 +4662,16 @@ impl Actuate {
                         self.params.buffermod_amount.value(),
                     );
                 }
+                // Chorus
+                if self.params.use_chorus.value() {
+                    self.chorus.update(
+                        self.sample_rate, 
+                        self.params.chorus_range.value(), 
+                        self.params.chorus_speed.value(), 
+                        self.params.chorus_amount.value()
+                    );
+                    (left_output, right_output) = self.chorus.process(left_output, right_output);
+                }
                 // Phaser
                 if self.params.use_phaser.value() {
                     self.phaser.set_sample_rate(self.sample_rate);
@@ -4766,7 +4814,7 @@ impl Actuate {
     }
 
     
-    fn export_preset(saving_preset: Option<PathBuf>, mut preset: ActuatePresetV126) {
+    fn export_preset(saving_preset: Option<PathBuf>, mut preset: ActuatePresetV130) {
         if let Some(mut location) = saving_preset {
             if let Some(extension_check) = location.extension() {
                 let extension = extension_check.to_string_lossy().to_string();
@@ -4787,7 +4835,7 @@ impl Actuate {
                 preset.mod3_sample_lib.clear();
 
                 // Serialize to MessagePack bytes
-                let serialized_data = rmp_serde::to_vec::<ActuatePresetV126>(&preset);
+                let serialized_data = rmp_serde::to_vec::<ActuatePresetV130>(&preset);
 
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
@@ -4809,7 +4857,7 @@ impl Actuate {
     }
 
     // import_preset() uses message packing with serde
-    fn import_preset(imported_preset: Option<PathBuf>) -> (String, Option<ActuatePresetV126>) {
+    fn import_preset(imported_preset: Option<PathBuf>) -> (String, Option<ActuatePresetV130>) {
         let return_name;
 
         if let Some(imported_preset) = imported_preset {
@@ -4838,28 +4886,33 @@ impl Actuate {
             let file_string_data = decompressed_data.unwrap();
 
             // Deserialize into preset struct - return default empty lib if error
-            let mut unserialized: ActuatePresetV126 = rmp_serde::from_slice(&file_string_data)
+            let mut unserialized: ActuatePresetV130 = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(ERROR_PRESET.clone());
 
+            // This if cascade tries to load each predecessor format of presets
             if unserialized.preset_name.contains("Error") {
-                unserialized = load_unserialized_v125(file_string_data.clone());
+                unserialized = load_unserialized_v126(file_string_data.clone());
+
                 if unserialized.preset_name.contains("Error") {
-                    // Attempt to load the previous version preset type
-                    unserialized = load_unserialized_v123(file_string_data.clone());
-
+                    unserialized = load_unserialized_v125(file_string_data.clone());
                     if unserialized.preset_name.contains("Error") {
-                        // Try loading the previous preset struct version
-                        unserialized = load_unserialized_v122(file_string_data.clone());
-
                         // Attempt to load the previous version preset type
+                        unserialized = load_unserialized_v123(file_string_data.clone());
+
                         if unserialized.preset_name.contains("Error") {
                             // Try loading the previous preset struct version
-                            unserialized = load_unserialized_v114(file_string_data.clone());
+                            unserialized = load_unserialized_v122(file_string_data.clone());
 
-                            // Attempt to load the oldest preset type
+                            // Attempt to load the previous version preset type
                             if unserialized.preset_name.contains("Error") {
                                 // Try loading the previous preset struct version
-                                unserialized = load_unserialized_old(file_string_data.clone());
+                                unserialized = load_unserialized_v114(file_string_data.clone());
+
+                                // Attempt to load the oldest preset type
+                                if unserialized.preset_name.contains("Error") {
+                                    // Try loading the previous preset struct version
+                                    unserialized = load_unserialized_old(file_string_data.clone());
+                                }
                             }
                         }
                     }
@@ -4872,7 +4925,7 @@ impl Actuate {
     }
 
     // Load presets uses message packing with serde
-    fn load_preset_bank(loading_bank: Option<PathBuf>) -> (String, Vec<ActuatePresetV126>) {
+    fn load_preset_bank(loading_bank: Option<PathBuf>) -> (String, Vec<ActuatePresetV130>) {
         let return_name;
 
         if let Some(loading_bank) = loading_bank {
@@ -4898,36 +4951,52 @@ impl Actuate {
             let file_string_data = decompressed_data.unwrap();
 
             // Deserialize into preset struct - return default empty lib if error
-            let unserialized: Vec<ActuatePresetV126> = rmp_serde::from_slice(&file_string_data)
+            let unserialized: Vec<ActuatePresetV130> = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(vec![
                     ERROR_PRESET.clone();
                     PRESET_BANK_SIZE
                 ]);
 
-            // Attempt loading 1.2.5 bank if error
+            // Attempt loading 1.2.6 bank if error
             if unserialized[0].preset_name.contains("Error") {
-                let unserialized: Vec<ActuatePresetV125> = rmp_serde::from_slice(&file_string_data)
-                    .unwrap_or(vec![
-                        ERROR_PRESETV125.clone();
-                        PRESET_BANK_SIZE
-                    ]);
-                // Convert each v1.2.3 entry into latest
-                let mut converted: Vec<ActuatePresetV126> = Vec::new();
-                for v125_preset in unserialized.iter() {
-                    converted.push(old_preset_structs::convert_preset_v125(v125_preset.clone()));
+                // Deserialize into preset struct - return default empty lib if error
+                let unserialized: Vec<ActuatePresetV126> = rmp_serde::from_slice(&file_string_data)
+                .unwrap_or(vec![
+                    ERROR_PRESETV126.clone();
+                    PRESET_BANK_SIZE
+                ]);
+                // Convert each v1.2.6 entry into latest
+                let mut converted: Vec<ActuatePresetV130> = Vec::new();
+                for v126_preset in unserialized.iter() {
+                    converted.push(old_preset_structs::convert_preset_v126(v126_preset.clone()));
                 }
 
-                // Attempt loading 1.2.3 bank if error
+                // Attempt loading 1.2.5 bank if error
                 if unserialized[0].preset_name.contains("Error") {
-                    let unserialized: Vec<ActuatePresetV123> = rmp_serde::from_slice(&file_string_data)
+                    let unserialized: Vec<ActuatePresetV125> = rmp_serde::from_slice(&file_string_data)
                         .unwrap_or(vec![
-                            ERROR_PRESETV123.clone();
+                            ERROR_PRESETV125.clone();
                             PRESET_BANK_SIZE
                         ]);
-                    // Convert each v1.2.3 entry into latest
-                    let mut converted: Vec<ActuatePresetV126> = Vec::new();
-                    for v123_preset in unserialized.iter() {
-                        converted.push(old_preset_structs::convert_preset_v123(v123_preset.clone()));
+                    // Convert each v1.2.5 entry into latest
+                    let mut converted: Vec<ActuatePresetV130> = Vec::new();
+                    for v125_preset in unserialized.iter() {
+                        converted.push(old_preset_structs::convert_preset_v125(v125_preset.clone()));
+                    }
+
+                    // Attempt loading 1.2.3 bank if error
+                    if unserialized[0].preset_name.contains("Error") {
+                        let unserialized: Vec<ActuatePresetV123> = rmp_serde::from_slice(&file_string_data)
+                            .unwrap_or(vec![
+                                ERROR_PRESETV123.clone();
+                                PRESET_BANK_SIZE
+                            ]);
+                        // Convert each v1.2.3 entry into latest
+                        let mut converted: Vec<ActuatePresetV130> = Vec::new();
+                        for v123_preset in unserialized.iter() {
+                            converted.push(old_preset_structs::convert_preset_v123(v123_preset.clone()));
+                        }
+                        return (return_name, converted);
                     }
                     return (return_name, converted);
                 }
@@ -4944,7 +5013,7 @@ impl Actuate {
         setter: &ParamSetter,
         params: Arc<ActuateParams>,
         current_preset_index: usize,
-        arc_preset: &Vec<ActuatePresetV126>,
+        arc_preset: &Vec<ActuatePresetV130>,
         AMod1: &mut AudioModule,
         AMod2: &mut AudioModule,
         AMod3: &mut AudioModule,
@@ -5350,6 +5419,13 @@ impl Actuate {
         setter.set_parameter(&params.fm_decay_curve, loaded_preset.fm_decay_curve);
         setter.set_parameter(&params.fm_release_curve, loaded_preset.fm_release_curve);
 
+        // Stereo Alg + Chorus Update 1.3.0
+        setter.set_parameter(&params.use_chorus, loaded_preset.use_chorus);
+        setter.set_parameter(&params.chorus_amount, loaded_preset.chorus_amount);
+        setter.set_parameter(&params.chorus_range, loaded_preset.chorus_range);
+        setter.set_parameter(&params.chorus_speed, loaded_preset.chorus_speed);
+        setter.set_parameter(&params.stereo_algorithm, loaded_preset.stereo_algorithm);
+
         // Assign the preset tags
         setter.set_parameter(&params.tag_acid, loaded_preset.tag_acid);
         setter.set_parameter(&params.tag_analog, loaded_preset.tag_analog);
@@ -5424,7 +5500,7 @@ impl Actuate {
         )
     }
 
-    fn save_preset_bank(preset_store: &mut Vec<ActuatePresetV126>, saving_bank: Option<PathBuf>) {
+    fn save_preset_bank(preset_store: &mut Vec<ActuatePresetV130>, saving_bank: Option<PathBuf>) {
         if let Some(mut location) = saving_bank {
             if let Some(extension_check) = location.extension() {
                 let extension = extension_check.to_string_lossy().to_string();
@@ -5448,7 +5524,7 @@ impl Actuate {
 
                 // Serialize to MessagePack bytes
                 let serialized_data =
-                    rmp_serde::to_vec::<&Vec<ActuatePresetV126>>(&preset_store.as_ref());
+                    rmp_serde::to_vec::<&Vec<ActuatePresetV130>>(&preset_store.as_ref());
 
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
@@ -5494,7 +5570,7 @@ impl Actuate {
         let AM2 = AM2c.lock().unwrap();
         let AM3 = AM3c.lock().unwrap();
         arc_lib.lock().unwrap()[self.current_preset.load(Ordering::Acquire) as usize] =
-            ActuatePresetV126 {
+            ActuatePresetV130 {
                 preset_name: self.preset_name.lock().unwrap().clone(),
                 preset_info: self.preset_info.lock().unwrap().clone(),
                 preset_category: self.params.preset_category.value(),
@@ -5744,6 +5820,8 @@ impl Actuate {
                 pre_mid_gain: self.params.pre_mid_gain.value(),
                 pre_high_gain: self.params.pre_high_gain.value(),
 
+                stereo_algorithm: self.params.stereo_algorithm.value().clone(),
+
                 use_fx: self.params.use_fx.value(),
                 use_compressor: self.params.use_compressor.value(),
                 comp_amt: self.params.comp_amt.value(),
@@ -5765,6 +5843,10 @@ impl Actuate {
                 reverb_amount: self.params.reverb_amount.value(),
                 reverb_size: self.params.reverb_size.value(),
                 reverb_feedback: self.params.reverb_feedback.value(),
+                use_chorus: self.params.use_chorus.value(),
+                chorus_amount: self.params.chorus_amount.value(),
+                chorus_range: self.params.chorus_range.value(),
+                chorus_speed: self.params.chorus_speed.value(),
                 use_phaser: self.params.use_phaser.value(),
                 phaser_amount: self.params.phaser_amount.value(),
                 phaser_depth: self.params.phaser_depth.value(),
@@ -6846,7 +6928,296 @@ lazy_static::lazy_static!(
         limiter_knee: 0.5,
     };
 
-    static ref ERROR_PRESET: ActuatePresetV126 = ActuatePresetV126 {
+    static ref ERROR_PRESETV126: ActuatePresetV126 = ActuatePresetV126 {
+        preset_name: String::from("Error Loading"),
+        preset_info: String::from("Corrupt or incompatible versions"),
+        preset_category: PresetType::Select,
+        tag_acid: false,
+        tag_analog: false,
+        tag_bright: false,
+        tag_chord: false,
+        tag_crisp: false,
+        tag_deep: false,
+        tag_delicate: false,
+        tag_hard: false,
+        tag_harsh: false,
+        tag_lush: false,
+        tag_mellow: false,
+        tag_resonant: false,
+        tag_rich: false,
+        tag_sharp: false,
+        tag_silky: false,
+        tag_smooth: false,
+        tag_soft: false,
+        tag_stab: false,
+        tag_warm: false,
+        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_level: 1.0,
+        mod1_audio_module_routing: AMFilterRouting::Filter1,
+        mod1_loaded_sample: vec![vec![0.0, 0.0]],
+        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod1_loop_wavetable: false,
+        mod1_single_cycle: false,
+        mod1_restretch: true,
+        mod1_prev_restretch: false,
+        mod1_grain_hold: 200,
+        mod1_grain_gap: 200,
+        mod1_start_position: 0.0,
+        mod1_end_position: 1.0,
+        mod1_grain_crossfade: 50,
+        mod1_osc_type: VoiceType::Sine,
+        mod1_osc_octave: 0,
+        mod1_osc_semitones: 0,
+        mod1_osc_detune: 0.0,
+        mod1_osc_attack: 0.0001,
+        mod1_osc_decay: 0.0001,
+        mod1_osc_sustain: 999.9,
+        mod1_osc_release: 5.0,
+        mod1_osc_retrigger: RetriggerStyle::Retrigger,
+        mod1_osc_atk_curve: SmoothStyle::Linear,
+        mod1_osc_dec_curve: SmoothStyle::Linear,
+        mod1_osc_rel_curve: SmoothStyle::Linear,
+        mod1_osc_unison: 1,
+        mod1_osc_unison_detune: 0.0,
+        mod1_osc_stereo: 0.0,
+
+        mod2_audio_module_type: AudioModuleType::Off,
+        mod2_audio_module_level: 1.0,
+        mod2_audio_module_routing: AMFilterRouting::Filter1,
+        mod2_loaded_sample: vec![vec![0.0, 0.0]],
+        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod2_loop_wavetable: false,
+        mod2_single_cycle: false,
+        mod2_restretch: true,
+        mod2_prev_restretch: false,
+        mod2_grain_hold: 200,
+        mod2_grain_gap: 200,
+        mod2_start_position: 0.0,
+        mod2_end_position: 1.0,
+        mod2_grain_crossfade: 50,
+        mod2_osc_type: VoiceType::Sine,
+        mod2_osc_octave: 0,
+        mod2_osc_semitones: 0,
+        mod2_osc_detune: 0.0,
+        mod2_osc_attack: 0.0001,
+        mod2_osc_decay: 0.0001,
+        mod2_osc_sustain: 999.9,
+        mod2_osc_release: 5.0,
+        mod2_osc_retrigger: RetriggerStyle::Retrigger,
+        mod2_osc_atk_curve: SmoothStyle::Linear,
+        mod2_osc_dec_curve: SmoothStyle::Linear,
+        mod2_osc_rel_curve: SmoothStyle::Linear,
+        mod2_osc_unison: 1,
+        mod2_osc_unison_detune: 0.0,
+        mod2_osc_stereo: 0.0,
+
+        mod3_audio_module_type: AudioModuleType::Off,
+        mod3_audio_module_level: 1.0,
+        mod3_audio_module_routing: AMFilterRouting::Filter1,
+        mod3_loaded_sample: vec![vec![0.0, 0.0]],
+        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod3_loop_wavetable: false,
+        mod3_single_cycle: false,
+        mod3_restretch: true,
+        mod3_prev_restretch: false,
+        mod3_grain_hold: 200,
+        mod3_grain_gap: 200,
+        mod3_start_position: 0.0,
+        mod3_end_position: 1.0,
+        mod3_grain_crossfade: 50,
+        mod3_osc_type: VoiceType::Sine,
+        mod3_osc_octave: 0,
+        mod3_osc_semitones: 0,
+        mod3_osc_detune: 0.0,
+        mod3_osc_attack: 0.0001,
+        mod3_osc_decay: 0.0001,
+        mod3_osc_sustain: 999.9,
+        mod3_osc_release: 5.0,
+        mod3_osc_retrigger: RetriggerStyle::Retrigger,
+        mod3_osc_atk_curve: SmoothStyle::Linear,
+        mod3_osc_dec_curve: SmoothStyle::Linear,
+        mod3_osc_rel_curve: SmoothStyle::Linear,
+        mod3_osc_unison: 1,
+        mod3_osc_unison_detune: 0.0,
+        mod3_osc_stereo: 0.0,
+
+        filter_wet: 1.0,
+        filter_cutoff: 20000.0,
+        filter_resonance: 1.0,
+        filter_res_type: ResonanceType::Default,
+        filter_lp_amount: 1.0,
+        filter_hp_amount: 0.0,
+        filter_bp_amount: 0.0,
+        filter_env_peak: 0.0,
+        filter_env_attack: 0.0,
+        filter_env_decay: 0.0001,
+        filter_env_sustain: 999.9,
+        filter_env_release: 5.0,
+        filter_env_atk_curve: SmoothStyle::Linear,
+        filter_env_dec_curve: SmoothStyle::Linear,
+        filter_env_rel_curve: SmoothStyle::Linear,
+        filter_alg_type: FilterAlgorithms::SVF,
+        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+
+        filter_wet_2: 1.0,
+        filter_cutoff_2: 20000.0,
+        filter_resonance_2: 1.0,
+        filter_res_type_2: ResonanceType::Default,
+        filter_lp_amount_2: 1.0,
+        filter_hp_amount_2: 0.0,
+        filter_bp_amount_2: 0.0,
+        filter_env_peak_2: 0.0,
+        filter_env_attack_2: 0.0,
+        filter_env_decay_2: 0.0001,
+        filter_env_sustain_2: 999.9,
+        filter_env_release_2: 5.0,
+        filter_env_atk_curve_2: SmoothStyle::Linear,
+        filter_env_dec_curve_2: SmoothStyle::Linear,
+        filter_env_rel_curve_2: SmoothStyle::Linear,
+        filter_alg_type_2: FilterAlgorithms::SVF,
+        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+
+        filter_routing: FilterRouting::Parallel,
+        filter_cutoff_link: false,
+
+        pitch_enable: false,
+        pitch_env_atk_curve: SmoothStyle::Linear,
+        pitch_env_dec_curve: SmoothStyle::Linear,
+        pitch_env_rel_curve: SmoothStyle::Linear,
+        pitch_env_attack: 0.0,
+        pitch_env_decay: 300.0,
+        pitch_env_sustain: 0.0,
+        pitch_env_release: 0.0,
+        pitch_env_peak: 0.0,
+        pitch_routing: PitchRouting::Osc1,
+
+        pitch_enable_2: false,
+        pitch_env_peak_2: 0.0,
+        pitch_env_atk_curve_2: SmoothStyle::Linear,
+        pitch_env_dec_curve_2: SmoothStyle::Linear,
+        pitch_env_rel_curve_2: SmoothStyle::Linear,
+        pitch_env_attack_2: 0.0,
+        pitch_env_decay_2: 300.0,
+        pitch_env_release_2: 0.0,
+        pitch_env_sustain_2: 0.0,
+        pitch_routing_2: PitchRouting::Osc1,
+
+        // LFOs
+        lfo1_enable: false,
+        lfo2_enable: false,
+        lfo3_enable: false,
+
+        lfo1_freq: 2.0,
+        lfo1_retrigger: LFOController::LFORetrigger::None,
+        lfo1_sync: true,
+        lfo1_snap: LFOController::LFOSnapValues::Half,
+        lfo1_waveform: LFOController::Waveform::Sine,
+        lfo1_phase: 0.0,
+
+        lfo2_freq: 2.0,
+        lfo2_retrigger: LFOController::LFORetrigger::None,
+        lfo2_sync: true,
+        lfo2_snap: LFOController::LFOSnapValues::Half,
+        lfo2_waveform: LFOController::Waveform::Sine,
+        lfo2_phase: 0.0,
+
+        lfo3_freq: 2.0,
+        lfo3_retrigger: LFOController::LFORetrigger::None,
+        lfo3_sync: true,
+        lfo3_snap: LFOController::LFOSnapValues::Half,
+        lfo3_waveform: LFOController::Waveform::Sine,
+        lfo3_phase: 0.0,
+
+        // Modulations
+        mod_source_1: ModulationSource::None,
+        mod_source_2: ModulationSource::None,
+        mod_source_3: ModulationSource::None,
+        mod_source_4: ModulationSource::None,
+        mod_dest_1: ModulationDestination::None,
+        mod_dest_2: ModulationDestination::None,
+        mod_dest_3: ModulationDestination::None,
+        mod_dest_4: ModulationDestination::None,
+        mod_amount_1: 0.0,
+        mod_amount_2: 0.0,
+        mod_amount_3: 0.0,
+        mod_amount_4: 0.0,
+
+        // EQ
+        pre_use_eq: false,
+        pre_low_freq: 800.0,
+        pre_mid_freq: 3000.0,
+        pre_high_freq: 10000.0,
+        pre_low_gain: 0.0,
+        pre_mid_gain: 0.0,
+        pre_high_gain: 0.0,
+
+        // FM
+        fm_attack: 0.5,
+        fm_attack_curve: SmoothStyle::Linear,
+        fm_decay: 0.5,
+        fm_decay_curve: SmoothStyle::Linear,
+        fm_release: 0.5,
+        fm_release_curve: SmoothStyle::Linear,
+        fm_sustain: 0.5,
+        fm_cycles: 1,
+        fm_one_to_three: 0.0,
+        fm_one_to_two: 0.0,
+        fm_two_to_three: 0.0,
+
+        // FX
+        use_fx: true,
+
+        use_compressor: false,
+        comp_amt: 0.5,
+        comp_atk: 0.5,
+        comp_rel: 0.5,
+        comp_drive: 0.5,
+
+        use_abass: false,
+        abass_amount: 0.0011,
+
+        use_saturation: false,
+        sat_amount: 0.0,
+        sat_type: SaturationType::Tape,
+
+        use_delay: false,
+        delay_amount: 0.5,
+        delay_time: DelaySnapValues::Quarter,
+        delay_decay: 0.5,
+        delay_type: DelayType::Stereo,
+
+        use_reverb: false,
+        reverb_model: ReverbModel::Default,
+        reverb_amount: 0.85,
+        reverb_size: 1.0,
+        reverb_feedback: 0.28,
+
+        use_phaser: false,
+        phaser_amount: 0.5,
+        phaser_depth: 0.5,
+        phaser_rate: 0.5,
+        phaser_feedback: 0.5,
+
+        use_buffermod: false,
+        buffermod_amount: 0.5,
+        buffermod_depth: 0.5,
+        buffermod_rate: 0.5,
+        buffermod_spread: 0.0,
+        buffermod_timing: 620.0,
+
+        use_flanger: false,
+        flanger_amount: 0.5,
+        flanger_depth: 0.5,
+        flanger_rate: 0.5,
+        flanger_feedback: 0.5,
+
+        use_limiter: false,
+        limiter_threshold: 0.5,
+        limiter_knee: 0.5,
+    };
+
+    // This gets updates to the latest preset type each format update
+    static ref ERROR_PRESET: ActuatePresetV130 = ActuatePresetV130 {
         preset_name: String::from("Error Loading"),
         preset_info: String::from("Corrupt or incompatible versions"),
         preset_category: PresetType::Select,
@@ -7117,6 +7488,14 @@ lazy_static::lazy_static!(
         phaser_rate: 0.5,
         phaser_feedback: 0.5,
 
+        // 1.3.0
+        stereo_algorithm: StereoAlgorithm::Original,
+        use_chorus: false,
+        chorus_amount: 0.8,
+        chorus_range: 0.5,
+        chorus_speed: 0.5,
+        // 1.3.0
+
         use_buffermod: false,
         buffermod_amount: 0.5,
         buffermod_depth: 0.5,
@@ -7135,7 +7514,7 @@ lazy_static::lazy_static!(
         limiter_knee: 0.5,
     };
 
-    static ref DEFAULT_PRESET: ActuatePresetV126 = ActuatePresetV126 {
+    static ref DEFAULT_PRESET: ActuatePresetV130 = ActuatePresetV130 {
         preset_name: "Default".to_string(),
         preset_info: "Info".to_string(),
         preset_category: PresetType::Select,
@@ -7389,6 +7768,14 @@ lazy_static::lazy_static!(
         use_saturation: false,
         sat_amount: 0.0,
         sat_type: SaturationType::Tape,
+
+        // 1.3.0
+        use_chorus: false,
+        chorus_amount: 0.8,
+        chorus_range: 0.5,
+        chorus_speed: 0.5,
+        stereo_algorithm: StereoAlgorithm::Original,
+        // 1.3.0
 
         use_delay: false,
         delay_amount: 0.5,

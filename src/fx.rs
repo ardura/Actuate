@@ -13,3 +13,4 @@ pub(crate) mod reverb;
 pub(crate) mod aw_galactic_reverb;
 pub(crate) mod simple_space_reverb;
 pub(crate) mod saturation;
+pub(crate) mod chorus;

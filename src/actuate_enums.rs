@@ -125,6 +125,13 @@ pub enum PitchRouting {
     Osc2_Osc3,
 }
 
+#[derive(Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
+pub enum StereoAlgorithm {
+    Original,
+    CubeSpread,
+    ExpSpread,
+}
+
 
 // These let us output ToString for the ComboBox stuff + Nih-Plug or string usage
 impl fmt::Display for PresetType {
