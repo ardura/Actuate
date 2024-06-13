@@ -36,9 +36,7 @@ pub(crate) mod Oscillator;
 pub(crate) mod frequency_modulation;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
-    ActuateParams, 
-    CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, 
-    PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, YELLOW_MUSTARD
+    actuate_enums::StereoAlgorithm, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, YELLOW_MUSTARD
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
@@ -1478,6 +1476,7 @@ Random: Sample uses a new random position every note".to_string());
         uni_velocity_mod: f32,
         vel_gain_mod: f32,
         vel_lfo_gain_mod: f32,
+        stereo_algorithm: StereoAlgorithm,
     ) -> (f32, f32, bool, bool) {
         // If the process is in here the file dialog is not open per lib.rs
 
@@ -1989,7 +1988,7 @@ Random: Sample uses a new random position every note".to_string());
                             };
                             let mut unison_angles = vec![0.0; unison_even_voices as usize];
                             for i in 1..(unison_even_voices + 1) {
-                                let voice_angle = self.calculate_panning(i - 1, self.osc_unison);
+                                let voice_angle = self.calculate_panning(i - 1, self.osc_unison, stereo_algorithm);
                                 unison_angles[(i - 1) as usize] = voice_angle;
                             }
 
@@ -3050,7 +3049,17 @@ Random: Sample uses a new random position every note".to_string());
                 summed_voices_r = (summed_voices_r + summed_voices_l * 0.8)/2.0;
 
                 // Stereo Spreading code
-                let width_coeff = self.osc_stereo * 0.5;
+                let width_coeff = match stereo_algorithm {
+                    StereoAlgorithm::Original => {
+                        self.osc_stereo * 0.5
+                    }
+                    StereoAlgorithm::CubeSpread => {
+                        self.osc_stereo
+                    },
+                    StereoAlgorithm::ExpSpread => {
+                        self.osc_stereo * 1.8
+                    },
+                };
                 let mid = (summed_voices_l + summed_voices_r) * 0.5;
                 let stereo = (summed_voices_r - summed_voices_l) * width_coeff;
                 summed_voices_l = mid - stereo;
@@ -3484,7 +3493,7 @@ Random: Sample uses a new random position every note".to_string());
         }
     }
 
-    fn calculate_panning(&mut self, voice_index: i32, num_voices: i32) -> f32 {
+    fn calculate_panning(&mut self, voice_index: i32, num_voices: i32, stereo_algorithm: StereoAlgorithm) -> f32 {
         // Ensure the voice index is within bounds.
         let voice_index = voice_index.min(num_voices - 1);
 
@@ -3521,16 +3530,42 @@ Random: Sample uses a new random position every note".to_string());
         // Calculate the pan angle for voices with index 0 and 1.
         let base_angle = ((voice_index / 2) as f32) / ((num_voices / 2) as f32 - 1.0) - 0.5;
 
-        // Determine the final angle based on even or odd index.
-        let angle = if voice_index % 2 == 0 {
-            -base_angle
-        } else {
-            base_angle
-        };
+        let angle: f32;
+        match stereo_algorithm {
+            StereoAlgorithm::CubeSpread => {
+                let poly_base_angle = base_angle.powf(3.0)/0.3;
+                // Determine the final angle based on even or odd index.
+                angle = if voice_index % 2 == 0 {
+                    -poly_base_angle
+                } else {
+                    poly_base_angle
+                };
+            },
+            StereoAlgorithm::ExpSpread => {
+                let exp_base_angle = base_angle.exp() - 1.0;  // Exponential transformation
+                let max_exp_angle = (1.0f32).exp() - 1.0;
+                let normalized_exp_angle = exp_base_angle / max_exp_angle;
+
+                // Determine the final angle based on even or odd index.
+                angle = if voice_index % 2 == 0 {
+                    -normalized_exp_angle
+                } else {
+                    normalized_exp_angle
+                };
+            },
+            StereoAlgorithm::Original => {
+                // Determine the final angle based on even or odd index.
+                angle = if voice_index % 2 == 0 {
+                    -base_angle
+                } else {
+                    base_angle
+                };
+            },
+        }
+
         if voice_index == 0 {
             self.two_voice_stereo_flipper = !self.two_voice_stereo_flipper;
         }
-
-        angle * std::f32::consts::PI * sign // Use full scale for other cases
+        angle * std::f32::consts::PI * sign
     }
 }

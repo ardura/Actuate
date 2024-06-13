@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel}, audio_module::{AudioModuleType, Oscillator::{self, RetriggerStyle, SmoothStyle, VoiceType}}, fx::{delay::{DelaySnapValues, DelayType}, saturation::SaturationType, ArduraFilter, StateVariableFilter::ResonanceType}, LFOController};
+use crate::{actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm}, audio_module::{AudioModuleType, Oscillator::{self, RetriggerStyle, SmoothStyle, VoiceType}}, fx::{delay::{DelaySnapValues, DelayType}, saturation::SaturationType, ArduraFilter, StateVariableFilter::ResonanceType}, LFOController};
 
 /// Modulation struct for passing mods to audio modules
 #[derive(Serialize, Deserialize, Clone)]
@@ -22,7 +22,7 @@ pub struct ModulationStruct {
 
 /// This is the structure that represents a storable preset value
 #[derive(Serialize, Deserialize, Clone)]
-pub struct ActuatePresetV126 {
+pub struct ActuatePresetV130 {
     // Information
     pub preset_name: String,
     pub preset_info: String,
@@ -269,6 +269,9 @@ pub struct ActuatePresetV126 {
     pub fm_decay_curve: Oscillator::SmoothStyle,
     pub fm_release_curve: Oscillator::SmoothStyle,
 
+    // Stereo
+    pub stereo_algorithm: StereoAlgorithm,
+
     // EQ
     pub pre_use_eq: bool,
     pub pre_low_freq: f32,
@@ -311,6 +314,11 @@ pub struct ActuatePresetV126 {
     pub phaser_depth: f32,
     pub phaser_rate: f32,
     pub phaser_feedback: f32,
+
+    pub use_chorus: bool,
+    pub chorus_amount: f32,
+    pub chorus_range: f32,
+    pub chorus_speed: f32,
 
     pub use_buffermod: bool,
     pub buffermod_amount: f32,
