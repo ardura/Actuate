@@ -9,7 +9,7 @@ Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura
 
 ![image](https://github.com/ardura/Actuate/assets/31751444/9b4cb9fe-de11-4242-a5c0-a0c5b724443d)
 
-[Shortcut to troubleshooting section](##Troubleshooting)
+[Shortcut to troubleshooting section](#Troubleshooting)
 
 ## Features
 Hover over any knob (or some labels) for an explanation!
@@ -101,7 +101,24 @@ Since Actuate 1.2.8 the new file browser and UI use native text editing. This cr
     - Bitwig tested compatible
     - Cantibile tested **uncompatible and has issues**
     - VSTHost tested **compatible but has gui issues**
- 
+
+## Building/Compiling Actuate Manually
+- You should do this if the precompiled binary fails or you have a unique system configuration (like linux)
+
+After installing [Rust](https://rustup.rs/) on your system (and possibly restarting your terminal session), you can compile Actuate as follows:
+1. Make sure your dependencies are installed. These are the packages you will need at minimum: `libgl1-mesa-dev libglu1-mesa-dev libxcursor-dev libxkbcommon-x11-dev libatk1.0-dev build-essential libgtk-3-dev libxcb-dri2-0-dev libxcb-icccm4-dev libx11-xcb-dev`
+   - Note I have also found on some systems `libc6` or `glibc` needs to be installed depending on your configuration
+2. Run the build process in a terminal from the Actuate root directory
+```
+cargo xtask bundle Actuate --profile release
+```
+Or use the following for debugging:
+```
+cargo xtask bundle Actuate --profile profiling
+```
+3. Your outputs will be in the Actuate/target/bundled directory.
+4. the `*.clap` you can copy to your clap directory/path, the vst3 one needs the folder structure copied on linux
+
 ## Other Build information
 The builds on GitHub and KVR are VST3 and CLAP format, and are compiled on the following machine types:
 - Ubuntu 22.04
