@@ -34,6 +34,7 @@ use std::{collections::VecDeque, f32::consts::SQRT_2, path::{Path, PathBuf}, syn
 // Audio module files
 pub(crate) mod Oscillator;
 pub(crate) mod frequency_modulation;
+pub(crate) mod AdditiveModule;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
     actuate_enums::StereoAlgorithm, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, YELLOW_MUSTARD
