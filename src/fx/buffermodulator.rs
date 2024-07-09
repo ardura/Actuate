@@ -1,4 +1,4 @@
-use std::f32::consts::PI;
+use std::f32::consts::TAU;
 
 // This started as me trying a bunch of different ways to make a StereoChorus without success
 // I ended up liking this weird modulation behavior more
@@ -61,8 +61,8 @@ impl BufferModulator {
         self.time_right += 1.0 + self.spread / self.sample_rate;
 
         // Calculate modulation signals
-        let modulation_left = (self.time_left * 2.0 * PI * self.rate).sin();
-        let modulation_right = (self.time_right * 2.0 * PI * self.rate).sin();
+        let modulation_left = (self.time_left * TAU * self.rate).sin();
+        let modulation_right = (self.time_right * TAU * self.rate).sin();
 
         // Apply effect to the left channel
         let delayed_sample_left = self.delay_line_left.remove(0);

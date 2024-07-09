@@ -28,10 +28,9 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV130, ModulationStruct};
 use flate2::{read::GzDecoder,write::GzEncoder,Compression};
-use nih_plug::prelude::*;
+use nih_plug::{prelude::*, util::db_to_gain};
 use nih_plug_egui::{
-    egui::{Color32, FontId},
-    EguiState,
+    egui::{Color32, FontId}, EguiState
 };
 use std::{
     fs::File, io::{Read, Write}, path::PathBuf, sync::{
@@ -47,7 +46,23 @@ use audio_module::{
     frequency_modulation,
 };
 use fx::{
-    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType, StateVariableFilter}, VCFilter::ResponseType as VCResponseType
+    abass::a_bass_saturation,
+    aw_galactic_reverb::GalacticReverb,
+    biquad_filters::{self, FilterType},
+    buffermodulator::BufferModulator,
+    chorus::ChorusEnsemble,
+    compressor::Compressor,
+    delay::{Delay, DelaySnapValues, DelayType},
+    flanger::StereoFlanger,
+    limiter::StereoLimiter,
+    phaser::StereoPhaser,
+    reverb::StereoReverb,
+    saturation::{Saturation, SaturationType},
+    simple_space_reverb::SimpleSpaceReverb,
+    ArduraFilter::{self, ResponseType},
+    StateVariableFilter::{ResonanceType,StateVariableFilter},
+    V4Filter::{self, V4FilterStruct},
+    VCFilter::ResponseType as VCResponseType
 };
 
 use old_preset_structs::{
@@ -183,6 +198,12 @@ pub struct Actuate {
     dc_filter_l: StateVariableFilter,
     dc_filter_r: StateVariableFilter,
 
+    // V4Filter
+    V4F_l_1: V4Filter::V4FilterStruct,
+    V4F_l_2: V4Filter::V4FilterStruct,
+    V4F_r_1: V4Filter::V4FilterStruct,
+    V4F_r_2: V4Filter::V4FilterStruct,
+
     fm_state: OscState,
     fm_atk_smoother_1: Smoother<f32>,
     fm_dec_smoother_1: Smoother<f32>,
@@ -312,6 +333,10 @@ impl Default for Actuate {
             vcf_filter_l_1: fx::VCFilter::VCFilter::new(),
             vcf_filter_r_1: fx::VCFilter::VCFilter::new(),
 
+            // V4Filter
+            V4F_l_1: V4FilterStruct::default(),
+            V4F_r_1: V4FilterStruct::default(),
+
             filter_state_2: OscState::Off,
             filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -336,6 +361,10 @@ impl Default for Actuate {
             // VCF Filters
             vcf_filter_l_2: fx::VCFilter::VCFilter::new(),
             vcf_filter_r_2: fx::VCFilter::VCFilter::new(),
+
+            // V4Filter
+            V4F_l_2: V4FilterStruct::default(),
+            V4F_r_2: V4FilterStruct::default(),
 
             filter_state_1: OscState::Off,
             filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -660,6 +689,59 @@ pub struct ActuateParams {
     end_position_3: FloatParam,
     #[id = "grain_crossfade_3"]
     grain_crossfade_3: IntParam,
+
+    // Additive Data
+    #[id = "additive_amp_1_0"]
+    additive_amp_1_0: FloatParam,
+    #[id = "additive_amp_1_1"]
+    additive_amp_1_1: FloatParam,
+    #[id = "additive_amp_1_2"]
+    additive_amp_1_2: FloatParam,
+    #[id = "additive_amp_1_3"]
+    additive_amp_1_3: FloatParam,
+    #[id = "additive_amp_1_4"]
+    additive_amp_1_4: FloatParam,
+    #[id = "additive_amp_1_5"]
+    additive_amp_1_5: FloatParam,
+    #[id = "additive_amp_1_6"]
+    additive_amp_1_6: FloatParam,
+    #[id = "additive_amp_1_7"]
+    additive_amp_1_7: FloatParam,
+
+    #[id = "additive_amp_2_0"]
+    additive_amp_2_0: FloatParam,
+    #[id = "additive_amp_2_1"]
+    additive_amp_2_1: FloatParam,
+    #[id = "additive_amp_2_2"]
+    additive_amp_2_2: FloatParam,
+    #[id = "additive_amp_2_3"]
+    additive_amp_2_3: FloatParam,
+    #[id = "additive_amp_2_4"]
+    additive_amp_2_4: FloatParam,
+    #[id = "additive_amp_2_5"]
+    additive_amp_2_5: FloatParam,
+    #[id = "additive_amp_2_6"]
+    additive_amp_2_6: FloatParam,
+    #[id = "additive_amp_2_7"]
+    additive_amp_2_7: FloatParam,
+
+    // Additive Data
+    #[id = "additive_amp_3_0"]
+    additive_amp_3_0: FloatParam,
+    #[id = "additive_amp_3_1"]
+    additive_amp_3_1: FloatParam,
+    #[id = "additive_amp_3_2"]
+    additive_amp_3_2: FloatParam,
+    #[id = "additive_amp_3_3"]
+    additive_amp_3_3: FloatParam,
+    #[id = "additive_amp_3_4"]
+    additive_amp_3_4: FloatParam,
+    #[id = "additive_amp_3_5"]
+    additive_amp_3_5: FloatParam,
+    #[id = "additive_amp_3_6"]
+    additive_amp_3_6: FloatParam,
+    #[id = "additive_amp_3_7"]
+    additive_amp_3_7: FloatParam,
 
     // Filters
     #[id = "filter_wet"]
@@ -2188,6 +2270,371 @@ impl ActuateParams {
                 }),
             pitch_enable_2: BoolParam::new("Pitch Enable", false),
             pitch_routing_2: EnumParam::new("Routing", PitchRouting::Osc1).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+
+            // Additive
+            ////////////////////////////////////////////////////////////////////////////////////
+            additive_amp_1_0: FloatParam::new(
+                "Harmonic 0",
+                1.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("0")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_1: FloatParam::new(
+                "Harmonic 1",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("1")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_2: FloatParam::new(
+                "Harmonic 2",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("2")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_3: FloatParam::new(
+                "Harmonic 3",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("3")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_4: FloatParam::new(
+                "Harmonic 4",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("4")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_5: FloatParam::new(
+                "Harmonic 5",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("5")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_6: FloatParam::new(
+                "Harmonic 6",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("6")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_7: FloatParam::new(
+                "Harmonic 7",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("7")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+
+            additive_amp_2_0: FloatParam::new(
+                "Harmonic 0",
+                1.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("0")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_1: FloatParam::new(
+                "Harmonic 1",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("1")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_2: FloatParam::new(
+                "Harmonic 2",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("2")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_3: FloatParam::new(
+                "Harmonic 3",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("3")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_4: FloatParam::new(
+                "Harmonic 4",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("4")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_5: FloatParam::new(
+                "Harmonic 5",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("5")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_6: FloatParam::new(
+                "Harmonic 6",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("6")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_7: FloatParam::new(
+                "Harmonic 7",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("7")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+
+            additive_amp_3_0: FloatParam::new(
+                "Harmonic 0",
+                1.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("0")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_1: FloatParam::new(
+                "Harmonic 1",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("1")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_2: FloatParam::new(
+                "Harmonic 2",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("2")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_3: FloatParam::new(
+                "Harmonic 3",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("3")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_4: FloatParam::new(
+                "Harmonic 4",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("4")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_5: FloatParam::new(
+                "Harmonic 5",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("5")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_6: FloatParam::new(
+                "Harmonic 6",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("6")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_7: FloatParam::new(
+                "Harmonic 7",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("7")
+            .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
@@ -5947,7 +6394,7 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF => self.params.filter_env_peak.value(),
+                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 => self.params.filter_env_peak.value(),
                                 FilterAlgorithms::TILT => adv_scale_value(
                                     self.params.filter_env_peak.value(),
                                     -19980.0,
@@ -5955,7 +6402,6 @@ impl Actuate {
                                     -5000.0,
                                     5000.0,
                                 ),
-                                FilterAlgorithms::VCF => self.params.filter_env_peak.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -5986,7 +6432,7 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF => self.params.filter_env_peak.value(),
+                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 => self.params.filter_env_peak.value(),
                                 FilterAlgorithms::TILT => adv_scale_value(
                                     self.params.filter_env_peak.value(),
                                     -19980.0,
@@ -5994,7 +6440,6 @@ impl Actuate {
                                     -5000.0,
                                     5000.0,
                                 ),
-                                FilterAlgorithms::VCF => self.params.filter_env_peak.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -6073,8 +6518,8 @@ impl Actuate {
                         self.params.filter_resonance.value() - filter_resonance_mod,
                         self.params.tilt_filter_type.value(),
                     );
-                    let tilt_out_l = self.tilt_filter_l_1.process(left_input_filter1);
-                    let tilt_out_r = self.tilt_filter_r_1.process(right_input_filter1);
+                    let tilt_out_l = self.tilt_filter_l_1.process(left_input_filter1 * db_to_gain(-12.0));
+                    let tilt_out_r = self.tilt_filter_r_1.process(right_input_filter1 * db_to_gain(-12.0));
                     *left_output += tilt_out_l * self.params.filter_wet.value()
                         + left_input_filter1 * (1.0 - self.params.filter_wet.value());
                     *right_output += tilt_out_r * self.params.filter_wet.value()
@@ -6099,6 +6544,22 @@ impl Actuate {
                         + left_input_filter1 * (1.0 - self.params.filter_wet.value());
                     *right_output += vcf_out_r * self.params.filter_wet.value()
                         + right_input_filter1 * (1.0 - self.params.filter_wet.value());
+                }
+                FilterAlgorithms::V4 => {
+                    self.V4F_l_1.update(
+                        self.params.filter_resonance.value(),
+                        next_filter_step,
+                        self.sample_rate
+                    );
+                    self.V4F_r_1.update(
+                        self.params.filter_resonance.value(),
+                        next_filter_step,
+                        self.sample_rate
+                    );
+                    let v4f_out_l = self.V4F_l_1.process(left_input_filter1);
+                    let v4f_out_r = self.V4F_r_1.process(right_input_filter1);
+                    *left_output += v4f_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
+                    *right_output += v4f_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
                 }
             }
         }
@@ -6182,7 +6643,7 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF => self.params.filter_env_peak_2.value(),
+                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 => self.params.filter_env_peak_2.value(),
                                 FilterAlgorithms::TILT => adv_scale_value(
                                     self.params.filter_env_peak_2.value(),
                                     -19980.0,
@@ -6190,7 +6651,6 @@ impl Actuate {
                                     -5000.0,
                                     5000.0,
                                 ),
-                                FilterAlgorithms::VCF => self.params.filter_env_peak_2.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -6221,7 +6681,7 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF => self.params.filter_env_peak_2.value(),
+                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 => self.params.filter_env_peak_2.value(),
                                 FilterAlgorithms::TILT => adv_scale_value(
                                     self.params.filter_env_peak_2.value(),
                                     -19980.0,
@@ -6229,7 +6689,6 @@ impl Actuate {
                                     -5000.0,
                                     5000.0,
                                 ),
-                                FilterAlgorithms::VCF => self.params.filter_env_peak_2.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -6308,8 +6767,8 @@ impl Actuate {
                         self.params.filter_resonance_2.value(),
                         self.params.tilt_filter_type_2.value(),
                     );
-                    let tilt_out_l = self.tilt_filter_l_2.process(left_input_filter2);
-                    let tilt_out_r = self.tilt_filter_r_2.process(right_input_filter2);
+                    let tilt_out_l = self.tilt_filter_l_2.process(left_input_filter2 * db_to_gain(-12.0));
+                    let tilt_out_r = self.tilt_filter_r_2.process(right_input_filter2 * db_to_gain(-12.0));
                     *left_output += tilt_out_l * self.params.filter_wet_2.value()
                         + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
                     *right_output += tilt_out_r * self.params.filter_wet_2.value()
@@ -6334,6 +6793,36 @@ impl Actuate {
                         + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
                     *right_output += vcf_out_r * self.params.filter_wet_2.value()
                         + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
+                }
+                FilterAlgorithms::V4 => {
+                    self.V4F_l_2.update(
+                        self.params.filter_resonance.value(),
+                        next_filter_step,
+                        self.sample_rate
+                    );
+                    self.V4F_r_2.update(
+                        self.params.filter_resonance.value(),
+                        next_filter_step,
+                        self.sample_rate
+                    );
+                    /*
+                    self.vcf_filter_l_2.update(
+                        next_filter_step,
+                        self.params.filter_resonance_2.value(),
+                        self.params.vcf_filter_type_2.value(),
+                        self.sample_rate,
+                    );
+                    self.vcf_filter_r_2.update(
+                        next_filter_step,
+                        self.params.filter_resonance_2.value(),
+                        self.params.vcf_filter_type_2.value(),
+                        self.sample_rate,
+                    );
+                    */
+                    let v4f_out_l = self.V4F_l_2.process(left_input_filter2);
+                    let v4f_out_r = self.V4F_r_2.process(right_input_filter2);
+                    *left_output += v4f_out_l * self.params.filter_wet.value() + left_input_filter2 * (1.0 - self.params.filter_wet.value());
+                    *right_output += v4f_out_r * self.params.filter_wet.value() + right_input_filter2 * (1.0 - self.params.filter_wet.value());
                 }
             }
         }

@@ -1,4 +1,5 @@
 pub(crate) mod ArduraFilter;
+pub(crate) mod V4Filter;
 pub(crate) mod StateVariableFilter;
 pub(crate) mod VCFilter;
 pub(crate) mod abass;

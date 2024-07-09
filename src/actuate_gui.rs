@@ -1713,6 +1713,84 @@ VCF: Voltage Controlled Filter model".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
                                                         },
+                                                        FilterAlgorithms::V4 => {
+                                                            ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
+                                                                ui.add(filter_wet_knob);
+                                                                let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_resonance,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
+                                                                ui.add(filter_resonance_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_cutoff,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
+                                                                ui.add(filter_cutoff_knob);
+                                                                let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.vcf_filter_type,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE);
+                                                                ui.add(vcf_filter_type_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_env_peak,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_readable_box(false)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
+                                                                ui.add(filter_env_peak);
+                                                            });
+                                                        },
                                                     }
                                                 },
                                                 UIBottomSelection::Filter2 => {
@@ -1904,6 +1982,85 @@ VCF: Voltage Controlled Filter model".to_string());
                                                             });
                                                         },
                                                         FilterAlgorithms::VCF => {
+                                                            ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model".to_string());
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
+                                                                ui.add(filter_wet_knob);
+                                                                let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_resonance_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
+                                                                ui.add(filter_resonance_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_cutoff_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
+                                                                ui.add(filter_cutoff_knob);
+                                                                let vcf_filter_type_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.vcf_filter_type_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("VCF filter algorithm to use".to_string());
+                                                                ui.add(vcf_filter_type_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_env_peak_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_readable_box(false)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
+                                                                ui.add(filter_env_peak);
+                                                            });
+                                                        },
+                                                        FilterAlgorithms::V4 => {
                                                             ui.vertical(|ui|{
                                                                 let filter_alg_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_alg_type_2,
