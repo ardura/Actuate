@@ -5,7 +5,7 @@ use nih_plug::{
     prelude::{Param, ParamSetter},
     wrapper::clap::lazy_static,
 };
-use nih_plug_egui::egui::{self, vec2, Color32, Response, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
+use nih_plug_egui::egui::{self, vec2, Color32, Galley, Response, RichText, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
 use nih_plug_egui::{
     egui::{Pos2, Rect},
     widgets::util as nUtil,
@@ -45,6 +45,7 @@ pub struct ParamSlider<'a, P: Param> {
     background_set_color: Color32,
     bar_set_color: Color32,
     use_padding: bool,
+    override_text_size: f32,
 
     /// Will be set in the `ui()` function so we can request keyboard input focus on Alt+click.
     keyboard_focus_id: Option<egui::Id>,
@@ -67,6 +68,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             background_set_color: Color32::PLACEHOLDER,
             bar_set_color: Color32::PLACEHOLDER,
             use_padding: false,
+            override_text_size: -1.0,
 
             // I removed this because it was causing errors on plugin load somehow in FL
             keyboard_focus_id: None,
@@ -108,6 +110,11 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
     pub fn use_padding(mut self, use_padding: bool) -> Self {
         self.use_padding = use_padding;
+        self
+    }
+
+    pub fn override_text_size(mut self, size: f32) -> Self {
+        self.override_text_size = size;
         self
     }
 
@@ -348,45 +355,22 @@ impl<'a, P: Param> ParamSlider<'a, P> {
             ui.spacing().button_padding / 2.0
         };
 
-        /*
-        // I had to comment this out since the init of ParamSlider breaks because of the keyboard focus not existing in FL
-        // I'm not sure how the original ParamSlider code works as a result :|
-
-        // Either show the parameter's label, or show a text entry field if the parameter's label
-        // has been clicked on
-        let keyboard_focus_id = self.keyboard_focus_id.unwrap();
-        if self.keyboard_entry_active(ui) {
-            let value_entry_mutex = ui
-                .memory()
-                .data
-                .get_temp_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID)
-                .clone();
-            let mut value_entry = value_entry_mutex.lock();
-
-            ui.add(
-                TextEdit::singleline(&mut *value_entry)
-                    .id(keyboard_focus_id)
-                    .font(TextStyle::Monospace),
+        let text: Arc<Galley>;
+        if self.override_text_size != -1.0 {
+            text = WidgetText::from(RichText::new(self.string_value()).size(self.override_text_size)).into_galley(
+                ui,
+                None,
+                ui.available_width() - (padding.x * 2.0),
+                TextStyle::Button,
             );
-            if ui.input().key_pressed(Key::Escape) {
-                // Cancel when pressing escape
-                ui.memory().surrender_focus(keyboard_focus_id);
-            } else if ui.input().key_pressed(Key::Enter) {
-                // And try to set the value by string when pressing enter
-                self.begin_drag();
-                self.set_from_string(&value_entry);
-                self.end_drag();
-
-                ui.memory().surrender_focus(keyboard_focus_id);
-            }
         } else {
-            */
-        let text = WidgetText::from(self.string_value()).into_galley(
-            ui,
-            None,
-            ui.available_width() - (padding.x * 2.0),
-            TextStyle::Button,
-        );
+            text = WidgetText::from(self.string_value()).into_galley(
+                ui,
+                None,
+                ui.available_width() - (padding.x * 2.0),
+                TextStyle::Button,
+            );
+        }
 
         let response = ui.allocate_response(text.size() + (padding * 2.0), Sense::click());
         if response.clicked() {

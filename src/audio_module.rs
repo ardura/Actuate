@@ -236,6 +236,33 @@ pub struct AudioModule {
     pub ah5: f32,
     pub ah6: f32,
     pub ah7: f32,
+    pub ah8: f32,
+    pub ah9: f32,
+    pub ah10: f32,
+    pub ah11: f32,
+    pub ah12: f32,
+    pub ah13: f32,
+    pub ah14: f32,
+    pub ah15: f32,
+
+    // Previous additive param
+    // Huge CPU saver with this here in return for more storage
+    pub prev_ah0: f32,
+    pub prev_ah1: f32,
+    pub prev_ah2: f32,
+    pub prev_ah3: f32,
+    pub prev_ah4: f32,
+    pub prev_ah5: f32,
+    pub prev_ah6: f32,
+    pub prev_ah7: f32,
+    pub prev_ah8: f32,
+    pub prev_ah9: f32,
+    pub prev_ah10: f32,
+    pub prev_ah11: f32,
+    pub prev_ah12: f32,
+    pub prev_ah13: f32,
+    pub prev_ah14: f32,
+    pub prev_ah15: f32,
 }
 
 // When you create a new audio module you need to add its default creation here as well
@@ -324,6 +351,31 @@ impl Default for AudioModule {
             ah5: 0.0,
             ah6: 0.0,
             ah7: 0.0,
+            ah8: 0.0,
+            ah9: 0.0,
+            ah10: 0.0,
+            ah11: 0.0,
+            ah12: 0.0,
+            ah13: 0.0,
+            ah14: 0.0,
+            ah15: 0.0,
+
+            prev_ah0: 0.0,
+            prev_ah1: 0.0,
+            prev_ah2: 0.0,
+            prev_ah3: 0.0,
+            prev_ah4: 0.0,
+            prev_ah5: 0.0,
+            prev_ah6: 0.0,
+            prev_ah7: 0.0,
+            prev_ah8: 0.0,
+            prev_ah9: 0.0,
+            prev_ah10: 0.0,
+            prev_ah11: 0.0,
+            prev_ah12: 0.0,
+            prev_ah13: 0.0,
+            prev_ah14: 0.0,
+            prev_ah15: 0.0,
         }
     }
 }
@@ -374,6 +426,14 @@ impl AudioModule {
         let additive_harmonic_5;
         let additive_harmonic_6;
         let additive_harmonic_7;
+        let additive_harmonic_8;
+        let additive_harmonic_9;
+        let additive_harmonic_10;
+        let additive_harmonic_11;
+        let additive_harmonic_12;
+        let additive_harmonic_13;
+        let additive_harmonic_14;
+        let additive_harmonic_15;
         match index {
             1 => {
                 am_type = &params.audio_module_1_type;
@@ -409,6 +469,14 @@ impl AudioModule {
                 additive_harmonic_5 = &params.additive_amp_1_5;
                 additive_harmonic_6 = &params.additive_amp_1_6;
                 additive_harmonic_7 = &params.additive_amp_1_7;
+                additive_harmonic_8 = &params.additive_amp_1_8;
+                additive_harmonic_9 = &params.additive_amp_1_9;
+                additive_harmonic_10 = &params.additive_amp_1_10;
+                additive_harmonic_11 = &params.additive_amp_1_11;
+                additive_harmonic_12 = &params.additive_amp_1_12;
+                additive_harmonic_13 = &params.additive_amp_1_13;
+                additive_harmonic_14 = &params.additive_amp_1_14;
+                additive_harmonic_15 = &params.additive_amp_1_15;
             },
             2 => {
                 am_type = &params.audio_module_2_type;
@@ -444,6 +512,14 @@ impl AudioModule {
                 additive_harmonic_5 = &params.additive_amp_2_5;
                 additive_harmonic_6 = &params.additive_amp_2_6;
                 additive_harmonic_7 = &params.additive_amp_2_7;
+                additive_harmonic_8 = &params.additive_amp_2_8;
+                additive_harmonic_9 = &params.additive_amp_2_9;
+                additive_harmonic_10 = &params.additive_amp_2_10;
+                additive_harmonic_11 = &params.additive_amp_2_11;
+                additive_harmonic_12 = &params.additive_amp_2_12;
+                additive_harmonic_13 = &params.additive_amp_2_13;
+                additive_harmonic_14 = &params.additive_amp_2_14;
+                additive_harmonic_15 = &params.additive_amp_2_15;
             },
             3 => {
                 am_type = &params.audio_module_3_type;
@@ -479,14 +555,18 @@ impl AudioModule {
                 additive_harmonic_5 = &params.additive_amp_3_5;
                 additive_harmonic_6 = &params.additive_amp_3_6;
                 additive_harmonic_7 = &params.additive_amp_3_7;
+                additive_harmonic_8 = &params.additive_amp_3_8;
+                additive_harmonic_9 = &params.additive_amp_3_9;
+                additive_harmonic_10 = &params.additive_amp_3_10;
+                additive_harmonic_11 = &params.additive_amp_3_11;
+                additive_harmonic_12 = &params.additive_amp_3_12;
+                additive_harmonic_13 = &params.additive_amp_3_13;
+                additive_harmonic_14 = &params.additive_amp_3_14;
+                additive_harmonic_15 = &params.additive_amp_3_15;
             },
             #[allow(unreachable_code)]
             _ => !unreachable!(),
         }
-        // Resetting from the draw thread since setter is valid here - I recognize this is ugly/bad practice
-        //if load_sample.value() {
-        //    setter.set_parameter(load_sample, false);
-        //}
 
         const VERT_BAR_HEIGHT: f32 = 76.0;
         const VERT_LARGER: f32 = 78.0;
@@ -1280,9 +1360,11 @@ Random: Sample uses a new random position every note".to_string());
                         .hscroll(true)
                         .max_width(WIDTH as f32 - 270.0)
                         .show(ui, |ui| {
-                        // Additive Amplitude, Additive Phase
+                        // Additive Amplitude
                         ui.add(
                             VerticalParamSlider::for_param(additive_harmonic_0, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_LARGER)
                                 .set_reversed(true)
@@ -1290,6 +1372,8 @@ Random: Sample uses a new random position every note".to_string());
                         );
                         ui.add(
                             VerticalParamSlider::for_param(additive_harmonic_1, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_LARGER)
                                 .set_reversed(true)
@@ -1297,6 +1381,8 @@ Random: Sample uses a new random position every note".to_string());
                         );
                         ui.add(
                             VerticalParamSlider::for_param(additive_harmonic_2, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_LARGER)
                                 .set_reversed(true)
@@ -1304,6 +1390,8 @@ Random: Sample uses a new random position every note".to_string());
                         );
                         ui.add(
                             VerticalParamSlider::for_param(additive_harmonic_3, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_LARGER)
                                 .set_reversed(true)
@@ -1311,6 +1399,8 @@ Random: Sample uses a new random position every note".to_string());
                         );
                         ui.add(
                             VerticalParamSlider::for_param(additive_harmonic_4, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_LARGER)
                                 .set_reversed(true)
@@ -1318,6 +1408,8 @@ Random: Sample uses a new random position every note".to_string());
                         );
                         ui.add(
                             VerticalParamSlider::for_param(additive_harmonic_5, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_LARGER)
                                 .set_reversed(true)
@@ -1325,6 +1417,8 @@ Random: Sample uses a new random position every note".to_string());
                         );
                         ui.add(
                             VerticalParamSlider::for_param(additive_harmonic_6, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_LARGER)
                                 .set_reversed(true)
@@ -1332,11 +1426,87 @@ Random: Sample uses a new random position every note".to_string());
                         );
                         ui.add(
                             VerticalParamSlider::for_param(additive_harmonic_7, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
                                 .with_width(VERT_BAR_WIDTH)
                                 .with_height(VERT_LARGER)
                                 .set_reversed(true)
                                 .override_colors(DARKER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
+
+                        ui.add(
+                            VerticalParamSlider::for_param(additive_harmonic_8, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
+                                .with_width(VERT_BAR_WIDTH)
+                                .with_height(VERT_LARGER)
+                                .set_reversed(true)
+                                .override_colors(DARKER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                        );
+                        ui.add(
+                            VerticalParamSlider::for_param(additive_harmonic_9, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
+                                .with_width(VERT_BAR_WIDTH)
+                                .with_height(VERT_LARGER)
+                                .set_reversed(true)
+                                .override_colors(DARKER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                        );
+                        ui.add(
+                            VerticalParamSlider::for_param(additive_harmonic_10, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
+                                .with_width(VERT_BAR_WIDTH)
+                                .with_height(VERT_LARGER)
+                                .set_reversed(true)
+                                .override_colors(DARKER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                        );
+                        ui.add(
+                            VerticalParamSlider::for_param(additive_harmonic_11, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
+                                .with_width(VERT_BAR_WIDTH)
+                                .with_height(VERT_LARGER)
+                                .set_reversed(true)
+                                .override_colors(DARKER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                        );
+                        ui.add(
+                            VerticalParamSlider::for_param(additive_harmonic_12, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
+                                .with_width(VERT_BAR_WIDTH)
+                                .with_height(VERT_LARGER)
+                                .set_reversed(true)
+                                .override_colors(DARKER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                        );
+                        ui.add(
+                            VerticalParamSlider::for_param(additive_harmonic_13, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
+                                .with_width(VERT_BAR_WIDTH)
+                                .with_height(VERT_LARGER)
+                                .set_reversed(true)
+                                .override_colors(DARKER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                        );
+                        ui.add(
+                            VerticalParamSlider::for_param(additive_harmonic_14, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
+                                .with_width(VERT_BAR_WIDTH)
+                                .with_height(VERT_LARGER)
+                                .set_reversed(true)
+                                .override_colors(DARKER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                        );
+                        ui.add(
+                            VerticalParamSlider::for_param(additive_harmonic_15, setter)
+                                .use_padding(false)
+                                .override_text_size(8.0)
+                                .with_width(VERT_BAR_WIDTH)
+                                .with_height(VERT_LARGER)
+                                .set_reversed(true)
+                                .override_colors(DARKER_GREY_UI_COLOR, YELLOW_MUSTARD),
+                        );
+
                         ui.vertical(|ui| {
                             let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
                                 osc_retrigger,
@@ -1629,6 +1799,14 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 self.ah5 = params.additive_amp_1_5.value();
                 self.ah6 = params.additive_amp_1_6.value();
                 self.ah7 = params.additive_amp_1_7.value();
+                self.ah8 = params.additive_amp_1_8.value();
+                self.ah9 = params.additive_amp_1_9.value();
+                self.ah10 = params.additive_amp_1_10.value();
+                self.ah11 = params.additive_amp_1_11.value();
+                self.ah12 = params.additive_amp_1_12.value();
+                self.ah13 = params.additive_amp_1_13.value();
+                self.ah14 = params.additive_amp_1_14.value();
+                self.ah15 = params.additive_amp_1_15.value();
             }
             2 => {
                 self.audio_module_type = params.audio_module_2_type.value();
@@ -1719,6 +1897,14 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 self.ah5 = params.additive_amp_2_5.value();
                 self.ah6 = params.additive_amp_2_6.value();
                 self.ah7 = params.additive_amp_2_7.value();
+                self.ah8 = params.additive_amp_2_8.value();
+                self.ah9 = params.additive_amp_2_9.value();
+                self.ah10 = params.additive_amp_2_10.value();
+                self.ah11 = params.additive_amp_2_11.value();
+                self.ah12 = params.additive_amp_2_12.value();
+                self.ah13 = params.additive_amp_2_13.value();
+                self.ah14 = params.additive_amp_2_14.value();
+                self.ah15 = params.additive_amp_2_15.value();
             }
             3 => {
                 self.audio_module_type = params.audio_module_3_type.value();
@@ -1809,6 +1995,14 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 self.ah5 = params.additive_amp_3_5.value();
                 self.ah6 = params.additive_amp_3_6.value();
                 self.ah7 = params.additive_amp_3_7.value();
+                self.ah8 = params.additive_amp_3_8.value();
+                self.ah9 = params.additive_amp_3_9.value();
+                self.ah10 = params.additive_amp_3_10.value();
+                self.ah11 = params.additive_amp_3_11.value();
+                self.ah12 = params.additive_amp_3_12.value();
+                self.ah13 = params.additive_amp_3_13.value();
+                self.ah14 = params.additive_amp_3_14.value();
+                self.ah15 = params.additive_amp_3_15.value();
             }
             _ => {}
         }
@@ -2328,7 +2522,26 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             )),
                             grain_state: GrainState::Attacking,
                             // Additive
-                            harmonic_phases: vec![0.0;8],
+                            harmonic_phases: {
+                                let mut vector: Vec<f32> = Vec::with_capacity(16);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector.push(0.0);
+                                vector
+                            },
                         };
 
                         // Add our voice struct to our voice tracking deque
@@ -2441,7 +2654,26 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
                                     grain_state: GrainState::Attacking,
                                     // Additive
-                                    harmonic_phases: vec![0.0;8],
+                                    harmonic_phases: {
+                                        let mut vector: Vec<f32> = Vec::with_capacity(16);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector.push(0.0);
+                                        vector
+                                    },
                                 };
 
                                 self.unison_voices.voices.push_back(new_unison_voice);
@@ -2500,7 +2732,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
                                     grain_state: GrainState::Attacking,
                                     // Additive
-                                    harmonic_phases: vec![0.0;8],
+                                    harmonic_phases: Vec::new(),
                                 },
                             );
 
@@ -2556,7 +2788,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                         grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
                                         grain_state: GrainState::Attacking,
                                         // Additive
-                                        harmonic_phases: vec![0.0;8],
+                                        harmonic_phases: Vec::new(),
                                     },
                                 );
                             }
@@ -2669,58 +2901,61 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
             None => (),
         }
 
-        // This is a dummy entry
-        let mut next_grain: SingleVoice = SingleVoice {
-            note: 0,
-            _velocity: 0.0,
-            vel_mod_amount: 0.0,
-            phase: 0.0,
-            phase_delta: 0.0,
-            state: OscState::Off,
-            // These get cloned since smoother cannot be copied
-            amp_current: 0.0,
-            osc_attack: Smoother::new(SmoothingStyle::None),
-            osc_decay: Smoother::new(SmoothingStyle::None),
-            osc_release: Smoother::new(SmoothingStyle::None),
-            pitch_enabled: false,
-            pitch_env_peak: 0.0,
-            pitch_current: 0.0,
-            pitch_state: OscState::Off,
-            pitch_attack: Smoother::new(SmoothingStyle::None),
-            pitch_decay: Smoother::new(SmoothingStyle::None),
-            pitch_release: Smoother::new(SmoothingStyle::None),
-            pitch_enabled_2: false,
-            pitch_env_peak_2: 0.0,
-            pitch_current_2: 0.0,
-            pitch_state_2: OscState::Off,
-            pitch_attack_2: Smoother::new(SmoothingStyle::None),
-            pitch_decay_2: Smoother::new(SmoothingStyle::None),
-            pitch_release_2: Smoother::new(SmoothingStyle::None),
-            _detune: 0.0,
-            _unison_detune_value: 0.0,
-            frequency: 0.0,
-            _attack_time: self.osc_attack,
-            _decay_time: self.osc_decay,
-            _release_time: self.osc_release,
-            _retrigger: self.osc_retrigger,
-            _voice_type: self.osc_type,
-            _angle: 0.0,
-            sample_pos: 0,
-            loop_it: self.loop_wavetable,
-            grain_start_pos: 0,
-            _granular_gap: 200,
-            _granular_hold: 200,
-            granular_hold_end: 200,
-            next_grain_pos: 400,
-            _end_position: 800,
-            _granular_crossfade: 50,
-            grain_attack: Smoother::new(SmoothingStyle::Linear(5.0)),
-            grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
-            grain_state: GrainState::Attacking,
-            // Additive
-            harmonic_phases: vec![0.0;8],
-        };
         let mut new_grain: bool = false;
+        //if self.audio_module_type == AudioModuleType::Granulizer {
+            // This is a dummy entry
+            let mut next_grain: SingleVoice = SingleVoice {
+                note: 0,
+                _velocity: 0.0,
+                vel_mod_amount: 0.0,
+                phase: 0.0,
+                phase_delta: 0.0,
+                state: OscState::Off,
+                // These get cloned since smoother cannot be copied
+                amp_current: 0.0,
+                osc_attack: Smoother::new(SmoothingStyle::None),
+                osc_decay: Smoother::new(SmoothingStyle::None),
+                osc_release: Smoother::new(SmoothingStyle::None),
+                pitch_enabled: false,
+                pitch_env_peak: 0.0,
+                pitch_current: 0.0,
+                pitch_state: OscState::Off,
+                pitch_attack: Smoother::new(SmoothingStyle::None),
+                pitch_decay: Smoother::new(SmoothingStyle::None),
+                pitch_release: Smoother::new(SmoothingStyle::None),
+                pitch_enabled_2: false,
+                pitch_env_peak_2: 0.0,
+                pitch_current_2: 0.0,
+                pitch_state_2: OscState::Off,
+                pitch_attack_2: Smoother::new(SmoothingStyle::None),
+                pitch_decay_2: Smoother::new(SmoothingStyle::None),
+                pitch_release_2: Smoother::new(SmoothingStyle::None),
+                _detune: 0.0,
+                _unison_detune_value: 0.0,
+                frequency: 0.0,
+                _attack_time: self.osc_attack,
+                _decay_time: self.osc_decay,
+                _release_time: self.osc_release,
+                _retrigger: self.osc_retrigger,
+                _voice_type: self.osc_type,
+                _angle: 0.0,
+                sample_pos: 0,
+                loop_it: self.loop_wavetable,
+                grain_start_pos: 0,
+                _granular_gap: 200,
+                _granular_hold: 200,
+                granular_hold_end: 200,
+                next_grain_pos: 400,
+                _end_position: 800,
+                _granular_crossfade: 50,
+                grain_attack: Smoother::new(SmoothingStyle::Linear(5.0)),
+                grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
+                grain_state: GrainState::Attacking,
+                // Additive
+                harmonic_phases: Vec::new(),
+            };
+        //}
+        
 
         // Second check for off notes before output to cut down on iterating
         // Remove any off notes
@@ -2738,41 +2973,99 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
         // Update our voices before output
         ////////////////////////////////////////////////////////////
         
-        self.additive_module.set_harmonics(vec![
-                AdditiveHarmonic {
-                    index: 0,
-                    amplitude: self.ah0,
-                },
-                AdditiveHarmonic {
-                    index: 1,
-                    amplitude: self.ah1,
-                },
-                AdditiveHarmonic {
-                    index: 2,
-                    amplitude: self.ah2,
-                },
-                AdditiveHarmonic {
-                    index: 3,
-                    amplitude: self.ah3,
-                },
-                AdditiveHarmonic {
-                    index: 4,
-                    amplitude: self.ah4,
-                },
-                AdditiveHarmonic {
-                    index: 5,
-                    amplitude: self.ah5,
-                },
-                AdditiveHarmonic {
-                    index: 6,
-                    amplitude: self.ah6,
-                },
-                AdditiveHarmonic {
-                    index: 7,
-                    amplitude: self.ah7,
-                },
-            ]
-        );
+        if self.audio_module_type == AudioModuleType::Additive {
+            if check_inequality(self.ah0, self.prev_ah0, self.ah1, self.prev_ah1, 
+                self.ah2, self.prev_ah2, self.ah3, self.prev_ah3, self.ah4, 
+                self.prev_ah4, self.ah5, self.prev_ah5, 
+                self.ah6, self.prev_ah6, self.ah7, self.prev_ah7,
+                self.ah8, self.prev_ah8, self.ah9, self.prev_ah9, 
+                self.ah10, self.prev_ah10, self.ah11, self.prev_ah11, self.ah12, 
+                self.prev_ah12, self.ah13, self.prev_ah13, 
+                self.ah14, self.prev_ah14, self.ah15, self.prev_ah15) {
+                    self.prev_ah0 = self.ah0;
+                    self.prev_ah1 = self.ah1;
+                    self.prev_ah2 = self.ah2;
+                    self.prev_ah3 = self.ah3;
+                    self.prev_ah4 = self.ah4;
+                    self.prev_ah5 = self.ah5;
+                    self.prev_ah6 = self.ah6;
+                    self.prev_ah7 = self.ah7;
+                    self.prev_ah8 = self.ah8;
+                    self.prev_ah9 = self.ah9;
+                    self.prev_ah10 = self.ah10;
+                    self.prev_ah11 = self.ah11;
+                    self.prev_ah12 = self.ah12;
+                    self.prev_ah13 = self.ah13;
+                    self.prev_ah14 = self.ah14;
+                    self.prev_ah15 = self.ah15;
+                    let mut new_harmonics = Vec::with_capacity(16);
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 0,
+                        amplitude: self.ah0,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 1,
+                        amplitude: self.ah1,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 2,
+                        amplitude: self.ah2,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 3,
+                        amplitude: self.ah3,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 4,
+                        amplitude: self.ah4,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 5,
+                        amplitude: self.ah5,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 6,
+                        amplitude: self.ah6,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 7,
+                        amplitude: self.ah7,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 8,
+                        amplitude: self.ah8,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 9,
+                        amplitude: self.ah9,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 10,
+                        amplitude: self.ah10,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 11,
+                        amplitude: self.ah11,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 12,
+                        amplitude: self.ah12,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 13,
+                        amplitude: self.ah13,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 14,
+                        amplitude: self.ah14,
+                    });
+                    new_harmonics.push(AdditiveHarmonic {
+                        index: 15,
+                        amplitude: self.ah15,
+                    });
+                    self.additive_module.set_harmonics(new_harmonics);
+                }
+        }
          
         for voice in self.playing_voices.voices.iter_mut() {
             if self.audio_module_type == AudioModuleType::Osc
@@ -3007,7 +3300,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         )),
                         grain_state: GrainState::Attacking,
                         // Additive
-                        harmonic_phases: vec![0.0;8],
+                        harmonic_phases: Vec::new(),
                     };
                 }
 
@@ -4193,4 +4486,19 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
         }
         angle * std::f32::consts::PI * sign
     }
+}
+
+// This is silly but it works and is somehow fast enough
+fn check_inequality(
+    a1: f32, b1: f32, a2: f32, b2: f32, a3: f32, b3: f32, 
+    a4: f32, b4: f32, a5: f32, b5: f32, a6: f32, b6: f32, 
+    a7: f32, b7: f32, a8: f32, b8: f32,
+    a9: f32, b9: f32, a10: f32, b10: f32, a11: f32, b11: f32, 
+    a12: f32, b12: f32, a13: f32, b13: f32, a14: f32, b14: f32, 
+    a15: f32, b15: f32, a16: f32, b16: f32
+) -> bool {
+    a1 != b1 || a2 != b2 || a3 != b3 || a4 != b4 ||
+    a5 != b5 || a6 != b6 || a7 != b7 || a8 != b8 ||
+    a9 != b9 || a10 != b10 || a11 != b11 || a12 != b12 ||
+    a13 != b13 || a14 != b14 || a15 != b15 || a16 != b16
 }

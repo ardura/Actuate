@@ -79,6 +79,7 @@ pub enum FilterAlgorithms {
     TILT,
     VCF,
     V4,
+    A4I,
 }
 
 // Preset categories in dropdown

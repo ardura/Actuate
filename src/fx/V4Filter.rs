@@ -5,6 +5,7 @@ use nih_plug::util;
 
 #[derive(Clone, Copy, Debug)]
 pub struct V4FilterStruct {
+    scale_gain: f32,
     adjustment_factor: f32,
     filter_stage_1: f32,
     filter_stage_2: f32,
@@ -21,6 +22,7 @@ pub struct V4FilterStruct {
 impl V4FilterStruct {
     pub fn default() -> V4FilterStruct {
         V4FilterStruct {
+            scale_gain: 1.0,
             adjustment_factor: 1.0,
             filter_stage_1: 0.0,
             filter_stage_2: 0.0,
@@ -52,11 +54,12 @@ impl V4FilterStruct {
     }
 
     pub fn process(&mut self, input_sample: f32) -> f32 {
+        self.scale_gain_from_cutoff();
         self.filter_stage_1 = self.process_stage(self.filter_stage_1, input_sample);
         self.filter_stage_2 = self.process_stage(self.filter_stage_2, self.filter_stage_1 * 1.2);
         self.filter_stage_3 = self.process_stage(self.filter_stage_3, self.filter_stage_2 * 1.3);
         self.filter_output = self.process_stage(self.filter_output, self.filter_stage_3 * 1.4);
-        self.filter_output * util::db_to_gain(4.0)
+        self.filter_output * util::db_to_gain(8.0 + self.scale_gain)
     }
 
     fn process_stage(&mut self, stage_value: f32, input_value: f32) -> f32 {
@@ -76,6 +79,14 @@ impl V4FilterStruct {
         
         output.clamp(-1.0, 1.0)
     }
+
+    fn scale_gain_from_cutoff(&mut self) {
+        let output_min = 1.0;
+        let output_max = 18.0;
+    
+        self.scale_gain = output_max - (self.cutoff_frequency.clamp(20.0, 20000.0) - 20.0) * (output_max - output_min) / 19980.0;
+    }
+    
 
     fn scale_adjustment_from_cutoff(&mut self) {
         let output_min = 20000.0;
