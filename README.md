@@ -1,5 +1,5 @@
-# Actuate (Latest is v1.3.0)
-A Synthesizer, Sampler, and Granulizer built in Rust + Nih-Plug
+# Actuate (Latest is v1.3.1)
+A Subtractive and Additive Synthesizer, Sampler, and Granulizer built in Rust + Nih-Plug
 Written by Ardura
 
 **Please note this project is still a work in progress/alpha - I got a lot of traction once I posted on KVR and wanted to clarify that!**
@@ -17,28 +17,35 @@ Hover over any knob (or some labels) for an explanation!
 ![image](https://github.com/ardura/Actuate/assets/31751444/6c455635-8f03-49b5-bce1-c665d437d2fe)
 
 
-- Two SVF Filters, a VCF inspired filter, and Tilt inspired filters that can be parallel, serial, or bypassed with ADSR Envelopes
+- Two SVF Filters, a VCF inspired filter, Tilt inspired filters, and two other analog-inspired filters that can be parallel, serial, or bypassed with ADSR Envelopes
 - Pitch modulation with ASDR
 
 ![image](https://github.com/ardura/Actuate/assets/31751444/accd4727-975a-4266-a82a-180c55db628d)
 
 
-- 12 Oscillator shapes:
+- 12 Subtractive Oscillator shapes:
   - The standard: Sine, Triangle, Saw, Ramp, Square, Pulse, Noise
   - WSaw - Saw with noise variance to create crispyness
   - SSaw - Saw with small variance to create shimmer
   - RSaw - Rounded saw wave
   - RASaw - Rounded saw wave with random variances
   - RSquare - Rounded square wave
-- 7 Filter resonance approximations for different sweeps in SVF filters
-  - Default - Allegedly the "ideal" response when tying Q to angular sin response
-  - Moog - Allegedly a Moog Ladder Q approximation further modified
-  - TB - Allegedly an approximation of a TB-303 LP further modified
-  - Arp - Allegedly an approximation of an Arp 2600 further modified
-  - Res - I made this up - kind of a hyper resonance while still being gentle
-  - Bump - I made this up - a gentle bump resonance different from the others
-  - Powf - I made this up - Curves based on Powf math function as it scales
-- 10 Different FX for post processing
+- Additive Oscillators with up to 16 harmonics
+- FM Supported between Oscillators/samples/granulizer
+- 5 Main Filter Algorithms
+  - SVF - 7 Filter resonance approximations for different sweeps in SVF filters
+    - Default - Allegedly the "ideal" response when tying Q to angular sin response
+    - Moog - Allegedly a Moog Ladder Q approximation further modified
+    - TB - Allegedly an approximation of a TB-303 LP further modified
+    - Arp - Allegedly an approximation of an Arp 2600 further modified
+    - Res - I made this up - kind of a hyper resonance while still being gentle
+    - Bump - I made this up - a gentle bump resonance different from the others
+    - Powf - I made this up - Curves based on Powf math function as it scales
+  - Tilt Filter
+  - VCF Filter
+  - Analog inspired filter idea (Ardura's V4)
+  - Analog inspired filter idea (Ardura's A4I)
+- 11 Different FX for post processing
 
 ![image](https://github.com/ardura/Actuate/assets/31751444/c13b62bb-a29e-420c-9f3a-764950cbd4a2)
 
@@ -75,7 +82,7 @@ Since Actuate 1.2.8 the new file browser and UI use native text editing. This cr
   - Unfortunately I don't know where this would be on Linux or Mac so I'm open to help from Ableton users!
 
 ## Roadmap
-- [ ] Create an additive module
+- [x] Create an additive module
 - [ ] Create filter release bypass toggle
 - [ ] Find more things to add here
 

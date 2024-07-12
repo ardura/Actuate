@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.3.0
+Version 1.3.1
 
 #####################################
 
@@ -26,12 +26,11 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 
 #![allow(non_snake_case)]
 use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
-use actuate_structs::{ActuatePresetV130, ModulationStruct};
+use actuate_structs::{ActuatePresetV131, ModulationStruct};
 use flate2::{read::GzDecoder,write::GzEncoder,Compression};
-use nih_plug::prelude::*;
+use nih_plug::{prelude::*, util::db_to_gain};
 use nih_plug_egui::{
-    egui::{Color32, FontId},
-    EguiState,
+    egui::{Color32, FontId}, EguiState
 };
 use std::{
     fs::File, io::{Read, Write}, path::PathBuf, sync::{
@@ -47,19 +46,11 @@ use audio_module::{
     frequency_modulation,
 };
 use fx::{
-    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType, StateVariableFilter}, VCFilter::ResponseType as VCResponseType
+    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, A4I_Filter::{self, A4iFilter}, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType,StateVariableFilter}, V4Filter::{self, V4FilterStruct}, VCFilter::ResponseType as VCResponseType
 };
 
 use old_preset_structs::{
-    load_unserialized_old, 
-    load_unserialized_v114,
-    load_unserialized_v122,
-    load_unserialized_v123,
-    load_unserialized_v125,
-    load_unserialized_v126,
-    ActuatePresetV123,
-    ActuatePresetV125,
-    ActuatePresetV126,
+    load_unserialized_old, load_unserialized_v114, load_unserialized_v122, load_unserialized_v123, load_unserialized_v125, load_unserialized_v126, load_unserialized_v130, ActuatePresetV123, ActuatePresetV125, ActuatePresetV126, ActuatePresetV130
 };
 
 mod actuate_gui;
@@ -177,11 +168,23 @@ pub struct Actuate {
     preset_name: Arc<Mutex<String>>,
     preset_info: Arc<Mutex<String>>,
     preset_category: Arc<Mutex<PresetType>>,
-    preset_lib: Arc<Mutex<Vec<ActuatePresetV130>>>,
+    preset_lib: Arc<Mutex<Vec<ActuatePresetV131>>>,
 
     // Used for DC Offset calculations
     dc_filter_l: StateVariableFilter,
     dc_filter_r: StateVariableFilter,
+
+    // V4 Filter
+    V4F_l_1: V4Filter::V4FilterStruct,
+    V4F_l_2: V4Filter::V4FilterStruct,
+    V4F_r_1: V4Filter::V4FilterStruct,
+    V4F_r_2: V4Filter::V4FilterStruct,
+
+    // A4I Filter
+    A4I_l_1: A4I_Filter::A4iFilter,
+    A4I_l_2: A4I_Filter::A4iFilter,
+    A4I_r_1: A4I_Filter::A4iFilter,
+    A4I_r_2: A4I_Filter::A4iFilter,
 
     fm_state: OscState,
     fm_atk_smoother_1: Smoother<f32>,
@@ -312,6 +315,14 @@ impl Default for Actuate {
             vcf_filter_l_1: fx::VCFilter::VCFilter::new(),
             vcf_filter_r_1: fx::VCFilter::VCFilter::new(),
 
+            // V4Filter
+            V4F_l_1: V4FilterStruct::default(),
+            V4F_r_1: V4FilterStruct::default(),
+
+            // A4I Filter
+            A4I_l_1: A4iFilter::new(44100.0, 20000.0, 0.0),
+            A4I_r_1: A4iFilter::new(44100.0, 20000.0, 0.0),
+
             filter_state_2: OscState::Off,
             filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
             filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -336,6 +347,14 @@ impl Default for Actuate {
             // VCF Filters
             vcf_filter_l_2: fx::VCFilter::VCFilter::new(),
             vcf_filter_r_2: fx::VCFilter::VCFilter::new(),
+
+            // V4Filter
+            V4F_l_2: V4FilterStruct::default(),
+            V4F_r_2: V4FilterStruct::default(),
+
+            // A4I Filter
+            A4I_l_2: A4iFilter::new(44100.0, 20000.0, 0.0),
+            A4I_r_2: A4iFilter::new(44100.0, 20000.0, 0.0),
 
             filter_state_1: OscState::Off,
             filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -660,6 +679,107 @@ pub struct ActuateParams {
     end_position_3: FloatParam,
     #[id = "grain_crossfade_3"]
     grain_crossfade_3: IntParam,
+
+    // Additive Data
+    #[id = "additive_amp_1_0"]
+    additive_amp_1_0: FloatParam,
+    #[id = "additive_amp_1_1"]
+    additive_amp_1_1: FloatParam,
+    #[id = "additive_amp_1_2"]
+    additive_amp_1_2: FloatParam,
+    #[id = "additive_amp_1_3"]
+    additive_amp_1_3: FloatParam,
+    #[id = "additive_amp_1_4"]
+    additive_amp_1_4: FloatParam,
+    #[id = "additive_amp_1_5"]
+    additive_amp_1_5: FloatParam,
+    #[id = "additive_amp_1_6"]
+    additive_amp_1_6: FloatParam,
+    #[id = "additive_amp_1_7"]
+    additive_amp_1_7: FloatParam,
+    #[id = "additive_amp_1_8"]
+    additive_amp_1_8: FloatParam,
+    #[id = "additive_amp_1_9"]
+    additive_amp_1_9: FloatParam,
+    #[id = "additive_amp_1_10"]
+    additive_amp_1_10: FloatParam,
+    #[id = "additive_amp_1_11"]
+    additive_amp_1_11: FloatParam,
+    #[id = "additive_amp_1_12"]
+    additive_amp_1_12: FloatParam,
+    #[id = "additive_amp_1_13"]
+    additive_amp_1_13: FloatParam,
+    #[id = "additive_amp_1_14"]
+    additive_amp_1_14: FloatParam,
+    #[id = "additive_amp_1_15"]
+    additive_amp_1_15: FloatParam,
+
+    #[id = "additive_amp_2_0"]
+    additive_amp_2_0: FloatParam,
+    #[id = "additive_amp_2_1"]
+    additive_amp_2_1: FloatParam,
+    #[id = "additive_amp_2_2"]
+    additive_amp_2_2: FloatParam,
+    #[id = "additive_amp_2_3"]
+    additive_amp_2_3: FloatParam,
+    #[id = "additive_amp_2_4"]
+    additive_amp_2_4: FloatParam,
+    #[id = "additive_amp_2_5"]
+    additive_amp_2_5: FloatParam,
+    #[id = "additive_amp_2_6"]
+    additive_amp_2_6: FloatParam,
+    #[id = "additive_amp_2_7"]
+    additive_amp_2_7: FloatParam,
+    #[id = "additive_amp_2_8"]
+    additive_amp_2_8: FloatParam,
+    #[id = "additive_amp_2_9"]
+    additive_amp_2_9: FloatParam,
+    #[id = "additive_amp_2_10"]
+    additive_amp_2_10: FloatParam,
+    #[id = "additive_amp_2_11"]
+    additive_amp_2_11: FloatParam,
+    #[id = "additive_amp_2_12"]
+    additive_amp_2_12: FloatParam,
+    #[id = "additive_amp_2_13"]
+    additive_amp_2_13: FloatParam,
+    #[id = "additive_amp_2_14"]
+    additive_amp_2_14: FloatParam,
+    #[id = "additive_amp_2_15"]
+    additive_amp_2_15: FloatParam,
+
+    // Additive Data
+    #[id = "additive_amp_3_0"]
+    additive_amp_3_0: FloatParam,
+    #[id = "additive_amp_3_1"]
+    additive_amp_3_1: FloatParam,
+    #[id = "additive_amp_3_2"]
+    additive_amp_3_2: FloatParam,
+    #[id = "additive_amp_3_3"]
+    additive_amp_3_3: FloatParam,
+    #[id = "additive_amp_3_4"]
+    additive_amp_3_4: FloatParam,
+    #[id = "additive_amp_3_5"]
+    additive_amp_3_5: FloatParam,
+    #[id = "additive_amp_3_6"]
+    additive_amp_3_6: FloatParam,
+    #[id = "additive_amp_3_7"]
+    additive_amp_3_7: FloatParam,
+    #[id = "additive_amp_3_8"]
+    additive_amp_3_8: FloatParam,
+    #[id = "additive_amp_3_9"]
+    additive_amp_3_9: FloatParam,
+    #[id = "additive_amp_3_10"]
+    additive_amp_3_10: FloatParam,
+    #[id = "additive_amp_3_11"]
+    additive_amp_3_11: FloatParam,
+    #[id = "additive_amp_3_12"]
+    additive_amp_3_12: FloatParam,
+    #[id = "additive_amp_3_13"]
+    additive_amp_3_13: FloatParam,
+    #[id = "additive_amp_3_14"]
+    additive_amp_3_14: FloatParam,
+    #[id = "additive_amp_3_15"]
+    additive_amp_3_15: FloatParam,
 
     // Filters
     #[id = "filter_wet"]
@@ -2188,6 +2308,731 @@ impl ActuateParams {
                 }),
             pitch_enable_2: BoolParam::new("Pitch Enable", false),
             pitch_routing_2: EnumParam::new("Routing", PitchRouting::Osc1).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+
+            // Additive
+            ////////////////////////////////////////////////////////////////////////////////////
+            additive_amp_1_0: FloatParam::new(
+                "Harmonic 0",
+                1.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("0")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_1: FloatParam::new(
+                "Harmonic 1",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("1")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_2: FloatParam::new(
+                "Harmonic 2",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("2")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_3: FloatParam::new(
+                "Harmonic 3",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("3")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_4: FloatParam::new(
+                "Harmonic 4",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("4")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_5: FloatParam::new(
+                "Harmonic 5",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("5")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_6: FloatParam::new(
+                "Harmonic 6",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("6")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_7: FloatParam::new(
+                "Harmonic 7",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("7")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_8: FloatParam::new(
+                "Harmonic 8",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("8")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_9: FloatParam::new(
+                "Harmonic 9",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("9")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_10: FloatParam::new(
+                "Harmonic 10",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("10")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_11: FloatParam::new(
+                "Harmonic 11",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("11")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_12: FloatParam::new(
+                "Harmonic 12",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("12")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_13: FloatParam::new(
+                "Harmonic 13",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("13")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_14: FloatParam::new(
+                "Harmonic 14",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("14")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_1_15: FloatParam::new(
+                "Harmonic 15",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("15")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+
+            additive_amp_2_0: FloatParam::new(
+                "Harmonic 0",
+                1.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("0")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_1: FloatParam::new(
+                "Harmonic 1",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("1")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_2: FloatParam::new(
+                "Harmonic 2",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("2")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_3: FloatParam::new(
+                "Harmonic 3",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("3")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_4: FloatParam::new(
+                "Harmonic 4",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("4")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_5: FloatParam::new(
+                "Harmonic 5",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("5")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_6: FloatParam::new(
+                "Harmonic 6",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("6")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_7: FloatParam::new(
+                "Harmonic 7",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("7")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_8: FloatParam::new(
+                "Harmonic 8",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("8")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_9: FloatParam::new(
+                "Harmonic 9",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("9")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_10: FloatParam::new(
+                "Harmonic 10",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("10")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_11: FloatParam::new(
+                "Harmonic 11",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("11")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_12: FloatParam::new(
+                "Harmonic 12",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("12")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_13: FloatParam::new(
+                "Harmonic 13",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("13")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_14: FloatParam::new(
+                "Harmonic 14",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("14")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_2_15: FloatParam::new(
+                "Harmonic 15",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("15")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+
+            additive_amp_3_0: FloatParam::new(
+                "Harmonic 0",
+                1.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("0")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_1: FloatParam::new(
+                "Harmonic 1",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("1")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_2: FloatParam::new(
+                "Harmonic 2",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("2")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_3: FloatParam::new(
+                "Harmonic 3",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("3")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_4: FloatParam::new(
+                "Harmonic 4",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("4")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_5: FloatParam::new(
+                "Harmonic 5",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("5")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_6: FloatParam::new(
+                "Harmonic 6",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("6")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_7: FloatParam::new(
+                "Harmonic 7",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("7")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_8: FloatParam::new(
+                "Harmonic 8",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("8")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_9: FloatParam::new(
+                "Harmonic 9",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("9")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_10: FloatParam::new(
+                "Harmonic 10",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("10")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_11: FloatParam::new(
+                "Harmonic 11",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("11")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_12: FloatParam::new(
+                "Harmonic 12",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("12")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_13: FloatParam::new(
+                "Harmonic 13",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("13")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_14: FloatParam::new(
+                "Harmonic 14",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("14")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            additive_amp_3_15: FloatParam::new(
+                "Harmonic 15",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 1.0,
+                    factor: 0.4,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("15")
+            .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
@@ -4814,7 +5659,7 @@ impl Actuate {
     }
 
     
-    fn export_preset(saving_preset: Option<PathBuf>, mut preset: ActuatePresetV130) {
+    fn export_preset(saving_preset: Option<PathBuf>, mut preset: ActuatePresetV131) {
         if let Some(mut location) = saving_preset {
             if let Some(extension_check) = location.extension() {
                 let extension = extension_check.to_string_lossy().to_string();
@@ -4835,7 +5680,7 @@ impl Actuate {
                 preset.mod3_sample_lib.clear();
 
                 // Serialize to MessagePack bytes
-                let serialized_data = rmp_serde::to_vec::<ActuatePresetV130>(&preset);
+                let serialized_data = rmp_serde::to_vec::<ActuatePresetV131>(&preset);
 
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
@@ -4857,7 +5702,7 @@ impl Actuate {
     }
 
     // import_preset() uses message packing with serde
-    fn import_preset(imported_preset: Option<PathBuf>) -> (String, Option<ActuatePresetV130>) {
+    fn import_preset(imported_preset: Option<PathBuf>) -> (String, Option<ActuatePresetV131>) {
         let return_name;
 
         if let Some(imported_preset) = imported_preset {
@@ -4886,32 +5731,25 @@ impl Actuate {
             let file_string_data = decompressed_data.unwrap();
 
             // Deserialize into preset struct - return default empty lib if error
-            let mut unserialized: ActuatePresetV130 = rmp_serde::from_slice(&file_string_data)
+            let mut unserialized: ActuatePresetV131 = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(ERROR_PRESET.clone());
 
             // This if cascade tries to load each predecessor format of presets
             if unserialized.preset_name.contains("Error") {
-                unserialized = load_unserialized_v126(file_string_data.clone());
-
+                unserialized = load_unserialized_v130(file_string_data.clone());
                 if unserialized.preset_name.contains("Error") {
-                    unserialized = load_unserialized_v125(file_string_data.clone());
+                    unserialized = load_unserialized_v126(file_string_data.clone());
                     if unserialized.preset_name.contains("Error") {
-                        // Attempt to load the previous version preset type
-                        unserialized = load_unserialized_v123(file_string_data.clone());
-
+                        unserialized = load_unserialized_v125(file_string_data.clone());
                         if unserialized.preset_name.contains("Error") {
-                            // Try loading the previous preset struct version
-                            unserialized = load_unserialized_v122(file_string_data.clone());
-
-                            // Attempt to load the previous version preset type
+                            unserialized = load_unserialized_v123(file_string_data.clone());
                             if unserialized.preset_name.contains("Error") {
-                                // Try loading the previous preset struct version
-                                unserialized = load_unserialized_v114(file_string_data.clone());
-
-                                // Attempt to load the oldest preset type
+                                unserialized = load_unserialized_v122(file_string_data.clone());
                                 if unserialized.preset_name.contains("Error") {
-                                    // Try loading the previous preset struct version
-                                    unserialized = load_unserialized_old(file_string_data.clone());
+                                    unserialized = load_unserialized_v114(file_string_data.clone());
+                                    if unserialized.preset_name.contains("Error") {
+                                        unserialized = load_unserialized_old(file_string_data.clone());
+                                    }
                                 }
                             }
                         }
@@ -4925,7 +5763,7 @@ impl Actuate {
     }
 
     // Load presets uses message packing with serde
-    fn load_preset_bank(loading_bank: Option<PathBuf>) -> (String, Vec<ActuatePresetV130>) {
+    fn load_preset_bank(loading_bank: Option<PathBuf>) -> (String, Vec<ActuatePresetV131>) {
         let return_name;
 
         if let Some(loading_bank) = loading_bank {
@@ -4951,50 +5789,65 @@ impl Actuate {
             let file_string_data = decompressed_data.unwrap();
 
             // Deserialize into preset struct - return default empty lib if error
-            let unserialized: Vec<ActuatePresetV130> = rmp_serde::from_slice(&file_string_data)
+            let unserialized: Vec<ActuatePresetV131> = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(vec![
                     ERROR_PRESET.clone();
                     PRESET_BANK_SIZE
                 ]);
 
-            // Attempt loading 1.2.6 bank if error
+            // Attempt loading 1.3.0 bank if error
             if unserialized[0].preset_name.contains("Error") {
                 // Deserialize into preset struct - return default empty lib if error
-                let unserialized: Vec<ActuatePresetV126> = rmp_serde::from_slice(&file_string_data)
+                let unserialized: Vec<ActuatePresetV130> = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(vec![
-                    ERROR_PRESETV126.clone();
+                    ERROR_PRESETV130.clone();
                     PRESET_BANK_SIZE
                 ]);
-                // Convert each v1.2.6 entry into latest
-                let mut converted: Vec<ActuatePresetV130> = Vec::new();
-                for v126_preset in unserialized.iter() {
-                    converted.push(old_preset_structs::convert_preset_v126(v126_preset.clone()));
+                // Convert each v1.3.0 entry into latest
+                let mut converted: Vec<ActuatePresetV131> = Vec::new();
+                for v130_preset in unserialized.iter() {
+                    converted.push(old_preset_structs::convert_preset_v130(v130_preset.clone()));
                 }
-
-                // Attempt loading 1.2.5 bank if error
+                // Attempt loading 1.2.6 bank if error
                 if unserialized[0].preset_name.contains("Error") {
-                    let unserialized: Vec<ActuatePresetV125> = rmp_serde::from_slice(&file_string_data)
-                        .unwrap_or(vec![
-                            ERROR_PRESETV125.clone();
-                            PRESET_BANK_SIZE
-                        ]);
-                    // Convert each v1.2.5 entry into latest
-                    let mut converted: Vec<ActuatePresetV130> = Vec::new();
-                    for v125_preset in unserialized.iter() {
-                        converted.push(old_preset_structs::convert_preset_v125(v125_preset.clone()));
+                    // Deserialize into preset struct - return default empty lib if error
+                    let unserialized: Vec<ActuatePresetV126> = rmp_serde::from_slice(&file_string_data)
+                    .unwrap_or(vec![
+                        ERROR_PRESETV126.clone();
+                        PRESET_BANK_SIZE
+                    ]);
+                    // Convert each v1.2.6 entry into latest
+                    let mut converted: Vec<ActuatePresetV131> = Vec::new();
+                    for v126_preset in unserialized.iter() {
+                        converted.push(old_preset_structs::convert_preset_v126(v126_preset.clone()));
                     }
 
-                    // Attempt loading 1.2.3 bank if error
+                    // Attempt loading 1.2.5 bank if error
                     if unserialized[0].preset_name.contains("Error") {
-                        let unserialized: Vec<ActuatePresetV123> = rmp_serde::from_slice(&file_string_data)
+                        let unserialized: Vec<ActuatePresetV125> = rmp_serde::from_slice(&file_string_data)
                             .unwrap_or(vec![
-                                ERROR_PRESETV123.clone();
+                                ERROR_PRESETV125.clone();
                                 PRESET_BANK_SIZE
                             ]);
-                        // Convert each v1.2.3 entry into latest
-                        let mut converted: Vec<ActuatePresetV130> = Vec::new();
-                        for v123_preset in unserialized.iter() {
-                            converted.push(old_preset_structs::convert_preset_v123(v123_preset.clone()));
+                        // Convert each v1.2.5 entry into latest
+                        let mut converted: Vec<ActuatePresetV131> = Vec::new();
+                        for v125_preset in unserialized.iter() {
+                            converted.push(old_preset_structs::convert_preset_v125(v125_preset.clone()));
+                        }
+
+                        // Attempt loading 1.2.3 bank if error
+                        if unserialized[0].preset_name.contains("Error") {
+                            let unserialized: Vec<ActuatePresetV123> = rmp_serde::from_slice(&file_string_data)
+                                .unwrap_or(vec![
+                                    ERROR_PRESETV123.clone();
+                                    PRESET_BANK_SIZE
+                                ]);
+                            // Convert each v1.2.3 entry into latest
+                            let mut converted: Vec<ActuatePresetV131> = Vec::new();
+                            for v123_preset in unserialized.iter() {
+                                converted.push(old_preset_structs::convert_preset_v123(v123_preset.clone()));
+                            }
+                            return (return_name, converted);
                         }
                         return (return_name, converted);
                     }
@@ -5013,7 +5866,7 @@ impl Actuate {
         setter: &ParamSetter,
         params: Arc<ActuateParams>,
         current_preset_index: usize,
-        arc_preset: &Vec<ActuatePresetV130>,
+        arc_preset: &Vec<ActuatePresetV131>,
         AMod1: &mut AudioModule,
         AMod2: &mut AudioModule,
         AMod3: &mut AudioModule,
@@ -5449,6 +6302,58 @@ impl Actuate {
 
         setter.set_parameter(&params.filter_cutoff_link, loaded_preset.filter_cutoff_link);
 
+        // 1.3.1 ADDITIVE!
+        setter.set_parameter(&params.additive_amp_1_0, loaded_preset.additive_amp_1_0);
+        setter.set_parameter(&params.additive_amp_1_1, loaded_preset.additive_amp_1_1);
+        setter.set_parameter(&params.additive_amp_1_2, loaded_preset.additive_amp_1_2);
+        setter.set_parameter(&params.additive_amp_1_3, loaded_preset.additive_amp_1_3);
+        setter.set_parameter(&params.additive_amp_1_4, loaded_preset.additive_amp_1_4);
+        setter.set_parameter(&params.additive_amp_1_5, loaded_preset.additive_amp_1_5);
+        setter.set_parameter(&params.additive_amp_1_6, loaded_preset.additive_amp_1_6);
+        setter.set_parameter(&params.additive_amp_1_7, loaded_preset.additive_amp_1_7);
+        setter.set_parameter(&params.additive_amp_1_8, loaded_preset.additive_amp_1_8);
+        setter.set_parameter(&params.additive_amp_1_9, loaded_preset.additive_amp_1_9);
+        setter.set_parameter(&params.additive_amp_1_10, loaded_preset.additive_amp_1_10);
+        setter.set_parameter(&params.additive_amp_1_11, loaded_preset.additive_amp_1_11);
+        setter.set_parameter(&params.additive_amp_1_12, loaded_preset.additive_amp_1_12);
+        setter.set_parameter(&params.additive_amp_1_13, loaded_preset.additive_amp_1_13);
+        setter.set_parameter(&params.additive_amp_1_14, loaded_preset.additive_amp_1_14);
+        setter.set_parameter(&params.additive_amp_1_15, loaded_preset.additive_amp_1_15);
+
+        setter.set_parameter(&params.additive_amp_2_0, loaded_preset.additive_amp_2_0);
+        setter.set_parameter(&params.additive_amp_2_1, loaded_preset.additive_amp_2_1);
+        setter.set_parameter(&params.additive_amp_2_2, loaded_preset.additive_amp_2_2);
+        setter.set_parameter(&params.additive_amp_2_3, loaded_preset.additive_amp_2_3);
+        setter.set_parameter(&params.additive_amp_2_4, loaded_preset.additive_amp_2_4);
+        setter.set_parameter(&params.additive_amp_2_5, loaded_preset.additive_amp_2_5);
+        setter.set_parameter(&params.additive_amp_2_6, loaded_preset.additive_amp_2_6);
+        setter.set_parameter(&params.additive_amp_2_7, loaded_preset.additive_amp_2_7);
+        setter.set_parameter(&params.additive_amp_2_8, loaded_preset.additive_amp_2_8);
+        setter.set_parameter(&params.additive_amp_2_9, loaded_preset.additive_amp_2_9);
+        setter.set_parameter(&params.additive_amp_2_10, loaded_preset.additive_amp_2_10);
+        setter.set_parameter(&params.additive_amp_2_11, loaded_preset.additive_amp_2_11);
+        setter.set_parameter(&params.additive_amp_2_12, loaded_preset.additive_amp_2_12);
+        setter.set_parameter(&params.additive_amp_2_13, loaded_preset.additive_amp_2_13);
+        setter.set_parameter(&params.additive_amp_2_14, loaded_preset.additive_amp_2_14);
+        setter.set_parameter(&params.additive_amp_2_15, loaded_preset.additive_amp_2_15);
+
+        setter.set_parameter(&params.additive_amp_3_0, loaded_preset.additive_amp_3_0);
+        setter.set_parameter(&params.additive_amp_3_1, loaded_preset.additive_amp_3_1);
+        setter.set_parameter(&params.additive_amp_3_2, loaded_preset.additive_amp_3_2);
+        setter.set_parameter(&params.additive_amp_3_3, loaded_preset.additive_amp_3_3);
+        setter.set_parameter(&params.additive_amp_3_4, loaded_preset.additive_amp_3_4);
+        setter.set_parameter(&params.additive_amp_3_5, loaded_preset.additive_amp_3_5);
+        setter.set_parameter(&params.additive_amp_3_6, loaded_preset.additive_amp_3_6);
+        setter.set_parameter(&params.additive_amp_3_7, loaded_preset.additive_amp_3_7);
+        setter.set_parameter(&params.additive_amp_3_8, loaded_preset.additive_amp_3_8);
+        setter.set_parameter(&params.additive_amp_3_9, loaded_preset.additive_amp_3_9);
+        setter.set_parameter(&params.additive_amp_3_10, loaded_preset.additive_amp_3_10);
+        setter.set_parameter(&params.additive_amp_3_11, loaded_preset.additive_amp_3_11);
+        setter.set_parameter(&params.additive_amp_3_12, loaded_preset.additive_amp_3_12);
+        setter.set_parameter(&params.additive_amp_3_13, loaded_preset.additive_amp_3_13);
+        setter.set_parameter(&params.additive_amp_3_14, loaded_preset.additive_amp_3_14);
+        setter.set_parameter(&params.additive_amp_3_15, loaded_preset.additive_amp_3_15);
+
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
         AMod1.restretch = loaded_preset.mod1_restretch;
@@ -5500,7 +6405,7 @@ impl Actuate {
         )
     }
 
-    fn save_preset_bank(preset_store: &mut Vec<ActuatePresetV130>, saving_bank: Option<PathBuf>) {
+    fn save_preset_bank(preset_store: &mut Vec<ActuatePresetV131>, saving_bank: Option<PathBuf>) {
         if let Some(mut location) = saving_bank {
             if let Some(extension_check) = location.extension() {
                 let extension = extension_check.to_string_lossy().to_string();
@@ -5524,7 +6429,7 @@ impl Actuate {
 
                 // Serialize to MessagePack bytes
                 let serialized_data =
-                    rmp_serde::to_vec::<&Vec<ActuatePresetV130>>(&preset_store.as_ref());
+                    rmp_serde::to_vec::<&Vec<ActuatePresetV131>>(&preset_store.as_ref());
 
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
@@ -5570,7 +6475,7 @@ impl Actuate {
         let AM2 = AM2c.lock().unwrap();
         let AM3 = AM3c.lock().unwrap();
         arc_lib.lock().unwrap()[self.current_preset.load(Ordering::Acquire) as usize] =
-            ActuatePresetV130 {
+            ActuatePresetV131 {
                 preset_name: self.preset_name.lock().unwrap().clone(),
                 preset_info: self.preset_info.lock().unwrap().clone(),
                 preset_category: self.params.preset_category.value(),
@@ -5866,6 +6771,55 @@ impl Actuate {
                 use_limiter: self.params.use_limiter.value(),
                 limiter_threshold: self.params.limiter_threshold.value(),
                 limiter_knee: self.params.limiter_knee.value(),
+
+                additive_amp_1_0: self.params.additive_amp_1_0.value(),
+                additive_amp_1_1: self.params.additive_amp_1_1.value(),
+                additive_amp_1_2: self.params.additive_amp_1_2.value(),
+                additive_amp_1_3: self.params.additive_amp_1_3.value(),
+                additive_amp_1_4: self.params.additive_amp_1_4.value(),
+                additive_amp_1_5: self.params.additive_amp_1_5.value(),
+                additive_amp_1_6: self.params.additive_amp_1_6.value(),
+                additive_amp_1_7: self.params.additive_amp_1_7.value(),
+                additive_amp_1_8: self.params.additive_amp_1_8.value(),
+                additive_amp_1_9: self.params.additive_amp_1_9.value(),
+                additive_amp_1_10: self.params.additive_amp_1_10.value(),
+                additive_amp_1_11: self.params.additive_amp_1_11.value(),
+                additive_amp_1_12: self.params.additive_amp_1_12.value(),
+                additive_amp_1_13: self.params.additive_amp_1_13.value(),
+                additive_amp_1_14: self.params.additive_amp_1_14.value(),
+                additive_amp_1_15: self.params.additive_amp_1_15.value(),
+                additive_amp_2_0: self.params.additive_amp_2_0.value(),
+                additive_amp_2_1: self.params.additive_amp_2_1.value(),
+                additive_amp_2_2: self.params.additive_amp_2_2.value(),
+                additive_amp_2_3: self.params.additive_amp_2_3.value(),
+                additive_amp_2_4: self.params.additive_amp_2_4.value(),
+                additive_amp_2_5: self.params.additive_amp_2_5.value(),
+                additive_amp_2_6: self.params.additive_amp_2_6.value(),
+                additive_amp_2_7: self.params.additive_amp_2_7.value(),
+                additive_amp_2_8: self.params.additive_amp_2_8.value(),
+                additive_amp_2_9: self.params.additive_amp_2_9.value(),
+                additive_amp_2_10: self.params.additive_amp_2_10.value(),
+                additive_amp_2_11: self.params.additive_amp_2_11.value(),
+                additive_amp_2_12: self.params.additive_amp_2_12.value(),
+                additive_amp_2_13: self.params.additive_amp_2_13.value(),
+                additive_amp_2_14: self.params.additive_amp_2_14.value(),
+                additive_amp_2_15: self.params.additive_amp_2_15.value(),
+                additive_amp_3_0: self.params.additive_amp_3_0.value(),
+                additive_amp_3_1: self.params.additive_amp_3_1.value(),
+                additive_amp_3_2: self.params.additive_amp_3_2.value(),
+                additive_amp_3_3: self.params.additive_amp_3_3.value(),
+                additive_amp_3_4: self.params.additive_amp_3_4.value(),
+                additive_amp_3_5: self.params.additive_amp_3_5.value(),
+                additive_amp_3_6: self.params.additive_amp_3_6.value(),
+                additive_amp_3_7: self.params.additive_amp_3_7.value(),
+                additive_amp_3_8: self.params.additive_amp_3_8.value(),
+                additive_amp_3_9: self.params.additive_amp_3_9.value(),
+                additive_amp_3_10: self.params.additive_amp_3_10.value(),
+                additive_amp_3_11: self.params.additive_amp_3_11.value(),
+                additive_amp_3_12: self.params.additive_amp_3_12.value(),
+                additive_amp_3_13: self.params.additive_amp_3_13.value(),
+                additive_amp_3_14: self.params.additive_amp_3_14.value(),
+                additive_amp_3_15: self.params.additive_amp_3_15.value(),
             };
     }
 
@@ -5947,7 +6901,7 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF => self.params.filter_env_peak.value(),
+                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
                                 FilterAlgorithms::TILT => adv_scale_value(
                                     self.params.filter_env_peak.value(),
                                     -19980.0,
@@ -5955,7 +6909,6 @@ impl Actuate {
                                     -5000.0,
                                     5000.0,
                                 ),
-                                FilterAlgorithms::VCF => self.params.filter_env_peak.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -5986,7 +6939,7 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF => self.params.filter_env_peak.value(),
+                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
                                 FilterAlgorithms::TILT => adv_scale_value(
                                     self.params.filter_env_peak.value(),
                                     -19980.0,
@@ -5994,7 +6947,6 @@ impl Actuate {
                                     -5000.0,
                                     5000.0,
                                 ),
-                                FilterAlgorithms::VCF => self.params.filter_env_peak.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -6073,8 +7025,8 @@ impl Actuate {
                         self.params.filter_resonance.value() - filter_resonance_mod,
                         self.params.tilt_filter_type.value(),
                     );
-                    let tilt_out_l = self.tilt_filter_l_1.process(left_input_filter1);
-                    let tilt_out_r = self.tilt_filter_r_1.process(right_input_filter1);
+                    let tilt_out_l = self.tilt_filter_l_1.process(left_input_filter1 * db_to_gain(-12.0));
+                    let tilt_out_r = self.tilt_filter_r_1.process(right_input_filter1 * db_to_gain(-12.0));
                     *left_output += tilt_out_l * self.params.filter_wet.value()
                         + left_input_filter1 * (1.0 - self.params.filter_wet.value());
                     *right_output += tilt_out_r * self.params.filter_wet.value()
@@ -6099,6 +7051,30 @@ impl Actuate {
                         + left_input_filter1 * (1.0 - self.params.filter_wet.value());
                     *right_output += vcf_out_r * self.params.filter_wet.value()
                         + right_input_filter1 * (1.0 - self.params.filter_wet.value());
+                }
+                FilterAlgorithms::V4 => {
+                    self.V4F_l_1.update(
+                        self.params.filter_resonance.value(),
+                        next_filter_step,
+                        self.sample_rate
+                    );
+                    self.V4F_r_1.update(
+                        self.params.filter_resonance.value(),
+                        next_filter_step,
+                        self.sample_rate
+                    );
+                    let v4f_out_l = self.V4F_l_1.process(left_input_filter1);
+                    let v4f_out_r = self.V4F_r_1.process(right_input_filter1);
+                    *left_output += v4f_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
+                    *right_output += v4f_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
+                }
+                FilterAlgorithms::A4I => {
+                    self.A4I_l_1.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
+                    self.A4I_r_1.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
+                    let a4i_out_l = self.A4I_l_1.process(left_input_filter1);
+                    let a4i_out_r = self.A4I_r_1.process(right_input_filter1);
+                    *left_output += a4i_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
+                    *right_output += a4i_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
                 }
             }
         }
@@ -6182,7 +7158,7 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF => self.params.filter_env_peak_2.value(),
+                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
                                 FilterAlgorithms::TILT => adv_scale_value(
                                     self.params.filter_env_peak_2.value(),
                                     -19980.0,
@@ -6190,7 +7166,6 @@ impl Actuate {
                                     -5000.0,
                                     5000.0,
                                 ),
-                                FilterAlgorithms::VCF => self.params.filter_env_peak_2.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -6221,7 +7196,7 @@ impl Actuate {
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF => self.params.filter_env_peak_2.value(),
+                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
                                 FilterAlgorithms::TILT => adv_scale_value(
                                     self.params.filter_env_peak_2.value(),
                                     -19980.0,
@@ -6229,7 +7204,6 @@ impl Actuate {
                                     -5000.0,
                                     5000.0,
                                 ),
-                                FilterAlgorithms::VCF => self.params.filter_env_peak_2.value(),
                             }
                         ))
                     .clamp(20.0, 20000.0),
@@ -6308,8 +7282,8 @@ impl Actuate {
                         self.params.filter_resonance_2.value(),
                         self.params.tilt_filter_type_2.value(),
                     );
-                    let tilt_out_l = self.tilt_filter_l_2.process(left_input_filter2);
-                    let tilt_out_r = self.tilt_filter_r_2.process(right_input_filter2);
+                    let tilt_out_l = self.tilt_filter_l_2.process(left_input_filter2 * db_to_gain(-12.0));
+                    let tilt_out_r = self.tilt_filter_r_2.process(right_input_filter2 * db_to_gain(-12.0));
                     *left_output += tilt_out_l * self.params.filter_wet_2.value()
                         + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
                     *right_output += tilt_out_r * self.params.filter_wet_2.value()
@@ -6334,6 +7308,30 @@ impl Actuate {
                         + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
                     *right_output += vcf_out_r * self.params.filter_wet_2.value()
                         + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
+                }
+                FilterAlgorithms::V4 => {
+                    self.V4F_l_2.update(
+                        self.params.filter_resonance.value(),
+                        next_filter_step,
+                        self.sample_rate
+                    );
+                    self.V4F_r_2.update(
+                        self.params.filter_resonance.value(),
+                        next_filter_step,
+                        self.sample_rate
+                    );
+                    let v4f_out_l = self.V4F_l_2.process(left_input_filter2);
+                    let v4f_out_r = self.V4F_r_2.process(right_input_filter2);
+                    *left_output += v4f_out_l * self.params.filter_wet.value() + left_input_filter2 * (1.0 - self.params.filter_wet.value());
+                    *right_output += v4f_out_r * self.params.filter_wet.value() + right_input_filter2 * (1.0 - self.params.filter_wet.value());
+                }
+                FilterAlgorithms::A4I => {
+                    self.A4I_l_2.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
+                    self.A4I_r_2.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
+                    let a4i_out_l = self.A4I_l_2.process(left_input_filter2);
+                    let a4i_out_r = self.A4I_r_2.process(right_input_filter2);
+                    *left_output += a4i_out_l * self.params.filter_wet.value() + left_input_filter2 * (1.0 - self.params.filter_wet.value());
+                    *right_output += a4i_out_r * self.params.filter_wet.value() + right_input_filter2 * (1.0 - self.params.filter_wet.value());
                 }
             }
         }
@@ -7216,8 +8214,7 @@ lazy_static::lazy_static!(
         limiter_knee: 0.5,
     };
 
-    // This gets updates to the latest preset type each format update
-    static ref ERROR_PRESET: ActuatePresetV130 = ActuatePresetV130 {
+    static ref ERROR_PRESETV130: ActuatePresetV130 = ActuatePresetV130 {
         preset_name: String::from("Error Loading"),
         preset_info: String::from("Corrupt or incompatible versions"),
         preset_category: PresetType::Select,
@@ -7514,7 +8511,355 @@ lazy_static::lazy_static!(
         limiter_knee: 0.5,
     };
 
-    static ref DEFAULT_PRESET: ActuatePresetV130 = ActuatePresetV130 {
+    // This gets updates to the latest preset type each format update
+    static ref ERROR_PRESET: ActuatePresetV131 = ActuatePresetV131 {
+        preset_name: String::from("Error Loading"),
+        preset_info: String::from("Corrupt or incompatible versions"),
+        preset_category: PresetType::Select,
+        tag_acid: false,
+        tag_analog: false,
+        tag_bright: false,
+        tag_chord: false,
+        tag_crisp: false,
+        tag_deep: false,
+        tag_delicate: false,
+        tag_hard: false,
+        tag_harsh: false,
+        tag_lush: false,
+        tag_mellow: false,
+        tag_resonant: false,
+        tag_rich: false,
+        tag_sharp: false,
+        tag_silky: false,
+        tag_smooth: false,
+        tag_soft: false,
+        tag_stab: false,
+        tag_warm: false,
+        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_level: 1.0,
+        mod1_audio_module_routing: AMFilterRouting::Filter1,
+        mod1_loaded_sample: vec![vec![0.0, 0.0]],
+        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod1_loop_wavetable: false,
+        mod1_single_cycle: false,
+        mod1_restretch: true,
+        mod1_prev_restretch: false,
+        mod1_grain_hold: 200,
+        mod1_grain_gap: 200,
+        mod1_start_position: 0.0,
+        mod1_end_position: 1.0,
+        mod1_grain_crossfade: 50,
+        mod1_osc_type: VoiceType::Sine,
+        mod1_osc_octave: 0,
+        mod1_osc_semitones: 0,
+        mod1_osc_detune: 0.0,
+        mod1_osc_attack: 0.0001,
+        mod1_osc_decay: 0.0001,
+        mod1_osc_sustain: 999.9,
+        mod1_osc_release: 5.0,
+        mod1_osc_retrigger: RetriggerStyle::Retrigger,
+        mod1_osc_atk_curve: SmoothStyle::Linear,
+        mod1_osc_dec_curve: SmoothStyle::Linear,
+        mod1_osc_rel_curve: SmoothStyle::Linear,
+        mod1_osc_unison: 1,
+        mod1_osc_unison_detune: 0.0,
+        mod1_osc_stereo: 0.0,
+
+        mod2_audio_module_type: AudioModuleType::Off,
+        mod2_audio_module_level: 1.0,
+        mod2_audio_module_routing: AMFilterRouting::Filter1,
+        mod2_loaded_sample: vec![vec![0.0, 0.0]],
+        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod2_loop_wavetable: false,
+        mod2_single_cycle: false,
+        mod2_restretch: true,
+        mod2_prev_restretch: false,
+        mod2_grain_hold: 200,
+        mod2_grain_gap: 200,
+        mod2_start_position: 0.0,
+        mod2_end_position: 1.0,
+        mod2_grain_crossfade: 50,
+        mod2_osc_type: VoiceType::Sine,
+        mod2_osc_octave: 0,
+        mod2_osc_semitones: 0,
+        mod2_osc_detune: 0.0,
+        mod2_osc_attack: 0.0001,
+        mod2_osc_decay: 0.0001,
+        mod2_osc_sustain: 999.9,
+        mod2_osc_release: 5.0,
+        mod2_osc_retrigger: RetriggerStyle::Retrigger,
+        mod2_osc_atk_curve: SmoothStyle::Linear,
+        mod2_osc_dec_curve: SmoothStyle::Linear,
+        mod2_osc_rel_curve: SmoothStyle::Linear,
+        mod2_osc_unison: 1,
+        mod2_osc_unison_detune: 0.0,
+        mod2_osc_stereo: 0.0,
+
+        mod3_audio_module_type: AudioModuleType::Off,
+        mod3_audio_module_level: 1.0,
+        mod3_audio_module_routing: AMFilterRouting::Filter1,
+        mod3_loaded_sample: vec![vec![0.0, 0.0]],
+        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
+        mod3_loop_wavetable: false,
+        mod3_single_cycle: false,
+        mod3_restretch: true,
+        mod3_prev_restretch: false,
+        mod3_grain_hold: 200,
+        mod3_grain_gap: 200,
+        mod3_start_position: 0.0,
+        mod3_end_position: 1.0,
+        mod3_grain_crossfade: 50,
+        mod3_osc_type: VoiceType::Sine,
+        mod3_osc_octave: 0,
+        mod3_osc_semitones: 0,
+        mod3_osc_detune: 0.0,
+        mod3_osc_attack: 0.0001,
+        mod3_osc_decay: 0.0001,
+        mod3_osc_sustain: 999.9,
+        mod3_osc_release: 5.0,
+        mod3_osc_retrigger: RetriggerStyle::Retrigger,
+        mod3_osc_atk_curve: SmoothStyle::Linear,
+        mod3_osc_dec_curve: SmoothStyle::Linear,
+        mod3_osc_rel_curve: SmoothStyle::Linear,
+        mod3_osc_unison: 1,
+        mod3_osc_unison_detune: 0.0,
+        mod3_osc_stereo: 0.0,
+
+        filter_wet: 1.0,
+        filter_cutoff: 20000.0,
+        filter_resonance: 1.0,
+        filter_res_type: ResonanceType::Default,
+        filter_lp_amount: 1.0,
+        filter_hp_amount: 0.0,
+        filter_bp_amount: 0.0,
+        filter_env_peak: 0.0,
+        filter_env_attack: 0.0,
+        filter_env_decay: 0.0001,
+        filter_env_sustain: 999.9,
+        filter_env_release: 5.0,
+        filter_env_atk_curve: SmoothStyle::Linear,
+        filter_env_dec_curve: SmoothStyle::Linear,
+        filter_env_rel_curve: SmoothStyle::Linear,
+        filter_alg_type: FilterAlgorithms::SVF,
+        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+
+        filter_wet_2: 1.0,
+        filter_cutoff_2: 20000.0,
+        filter_resonance_2: 1.0,
+        filter_res_type_2: ResonanceType::Default,
+        filter_lp_amount_2: 1.0,
+        filter_hp_amount_2: 0.0,
+        filter_bp_amount_2: 0.0,
+        filter_env_peak_2: 0.0,
+        filter_env_attack_2: 0.0,
+        filter_env_decay_2: 0.0001,
+        filter_env_sustain_2: 999.9,
+        filter_env_release_2: 5.0,
+        filter_env_atk_curve_2: SmoothStyle::Linear,
+        filter_env_dec_curve_2: SmoothStyle::Linear,
+        filter_env_rel_curve_2: SmoothStyle::Linear,
+        filter_alg_type_2: FilterAlgorithms::SVF,
+        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+
+        filter_routing: FilterRouting::Parallel,
+        filter_cutoff_link: false,
+
+        pitch_enable: false,
+        pitch_env_atk_curve: SmoothStyle::Linear,
+        pitch_env_dec_curve: SmoothStyle::Linear,
+        pitch_env_rel_curve: SmoothStyle::Linear,
+        pitch_env_attack: 0.0,
+        pitch_env_decay: 300.0,
+        pitch_env_sustain: 0.0,
+        pitch_env_release: 0.0,
+        pitch_env_peak: 0.0,
+        pitch_routing: PitchRouting::Osc1,
+
+        pitch_enable_2: false,
+        pitch_env_peak_2: 0.0,
+        pitch_env_atk_curve_2: SmoothStyle::Linear,
+        pitch_env_dec_curve_2: SmoothStyle::Linear,
+        pitch_env_rel_curve_2: SmoothStyle::Linear,
+        pitch_env_attack_2: 0.0,
+        pitch_env_decay_2: 300.0,
+        pitch_env_release_2: 0.0,
+        pitch_env_sustain_2: 0.0,
+        pitch_routing_2: PitchRouting::Osc1,
+
+        // LFOs
+        lfo1_enable: false,
+        lfo2_enable: false,
+        lfo3_enable: false,
+
+        lfo1_freq: 2.0,
+        lfo1_retrigger: LFOController::LFORetrigger::None,
+        lfo1_sync: true,
+        lfo1_snap: LFOController::LFOSnapValues::Half,
+        lfo1_waveform: LFOController::Waveform::Sine,
+        lfo1_phase: 0.0,
+
+        lfo2_freq: 2.0,
+        lfo2_retrigger: LFOController::LFORetrigger::None,
+        lfo2_sync: true,
+        lfo2_snap: LFOController::LFOSnapValues::Half,
+        lfo2_waveform: LFOController::Waveform::Sine,
+        lfo2_phase: 0.0,
+
+        lfo3_freq: 2.0,
+        lfo3_retrigger: LFOController::LFORetrigger::None,
+        lfo3_sync: true,
+        lfo3_snap: LFOController::LFOSnapValues::Half,
+        lfo3_waveform: LFOController::Waveform::Sine,
+        lfo3_phase: 0.0,
+
+        // Modulations
+        mod_source_1: ModulationSource::None,
+        mod_source_2: ModulationSource::None,
+        mod_source_3: ModulationSource::None,
+        mod_source_4: ModulationSource::None,
+        mod_dest_1: ModulationDestination::None,
+        mod_dest_2: ModulationDestination::None,
+        mod_dest_3: ModulationDestination::None,
+        mod_dest_4: ModulationDestination::None,
+        mod_amount_1: 0.0,
+        mod_amount_2: 0.0,
+        mod_amount_3: 0.0,
+        mod_amount_4: 0.0,
+
+        // 1.2.6
+        fm_one_to_two: 0.0,
+        fm_one_to_three: 0.0,
+        fm_two_to_three: 0.0,
+        fm_cycles: 1,
+        fm_attack: 0.0001,
+        fm_decay: 0.0001,
+        fm_sustain: 999.9,
+        fm_release: 0.0001,
+        fm_attack_curve: SmoothStyle::Linear,
+        fm_decay_curve: SmoothStyle::Linear,
+        fm_release_curve: SmoothStyle::Linear,
+        // 1.2.6
+
+        // EQ
+        pre_use_eq: false,
+        pre_low_freq: 800.0,
+        pre_mid_freq: 3000.0,
+        pre_high_freq: 10000.0,
+        pre_low_gain: 0.0,
+        pre_mid_gain: 0.0,
+        pre_high_gain: 0.0,
+
+        // FX
+        use_fx: true,
+
+        use_compressor: false,
+        comp_amt: 0.5,
+        comp_atk: 0.5,
+        comp_rel: 0.5,
+        comp_drive: 0.5,
+
+        use_abass: false,
+        abass_amount: 0.0011,
+
+        use_saturation: false,
+        sat_amount: 0.0,
+        sat_type: SaturationType::Tape,
+
+        use_delay: false,
+        delay_amount: 0.5,
+        delay_time: DelaySnapValues::Quarter,
+        delay_decay: 0.5,
+        delay_type: DelayType::Stereo,
+
+        use_reverb: false,
+        reverb_model: ReverbModel::Default,
+        reverb_amount: 0.85,
+        reverb_size: 1.0,
+        reverb_feedback: 0.28,
+
+        use_phaser: false,
+        phaser_amount: 0.5,
+        phaser_depth: 0.5,
+        phaser_rate: 0.5,
+        phaser_feedback: 0.5,
+
+        // 1.3.0
+        stereo_algorithm: StereoAlgorithm::Original,
+        use_chorus: false,
+        chorus_amount: 0.8,
+        chorus_range: 0.5,
+        chorus_speed: 0.5,
+        // 1.3.0
+
+        use_buffermod: false,
+        buffermod_amount: 0.5,
+        buffermod_depth: 0.5,
+        buffermod_rate: 0.5,
+        buffermod_spread: 0.0,
+        buffermod_timing: 620.0,
+
+        use_flanger: false,
+        flanger_amount: 0.5,
+        flanger_depth: 0.5,
+        flanger_rate: 0.5,
+        flanger_feedback: 0.5,
+
+        use_limiter: false,
+        limiter_threshold: 0.5,
+        limiter_knee: 0.5,
+
+        // v 1.3.1 Additive fields
+        additive_amp_1_0: 0.0,
+        additive_amp_1_1: 0.0,
+        additive_amp_1_2: 0.0,
+        additive_amp_1_3: 0.0,
+        additive_amp_1_4: 0.0,
+        additive_amp_1_5: 0.0,
+        additive_amp_1_6: 0.0,
+        additive_amp_1_7: 0.0,
+        additive_amp_1_8: 0.0,
+        additive_amp_1_9: 0.0,
+        additive_amp_1_10: 0.0,
+        additive_amp_1_11: 0.0,
+        additive_amp_1_12: 0.0,
+        additive_amp_1_13: 0.0,
+        additive_amp_1_14: 0.0,
+        additive_amp_1_15: 0.0,
+        additive_amp_2_0: 0.0,
+        additive_amp_2_1: 0.0,
+        additive_amp_2_2: 0.0,
+        additive_amp_2_3: 0.0,
+        additive_amp_2_4: 0.0,
+        additive_amp_2_5: 0.0,
+        additive_amp_2_6: 0.0,
+        additive_amp_2_7: 0.0,
+        additive_amp_2_8: 0.0,
+        additive_amp_2_9: 0.0,
+        additive_amp_2_10: 0.0,
+        additive_amp_2_11: 0.0,
+        additive_amp_2_12: 0.0,
+        additive_amp_2_13: 0.0,
+        additive_amp_2_14: 0.0,
+        additive_amp_2_15: 0.0,
+        additive_amp_3_0: 0.0,
+        additive_amp_3_1: 0.0,
+        additive_amp_3_2: 0.0,
+        additive_amp_3_3: 0.0,
+        additive_amp_3_4: 0.0,
+        additive_amp_3_5: 0.0,
+        additive_amp_3_6: 0.0,
+        additive_amp_3_7: 0.0,
+        additive_amp_3_8: 0.0,
+        additive_amp_3_9: 0.0,
+        additive_amp_3_10: 0.0,
+        additive_amp_3_11: 0.0,
+        additive_amp_3_12: 0.0,
+        additive_amp_3_13: 0.0,
+        additive_amp_3_14: 0.0,
+        additive_amp_3_15: 0.0,
+    };
+
+    static ref DEFAULT_PRESET: ActuatePresetV131 = ActuatePresetV131 {
         preset_name: "Default".to_string(),
         preset_info: "Info".to_string(),
         preset_category: PresetType::Select,
@@ -7811,5 +9156,55 @@ lazy_static::lazy_static!(
         use_limiter: false,
         limiter_threshold: 0.5,
         limiter_knee: 0.5,
+
+        // v 1.3.1 Additive fields
+        additive_amp_1_0: 0.0,
+        additive_amp_1_1: 0.0,
+        additive_amp_1_2: 0.0,
+        additive_amp_1_3: 0.0,
+        additive_amp_1_4: 0.0,
+        additive_amp_1_5: 0.0,
+        additive_amp_1_6: 0.0,
+        additive_amp_1_7: 0.0,
+        additive_amp_1_8: 0.0,
+        additive_amp_1_9: 0.0,
+        additive_amp_1_10: 0.0,
+        additive_amp_1_11: 0.0,
+        additive_amp_1_12: 0.0,
+        additive_amp_1_13: 0.0,
+        additive_amp_1_14: 0.0,
+        additive_amp_1_15: 0.0,
+        additive_amp_2_0: 0.0,
+        additive_amp_2_1: 0.0,
+        additive_amp_2_2: 0.0,
+        additive_amp_2_3: 0.0,
+        additive_amp_2_4: 0.0,
+        additive_amp_2_5: 0.0,
+        additive_amp_2_6: 0.0,
+        additive_amp_2_7: 0.0,
+        additive_amp_2_8: 0.0,
+        additive_amp_2_9: 0.0,
+        additive_amp_2_10: 0.0,
+        additive_amp_2_11: 0.0,
+        additive_amp_2_12: 0.0,
+        additive_amp_2_13: 0.0,
+        additive_amp_2_14: 0.0,
+        additive_amp_2_15: 0.0,
+        additive_amp_3_0: 0.0,
+        additive_amp_3_1: 0.0,
+        additive_amp_3_2: 0.0,
+        additive_amp_3_3: 0.0,
+        additive_amp_3_4: 0.0,
+        additive_amp_3_5: 0.0,
+        additive_amp_3_6: 0.0,
+        additive_amp_3_7: 0.0,
+        additive_amp_3_8: 0.0,
+        additive_amp_3_9: 0.0,
+        additive_amp_3_10: 0.0,
+        additive_amp_3_11: 0.0,
+        additive_amp_3_12: 0.0,
+        additive_amp_3_13: 0.0,
+        additive_amp_3_14: 0.0,
+        additive_amp_3_15: 0.0,
     };
 );
