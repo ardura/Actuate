@@ -80,6 +80,7 @@ impl<'a> Widget for AtomicSlimCheckbox<'a> {
         response.widget_info(|| {
             WidgetInfo::selected(
                 WidgetType::Checkbox,
+                true,
                 checked.load(Ordering::SeqCst),
                 text.as_ref().map_or("", |x| x.text()),
             )
@@ -96,6 +97,7 @@ impl<'a> Widget for AtomicSlimCheckbox<'a> {
                 stroke: visuals.bg_stroke,
                 fill_texture_id: TextureId::default(),
                 uv: big_icon_rect.expand(visuals.expansion),
+                blur_width: 0.0,
             });
 
             if checked.load(Ordering::SeqCst) {
@@ -171,6 +173,7 @@ impl<'a> Widget for SlimCheckbox<'a> {
         response.widget_info(|| {
             WidgetInfo::selected(
                 WidgetType::Checkbox,
+                true,
                 *checked,
                 text.as_ref().map_or("", |x| x.text()),
             )
@@ -187,6 +190,7 @@ impl<'a> Widget for SlimCheckbox<'a> {
                 stroke: visuals.fg_stroke,
                 fill_texture_id: TextureId::default(),
                 uv: Rect::ZERO,
+                blur_width: 0.0,
             });
 
             if *checked {

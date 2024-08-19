@@ -5,14 +5,14 @@
 use std::{ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, AtomicU32, Ordering}, Arc, Mutex}};
 use egui_file::{FileDialog, State};
 use nih_plug::{context::gui::AsyncExecutor, editor::Editor};
-use nih_plug_egui::{create_egui_editor, egui::{self, Align2, Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2}, widgets::ParamSlider};
+use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2}, widgets::ParamSlider};
 
 use crate::{
     actuate_enums::{
         FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType}, Actuate, ActuateParams, CustomWidgets::{
             slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, 
             BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, 
-            CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, LOADING_FONT, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
+            CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
 
 pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExecutor<Actuate>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = instance.params.clone();
@@ -30,8 +30,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let AM3: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_3);
 
         let update_current_preset: Arc<AtomicBool> = Arc::clone(&instance.update_current_preset);
-
-        let loading: Arc<AtomicBool> = Arc::clone(&instance.file_dialog);
         let filter_select_outside: Arc<Mutex<UIBottomSelection>> =
             Arc::new(Mutex::new(UIBottomSelection::Filter1));
         let lfo_select_outside: Arc<Mutex<LFOSelect>> = Arc::new(Mutex::new(LFOSelect::INFO));
@@ -114,7 +112,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                     FileDialog::open_file(Some(home_dir.clone()))
-                        .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                        .current_pos([(WIDTH/4) as f32, 10.0])
                         .show_files_filter(preset_filter)
                         .keep_on_top(true)
                         .show_new_folder(false)
@@ -124,7 +122,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let save_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                     FileDialog::save_file(Some(home_dir.clone()))
-                        .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                        .current_pos([(WIDTH/4) as f32, 10.0])
                         .show_files_filter(save_preset_filter)
                         .keep_on_top(true)
                         .show_new_folder(false)
@@ -134,7 +132,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let bank_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                     FileDialog::open_file(Some(home_dir.clone()))
-                        .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                        .current_pos([(WIDTH/4) as f32, 10.0])
                         .show_files_filter(bank_filter)
                         .keep_on_top(true)
                         .show_new_folder(false)
@@ -144,7 +142,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let bank_save_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                     FileDialog::save_file(Some(home_dir.clone()))
-                        .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                        .current_pos([(WIDTH/4) as f32, 10.0])
                         .show_files_filter(save_bank_filter)
                         .keep_on_top(true)
                         .show_new_folder(false)
@@ -155,7 +153,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let load_sample_dialog: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                 FileDialog::open_file(Some(home_dir.clone()))
-                    .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                    .current_pos([(WIDTH/4) as f32, 10.0])
                     .show_files_filter(sample_filter)
                     .keep_on_top(true)
                     .show_new_folder(false)
@@ -196,18 +194,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
                             AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
                            {
-                            // This is manually here to make sure it appears for long loads from different threads
-                            // Create the loading popup here.
-                            let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                            let popup_size = Vec2::new(400.0, 200.0);
-                            let popup_pos = screen_size.center();
-
-                            // Draw the loading popup content here.
-                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
                             let mut AM1_Lock = AM1.lock().unwrap();
 
                             AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
@@ -220,18 +206,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                            (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
                             AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
                            {
-                            // This is manually here to make sure it appears for long loads from different threads
-                            // Create the loading popup here.
-                            let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                            let popup_size = Vec2::new(400.0, 200.0);
-                            let popup_pos = screen_size.center();
-
-                            // Draw the loading popup content here.
-                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
                             let mut AM2_Lock = AM2.lock().unwrap();
 
                             AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
@@ -244,18 +218,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                            (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
                             AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
                            {
-                            // This is manually here to make sure it appears for long loads from different threads
-                            // Create the loading popup here.
-                            let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                            let popup_size = Vec2::new(400.0, 200.0);
-                            let popup_pos = screen_size.center();
-
-                            // Draw the loading popup content here.
-                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
                             let mut AM3_Lock = AM3.lock().unwrap();
 
                             AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
@@ -266,9 +228,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         // Reset our buttons
                         if params.param_next_preset.value() {
                             if current_preset_index < (PRESET_BANK_SIZE - 1) as u32 {
-                                loading.store(true, Ordering::SeqCst);
-                                setter.set_parameter(&params.loading, true);
-
                                 current_preset.store(current_preset_index + 1, Ordering::SeqCst);
 
                                 setter.set_parameter(&params.param_next_preset, false);
@@ -281,18 +240,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 let temp_current_preset = arc_preset.lock().unwrap()[current_preset_index as usize + 1].clone();
                                 *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
                                 *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
-
-                                // This is manually here to make sure it appears for long loads from different threads
-                                // Create the loading popup here.
-                                let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                                let popup_size = Vec2::new(400.0, 200.0);
-                                let popup_pos = screen_size.center();
-
-                                // Draw the loading popup content here.
-                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
 
                                 // GUI thread misses this without this call here for some reason
                                 (
@@ -320,13 +267,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 // This is set for the process thread
                                 reload_entire_preset.store(true, Ordering::SeqCst);
                             }
-                            setter.set_parameter(&params.loading, false);
                         }
                         if params.param_prev_preset.value() {
                             if current_preset_index > 0 {
-                                loading.store(true, Ordering::SeqCst);
-                                setter.set_parameter(&params.loading, true);
-
                                 current_preset.store(current_preset_index - 1, Ordering::SeqCst);
 
                                 setter.set_parameter(&params.param_prev_preset, false);
@@ -339,18 +282,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 let temp_current_preset = arc_preset.lock().unwrap()[current_preset_index as usize - 1].clone();
                                 *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
                                 *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
-
-                                // This is manually here to make sure it appears for long loads from different threads
-                                // Create the loading popup here.
-                                let screen_size = Rect::from_x_y_ranges(
-                                    RangeInclusive::new(0.0, WIDTH as f32),
-                                    RangeInclusive::new(0.0, HEIGHT as f32));
-                                let popup_size = Vec2::new(400.0, 200.0);
-                                let popup_pos = screen_size.center();
-
-                                // Draw the loading popup content here.
-                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
 
                                 // GUI thread misses this without this call here for some reason
                                 (
@@ -378,7 +309,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 // This is set for the process thread
                                 reload_entire_preset.store(true, Ordering::SeqCst);
                             }
-                            setter.set_parameter(&params.loading, false);
                         }
 
                         if update_current_preset.load(Ordering::SeqCst) || params.param_update_current_preset.value() {
@@ -515,14 +445,14 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 (WIDTH as f32/ 2.0) - 330.0,
                                                 (HEIGHT as f32/ 2.0) - 250.0))
                                             .fixed_size(Vec2::new(660.0, 500.0))
-                                            .scroll2([true, true])
+                                            .scroll([true, true])
                                             .enabled(true);
                                         window.show(egui_ctx, |ui| {
                                             ui.visuals_mut().extreme_bg_color = Color32::DARK_GRAY;
                                             let max_rows = PRESET_BANK_SIZE;
 
                                             ui.vertical_centered(|ui| {
-                                                let close_button = ui.button(RichText::new("Cancel")
+                                                let close_button = ui.button(RichText::new("Close Browser")
                                                     .font(FONT)
                                                     .background_color(A_BACKGROUND_COLOR_TOP)
                                                     .color(FONT_COLOR)
@@ -627,26 +557,11 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                         {
                                                             for row in 0..=(max_rows-1) {
                                                                 if ui.button(format!("Load Preset {row}")).clicked() {
-                                                                    loading.store(true, Ordering::SeqCst);
-                                                                    setter.set_parameter(&params.loading, true);
-        
                                                                     current_preset.store(row as u32, Ordering::SeqCst);
                                                                     clear_voices.store(true, Ordering::SeqCst);
         
                                                                     // Move to info tab on preset change
                                                                     *lfo_select.lock().unwrap() = LFOSelect::INFO;
-        
-                                                                    // This is manually here to make sure it appears for long loads from different threads
-                                                                    // Create the loading popup here.
-                                                                    let screen_size = Rect::from_x_y_ranges(
-                                                                    RangeInclusive::new(0.0, WIDTH as f32),
-                                                                    RangeInclusive::new(0.0, HEIGHT as f32));
-                                                                    let popup_size = Vec2::new(400.0, 200.0);
-                                                                    let popup_pos = screen_size.center();
-        
-                                                                    // Draw the loading popup content here.
-                                                                    ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                                                    ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
         
                                                                     // GUI thread misses this without this call here for some reason
                                                                     (
@@ -677,7 +592,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         
                                                                     // This is set for the process thread
                                                                     reload_entire_preset.store(true, Ordering::SeqCst);
-                                                                    setter.set_parameter(&params.loading, false);
                                                                 }
                                                                 ui.label(arc_preset.lock().unwrap()[row].preset_name.clone().trim());
                                                                 ui.label(format!("{:?}",arc_preset.lock().unwrap()[row].preset_category.clone()).trim());
@@ -772,26 +686,11 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                             }
                                                             for r_index in filtered_results.iter() {
                                                                 if ui.button(format!("Load Preset {r_index}")).clicked() {
-                                                                    loading.store(true, Ordering::SeqCst);
-                                                                    setter.set_parameter(&params.loading, true);
-        
                                                                     current_preset.store(*r_index as u32, Ordering::SeqCst);
                                                                     clear_voices.store(true, Ordering::SeqCst);
         
                                                                     // Move to info tab on preset change
                                                                     *lfo_select.lock().unwrap() = LFOSelect::INFO;
-        
-                                                                    // This is manually here to make sure it appears for long loads from different threads
-                                                                    // Create the loading popup here.
-                                                                    let screen_size = Rect::from_x_y_ranges(
-                                                                    RangeInclusive::new(0.0, WIDTH as f32),
-                                                                    RangeInclusive::new(0.0, HEIGHT as f32));
-                                                                    let popup_size = Vec2::new(400.0, 200.0);
-                                                                    let popup_pos = screen_size.center();
-        
-                                                                    // Draw the loading popup content here.
-                                                                    ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                                                    ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
         
                                                                     // GUI thread misses this without this call here for some reason
                                                                     (
@@ -822,7 +721,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         
                                                                     // This is set for the process thread
                                                                     reload_entire_preset.store(true, Ordering::SeqCst);
-                                                                    setter.set_parameter(&params.loading, false);
                                                                 }
                                                                 ui.label(arc_preset.lock().unwrap()[*r_index].preset_name.clone().trim());
                                                                 ui.label(format!("{:?}",arc_preset.lock().unwrap()[*r_index].preset_category.clone()).trim());
@@ -892,7 +790,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 });
 
                                             ui.vertical_centered(|ui| {
-                                                let close_button = ui.button(RichText::new("Cancel")
+                                                let close_button = ui.button(RichText::new("Close Browser")
                                                     .font(FONT)
                                                     .background_color(A_BACKGROUND_COLOR_TOP)
                                                     .color(FONT_COLOR)
@@ -1268,6 +1166,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    true,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1279,6 +1178,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1290,6 +1190,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1303,6 +1204,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    true,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1314,6 +1216,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1325,6 +1228,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1338,6 +1242,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    true,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1349,6 +1254,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1360,6 +1266,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1373,6 +1280,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    true,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1384,6 +1292,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1395,6 +1304,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -2612,6 +2522,7 @@ A4I: Averaged 4 Pole Integrator".to_string());
                                                                 5.1,
                                                                 2.0,
                                                                 ButtonLayout::HorizontalInline,
+                                                                true,
                                                             )
                                                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                             .with_line_color(YELLOW_MUSTARD),
@@ -2623,6 +2534,7 @@ A4I: Averaged 4 Pole Integrator".to_string());
                                                                 5.1,
                                                                 2.0,
                                                                 ButtonLayout::HorizontalInline,
+                                                                false,
                                                             )
                                                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                             .with_line_color(YELLOW_MUSTARD),
@@ -2634,6 +2546,7 @@ A4I: Averaged 4 Pole Integrator".to_string());
                                                                 5.1,
                                                                 2.0,
                                                                 ButtonLayout::HorizontalInline,
+                                                                false,
                                                             )
                                                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                             .with_line_color(YELLOW_MUSTARD),
@@ -3087,19 +3000,6 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                     setter.set_parameter(&params.param_import_preset, false);
 
                                                                     drop(locked_lib);
-                                                                    
-                                                                    // PRESET LOAD
-                                                                    // This is manually here to make sure it appears for long loads from different threads
-                                                                    // Create the loading popup here.
-                                                                    let screen_size = Rect::from_x_y_ranges(
-                                                                    RangeInclusive::new(0.0, WIDTH as f32),
-                                                                    RangeInclusive::new(0.0, HEIGHT as f32));
-                                                                    let popup_size = Vec2::new(400.0, 200.0);
-                                                                    let popup_pos = screen_size.center();
-                                                                
-                                                                    // Draw the loading popup content here.
-                                                                    ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                                                    ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
                                                                 
                                                                     // GUI thread misses this without this call here for some reason
                                                                     (
@@ -3178,19 +3078,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                         if let Some(dialog) = &mut dvar {
                                                             if dialog.show(egui_ctx).selected() {
                                                               if let Some(file) = dialog.path() {
-                                                                let default_name: String;
-                                                                // This is manually here to make sure it appears for long loads from different threads
-                                                                // Create the loading popup here.
-                                                                let screen_size = Rect::from_x_y_ranges(
-                                                                RangeInclusive::new(0.0, WIDTH as f32),
-                                                                RangeInclusive::new(0.0, HEIGHT as f32));
-                                                                let popup_size = Vec2::new(400.0, 200.0);
-                                                                let popup_pos = screen_size.center();
-                                                                
-                                                                // Draw the loading popup content here.
-                                                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-                                                                
+                                                                let default_name: String;                                                                
                                                                 let opened_file = Some(file.to_path_buf());
                                                                 let unserialized: Vec<ActuatePresetV131>;
                                                                 (default_name, unserialized) = Actuate::load_preset_bank(opened_file);
@@ -3292,6 +3180,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                     .auto_shrink([false; 2])
                                                     .max_height(200.0)
                                                     .max_width(400.0)
+                                                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                                                     .show(ui, |ui|{
                                                         ui.set_min_width(400.0);
                                                         ui.vertical(|ui|{
@@ -3613,19 +3502,6 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                     });
                                 });
                             });
-
-                        if params.loading.value() || loading.load(Ordering::SeqCst) {
-                            // Create the loading popup here.
-                            let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                            let popup_size = Vec2::new(400.0, 200.0);
-                            let popup_pos = screen_size.center();
-
-                            // Draw the loading popup content here.
-                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-                        }
 
                         // Sanity resetting inbetween channel processing
                         if params.param_next_preset.value() {

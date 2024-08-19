@@ -25,7 +25,7 @@ use egui_file::{FileDialog, State};
 use nih_plug::{
     params::enums::Enum, prelude::{NoteEvent, ParamSetter, Smoother, SmoothingStyle}, util
 };
-use nih_plug_egui::egui::{Pos2, Rect, RichText, Rounding, ScrollArea, Ui};
+use nih_plug_egui::egui::{self, Pos2, Rect, RichText, Rounding, ScrollArea, Ui};
 use pitch_shift::PitchShifter;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -757,39 +757,46 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         );
 
                         // Curves
-                        ui.add(
-                            BeizerButton::BeizerButton::for_param(
-                                osc_atk_curve,
-                                setter,
-                                3.2,
-                                5.3,
-                                ButtonLayout::Vertical,
-                            )
-                            .with_background_color(MEDIUM_GREY_UI_COLOR)
-                            .with_line_color(YELLOW_MUSTARD),
-                        ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
-                        ui.add(
-                            BeizerButton::BeizerButton::for_param(
-                                osc_dec_curve,
-                                setter,
-                                3.2,
-                                5.3,
-                                ButtonLayout::Vertical,
-                            )
-                            .with_background_color(MEDIUM_GREY_UI_COLOR)
-                            .with_line_color(YELLOW_MUSTARD),
-                        ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
-                        ui.add(
-                            BeizerButton::BeizerButton::for_param(
-                                osc_rel_curve,
-                                setter,
-                                3.2,
-                                5.3,
-                                ButtonLayout::Vertical,
-                            )
-                            .with_background_color(MEDIUM_GREY_UI_COLOR)
-                            .with_line_color(YELLOW_MUSTARD),
-                        ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                        ui.vertical(|ui|{
+                            ui.add(
+                                BeizerButton::BeizerButton::for_param(
+                                    osc_atk_curve,
+                                    setter,
+                                    //3.2,
+                                    //5.3,
+                                    5.1,
+                                    1.66,
+                                    ButtonLayout::HorizontalInline,
+                                    true,
+                                )
+                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                .with_line_color(YELLOW_MUSTARD),
+                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
+                            ui.add(
+                                BeizerButton::BeizerButton::for_param(
+                                    osc_dec_curve,
+                                    setter,
+                                    5.1,
+                                    1.66,
+                                    ButtonLayout::HorizontalInline,
+                                    false,
+                                )
+                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                .with_line_color(YELLOW_MUSTARD),
+                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
+                            ui.add(
+                                BeizerButton::BeizerButton::for_param(
+                                    osc_rel_curve,
+                                    setter,
+                                    5.1,
+                                    1.66,
+                                    ButtonLayout::HorizontalInline,
+                                    false,
+                                )
+                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                .with_line_color(YELLOW_MUSTARD),
+                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                        });
                     });
                 });
                 ui.add_space(20.0);
@@ -821,7 +828,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                                     *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
                                                     setter.set_parameter(&params.load_sample_1, false);
                                                     dialog.set_path(dialog.directory().to_path_buf());
-                                                    dialog.deselect();
+                                                    //dialog.deselect();
                                                 }
                                             },
                                             2 => {
@@ -833,7 +840,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                                     *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
                                                     setter.set_parameter(&params.load_sample_2, false);
                                                     dialog.set_path(dialog.directory().to_path_buf());
-                                                    dialog.deselect();
+                                                    //dialog.deselect();
                                                 }
                                             },
                                             3 => {
@@ -845,7 +852,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                                     *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
                                                     setter.set_parameter(&params.load_sample_3, false);
                                                     dialog.set_path(dialog.directory().to_path_buf());
-                                                    dialog.deselect();
+                                                    //dialog.deselect();
                                                 }
                                             },
                                             _ => {}
@@ -859,17 +866,17 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                             1 => {
                                                 setter.set_parameter(&params.load_sample_1, false);
                                                 dialog.set_path(dialog.directory().to_path_buf());
-                                                dialog.deselect();
+                                                //dialog.deselect();
                                             },
                                             2 => {
                                                 setter.set_parameter(&params.load_sample_2, false);
                                                 dialog.set_path(dialog.directory().to_path_buf());
-                                                dialog.deselect();
+                                                //dialog.deselect();
                                             },
                                             3 => {
                                                 setter.set_parameter(&params.load_sample_3, false);
                                                 dialog.set_path(dialog.directory().to_path_buf());
-                                                dialog.deselect();
+                                                //dialog.deselect();
                                             },
                                             _ => {}
                                         }
@@ -1015,39 +1022,44 @@ Random: Sample uses a new random position every note".to_string());
                             .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                     );
                     // Curves
-                    ui.add(
-                        BeizerButton::BeizerButton::for_param(
-                            osc_atk_curve,
-                            setter,
-                            3.2,
-                            5.3,
-                            ButtonLayout::Vertical,
-                        )
-                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                        .with_line_color(YELLOW_MUSTARD),
-                    ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
-                    ui.add(
-                        BeizerButton::BeizerButton::for_param(
-                            osc_dec_curve,
-                            setter,
-                            3.2,
-                            5.3,
-                            ButtonLayout::Vertical,
-                        )
-                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                        .with_line_color(YELLOW_MUSTARD),
-                    ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
-                    ui.add(
-                        BeizerButton::BeizerButton::for_param(
-                            osc_rel_curve,
-                            setter,
-                            3.2,
-                            5.3,
-                            ButtonLayout::Vertical,
-                        )
-                        .with_background_color(MEDIUM_GREY_UI_COLOR)
-                        .with_line_color(YELLOW_MUSTARD),
-                    ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                    ui.vertical(|ui|{
+                        ui.add(
+                            BeizerButton::BeizerButton::for_param(
+                                osc_atk_curve,
+                                setter,
+                                5.1,
+                                1.66,
+                                ButtonLayout::HorizontalInline,
+                                true,
+                            )
+                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                            .with_line_color(YELLOW_MUSTARD),
+                        ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
+                        ui.add(
+                            BeizerButton::BeizerButton::for_param(
+                                osc_dec_curve,
+                                setter,
+                                5.1,
+                                1.66,
+                                ButtonLayout::HorizontalInline,
+                                false,
+                            )
+                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                            .with_line_color(YELLOW_MUSTARD),
+                        ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
+                        ui.add(
+                            BeizerButton::BeizerButton::for_param(
+                                osc_rel_curve,
+                                setter,
+                                5.1,
+                                1.66,
+                                ButtonLayout::HorizontalInline,
+                                false,
+                            )
+                            .with_background_color(MEDIUM_GREY_UI_COLOR)
+                            .with_line_color(YELLOW_MUSTARD),
+                        ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                    });
                 });
                 ui.add_space(20.0);
             }
@@ -1080,7 +1092,7 @@ Random: Sample uses a new random position every note".to_string());
                                                     *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
                                                     setter.set_parameter(&params.load_sample_1, false);
                                                     dialog.set_path(dialog.directory().to_path_buf());
-                                                    dialog.deselect();
+                                                    //dialog.deselect();
                                                 }
                                             },
                                             2 => {
@@ -1092,7 +1104,7 @@ Random: Sample uses a new random position every note".to_string());
                                                     *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
                                                     setter.set_parameter(&params.load_sample_2, false);
                                                     dialog.set_path(dialog.directory().to_path_buf());
-                                                    dialog.deselect();
+                                                    //dialog.deselect();
                                                 }
                                             },
                                             3 => {
@@ -1104,7 +1116,7 @@ Random: Sample uses a new random position every note".to_string());
                                                     *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
                                                     setter.set_parameter(&params.load_sample_3, false);
                                                     dialog.set_path(dialog.directory().to_path_buf());
-                                                    dialog.deselect();
+                                                    //dialog.deselect();
                                                 }
                                             },
                                             _ => {}
@@ -1118,17 +1130,17 @@ Random: Sample uses a new random position every note".to_string());
                                             1 => {
                                                 setter.set_parameter(&params.load_sample_1, false);
                                                 dialog.set_path(dialog.directory().to_path_buf());
-                                                dialog.deselect();
+                                                //dialog.deselect();
                                             },
                                             2 => {
                                                 setter.set_parameter(&params.load_sample_2, false);
                                                 dialog.set_path(dialog.directory().to_path_buf());
-                                                dialog.deselect();
+                                                //dialog.deselect();
                                             },
                                             3 => {
                                                 setter.set_parameter(&params.load_sample_3, false);
                                                 dialog.set_path(dialog.directory().to_path_buf());
-                                                dialog.deselect();
+                                                //dialog.deselect();
                                             },
                                             _ => {}
                                         }
@@ -1311,39 +1323,44 @@ Random: Sample uses a new random position every note".to_string());
                                 .override_colors(LIGHTER_GREY_UI_COLOR, YELLOW_MUSTARD),
                         );
                         // Curves
-                        ui.add(
-                            BeizerButton::BeizerButton::for_param(
-                                osc_atk_curve,
-                                setter,
-                                3.2,
-                                5.3,
-                                ButtonLayout::Vertical,
-                            )
-                            .with_background_color(MEDIUM_GREY_UI_COLOR)
-                            .with_line_color(YELLOW_MUSTARD),
-                        ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
-                        ui.add(
-                            BeizerButton::BeizerButton::for_param(
-                                osc_dec_curve,
-                                setter,
-                                3.2,
-                                5.3,
-                                ButtonLayout::Vertical,
-                            )
-                            .with_background_color(MEDIUM_GREY_UI_COLOR)
-                            .with_line_color(YELLOW_MUSTARD),
-                        ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
-                        ui.add(
-                            BeizerButton::BeizerButton::for_param(
-                                osc_rel_curve,
-                                setter,
-                                3.2,
-                                5.3,
-                                ButtonLayout::Vertical,
-                            )
-                            .with_background_color(MEDIUM_GREY_UI_COLOR)
-                            .with_line_color(YELLOW_MUSTARD),
-                        ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                        ui.vertical(|ui|{
+                            ui.add(
+                                BeizerButton::BeizerButton::for_param(
+                                    osc_atk_curve,
+                                    setter,
+                                    5.1,
+                                    1.66,
+                                    ButtonLayout::HorizontalInline,
+                                    true,
+                                )
+                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                .with_line_color(YELLOW_MUSTARD),
+                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
+                            ui.add(
+                                BeizerButton::BeizerButton::for_param(
+                                    osc_dec_curve,
+                                    setter,
+                                    5.1,
+                                    1.66,
+                                    ButtonLayout::HorizontalInline,
+                                    false,
+                                )
+                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                .with_line_color(YELLOW_MUSTARD),
+                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
+                            ui.add(
+                                BeizerButton::BeizerButton::for_param(
+                                    osc_rel_curve,
+                                    setter,
+                                    5.1,
+                                    1.66,
+                                    ButtonLayout::HorizontalInline,
+                                    false,
+                                )
+                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                .with_line_color(YELLOW_MUSTARD),
+                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                        });
                     });
                 });
             }
@@ -1358,6 +1375,7 @@ Random: Sample uses a new random position every note".to_string());
                         .drag_to_scroll(true)
                         .enable_scrolling(true)
                         .hscroll(true)
+                        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                         .max_width(WIDTH as f32 - 270.0)
                         .show(ui, |ui| {
                         // Additive Amplitude
@@ -1665,39 +1683,44 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         );
 
                         // Curves
-                        ui.add(
-                            BeizerButton::BeizerButton::for_param(
-                                osc_atk_curve,
-                                setter,
-                                3.2,
-                                5.3,
-                                ButtonLayout::Vertical,
-                            )
-                            .with_background_color(MEDIUM_GREY_UI_COLOR)
-                            .with_line_color(YELLOW_MUSTARD),
-                        ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
-                        ui.add(
-                            BeizerButton::BeizerButton::for_param(
-                                osc_dec_curve,
-                                setter,
-                                3.2,
-                                5.3,
-                                ButtonLayout::Vertical,
-                            )
-                            .with_background_color(MEDIUM_GREY_UI_COLOR)
-                            .with_line_color(YELLOW_MUSTARD),
-                        ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
-                        ui.add(
-                            BeizerButton::BeizerButton::for_param(
-                                osc_rel_curve,
-                                setter,
-                                3.2,
-                                5.3,
-                                ButtonLayout::Vertical,
-                            )
-                            .with_background_color(MEDIUM_GREY_UI_COLOR)
-                            .with_line_color(YELLOW_MUSTARD),
-                        ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                        ui.vertical(|ui|{
+                            ui.add(
+                                BeizerButton::BeizerButton::for_param(
+                                    osc_atk_curve,
+                                    setter,
+                                    5.1,
+                                    1.66,
+                                    ButtonLayout::HorizontalInline,
+                                    true,
+                                )
+                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                .with_line_color(YELLOW_MUSTARD),
+                            ).on_hover_text_at_pointer("The behavior of Attack movement in the envelope".to_string());
+                            ui.add(
+                                BeizerButton::BeizerButton::for_param(
+                                    osc_dec_curve,
+                                    setter,
+                                    5.1,
+                                    1.66,
+                                    ButtonLayout::HorizontalInline,
+                                    false,
+                                )
+                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                .with_line_color(YELLOW_MUSTARD),
+                            ).on_hover_text_at_pointer("The behavior of Decay movement in the envelope".to_string());
+                            ui.add(
+                                BeizerButton::BeizerButton::for_param(
+                                    osc_rel_curve,
+                                    setter,
+                                    5.1,
+                                    1.66,
+                                    ButtonLayout::HorizontalInline,
+                                    false,
+                                )
+                                .with_background_color(MEDIUM_GREY_UI_COLOR)
+                                .with_line_color(YELLOW_MUSTARD),
+                            ).on_hover_text_at_pointer("The behavior of Release movement in the envelope".to_string());
+                        });
                     });
                     });
                 });

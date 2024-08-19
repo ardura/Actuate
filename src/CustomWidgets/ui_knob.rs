@@ -11,7 +11,7 @@ use lazy_static::lazy_static;
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
     self,
-    epaint::{CircleShape, PathShape},
+    epaint::{CircleShape, PathShape, PathStroke},
     pos2, Align2, Color32, FontId, Pos2, Rect, Response, Rgba, Rounding, Sense, Shape, Stroke, Ui,
     Vec2, Widget,
 };
@@ -437,7 +437,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                     ),
                     closed: false,
                     fill: self.fill_color.linear_multiply(0.7),
-                    stroke: outline_stroke,
+                    stroke: outline_stroke.into(),
                 });
                 painter.add(outline_shape);
             }
@@ -456,7 +456,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: arc_stroke,
+                stroke: arc_stroke.into(),
             });
             painter.add(shape);
 
@@ -520,7 +520,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g2 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.20)
@@ -540,7 +540,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g3 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.18)
@@ -560,7 +560,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g4 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.16)
@@ -580,7 +580,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g5 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.14)
@@ -600,7 +600,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g6 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.12)
@@ -620,7 +620,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g7 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.10)
@@ -640,7 +640,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g8 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.08)
@@ -660,7 +660,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g9 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.06)
@@ -680,7 +680,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g10 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.04)
@@ -700,7 +700,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: Color32::TRANSPARENT,
-                stroke: Stroke::new(
+                stroke: PathStroke::new(
                     ball_width * 3.0,
                     if g11 > 0.0 {
                         Color32::DARK_GRAY.gamma_multiply(0.02)
@@ -721,7 +721,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ),
                 closed: false,
                 fill: self.line_color,
-                stroke: Stroke::new(ball_width * 3.0, self.line_color),
+                stroke: PathStroke::new(ball_width * 3.0, self.line_color),
             });
             painter.add(line_shape);
 
@@ -741,8 +741,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ui.allocate_rect(
                     Rect::from_center_size(center, Vec2::new(self.radius * 2.0, self.radius * 2.0)),
                     Sense::hover(),
-                )
-                .on_hover_text_at_pointer(self.hover_text_content);
+                ).on_hover_text_at_pointer(self.hover_text_content);
             }
 
             // Label text from response rect bound
