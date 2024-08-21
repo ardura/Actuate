@@ -11,8 +11,8 @@ dependencies = [
  "flate2",
  "hound",
  "lazy_static",
- "nih_plug 0.0.0 (git+https://github.com/ardura/nih-plug.git?rev=9d9d5f9710daeadfb2eba3859088b4bea196b904)",
- "nih_plug_egui 0.0.0 (git+https://github.com/ardura/nih-plug.git?rev=9d9d5f9710daeadfb2eba3859088b4bea196b904)",
+ "nih_plug 0.0.0 (git+https://github.com/ardura/nih-plug.git?rev=30502a623d1eef5eed4e043a1977baddf4cb6343)",
+ "nih_plug_egui 0.0.0 (git+https://github.com/ardura/nih-plug.git?rev=30502a623d1eef5eed4e043a1977baddf4cb6343)",
  "num-complex",
  "num-traits",
  "once_cell",
@@ -471,6 +471,22 @@ dependencies = [
 [[package]]
 name = "egui-baseview"
 version = "0.2.0"
+source = "git+https://github.com/ardura/egui-baseview.git?rev=0af46f14ff6f1cc18ef6feb9d62e278935079ba2#0af46f14ff6f1cc18ef6feb9d62e278935079ba2"
+dependencies = [
+ "baseview",
+ "copypasta",
+ "egui",
+ "egui_glow",
+ "keyboard-types",
+ "log",
+ "open",
+ "raw-window-handle",
+ "thiserror",
+]
+
+[[package]]
+name = "egui-baseview"
+version = "0.2.0"
 source = "git+https://github.com/ardura/egui-baseview.git?rev=bfb062bdda0c3bb38018b1338b78687be4e4a596#bfb062bdda0c3bb38018b1338b78687be4e4a596"
 dependencies = [
  "baseview",
@@ -487,7 +503,7 @@ dependencies = [
 [[package]]
 name = "egui_file"
 version = "0.18.0"
-source = "git+https://github.com/ardura/egui_file.git?rev=72d857a3689e34f1098e0a4435a82e04746ea9f7#72d857a3689e34f1098e0a4435a82e04746ea9f7"
+source = "git+https://github.com/ardura/egui_file.git?rev=eabe829cbaab41eebe6fbe19797d0fbbea23be7d#eabe829cbaab41eebe6fbe19797d0fbbea23be7d"
 dependencies = [
  "nih_plug_egui 0.0.0 (git+https://github.com/ardura/nih-plug.git?rev=dcbcf2a7e3f013cfa5f2b63e1a65ae16122d5535)",
 ]
@@ -812,7 +828,7 @@ dependencies = [
 [[package]]
 name = "nih_plug"
 version = "0.0.0"
-source = "git+https://github.com/ardura/nih-plug.git?rev=9d9d5f9710daeadfb2eba3859088b4bea196b904#9d9d5f9710daeadfb2eba3859088b4bea196b904"
+source = "git+https://github.com/ardura/nih-plug.git?rev=30502a623d1eef5eed4e043a1977baddf4cb6343#30502a623d1eef5eed4e043a1977baddf4cb6343"
 dependencies = [
  "anyhow",
  "anymap",
@@ -830,7 +846,7 @@ dependencies = [
  "log",
  "midi-consts",
  "nih_log",
- "nih_plug_derive 0.1.0 (git+https://github.com/ardura/nih-plug.git?rev=9d9d5f9710daeadfb2eba3859088b4bea196b904)",
+ "nih_plug_derive 0.1.0 (git+https://github.com/ardura/nih-plug.git?rev=30502a623d1eef5eed4e043a1977baddf4cb6343)",
  "objc",
  "parking_lot",
  "raw-window-handle",
@@ -874,7 +890,7 @@ dependencies = [
 [[package]]
 name = "nih_plug_derive"
 version = "0.1.0"
-source = "git+https://github.com/ardura/nih-plug.git?rev=9d9d5f9710daeadfb2eba3859088b4bea196b904#9d9d5f9710daeadfb2eba3859088b4bea196b904"
+source = "git+https://github.com/ardura/nih-plug.git?rev=30502a623d1eef5eed4e043a1977baddf4cb6343#30502a623d1eef5eed4e043a1977baddf4cb6343"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -894,13 +910,13 @@ dependencies = [
 [[package]]
 name = "nih_plug_egui"
 version = "0.0.0"
-source = "git+https://github.com/ardura/nih-plug.git?rev=9d9d5f9710daeadfb2eba3859088b4bea196b904#9d9d5f9710daeadfb2eba3859088b4bea196b904"
+source = "git+https://github.com/ardura/nih-plug.git?rev=30502a623d1eef5eed4e043a1977baddf4cb6343#30502a623d1eef5eed4e043a1977baddf4cb6343"
 dependencies = [
  "baseview",
  "crossbeam",
- "egui-baseview",
+ "egui-baseview 0.2.0 (git+https://github.com/ardura/egui-baseview.git?rev=0af46f14ff6f1cc18ef6feb9d62e278935079ba2)",
  "lazy_static",
- "nih_plug 0.0.0 (git+https://github.com/ardura/nih-plug.git?rev=9d9d5f9710daeadfb2eba3859088b4bea196b904)",
+ "nih_plug 0.0.0 (git+https://github.com/ardura/nih-plug.git?rev=30502a623d1eef5eed4e043a1977baddf4cb6343)",
  "parking_lot",
  "raw-window-handle",
  "serde",
@@ -913,7 +929,7 @@ source = "git+https://github.com/ardura/nih-plug.git?rev=dcbcf2a7e3f013cfa5f2b63
 dependencies = [
  "baseview",
  "crossbeam",
- "egui-baseview",
+ "egui-baseview 0.2.0 (git+https://github.com/ardura/egui-baseview.git?rev=bfb062bdda0c3bb38018b1338b78687be4e4a596)",
  "lazy_static",
  "nih_plug 0.0.0 (git+https://github.com/ardura/nih-plug.git?rev=dcbcf2a7e3f013cfa5f2b63e1a65ae16122d5535)",
  "parking_lot",

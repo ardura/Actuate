@@ -446,6 +446,8 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 (HEIGHT as f32/ 2.0) - 250.0))
                                             .fixed_size(Vec2::new(660.0, 500.0))
                                             .scroll([true, true])
+                                            .fade_in(false)
+                                            .fade_out(false)
                                             .enabled(true);
                                         window.show(egui_ctx, |ui| {
                                             ui.visuals_mut().extreme_bg_color = Color32::DARK_GRAY;

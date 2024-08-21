@@ -9,6 +9,8 @@ use nih_plug_egui::egui::{
     Align2, Color32, FontId, Pos2, Rect, Response, Rounding, Shape, Stroke, Ui, Vec2, Widget,
 };
 
+// This allow is here since Actuate ended up only using HorizontalInline
+#[allow(dead_code)]
 pub enum ButtonLayout {
     HorizontalInline,
     Vertical,
