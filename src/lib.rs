@@ -162,6 +162,11 @@ pub struct Actuate {
     mod_override_dest_4: Arc<Mutex<ModulationDestination>>,
     preset_category_override: Arc<Mutex<PresetType>>,
 
+    // Other overrides for preset loading
+    gen_1_routing_override: Arc<Mutex<AMFilterRouting>>,
+    gen_2_routing_override: Arc<Mutex<AMFilterRouting>>,
+    gen_3_routing_override: Arc<Mutex<AMFilterRouting>>,
+
     // Preset Lib Default
     preset_lib_name: Arc<Mutex<String>>,
     preset_name: Arc<Mutex<String>>,
@@ -375,6 +380,9 @@ impl Default for Actuate {
             mod_override_dest_3: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
             mod_override_dest_4: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
             preset_category_override: Arc::new(Mutex::new(PresetType::Select)),
+            gen_1_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
+            gen_2_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
+            gen_3_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
 
             // Preset Library DEFAULT
             preset_lib_name: Arc::new(Mutex::new(String::from("Default"))),
@@ -5208,7 +5216,7 @@ impl Actuate {
             let mut right_output: f32 = 0.0;
 
             match self.params.audio_module_1_routing.value() {
-                AMFilterRouting::Bypass => {
+                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
                     left_output += wave1_l;
                     right_output += wave1_r;
                 },
@@ -5229,7 +5237,7 @@ impl Actuate {
             }
             //#[allow(unused_assignments)]
             match self.params.audio_module_2_routing.value() {
-                AMFilterRouting::Bypass => {
+                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
                     left_output += wave2_l;
                     right_output += wave2_r;
                 },
@@ -5250,7 +5258,7 @@ impl Actuate {
             }
             //#[allow(unused_assignments)]
             match self.params.audio_module_3_routing.value() {
-                AMFilterRouting::Bypass => {
+                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
                     left_output += wave3_l;
                     right_output += wave3_r;
                 },
@@ -5879,6 +5887,9 @@ impl Actuate {
         ModulationDestination,
         ModulationDestination,
         PresetType,
+        AMFilterRouting,
+        AMFilterRouting,
+        AMFilterRouting,
     ) {
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset[current_preset_index as usize];
@@ -6051,6 +6062,9 @@ impl Actuate {
         let mod_dest_2_override = loaded_preset.mod_dest_2.clone();
         let mod_dest_3_override = loaded_preset.mod_dest_3.clone();
         let mod_dest_4_override = loaded_preset.mod_dest_4.clone();
+        let gen_1_routing_override = loaded_preset.mod1_audio_module_routing.clone();
+        let gen_2_routing_override = loaded_preset.mod2_audio_module_routing.clone();
+        let gen_3_routing_override = loaded_preset.mod3_audio_module_routing.clone();
 
         setter.set_parameter(&params.use_fx, loaded_preset.use_fx);
         setter.set_parameter(&params.pre_use_eq, loaded_preset.pre_use_eq);
@@ -6401,6 +6415,9 @@ impl Actuate {
             mod_dest_3_override,
             mod_dest_4_override,
             preset_category_override,
+            gen_1_routing_override,
+            gen_2_routing_override,
+            gen_3_routing_override,
         )
     }
 

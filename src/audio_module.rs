@@ -587,7 +587,7 @@ impl AudioModule {
                     ui.add_space(1.0);
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
-                            let osc_1_type_knob = ui_knob::ArcKnob::for_param(
+                            /*let osc_1_type_knob = ui_knob::ArcKnob::for_param(
                                 osc_voice,
                                 setter,
                                 KNOB_SIZE,
@@ -599,6 +599,7 @@ impl AudioModule {
                             .set_text_size(TEXT_SIZE)
                             .set_hover_text("Oscillator wave form type".to_string());
                             ui.add(osc_1_type_knob);
+                            */
 
                             let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
                                 osc_retrigger,

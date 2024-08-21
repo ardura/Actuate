@@ -9,7 +9,7 @@ use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichTe
 
 use crate::{
     actuate_enums::{
-        FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType}, Actuate, ActuateParams, CustomWidgets::{
+        AMFilterRouting, FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType}, Actuate, ActuateParams, CustomWidgets::{
             slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, 
             BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, 
             CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
@@ -49,6 +49,12 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             Arc::new(Mutex::new(ModulationDestination::None));
         let mod_dest_4_tracker_outside: Arc<Mutex<ModulationDestination>> =
             Arc::new(Mutex::new(ModulationDestination::None));
+        let gen_1_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
+            Arc::new(Mutex::new(AMFilterRouting::Filter1));
+        let gen_2_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
+            Arc::new(Mutex::new(AMFilterRouting::Filter1));
+        let gen_3_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
+            Arc::new(Mutex::new(AMFilterRouting::Filter1));
 
         let preset_category_tracker_outside: Arc<Mutex<PresetType>> =
             Arc::new(Mutex::new(PresetType::Select));
@@ -62,6 +68,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let mod_dest_override_3 = instance.mod_override_dest_3.clone();
         let mod_dest_override_4 = instance.mod_override_dest_4.clone();
         let preset_category_override = instance.preset_category_override.clone();
+        let gen_1_routing_override_set = instance.gen_1_routing_override.clone();
+        let gen_2_routing_override_set = instance.gen_2_routing_override.clone();
+        let gen_3_routing_override_set = instance.gen_3_routing_override.clone();
 
         let filter_acid = instance.filter_acid.clone();
         let filter_analog = instance.filter_analog.clone();
@@ -180,6 +189,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         let mod_dest_2_tracker = mod_dest_2_tracker_outside.clone();
                         let mod_dest_3_tracker = mod_dest_3_tracker_outside.clone();
                         let mod_dest_4_tracker = mod_dest_4_tracker_outside.clone();
+                        let gen_1_filter_tracker = gen_1_filter_tracker_outside.clone();
+                        let gen_2_filter_tracker = gen_2_filter_tracker_outside.clone();
+                        let gen_3_filter_tracker = gen_3_filter_tracker_outside.clone();
                         let preset_category_tracker = preset_category_tracker_outside.clone();
                         let preset_lib_name_tracker = arc_preset_lib_name.clone();
 
@@ -252,6 +264,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     *mod_dest_override_3.lock().unwrap(),
                                     *mod_dest_override_4.lock().unwrap(),
                                     *preset_category_override.lock().unwrap(),
+                                    *gen_1_routing_override_set.lock().unwrap(),
+                                    *gen_2_routing_override_set.lock().unwrap(),
+                                    *gen_3_routing_override_set.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -294,6 +309,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     *mod_dest_override_3.lock().unwrap(),
                                     *mod_dest_override_4.lock().unwrap(),
                                     *preset_category_override.lock().unwrap(),
+                                    *gen_1_routing_override_set.lock().unwrap(),
+                                    *gen_2_routing_override_set.lock().unwrap(),
+                                    *gen_3_routing_override_set.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -357,21 +375,21 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
-                                RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.23)),
+                                RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.25)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
-                                RangeInclusive::new(HEIGHT as f32 * 0.24, HEIGHT as f32 * 0.41)),
+                                RangeInclusive::new(HEIGHT as f32 * 0.26, HEIGHT as f32 * 0.45)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
-                                RangeInclusive::new(HEIGHT as f32 * 0.42, HEIGHT as f32 * 0.59)),
+                                RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.65)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
@@ -576,6 +594,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                         *mod_dest_override_3.lock().unwrap(),
                                                                         *mod_dest_override_4.lock().unwrap(),
                                                                         *preset_category_override.lock().unwrap(),
+                                                                        *gen_1_routing_override_set.lock().unwrap(),
+                                                                        *gen_2_routing_override_set.lock().unwrap(),
+                                                                        *gen_3_routing_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -705,6 +726,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                         *mod_dest_override_3.lock().unwrap(),
                                                                         *mod_dest_override_4.lock().unwrap(),
                                                                         *preset_category_override.lock().unwrap(),
+                                                                        *gen_1_routing_override_set.lock().unwrap(),
+                                                                        *gen_2_routing_override_set.lock().unwrap(),
+                                                                        *gen_3_routing_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -838,7 +862,57 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             .font(FONT))
                                             .on_hover_text("These are the audio modules that create sound on midi events");
                                         ui.horizontal(|ui|{
-                                            ui.add_space(4.0);
+                                            ui.add_space(24.0);
+                                            ui.vertical(|ui|{
+                                                ui.add_space(12.0);
+                                                ui.colored_label(TEAL_GREEN, "Type");
+                                                let mystr = Arc::new(Mutex::new("Off"));
+                                                egui::ComboBox::new("gen_1_combobox", "")
+                                                    .selected_text(format!("{:?}", *mystr.lock().unwrap()))
+                                                    .width(70.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Off", "Off");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Sine", "Sine");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Tri", "Tri");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Saw", "Saw");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Rsaw", "Rsaw");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "WSaw", "WSaw");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "SSaw", "SSaw");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "RASaw", "RASaw");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Ramp", "Ramp");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Square", "Square");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "RSquare", "RSquare");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Pulse", "Pulse");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Noise", "Noise");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Sampler", "Sampler");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Granulizer", "Granulizer");
+                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Additive", "Additive");
+                                                    }).response.on_hover_text_at_pointer("The type of generator to use.");
+                                                ui.colored_label(TEAL_GREEN, "Filter Assign");
+                                                egui::ComboBox::new("gen_1_routing_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_1_filter_tracker.lock().unwrap()))
+                                                    .width(70.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Bypass, "Bypass");
+                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Filter1, "Filter1");
+                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Filter2, "Filter2");
+                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Both, "Both");
+                                                    }).response.on_hover_text_at_pointer("Filter routing(s) for the generator");
+                                                // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                // Set the new value FROM the override field
+                                                if *gen_1_routing_override_set.lock().unwrap() != AMFilterRouting::UNSETROUTING {
+                                                    // This happens on plugin preset load
+                                                    *gen_1_filter_tracker.lock().unwrap() = *gen_1_routing_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_1_routing, gen_1_filter_tracker.lock().unwrap().clone());
+                                                    *gen_1_routing_override_set.lock().unwrap() = AMFilterRouting::UNSETROUTING;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if *gen_1_filter_tracker.lock().unwrap() != params.audio_module_1_routing.value() {
+                                                        setter.set_parameter( &params.audio_module_1_routing, gen_1_filter_tracker.lock().unwrap().clone());
+                                                    }
+                                                }
+                                            });
+                                            /*
                                             let audio_module_1_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_1_type,
                                                 setter,
@@ -850,6 +924,17 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     .set_text_size(TEXT_SIZE)
                                                     .set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_1_knob);
+                                            let audio_module_1_filter_routing = ui_knob::ArcKnob::for_param(
+                                                &params.audio_module_1_routing,
+                                                setter,
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
+                                            ui.add(audio_module_1_filter_routing);
+                                            */
                                             let audio_module_1_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_1_level,
                                                 setter,
@@ -861,16 +946,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string())
                                                 .use_outline(true);
                                             ui.add(audio_module_1_level_knob);
-                                            let audio_module_1_filter_routing = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_1_routing,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
-                                            ui.add(audio_module_1_filter_routing);
                                         });
                                         ui.add_space(32.0);
 
@@ -3014,6 +3089,9 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                         *mod_dest_override_3.lock().unwrap(),
                                                                         *mod_dest_override_4.lock().unwrap(),
                                                                         *preset_category_override.lock().unwrap(),
+                                                                        *gen_1_routing_override_set.lock().unwrap(),
+                                                                        *gen_2_routing_override_set.lock().unwrap(),
+                                                                        *gen_3_routing_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -3125,6 +3203,9 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                         *mod_dest_override_3.lock().unwrap(),
                                                                         *mod_dest_override_4.lock().unwrap(),
                                                                         *preset_category_override.lock().unwrap(),
+                                                                        *gen_1_routing_override_set.lock().unwrap(),
+                                                                        *gen_2_routing_override_set.lock().unwrap(),
+                                                                        *gen_3_routing_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -3265,6 +3346,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(high_freq_knob);
                                                                 });
+                                                                ui.colored_label(TEAL_GREEN, "This AREA is scrollable!");
                                                                 ui.separator();
                                                             });
                                                             ui.separator();

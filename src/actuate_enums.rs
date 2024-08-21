@@ -64,8 +64,9 @@ pub enum ModulationDestination {
 }
 
 // Values for Audio Module Routing to filters
-#[derive(Enum, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Enum, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum AMFilterRouting {
+    UNSETROUTING,
     Bypass,
     Filter1,
     Filter2,
@@ -149,6 +150,12 @@ impl fmt::Display for ModulationSource {
 }
 
 impl fmt::Display for ModulationDestination {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for AMFilterRouting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
