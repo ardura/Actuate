@@ -25,7 +25,7 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 */
 
 #![allow(non_snake_case)]
-use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
+use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, GeneratorType, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV131, ModulationStruct};
 use flate2::{read::GzDecoder,write::GzEncoder,Compression};
 use nih_plug::{prelude::*, util::db_to_gain};
@@ -166,6 +166,9 @@ pub struct Actuate {
     gen_1_routing_override: Arc<Mutex<AMFilterRouting>>,
     gen_2_routing_override: Arc<Mutex<AMFilterRouting>>,
     gen_3_routing_override: Arc<Mutex<AMFilterRouting>>,
+    gen_1_type_override: Arc<Mutex<GeneratorType>>,
+    gen_2_type_override: Arc<Mutex<GeneratorType>>,
+    gen_3_type_override: Arc<Mutex<GeneratorType>>,
 
     // Preset Lib Default
     preset_lib_name: Arc<Mutex<String>>,
@@ -383,6 +386,9 @@ impl Default for Actuate {
             gen_1_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
             gen_2_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
             gen_3_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
+            gen_1_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
+            gen_2_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
+            gen_3_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
 
             // Preset Library DEFAULT
             preset_lib_name: Arc::new(Mutex::new(String::from("Default"))),
@@ -5890,6 +5896,9 @@ impl Actuate {
         AMFilterRouting,
         AMFilterRouting,
         AMFilterRouting,
+        GeneratorType,
+        GeneratorType,
+        GeneratorType,
     ) {
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset[current_preset_index as usize];
@@ -6065,6 +6074,96 @@ impl Actuate {
         let gen_1_routing_override = loaded_preset.mod1_audio_module_routing.clone();
         let gen_2_routing_override = loaded_preset.mod2_audio_module_routing.clone();
         let gen_3_routing_override = loaded_preset.mod3_audio_module_routing.clone();
+        let gen_1_type_override = match loaded_preset.mod1_audio_module_type {
+            AudioModuleType::Off => {
+                GeneratorType::Off
+            },
+            AudioModuleType::Osc => {
+                match loaded_preset.mod1_osc_type {
+                    VoiceType::Sine => GeneratorType::Sine,
+                    VoiceType::Tri => GeneratorType::Tri,
+                    VoiceType::Saw => GeneratorType::Saw,
+                    VoiceType::RSaw => GeneratorType::RSaw,
+                    VoiceType::WSaw => GeneratorType::WSaw,
+                    VoiceType::SSaw => GeneratorType::SSaw,
+                    VoiceType::RASaw => GeneratorType::RASaw,
+                    VoiceType::Ramp => GeneratorType::Ramp,
+                    VoiceType::Square => GeneratorType::Square,
+                    VoiceType::RSquare => GeneratorType::RSquare,
+                    VoiceType::Pulse => GeneratorType::Pulse,
+                    VoiceType::Noise => GeneratorType::Noise,
+                }
+            },
+            AudioModuleType::Sampler => {
+                GeneratorType::Sampler
+            },
+            AudioModuleType::Granulizer => {
+                GeneratorType::Granulizer
+            },
+            AudioModuleType::Additive => {
+                GeneratorType::Additive
+            }
+        };
+        let gen_2_type_override = match loaded_preset.mod2_audio_module_type {
+            AudioModuleType::Off => {
+                GeneratorType::Off
+            },
+            AudioModuleType::Osc => {
+                match loaded_preset.mod2_osc_type {
+                    VoiceType::Sine => GeneratorType::Sine,
+                    VoiceType::Tri => GeneratorType::Tri,
+                    VoiceType::Saw => GeneratorType::Saw,
+                    VoiceType::RSaw => GeneratorType::RSaw,
+                    VoiceType::WSaw => GeneratorType::WSaw,
+                    VoiceType::SSaw => GeneratorType::SSaw,
+                    VoiceType::RASaw => GeneratorType::RASaw,
+                    VoiceType::Ramp => GeneratorType::Ramp,
+                    VoiceType::Square => GeneratorType::Square,
+                    VoiceType::RSquare => GeneratorType::RSquare,
+                    VoiceType::Pulse => GeneratorType::Pulse,
+                    VoiceType::Noise => GeneratorType::Noise,
+                }
+            },
+            AudioModuleType::Sampler => {
+                GeneratorType::Sampler
+            },
+            AudioModuleType::Granulizer => {
+                GeneratorType::Granulizer
+            },
+            AudioModuleType::Additive => {
+                GeneratorType::Additive
+            }
+        };
+        let gen_3_type_override = match loaded_preset.mod3_audio_module_type {
+            AudioModuleType::Off => {
+                GeneratorType::Off
+            },
+            AudioModuleType::Osc => {
+                match loaded_preset.mod3_osc_type {
+                    VoiceType::Sine => GeneratorType::Sine,
+                    VoiceType::Tri => GeneratorType::Tri,
+                    VoiceType::Saw => GeneratorType::Saw,
+                    VoiceType::RSaw => GeneratorType::RSaw,
+                    VoiceType::WSaw => GeneratorType::WSaw,
+                    VoiceType::SSaw => GeneratorType::SSaw,
+                    VoiceType::RASaw => GeneratorType::RASaw,
+                    VoiceType::Ramp => GeneratorType::Ramp,
+                    VoiceType::Square => GeneratorType::Square,
+                    VoiceType::RSquare => GeneratorType::RSquare,
+                    VoiceType::Pulse => GeneratorType::Pulse,
+                    VoiceType::Noise => GeneratorType::Noise,
+                }
+            },
+            AudioModuleType::Sampler => {
+                GeneratorType::Sampler
+            },
+            AudioModuleType::Granulizer => {
+                GeneratorType::Granulizer
+            },
+            AudioModuleType::Additive => {
+                GeneratorType::Additive
+            }
+        };
 
         setter.set_parameter(&params.use_fx, loaded_preset.use_fx);
         setter.set_parameter(&params.pre_use_eq, loaded_preset.pre_use_eq);
@@ -6418,6 +6517,9 @@ impl Actuate {
             gen_1_routing_override,
             gen_2_routing_override,
             gen_3_routing_override,
+            gen_1_type_override,
+            gen_2_type_override,
+            gen_3_type_override,
         )
     }
 
@@ -6984,16 +7086,16 @@ impl Actuate {
                     self.params.filter_cutoff.value()
                         * (self.params.filter_env_sustain.value() / 1999.9)
                         +   // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            },
+                        match self.params.filter_alg_type.value() {
+                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
+                            FilterAlgorithms::TILT => adv_scale_value(
+                                self.params.filter_env_peak.value(),
+                                -19980.0,
+                                19980.0,
+                                -5000.0,
+                                5000.0,
+                            ),
+                        },
                 );
             }
             // If our decay has finished move to sustain state

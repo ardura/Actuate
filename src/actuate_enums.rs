@@ -5,6 +5,25 @@ use std::fmt;
 use nih_plug::params::enums::Enum;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, PartialEq, Enum, Clone, Copy)]
+pub enum GeneratorType {
+    Off,
+    Sine,
+    Tri,
+    Saw,
+    RSaw,
+    WSaw,
+    SSaw,
+    RASaw,
+    Ramp,
+    Square,
+    RSquare,
+    Pulse,
+    Noise,
+    Sampler,
+    Granulizer,
+    Additive,
+}
 
 // Gui for which filter to display on bottom
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

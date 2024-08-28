@@ -45,7 +45,7 @@ use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
 use Oscillator::VoiceType;
 
 // When you create a new audio module, you should add it here
-#[derive(Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum AudioModuleType {
     Off,
     Osc,
@@ -1377,7 +1377,7 @@ Random: Sample uses a new random position every note".to_string());
                         .enable_scrolling(true)
                         .hscroll(true)
                         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                        .max_width(WIDTH as f32 - 270.0)
+                        .max_width(WIDTH as f32 - 260.0)
                         .show(ui, |ui| {
                         // Additive Amplitude
                         ui.add(

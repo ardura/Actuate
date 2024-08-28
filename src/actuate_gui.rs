@@ -9,7 +9,7 @@ use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichTe
 
 use crate::{
     actuate_enums::{
-        AMFilterRouting, FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType}, Actuate, ActuateParams, CustomWidgets::{
+        AMFilterRouting, FilterAlgorithms, GeneratorType, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType, Oscillator::VoiceType}, Actuate, ActuateParams, CustomWidgets::{
             slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, 
             BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, 
             CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
@@ -55,6 +55,12 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             Arc::new(Mutex::new(AMFilterRouting::Filter1));
         let gen_3_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
             Arc::new(Mutex::new(AMFilterRouting::Filter1));
+        let gen_1_type_tracker_outside: Arc<Mutex<GeneratorType>> =
+            Arc::new(Mutex::new(GeneratorType::Off));
+        let gen_2_type_tracker_outside: Arc<Mutex<GeneratorType>> =
+            Arc::new(Mutex::new(GeneratorType::Off));
+        let gen_3_type_tracker_outside: Arc<Mutex<GeneratorType>> =
+            Arc::new(Mutex::new(GeneratorType::Off));
 
         let preset_category_tracker_outside: Arc<Mutex<PresetType>> =
             Arc::new(Mutex::new(PresetType::Select));
@@ -71,6 +77,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let gen_1_routing_override_set = instance.gen_1_routing_override.clone();
         let gen_2_routing_override_set = instance.gen_2_routing_override.clone();
         let gen_3_routing_override_set = instance.gen_3_routing_override.clone();
+        let gen_1_type_override_set = instance.gen_1_type_override.clone();
+        let gen_2_type_override_set = instance.gen_2_type_override.clone();
+        let gen_3_type_override_set = instance.gen_3_type_override.clone();
 
         let filter_acid = instance.filter_acid.clone();
         let filter_analog = instance.filter_analog.clone();
@@ -192,6 +201,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         let gen_1_filter_tracker = gen_1_filter_tracker_outside.clone();
                         let gen_2_filter_tracker = gen_2_filter_tracker_outside.clone();
                         let gen_3_filter_tracker = gen_3_filter_tracker_outside.clone();
+                        let gen_1_type_tracker = gen_1_type_tracker_outside.clone();
+                        let gen_2_type_tracker = gen_2_type_tracker_outside.clone();
+                        let gen_3_type_tracker = gen_3_type_tracker_outside.clone();
                         let preset_category_tracker = preset_category_tracker_outside.clone();
                         let preset_lib_name_tracker = arc_preset_lib_name.clone();
 
@@ -267,6 +279,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     *gen_1_routing_override_set.lock().unwrap(),
                                     *gen_2_routing_override_set.lock().unwrap(),
                                     *gen_3_routing_override_set.lock().unwrap(),
+                                    *gen_1_type_override_set.lock().unwrap(),
+                                    *gen_2_type_override_set.lock().unwrap(),
+                                    *gen_3_type_override_set.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -312,6 +327,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     *gen_1_routing_override_set.lock().unwrap(),
                                     *gen_2_routing_override_set.lock().unwrap(),
                                     *gen_3_routing_override_set.lock().unwrap(),
+                                    *gen_1_type_override_set.lock().unwrap(),
+                                    *gen_2_type_override_set.lock().unwrap(),
+                                    *gen_3_type_override_set.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -374,21 +392,21 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         // Background boxes for Generators
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
+                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.20),
                                 RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.25)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
+                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.20),
                                 RangeInclusive::new(HEIGHT as f32 * 0.26, HEIGHT as f32 * 0.45)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
+                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.20),
                                 RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.65)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
@@ -397,21 +415,21 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         // Background boxes for Audio Modules
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
+                                RangeInclusive::new(WIDTH as f32 * 0.21, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.25)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
+                                RangeInclusive::new(WIDTH as f32 * 0.21, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.26, HEIGHT as f32 * 0.45)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
+                                RangeInclusive::new(WIDTH as f32 * 0.21, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.65)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
@@ -597,6 +615,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                         *gen_1_routing_override_set.lock().unwrap(),
                                                                         *gen_2_routing_override_set.lock().unwrap(),
                                                                         *gen_3_routing_override_set.lock().unwrap(),
+                                                                        *gen_1_type_override_set.lock().unwrap(),
+                                                                        *gen_2_type_override_set.lock().unwrap(),
+                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -729,6 +750,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                         *gen_1_routing_override_set.lock().unwrap(),
                                                                         *gen_2_routing_override_set.lock().unwrap(),
                                                                         *gen_3_routing_override_set.lock().unwrap(),
+                                                                        *gen_1_type_override_set.lock().unwrap(),
+                                                                        *gen_2_type_override_set.lock().unwrap(),
+                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -862,32 +886,64 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             .font(FONT))
                                             .on_hover_text("These are the audio modules that create sound on midi events");
                                         ui.horizontal(|ui|{
-                                            ui.add_space(24.0);
+                                            ui.add_space(8.0);
                                             ui.vertical(|ui|{
                                                 ui.add_space(12.0);
                                                 ui.colored_label(TEAL_GREEN, "Type");
-                                                let mystr = Arc::new(Mutex::new("Off"));
                                                 egui::ComboBox::new("gen_1_combobox", "")
-                                                    .selected_text(format!("{:?}", *mystr.lock().unwrap()))
-                                                    .width(70.0)
+                                                    .selected_text(format!("{:?}", *gen_1_type_tracker.lock().unwrap()))
+                                                    .width(86.0)
+                                                    .height(336.0)
                                                     .show_ui(ui, |ui| {
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Off", "Off");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Sine", "Sine");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Tri", "Tri");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Saw", "Saw");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Rsaw", "Rsaw");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "WSaw", "WSaw");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "SSaw", "SSaw");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "RASaw", "RASaw");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Ramp", "Ramp");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Square", "Square");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "RSquare", "RSquare");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Pulse", "Pulse");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Noise", "Noise");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Sampler", "Sampler");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Granulizer", "Granulizer");
-                                                        ui.selectable_value(&mut *mystr.lock().unwrap(), "Additive", "Additive");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Off, "Off");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Sine, "Sine");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Tri, "Tri");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Saw, "Saw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::RSaw, "Rsaw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::WSaw, "WSaw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::SSaw, "SSaw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::RASaw, "RASaw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Ramp, "Ramp");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Square, "Square");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::RSquare, "RSquare");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Pulse, "Pulse");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Noise, "Noise");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Sampler, "Sampler");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Granulizer, "Granulizer");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
                                                     }).response.on_hover_text_at_pointer("The type of generator to use.");
+                                                let (new_type, sub_type) = match *gen_1_type_tracker.lock().unwrap() {
+                                                    GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
+                                                    GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
+                                                    GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
+                                                    GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
+                                                    GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
+                                                    GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
+                                                    GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
+                                                    GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
+                                                    GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
+                                                    GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
+                                                    GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
+                                                    GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
+                                                    GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
+                                                    GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
+                                                    GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
+                                                    GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
+                                                };
+                                                if *gen_1_type_override_set.lock().unwrap() != GeneratorType::Off {
+                                                    // This happens on plugin preset load
+                                                    *gen_1_type_tracker.lock().unwrap() = *gen_1_type_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_1_type, new_type);
+                                                    setter.set_parameter( &params.osc_1_type, sub_type);
+                                                    *gen_1_type_override_set.lock().unwrap() = GeneratorType::Off;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if new_type.clone() != params.audio_module_1_type.value() || sub_type != params.osc_1_type.value() {
+                                                        setter.set_parameter( &params.audio_module_1_type, new_type);
+                                                        setter.set_parameter( &params.osc_1_type, sub_type);
+                                                    }
+                                                }
+                                                
                                                 ui.colored_label(TEAL_GREEN, "Filter Assign");
                                                 egui::ComboBox::new("gen_1_routing_combobox", "")
                                                     .selected_text(format!("{:?}", *gen_1_filter_tracker.lock().unwrap()))
@@ -947,10 +1003,92 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .use_outline(true);
                                             ui.add(audio_module_1_level_knob);
                                         });
-                                        ui.add_space(32.0);
+                                        ui.add_space(48.0);
 
                                         ui.horizontal(|ui|{
-                                            ui.add_space(4.0);
+                                            ui.add_space(8.0);
+                                            ui.vertical(|ui|{
+                                                ui.add_space(12.0);
+                                                ui.colored_label(TEAL_GREEN, "Type");
+                                                egui::ComboBox::new("gen_2_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_2_type_tracker.lock().unwrap()))
+                                                    .width(86.0)
+                                                    .height(336.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Off, "Off");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Sine, "Sine");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Tri, "Tri");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Saw, "Saw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::RSaw, "Rsaw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::WSaw, "WSaw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::SSaw, "SSaw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::RASaw, "RASaw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Ramp, "Ramp");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Square, "Square");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::RSquare, "RSquare");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Pulse, "Pulse");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Noise, "Noise");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Sampler, "Sampler");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Granulizer, "Granulizer");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
+                                                    }).response.on_hover_text_at_pointer("The type of generator to use.");
+                                                let (new_type, sub_type) = match *gen_2_type_tracker.lock().unwrap() {
+                                                    GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
+                                                    GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
+                                                    GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
+                                                    GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
+                                                    GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
+                                                    GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
+                                                    GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
+                                                    GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
+                                                    GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
+                                                    GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
+                                                    GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
+                                                    GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
+                                                    GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
+                                                    GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
+                                                    GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
+                                                    GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
+                                                };
+                                                if *gen_2_type_override_set.lock().unwrap() != GeneratorType::Off {
+                                                    // This happens on plugin preset load
+                                                    *gen_2_type_tracker.lock().unwrap() = *gen_2_type_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_2_type, new_type);
+                                                    setter.set_parameter( &params.osc_2_type, sub_type);
+                                                    *gen_2_type_override_set.lock().unwrap() = GeneratorType::Off;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if new_type.clone() != params.audio_module_2_type.value() || sub_type != params.osc_2_type.value() {
+                                                        setter.set_parameter( &params.audio_module_2_type, new_type);
+                                                        setter.set_parameter( &params.osc_2_type, sub_type);
+                                                    }
+                                                }
+                                                
+                                                ui.colored_label(TEAL_GREEN, "Filter Assign");
+                                                egui::ComboBox::new("gen_2_routing_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_2_filter_tracker.lock().unwrap()))
+                                                    .width(70.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Bypass, "Bypass");
+                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Filter1, "Filter1");
+                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Filter2, "Filter2");
+                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Both, "Both");
+                                                    }).response.on_hover_text_at_pointer("Filter routing(s) for the generator");
+                                                // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                // Set the new value FROM the override field
+                                                if *gen_2_routing_override_set.lock().unwrap() != AMFilterRouting::UNSETROUTING {
+                                                    // This happens on plugin preset load
+                                                    *gen_2_filter_tracker.lock().unwrap() = *gen_2_routing_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_2_routing, gen_2_filter_tracker.lock().unwrap().clone());
+                                                    *gen_2_routing_override_set.lock().unwrap() = AMFilterRouting::UNSETROUTING;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if *gen_2_filter_tracker.lock().unwrap() != params.audio_module_2_routing.value() {
+                                                        setter.set_parameter( &params.audio_module_2_routing, gen_2_filter_tracker.lock().unwrap().clone());
+                                                    }
+                                                }
+                                            });
+                                            /*
                                             let audio_module_2_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_2_type,
                                                 setter,
@@ -961,16 +1099,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_line_color(TEAL_GREEN)
                                                 .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_2_knob);
-                                            let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_2_level,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
-                                            ui.add(audio_module_2_level_knob);
+                                            
                                             let audio_module_2_filter_routing = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_2_routing,
                                                 setter,
@@ -982,10 +1111,104 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_2_filter_routing);
                                         });
-                                        ui.add_space(32.0);
+                                        */
+                                            let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
+                                                &params.audio_module_2_level,
+                                                setter,
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
+                                            ui.add(audio_module_2_level_knob);
+                                        });
+                                        ui.add_space(46.0);
 
                                         ui.horizontal(|ui| {
-                                            ui.add_space(4.0);
+                                            ui.add_space(8.0);
+                                            ui.vertical(|ui|{
+                                                ui.add_space(12.0);
+                                                ui.colored_label(TEAL_GREEN, "Type");
+                                                egui::ComboBox::new("gen_3_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_3_type_tracker.lock().unwrap()))
+                                                    .width(86.0)
+                                                    .height(336.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Off, "Off");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Sine, "Sine");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Tri, "Tri");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Saw, "Saw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::RSaw, "Rsaw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::WSaw, "WSaw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::SSaw, "SSaw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::RASaw, "RASaw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Ramp, "Ramp");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Square, "Square");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::RSquare, "RSquare");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Pulse, "Pulse");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Noise, "Noise");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Sampler, "Sampler");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Granulizer, "Granulizer");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
+                                                    }).response.on_hover_text_at_pointer("The type of generator to use.");
+                                                let (new_type, sub_type) = match *gen_3_type_tracker.lock().unwrap() {
+                                                    GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
+                                                    GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
+                                                    GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
+                                                    GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
+                                                    GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
+                                                    GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
+                                                    GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
+                                                    GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
+                                                    GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
+                                                    GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
+                                                    GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
+                                                    GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
+                                                    GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
+                                                    GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
+                                                    GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
+                                                    GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
+                                                };
+                                                if *gen_3_type_override_set.lock().unwrap() != GeneratorType::Off {
+                                                    // This happens on plugin preset load
+                                                    *gen_3_type_tracker.lock().unwrap() = *gen_3_type_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_3_type, new_type);
+                                                    setter.set_parameter( &params.osc_3_type, sub_type);
+                                                    *gen_3_type_override_set.lock().unwrap() = GeneratorType::Off;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if new_type.clone() != params.audio_module_3_type.value() || sub_type != params.osc_3_type.value() {
+                                                        setter.set_parameter( &params.audio_module_3_type, new_type);
+                                                        setter.set_parameter( &params.osc_3_type, sub_type);
+                                                    }
+                                                }
+                                                
+                                                ui.colored_label(TEAL_GREEN, "Filter Assign");
+                                                egui::ComboBox::new("gen_3_routing_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_3_filter_tracker.lock().unwrap()))
+                                                    .width(70.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Bypass, "Bypass");
+                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Filter1, "Filter1");
+                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Filter2, "Filter2");
+                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Both, "Both");
+                                                    }).response.on_hover_text_at_pointer("Filter routing(s) for the generator");
+                                                // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                // Set the new value FROM the override field
+                                                if *gen_3_routing_override_set.lock().unwrap() != AMFilterRouting::UNSETROUTING {
+                                                    // This happens on plugin preset load
+                                                    *gen_3_filter_tracker.lock().unwrap() = *gen_3_routing_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_3_routing, gen_3_filter_tracker.lock().unwrap().clone());
+                                                    *gen_3_routing_override_set.lock().unwrap() = AMFilterRouting::UNSETROUTING;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if *gen_3_filter_tracker.lock().unwrap() != params.audio_module_3_routing.value() {
+                                                        setter.set_parameter( &params.audio_module_3_routing, gen_3_filter_tracker.lock().unwrap().clone());
+                                                    }
+                                                }
+                                            });
+                                            /*
                                             let audio_module_3_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_3_type,
                                                 setter,
@@ -996,16 +1219,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_line_color(TEAL_GREEN)
                                                 .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_3_knob);
-                                            let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_3_level,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
-                                            ui.add(audio_module_3_level_knob);
                                             let audio_module_3_filter_routing = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_3_routing,
                                                 setter,
@@ -1016,6 +1229,17 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_line_color(TEAL_GREEN)
                                                 .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_3_filter_routing);
+                                            */
+                                            let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
+                                                &params.audio_module_3_level,
+                                                setter,
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
+                                            ui.add(audio_module_3_level_knob);
                                         });
                                         ui.add_space(32.0);
                                     });
@@ -3092,6 +3316,9 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                         *gen_1_routing_override_set.lock().unwrap(),
                                                                         *gen_2_routing_override_set.lock().unwrap(),
                                                                         *gen_3_routing_override_set.lock().unwrap(),
+                                                                        *gen_1_type_override_set.lock().unwrap(),
+                                                                        *gen_2_type_override_set.lock().unwrap(),
+                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -3206,6 +3433,9 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                         *gen_1_routing_override_set.lock().unwrap(),
                                                                         *gen_2_routing_override_set.lock().unwrap(),
                                                                         *gen_3_routing_override_set.lock().unwrap(),
+                                                                        *gen_1_type_override_set.lock().unwrap(),
+                                                                        *gen_2_type_override_set.lock().unwrap(),
+                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
