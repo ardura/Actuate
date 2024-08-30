@@ -1377,7 +1377,7 @@ Random: Sample uses a new random position every note".to_string());
                         .enable_scrolling(true)
                         .hscroll(true)
                         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-                        .max_width(WIDTH as f32 - 260.0)
+                        .max_width(WIDTH as f32 - 238.0)
                         .show(ui, |ui| {
                         // Additive Amplitude
                         ui.add(

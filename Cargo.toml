@@ -23,7 +23,7 @@ nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "de315f902d7b
 nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "de315f902d7b5a75f80bc9d4164e4485bf2b34a1" }
 
 # egui_file fork for nih-plug/Actuate
-egui_file = { git = "https://github.com/ardura/egui_file.git", rev = "841087cdeb974ee9358e05765e41113846bc9f18" }
+egui_file = { git = "https://github.com/ardura/egui_file.git", rev = "33c96389cd1c5e40c5d2ece87ef7f86a1df53cb2" }
 
 num-complex = "0.4.4"
 num-traits = "0.2.17"

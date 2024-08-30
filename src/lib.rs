@@ -6966,6 +6966,7 @@ impl Actuate {
                 || note_off_filter_controller2
                 || note_off_filter_controller3
             {
+                let old_filter_state = self.filter_state_1;
                 self.filter_state_1 = OscState::Releasing;
                 self.filter_rel_smoother_1 = match self.params.filter_env_rel_curve.value() {
                     SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
@@ -6983,10 +6984,17 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_1.reset(
-                    self.params.filter_cutoff.value()
-                        * (self.params.filter_env_sustain.value() / 1999.9)
-                        +   // This scales the peak env to be much gentler for the TILT filter
-                        match self.params.filter_alg_type.value() {
+                    //(//self.params.filter_cutoff.value()
+                        //+
+                        match old_filter_state {
+                            OscState::Attacking => self.filter_atk_smoother_1.next(),
+                            OscState::Decaying | OscState::Releasing => self.filter_dec_smoother_1.next(),
+                            OscState::Sustaining => self.filter_dec_smoother_1.next(),
+                            OscState::Off => self.params.filter_cutoff.value(),
+                        }
+                        /*
+                         // This scales the peak env to be much gentler for the TILT filter
+                         match self.params.filter_alg_type.value() {
                             FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
                             FilterAlgorithms::TILT => adv_scale_value(
                                 self.params.filter_env_peak.value(),
@@ -6995,7 +7003,10 @@ impl Actuate {
                                 -5000.0,
                                 5000.0,
                             ),
-                        },
+                        }*/
+                    //)
+                    //* (self.params.filter_env_sustain.value() / 1999.9)
+                    ,
                 );
                 // Move release to the cutoff to end
                 self.filter_rel_smoother_1
@@ -7064,6 +7075,7 @@ impl Actuate {
                 };
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_1.reset(
+                    /*
                     (self.params.filter_cutoff.value()
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
@@ -7077,14 +7089,17 @@ impl Actuate {
                                     5000.0,
                                 ),
                             }
-                        ))
+                        )
+                    )
+                    */
+                    self.filter_atk_smoother_1.next()
                     .clamp(20.0, 20000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_1.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff.value()
-                        * (self.params.filter_env_sustain.value() / 1999.9)
+                    (
+                        self.params.filter_cutoff.value()
                         +   // This scales the peak env to be much gentler for the TILT filter
                         match self.params.filter_alg_type.value() {
                             FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
@@ -7095,7 +7110,9 @@ impl Actuate {
                                 -5000.0,
                                 5000.0,
                             ),
-                        },
+                        }
+                    )
+                    * (self.params.filter_env_sustain.value() / 1999.9),
                 );
             }
             // If our decay has finished move to sustain state
@@ -7109,7 +7126,10 @@ impl Actuate {
                 OscState::Attacking => {
                     (self.filter_atk_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
                 }
-                OscState::Decaying | OscState::Sustaining => {
+                OscState::Decaying => {
+                    (self.filter_dec_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
+                OscState::Sustaining => {
                     (self.filter_dec_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
                 }
                 OscState::Releasing => {
@@ -7245,6 +7265,7 @@ impl Actuate {
                 || note_off_filter_controller2
                 || note_off_filter_controller3
             {
+                let old_filter_state = self.filter_state_2;
                 self.filter_state_2 = OscState::Releasing;
                 self.filter_rel_smoother_2 = match self.params.filter_env_rel_curve_2.value() {
                     SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
@@ -7262,7 +7283,7 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_2.reset(
-                    self.params.filter_cutoff_2.value()
+                    /*self.params.filter_cutoff_2.value()
                         * (self.params.filter_env_sustain_2.value() / 1999.9)
                         +   // This scales the peak env to be much gentler for the TILT filter
                         match self.params.filter_alg_type_2.value() {
@@ -7275,6 +7296,14 @@ impl Actuate {
                                 5000.0,
                             ),
                         },
+                    */
+                    //self.filter_dec_smoother_2.next(),
+                    match old_filter_state {
+                        OscState::Attacking => self.filter_atk_smoother_2.next(),
+                        OscState::Decaying | OscState::Releasing => self.filter_dec_smoother_2.next(),
+                        OscState::Sustaining => self.filter_dec_smoother_2.next(),
+                        OscState::Off => self.params.filter_cutoff_2.value(),
+                    }
                 );
                 // Move release to the cutoff to end
                 self.filter_rel_smoother_2
@@ -7343,7 +7372,7 @@ impl Actuate {
                 };
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_2.reset(
-                    (self.params.filter_cutoff_2.value()
+                    /*(self.params.filter_cutoff_2.value()
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
@@ -7356,15 +7385,15 @@ impl Actuate {
                                     5000.0,
                                 ),
                             }
-                        ))
+                        ))*/
+                    self.filter_atk_smoother_2.next()
                     .clamp(20.0, 20000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_2.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff_2.value()
-                        * (self.params.filter_env_sustain_2.value() / 1999.9)
-                        +   // This scales the peak env to be much gentler for the TILT filter
+                    (self.params.filter_cutoff_2.value()
+                            +   // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
                                 FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
                                 FilterAlgorithms::TILT => adv_scale_value(
@@ -7374,7 +7403,9 @@ impl Actuate {
                                     -5000.0,
                                     5000.0,
                                 ),
-                            },
+                            }
+                        )
+                        * (self.params.filter_env_sustain_2.value() / 1999.9)
                 );
             }
             // If our decay has finished move to sustain state
@@ -7388,7 +7419,10 @@ impl Actuate {
                 OscState::Attacking => {
                     (self.filter_atk_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
                 }
-                OscState::Decaying | OscState::Sustaining => {
+                OscState::Decaying => {
+                    (self.filter_dec_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
+                OscState::Sustaining => {
                     (self.filter_dec_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
                 }
                 OscState::Releasing => {

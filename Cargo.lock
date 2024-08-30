@@ -491,7 +491,7 @@ dependencies = [
 [[package]]
 name = "egui_file"
 version = "0.18.0"
-source = "git+https://github.com/ardura/egui_file.git?rev=841087cdeb974ee9358e05765e41113846bc9f18#841087cdeb974ee9358e05765e41113846bc9f18"
+source = "git+https://github.com/ardura/egui_file.git?rev=33c96389cd1c5e40c5d2ece87ef7f86a1df53cb2#33c96389cd1c5e40c5d2ece87ef7f86a1df53cb2"
 dependencies = [
  "nih_plug_egui",
 ]
