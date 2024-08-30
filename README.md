@@ -1,4 +1,4 @@
-# Actuate (Latest is v1.3.1)
+# Actuate (Latest is v1.3.2)
 A Subtractive and Additive Synthesizer, Sampler, and Granulizer built in Rust + Nih-Plug
 Written by Ardura
 
@@ -80,21 +80,6 @@ Since Actuate 1.2.8 the new file browser and UI use native text editing. This cr
 - **Ableton:** 
   - Text input works if you add "-_EnsureKeyMessagesForPlugins" to Options.txt in preferences. See https://forum.ableton.com/viewtopic.php?t=97318
   - Unfortunately I don't know where this would be on Linux or Mac so I'm open to help from Ableton users!
-
-## Roadmap
-- [x] Create an additive module
-- [ ] Create filter release bypass toggle
-- [ ] Find more things to add here
-
-(old items pre 1.3.0)
-- [x] Create a Preset Browser
-- [x] Add more reverb styles
-- [x] Fix some bandpass glitching on certain filter types
-- [x] Create different stereo spreading algorithms
-- [x] Make the GUI nicer - see Discussion https://github.com/ardura/Actuate/discussions/26
-- [x] Look into making the preset loading more reliable
-- [x] Fix text input not working (right now it's a OS safe workaround)
-- [x] Fix file dialog in the process thread (right now it's a OS safe workaround)
 
 ## DAWS and compatibility
 - Compatible with Windows 10 and up

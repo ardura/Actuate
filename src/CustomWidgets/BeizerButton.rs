@@ -9,6 +9,8 @@ use nih_plug_egui::egui::{
     Align2, Color32, FontId, Pos2, Rect, Response, Rounding, Shape, Stroke, Ui, Vec2, Widget,
 };
 
+// This allow is here since Actuate ended up only using HorizontalInline
+#[allow(dead_code)]
 pub enum ButtonLayout {
     HorizontalInline,
     Vertical,
@@ -20,6 +22,7 @@ struct SliderRegion<'a, P: Param> {
     background_color: Color32,
     line_color: Color32,
     button_layout: ButtonLayout,
+    img_flip: bool,
 }
 
 impl<'a, P: Param> SliderRegion<'a, P> {
@@ -29,6 +32,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         background_color: Color32,
         line_color: Color32,
         button_layout: ButtonLayout,
+        img_flip: bool,
     ) -> Self {
         SliderRegion {
             param,
@@ -36,6 +40,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
             background_color,
             line_color,
             button_layout,
+            img_flip
         }
     }
 
@@ -48,41 +53,82 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         let rect = rect.expand(visuals.expansion);
         let spacer = 12.0;
         let hspacer = 6.0;
-        let mut control_points = match self.button_layout {
-            ButtonLayout::Vertical => {[
-                Pos2 {
-                    x: rect.left_top().x + spacer,
-                    y: rect.left_top().y + spacer,
+        let mut control_points = match self.img_flip {
+                true => {
+                    match self.button_layout {
+                        ButtonLayout::Vertical => {[
+                            Pos2 {
+                                x: rect.right_top().x - spacer,
+                                y: rect.left_top().y + spacer,
+                            },
+                            rect.center(),
+                            Pos2 {
+                                x: rect.left_bottom().x + spacer,
+                                y: rect.right_bottom().y - 10.0 - spacer,
+                            },
+                            Pos2 {
+                                x: rect.left_bottom().x + spacer,
+                                y:rect.right_bottom().y - 10.0 - spacer,
+                            },
+                        ]},
+                        ButtonLayout::HorizontalInline => {[
+                            Pos2 {
+                                x: rect.right_top().x - hspacer,
+                                y: rect.right_top().y + hspacer,
+                            },
+                            Pos2 {
+                                x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
+                                y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
+                            },
+                            Pos2 {
+                                x: rect.right_bottom().x + hspacer - rect.height(),
+                                y: rect.right_bottom().y - 2.0 - hspacer,
+                            },
+                            Pos2 {
+                                x: rect.right_bottom().x + hspacer - rect.height(),
+                                y: rect.right_bottom().y - 2.0 - hspacer,
+                            },
+                        ]},
+                    }
                 },
-                rect.center(),
-                Pos2 {
-                    x: rect.right_bottom().x - spacer,
-                    y: rect.right_bottom().y - 10.0 - spacer,
-                },
-                Pos2 {
-                    x: rect.right_bottom().x - spacer,
-                    y: rect.right_bottom().y - 10.0 - spacer,
-                },
-            ]},
-            ButtonLayout::HorizontalInline => {[
-                Pos2 {
-                    x: rect.right_top().x + hspacer - rect.height(),
-                    y: rect.right_top().y + hspacer,
-                },
-                Pos2 {
-                    x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
-                    y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
-                },
-                Pos2 {
-                    x: rect.right_bottom().x - hspacer,
-                    y: rect.right_bottom().y - 2.0 - hspacer,
-                },
-                Pos2 {
-                    x: rect.right_bottom().x - hspacer,
-                    y: rect.right_bottom().y - 2.0 - hspacer,
-                },
-            ]},
-        };
+                false => {
+                    match self.button_layout {
+                        ButtonLayout::Vertical => {[
+                            Pos2 {
+                                x: rect.left_top().x + spacer,
+                                y: rect.left_top().y + spacer,
+                            },
+                            rect.center(),
+                            Pos2 {
+                                x: rect.right_bottom().x - spacer,
+                                y: rect.right_bottom().y - 10.0 - spacer,
+                            },
+                            Pos2 {
+                                x: rect.right_bottom().x - spacer,
+                                y: rect.right_bottom().y - 10.0 - spacer,
+                            },
+                        ]},
+                        ButtonLayout::HorizontalInline => {[
+                            Pos2 {
+                                x: rect.right_top().x + hspacer - rect.height(),
+                                y: rect.right_top().y + hspacer,
+                            },
+                            Pos2 {
+                                x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
+                                y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
+                            },
+                            Pos2 {
+                                x: rect.right_bottom().x - hspacer,
+                                y: rect.right_bottom().y - 2.0 - hspacer,
+                            },
+                            Pos2 {
+                                x: rect.right_bottom().x - hspacer,
+                                y: rect.right_bottom().y - 2.0 - hspacer,
+                            },
+                        ]},
+                    }
+                }
+            };
 
         // Check if our button is clicked
         if response.clicked() {
@@ -100,7 +146,10 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                         self.param_setter.set_parameter_normalized(self.param, 1.0);
                         control_points[1] = Pos2 {
                             x: rect.left_center().x + spacer,
-                            y: rect.left_center().y + 40.0,
+                            y: rect.left_center().y + match self.img_flip {
+                                true => { -40.0 },
+                                false => { 40.0 },
+                            },
                         };
                     } else if value == 1.0 {
                         self.param_setter.set_parameter_normalized(self.param, 0.0);
@@ -111,34 +160,74 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                     if value == 0.0 {
                         self.param_setter
                             .set_parameter_normalized(self.param, 0.333333343);
-                        control_points[1] = Pos2 {
-                            x: rect.center_bottom().x + rect.height()*0.5,
-                            y: rect.center_bottom().y
+                        control_points[1] = match self.img_flip {
+                            false => {
+                                Pos2 {
+                                    x: rect.center_bottom().x + rect.height()*0.5,
+                                    y: rect.center_bottom().y
+                                }
+                            },
+                            true => {
+                                Pos2 {
+                                    x: rect.center_top().x + rect.height()*0.5,
+                                    y: rect.center_top().y
+                                }
+                            }
                         };
                     } else if value == 0.333333343 {
                         self.param_setter
                             .set_parameter_normalized(self.param, 0.666666687);
-                        control_points[1] = Pos2 {
-                            x: rect.center_bottom().x + rect.height()*0.2,
-                            y: rect.center_bottom().y
+                        control_points[1] = match self.img_flip {
+                            false => {
+                                Pos2 {
+                                    x: rect.center_bottom().x + rect.height()*0.2,
+                                    y: rect.center_bottom().y
+                                }
+                            },
+                            true => {
+                                Pos2 {
+                                    x: rect.center_top().x + rect.height()*0.5 - 18.0,
+                                    y: rect.center_top().y
+                                }
+                            }
                         };
                     } else if value == 0.666666687 {
                         self.param_setter.set_parameter_normalized(self.param, 1.0);
-                        control_points[1] = Pos2 {
-                            x: rect.right_top().x - rect.height()*0.25,
-                            y: rect.right_top().y
+                        control_points[1] = match self.img_flip {
+                            false => {
+                                Pos2 {
+                                    x: rect.right_top().x - rect.height()*0.25,
+                                    y: rect.right_top().y
+                                }
+                            },
+                            true => {
+                                Pos2 {
+                                    x: rect.right_center().x - rect.height()*0.25 + 10.0,
+                                    y: rect.right_center().y + 16.0
+                                }
+                            }
                         };
                     } else if value == 1.0 {
                         self.param_setter.set_parameter_normalized(self.param, 0.0);
-                        control_points[1] = Pos2 {
-                            x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
-                            y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
+                        control_points[1] =  match self.img_flip {
+                            false => {
+                                Pos2 {
+                                    x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
+                                    y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
+                                }
+                            },
+                            true => {
+                                Pos2 {
+                                    x: ((rect.right_bottom().x + hspacer) + (rect.right_top().x - hspacer - rect.height())) * 0.5,
+                                    y: ((rect.right_bottom().y + hspacer) + (rect.right_top().y - hspacer)) * 0.5,
+                                }
+                            }
                         };
                     }
                 }
             }
-            
         } else {
+            // Our button is not clicked, this is the static position
             match self.button_layout {
                 ButtonLayout::Vertical => {
                     if value == 0.0 {
@@ -148,7 +237,10 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                     } else if value == 0.666666687 {
                         control_points[1] = Pos2 {
                             x: rect.left_center().x,
-                            y: rect.left_center().y + 40.0,
+                            y: rect.left_center().y + match self.img_flip {
+                                true => { -40.0 },
+                                false => { 40.0 },
+                            },
                         };
                     } else if value == 1.0 {
                         control_points[1] = rect.right_center();
@@ -156,24 +248,65 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                 },
                 ButtonLayout::HorizontalInline => {
                     if value == 0.0 {
-                        control_points[1] = Pos2 {
-                            x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x - hspacer - rect.height())) * 0.5,
-                            y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y - hspacer)) * 0.5,
-                        };
+                        control_points[1] = 
+                            match self.img_flip {
+                                false => {
+                                    Pos2 {
+                                        x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x - hspacer - rect.height())) * 0.5,
+                                        y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y - hspacer)) * 0.5,
+                                    }
+                                },
+                                true => {
+                                    Pos2 {
+                                        x: ((rect.right_bottom().x + hspacer) + (rect.right_top().x - hspacer - rect.height())) * 0.5,
+                                        y: ((rect.right_bottom().y + hspacer) + (rect.right_top().y - hspacer)) * 0.5,
+                                    }
+                                }
+                            };
                     } else if value == 0.333333343 {
-                        control_points[1] = Pos2 {
-                            x: rect.center_bottom().x + rect.height()*0.5,
-                            y: rect.center_bottom().y
+                        control_points[1] = match self.img_flip {
+                            false => {
+                                Pos2 {
+                                    x: rect.center_bottom().x + rect.height()*0.5,
+                                    y: rect.center_bottom().y
+                                }
+                            },
+                            true => {
+                                Pos2 {
+                                    x: rect.center_top().x + rect.height()*0.5,
+                                    y: rect.center_top().y
+                                }
+                            }
                         };
                     } else if value == 0.666666687 {
-                        control_points[1] = Pos2 {
-                            x: rect.center_bottom().x + rect.height()*0.2,
-                            y: rect.center_bottom().y
+                        control_points[1] = match self.img_flip {
+                            false => {
+                                Pos2 {
+                                    x: rect.center_bottom().x + rect.height()*0.2,
+                                    y: rect.center_bottom().y
+                                }
+                            },
+                            true => {
+                                Pos2 {
+                                    x: rect.center_top().x + rect.height()*0.5 - 18.0,
+                                    y: rect.center_top().y
+                                }
+                            }
                         };
                     } else if value == 1.0 {
-                        control_points[1] = Pos2 {
-                            x: rect.right_top().x - rect.height()*0.25,
-                            y: rect.right_top().y
+                        control_points[1] = match self.img_flip {
+                            false => {
+                                Pos2 {
+                                    x: rect.right_top().x - rect.height()*0.25,
+                                    y: rect.right_top().y
+                                }
+                            },
+                            true => {
+                                Pos2 {
+                                    x: rect.right_center().x - rect.height()*0.25 + 10.0,
+                                    y: rect.right_center().y + 16.0
+                                }
+                            }
                         };
                     }
                 }
@@ -306,6 +439,7 @@ impl<'a, P: Param> BeizerButton<'a, P> {
         x_scaling: f32,
         y_scaling: f32,
         button_layout: ButtonLayout,
+        img_flip: bool,
     ) -> Self {
         BeizerButton {
             // Pass things to slider to get around
@@ -315,6 +449,7 @@ impl<'a, P: Param> BeizerButton<'a, P> {
                 Color32::PLACEHOLDER,
                 Color32::PLACEHOLDER,
                 button_layout,
+                img_flip,
             ),
             scaling_x: x_scaling,
             scaling_y: y_scaling,

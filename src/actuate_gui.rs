@@ -5,14 +5,14 @@
 use std::{ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, AtomicU32, Ordering}, Arc, Mutex}};
 use egui_file::{FileDialog, State};
 use nih_plug::{context::gui::AsyncExecutor, editor::Editor};
-use nih_plug_egui::{create_egui_editor, egui::{self, Align2, Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2}, widgets::ParamSlider};
+use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2}, widgets::ParamSlider};
 
 use crate::{
     actuate_enums::{
-        FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType}, Actuate, ActuateParams, CustomWidgets::{
+        AMFilterRouting, FilterAlgorithms, GeneratorType, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType, Oscillator::VoiceType}, Actuate, ActuateParams, CustomWidgets::{
             slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, 
             BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, 
-            CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, LOADING_FONT, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
+            CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
 
 pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExecutor<Actuate>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = instance.params.clone();
@@ -30,8 +30,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let AM3: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_3);
 
         let update_current_preset: Arc<AtomicBool> = Arc::clone(&instance.update_current_preset);
-
-        let loading: Arc<AtomicBool> = Arc::clone(&instance.file_dialog);
         let filter_select_outside: Arc<Mutex<UIBottomSelection>> =
             Arc::new(Mutex::new(UIBottomSelection::Filter1));
         let lfo_select_outside: Arc<Mutex<LFOSelect>> = Arc::new(Mutex::new(LFOSelect::INFO));
@@ -51,6 +49,18 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             Arc::new(Mutex::new(ModulationDestination::None));
         let mod_dest_4_tracker_outside: Arc<Mutex<ModulationDestination>> =
             Arc::new(Mutex::new(ModulationDestination::None));
+        let gen_1_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
+            Arc::new(Mutex::new(AMFilterRouting::Filter1));
+        let gen_2_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
+            Arc::new(Mutex::new(AMFilterRouting::Filter1));
+        let gen_3_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
+            Arc::new(Mutex::new(AMFilterRouting::Filter1));
+        let gen_1_type_tracker_outside: Arc<Mutex<GeneratorType>> =
+            Arc::new(Mutex::new(GeneratorType::Off));
+        let gen_2_type_tracker_outside: Arc<Mutex<GeneratorType>> =
+            Arc::new(Mutex::new(GeneratorType::Off));
+        let gen_3_type_tracker_outside: Arc<Mutex<GeneratorType>> =
+            Arc::new(Mutex::new(GeneratorType::Off));
 
         let preset_category_tracker_outside: Arc<Mutex<PresetType>> =
             Arc::new(Mutex::new(PresetType::Select));
@@ -64,6 +74,12 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let mod_dest_override_3 = instance.mod_override_dest_3.clone();
         let mod_dest_override_4 = instance.mod_override_dest_4.clone();
         let preset_category_override = instance.preset_category_override.clone();
+        let gen_1_routing_override_set = instance.gen_1_routing_override.clone();
+        let gen_2_routing_override_set = instance.gen_2_routing_override.clone();
+        let gen_3_routing_override_set = instance.gen_3_routing_override.clone();
+        let gen_1_type_override_set = instance.gen_1_type_override.clone();
+        let gen_2_type_override_set = instance.gen_2_type_override.clone();
+        let gen_3_type_override_set = instance.gen_3_type_override.clone();
 
         let filter_acid = instance.filter_acid.clone();
         let filter_analog = instance.filter_analog.clone();
@@ -114,7 +130,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                     FileDialog::open_file(Some(home_dir.clone()))
-                        .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                        .current_pos([(WIDTH/4) as f32, 10.0])
                         .show_files_filter(preset_filter)
                         .keep_on_top(true)
                         .show_new_folder(false)
@@ -124,7 +140,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let save_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                     FileDialog::save_file(Some(home_dir.clone()))
-                        .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                        .current_pos([(WIDTH/4) as f32, 10.0])
                         .show_files_filter(save_preset_filter)
                         .keep_on_top(true)
                         .show_new_folder(false)
@@ -134,7 +150,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let bank_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                     FileDialog::open_file(Some(home_dir.clone()))
-                        .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                        .current_pos([(WIDTH/4) as f32, 10.0])
                         .show_files_filter(bank_filter)
                         .keep_on_top(true)
                         .show_new_folder(false)
@@ -144,7 +160,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let bank_save_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                     FileDialog::save_file(Some(home_dir.clone()))
-                        .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                        .current_pos([(WIDTH/4) as f32, 10.0])
                         .show_files_filter(save_bank_filter)
                         .keep_on_top(true)
                         .show_new_folder(false)
@@ -155,7 +171,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let load_sample_dialog: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                 FileDialog::open_file(Some(home_dir.clone()))
-                    .current_pos(Pos2::new((WIDTH/4) as f32, 10.0))
+                    .current_pos([(WIDTH/4) as f32, 10.0])
                     .show_files_filter(sample_filter)
                     .keep_on_top(true)
                     .show_new_folder(false)
@@ -182,6 +198,12 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         let mod_dest_2_tracker = mod_dest_2_tracker_outside.clone();
                         let mod_dest_3_tracker = mod_dest_3_tracker_outside.clone();
                         let mod_dest_4_tracker = mod_dest_4_tracker_outside.clone();
+                        let gen_1_filter_tracker = gen_1_filter_tracker_outside.clone();
+                        let gen_2_filter_tracker = gen_2_filter_tracker_outside.clone();
+                        let gen_3_filter_tracker = gen_3_filter_tracker_outside.clone();
+                        let gen_1_type_tracker = gen_1_type_tracker_outside.clone();
+                        let gen_2_type_tracker = gen_2_type_tracker_outside.clone();
+                        let gen_3_type_tracker = gen_3_type_tracker_outside.clone();
                         let preset_category_tracker = preset_category_tracker_outside.clone();
                         let preset_lib_name_tracker = arc_preset_lib_name.clone();
 
@@ -196,18 +218,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
                             AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
                            {
-                            // This is manually here to make sure it appears for long loads from different threads
-                            // Create the loading popup here.
-                            let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                            let popup_size = Vec2::new(400.0, 200.0);
-                            let popup_pos = screen_size.center();
-
-                            // Draw the loading popup content here.
-                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
                             let mut AM1_Lock = AM1.lock().unwrap();
 
                             AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
@@ -220,18 +230,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                            (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
                             AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
                            {
-                            // This is manually here to make sure it appears for long loads from different threads
-                            // Create the loading popup here.
-                            let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                            let popup_size = Vec2::new(400.0, 200.0);
-                            let popup_pos = screen_size.center();
-
-                            // Draw the loading popup content here.
-                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
                             let mut AM2_Lock = AM2.lock().unwrap();
 
                             AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
@@ -244,18 +242,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                            (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
                             AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
                            {
-                            // This is manually here to make sure it appears for long loads from different threads
-                            // Create the loading popup here.
-                            let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                            let popup_size = Vec2::new(400.0, 200.0);
-                            let popup_pos = screen_size.center();
-
-                            // Draw the loading popup content here.
-                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
                             let mut AM3_Lock = AM3.lock().unwrap();
 
                             AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
@@ -266,9 +252,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         // Reset our buttons
                         if params.param_next_preset.value() {
                             if current_preset_index < (PRESET_BANK_SIZE - 1) as u32 {
-                                loading.store(true, Ordering::SeqCst);
-                                setter.set_parameter(&params.loading, true);
-
                                 current_preset.store(current_preset_index + 1, Ordering::SeqCst);
 
                                 setter.set_parameter(&params.param_next_preset, false);
@@ -282,18 +265,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
                                 *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
 
-                                // This is manually here to make sure it appears for long loads from different threads
-                                // Create the loading popup here.
-                                let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                                let popup_size = Vec2::new(400.0, 200.0);
-                                let popup_pos = screen_size.center();
-
-                                // Draw the loading popup content here.
-                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
                                 // GUI thread misses this without this call here for some reason
                                 (
                                     *mod_source_override_1.lock().unwrap(),
@@ -305,6 +276,12 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     *mod_dest_override_3.lock().unwrap(),
                                     *mod_dest_override_4.lock().unwrap(),
                                     *preset_category_override.lock().unwrap(),
+                                    *gen_1_routing_override_set.lock().unwrap(),
+                                    *gen_2_routing_override_set.lock().unwrap(),
+                                    *gen_3_routing_override_set.lock().unwrap(),
+                                    *gen_1_type_override_set.lock().unwrap(),
+                                    *gen_2_type_override_set.lock().unwrap(),
+                                    *gen_3_type_override_set.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -320,13 +297,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 // This is set for the process thread
                                 reload_entire_preset.store(true, Ordering::SeqCst);
                             }
-                            setter.set_parameter(&params.loading, false);
                         }
                         if params.param_prev_preset.value() {
                             if current_preset_index > 0 {
-                                loading.store(true, Ordering::SeqCst);
-                                setter.set_parameter(&params.loading, true);
-
                                 current_preset.store(current_preset_index - 1, Ordering::SeqCst);
 
                                 setter.set_parameter(&params.param_prev_preset, false);
@@ -340,18 +313,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
                                 *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
 
-                                // This is manually here to make sure it appears for long loads from different threads
-                                // Create the loading popup here.
-                                let screen_size = Rect::from_x_y_ranges(
-                                    RangeInclusive::new(0.0, WIDTH as f32),
-                                    RangeInclusive::new(0.0, HEIGHT as f32));
-                                let popup_size = Vec2::new(400.0, 200.0);
-                                let popup_pos = screen_size.center();
-
-                                // Draw the loading popup content here.
-                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-
                                 // GUI thread misses this without this call here for some reason
                                 (
                                     *mod_source_override_1.lock().unwrap(),
@@ -363,6 +324,12 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     *mod_dest_override_3.lock().unwrap(),
                                     *mod_dest_override_4.lock().unwrap(),
                                     *preset_category_override.lock().unwrap(),
+                                    *gen_1_routing_override_set.lock().unwrap(),
+                                    *gen_2_routing_override_set.lock().unwrap(),
+                                    *gen_3_routing_override_set.lock().unwrap(),
+                                    *gen_1_type_override_set.lock().unwrap(),
+                                    *gen_2_type_override_set.lock().unwrap(),
+                                    *gen_3_type_override_set.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -378,7 +345,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 // This is set for the process thread
                                 reload_entire_preset.store(true, Ordering::SeqCst);
                             }
-                            setter.set_parameter(&params.loading, false);
                         }
 
                         if update_current_preset.load(Ordering::SeqCst) || params.param_update_current_preset.value() {
@@ -426,22 +392,22 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         // Background boxes for Generators
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
-                                RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.23)),
+                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.20),
+                                RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.25)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
-                                RangeInclusive::new(HEIGHT as f32 * 0.24, HEIGHT as f32 * 0.41)),
+                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.20),
+                                RangeInclusive::new(HEIGHT as f32 * 0.26, HEIGHT as f32 * 0.45)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.24),
-                                RangeInclusive::new(HEIGHT as f32 * 0.42, HEIGHT as f32 * 0.59)),
+                                RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.20),
+                                RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.65)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
@@ -449,21 +415,21 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         // Background boxes for Audio Modules
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
+                                RangeInclusive::new(WIDTH as f32 * 0.21, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.25)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
+                                RangeInclusive::new(WIDTH as f32 * 0.21, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.26, HEIGHT as f32 * 0.45)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
-                                RangeInclusive::new(WIDTH as f32 * 0.25, WIDTH as f32 * 0.99),
+                                RangeInclusive::new(WIDTH as f32 * 0.21, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.65)),
                             Rounding::from(4.0),
                             LIGHTER_GREY_UI_COLOR
@@ -515,14 +481,16 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 (WIDTH as f32/ 2.0) - 330.0,
                                                 (HEIGHT as f32/ 2.0) - 250.0))
                                             .fixed_size(Vec2::new(660.0, 500.0))
-                                            .scroll2([true, true])
+                                            .scroll([true, true])
+                                            .fade_in(false)
+                                            .fade_out(false)
                                             .enabled(true);
                                         window.show(egui_ctx, |ui| {
                                             ui.visuals_mut().extreme_bg_color = Color32::DARK_GRAY;
                                             let max_rows = PRESET_BANK_SIZE;
 
                                             ui.vertical_centered(|ui| {
-                                                let close_button = ui.button(RichText::new("Cancel")
+                                                let close_button = ui.button(RichText::new("Close Browser")
                                                     .font(FONT)
                                                     .background_color(A_BACKGROUND_COLOR_TOP)
                                                     .color(FONT_COLOR)
@@ -627,26 +595,11 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                         {
                                                             for row in 0..=(max_rows-1) {
                                                                 if ui.button(format!("Load Preset {row}")).clicked() {
-                                                                    loading.store(true, Ordering::SeqCst);
-                                                                    setter.set_parameter(&params.loading, true);
-        
                                                                     current_preset.store(row as u32, Ordering::SeqCst);
                                                                     clear_voices.store(true, Ordering::SeqCst);
         
                                                                     // Move to info tab on preset change
                                                                     *lfo_select.lock().unwrap() = LFOSelect::INFO;
-        
-                                                                    // This is manually here to make sure it appears for long loads from different threads
-                                                                    // Create the loading popup here.
-                                                                    let screen_size = Rect::from_x_y_ranges(
-                                                                    RangeInclusive::new(0.0, WIDTH as f32),
-                                                                    RangeInclusive::new(0.0, HEIGHT as f32));
-                                                                    let popup_size = Vec2::new(400.0, 200.0);
-                                                                    let popup_pos = screen_size.center();
-        
-                                                                    // Draw the loading popup content here.
-                                                                    ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                                                    ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
         
                                                                     // GUI thread misses this without this call here for some reason
                                                                     (
@@ -659,6 +612,12 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                         *mod_dest_override_3.lock().unwrap(),
                                                                         *mod_dest_override_4.lock().unwrap(),
                                                                         *preset_category_override.lock().unwrap(),
+                                                                        *gen_1_routing_override_set.lock().unwrap(),
+                                                                        *gen_2_routing_override_set.lock().unwrap(),
+                                                                        *gen_3_routing_override_set.lock().unwrap(),
+                                                                        *gen_1_type_override_set.lock().unwrap(),
+                                                                        *gen_2_type_override_set.lock().unwrap(),
+                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -677,7 +636,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         
                                                                     // This is set for the process thread
                                                                     reload_entire_preset.store(true, Ordering::SeqCst);
-                                                                    setter.set_parameter(&params.loading, false);
                                                                 }
                                                                 ui.label(arc_preset.lock().unwrap()[row].preset_name.clone().trim());
                                                                 ui.label(format!("{:?}",arc_preset.lock().unwrap()[row].preset_category.clone()).trim());
@@ -772,26 +730,11 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                             }
                                                             for r_index in filtered_results.iter() {
                                                                 if ui.button(format!("Load Preset {r_index}")).clicked() {
-                                                                    loading.store(true, Ordering::SeqCst);
-                                                                    setter.set_parameter(&params.loading, true);
-        
                                                                     current_preset.store(*r_index as u32, Ordering::SeqCst);
                                                                     clear_voices.store(true, Ordering::SeqCst);
         
                                                                     // Move to info tab on preset change
                                                                     *lfo_select.lock().unwrap() = LFOSelect::INFO;
-        
-                                                                    // This is manually here to make sure it appears for long loads from different threads
-                                                                    // Create the loading popup here.
-                                                                    let screen_size = Rect::from_x_y_ranges(
-                                                                    RangeInclusive::new(0.0, WIDTH as f32),
-                                                                    RangeInclusive::new(0.0, HEIGHT as f32));
-                                                                    let popup_size = Vec2::new(400.0, 200.0);
-                                                                    let popup_pos = screen_size.center();
-        
-                                                                    // Draw the loading popup content here.
-                                                                    ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                                                    ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
         
                                                                     // GUI thread misses this without this call here for some reason
                                                                     (
@@ -804,6 +747,12 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                         *mod_dest_override_3.lock().unwrap(),
                                                                         *mod_dest_override_4.lock().unwrap(),
                                                                         *preset_category_override.lock().unwrap(),
+                                                                        *gen_1_routing_override_set.lock().unwrap(),
+                                                                        *gen_2_routing_override_set.lock().unwrap(),
+                                                                        *gen_3_routing_override_set.lock().unwrap(),
+                                                                        *gen_1_type_override_set.lock().unwrap(),
+                                                                        *gen_2_type_override_set.lock().unwrap(),
+                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -822,7 +771,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         
                                                                     // This is set for the process thread
                                                                     reload_entire_preset.store(true, Ordering::SeqCst);
-                                                                    setter.set_parameter(&params.loading, false);
                                                                 }
                                                                 ui.label(arc_preset.lock().unwrap()[*r_index].preset_name.clone().trim());
                                                                 ui.label(format!("{:?}",arc_preset.lock().unwrap()[*r_index].preset_category.clone()).trim());
@@ -892,7 +840,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 });
 
                                             ui.vertical_centered(|ui| {
-                                                let close_button = ui.button(RichText::new("Cancel")
+                                                let close_button = ui.button(RichText::new("Close Browser")
                                                     .font(FONT)
                                                     .background_color(A_BACKGROUND_COLOR_TOP)
                                                     .color(FONT_COLOR)
@@ -938,7 +886,89 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             .font(FONT))
                                             .on_hover_text("These are the audio modules that create sound on midi events");
                                         ui.horizontal(|ui|{
-                                            ui.add_space(4.0);
+                                            ui.add_space(8.0);
+                                            ui.vertical(|ui|{
+                                                ui.add_space(12.0);
+                                                ui.colored_label(TEAL_GREEN, "Type");
+                                                egui::ComboBox::new("gen_1_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_1_type_tracker.lock().unwrap()))
+                                                    .width(86.0)
+                                                    .height(336.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Off, "Off");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Sine, "Sine");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Tri, "Tri");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Saw, "Saw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::RSaw, "Rsaw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::WSaw, "WSaw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::SSaw, "SSaw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::RASaw, "RASaw");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Ramp, "Ramp");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Square, "Square");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::RSquare, "RSquare");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Pulse, "Pulse");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Noise, "Noise");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Sampler, "Sampler");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Granulizer, "Granulizer");
+                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
+                                                    }).response.on_hover_text_at_pointer("The type of generator to use.");
+                                                let (new_type, sub_type) = match *gen_1_type_tracker.lock().unwrap() {
+                                                    GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
+                                                    GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
+                                                    GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
+                                                    GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
+                                                    GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
+                                                    GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
+                                                    GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
+                                                    GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
+                                                    GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
+                                                    GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
+                                                    GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
+                                                    GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
+                                                    GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
+                                                    GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
+                                                    GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
+                                                    GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
+                                                };
+                                                if *gen_1_type_override_set.lock().unwrap() != GeneratorType::Off {
+                                                    // This happens on plugin preset load
+                                                    *gen_1_type_tracker.lock().unwrap() = *gen_1_type_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_1_type, new_type);
+                                                    setter.set_parameter( &params.osc_1_type, sub_type);
+                                                    *gen_1_type_override_set.lock().unwrap() = GeneratorType::Off;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if new_type.clone() != params.audio_module_1_type.value() || sub_type != params.osc_1_type.value() {
+                                                        setter.set_parameter( &params.audio_module_1_type, new_type);
+                                                        setter.set_parameter( &params.osc_1_type, sub_type);
+                                                    }
+                                                }
+                                                
+                                                ui.colored_label(TEAL_GREEN, "Filter Assign");
+                                                egui::ComboBox::new("gen_1_routing_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_1_filter_tracker.lock().unwrap()))
+                                                    .width(70.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Bypass, "Bypass");
+                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Filter1, "Filter1");
+                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Filter2, "Filter2");
+                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Both, "Both");
+                                                    }).response.on_hover_text_at_pointer("Filter routing(s) for the generator");
+                                                // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                // Set the new value FROM the override field
+                                                if *gen_1_routing_override_set.lock().unwrap() != AMFilterRouting::UNSETROUTING {
+                                                    // This happens on plugin preset load
+                                                    *gen_1_filter_tracker.lock().unwrap() = *gen_1_routing_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_1_routing, gen_1_filter_tracker.lock().unwrap().clone());
+                                                    *gen_1_routing_override_set.lock().unwrap() = AMFilterRouting::UNSETROUTING;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if *gen_1_filter_tracker.lock().unwrap() != params.audio_module_1_routing.value() {
+                                                        setter.set_parameter( &params.audio_module_1_routing, gen_1_filter_tracker.lock().unwrap().clone());
+                                                    }
+                                                }
+                                            });
+                                            /*
                                             let audio_module_1_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_1_type,
                                                 setter,
@@ -950,6 +980,17 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     .set_text_size(TEXT_SIZE)
                                                     .set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_1_knob);
+                                            let audio_module_1_filter_routing = ui_knob::ArcKnob::for_param(
+                                                &params.audio_module_1_routing,
+                                                setter,
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
+                                            ui.add(audio_module_1_filter_routing);
+                                            */
                                             let audio_module_1_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_1_level,
                                                 setter,
@@ -961,21 +1002,93 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string())
                                                 .use_outline(true);
                                             ui.add(audio_module_1_level_knob);
-                                            let audio_module_1_filter_routing = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_1_routing,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
-                                            ui.add(audio_module_1_filter_routing);
                                         });
-                                        ui.add_space(32.0);
+                                        ui.add_space(48.0);
 
                                         ui.horizontal(|ui|{
-                                            ui.add_space(4.0);
+                                            ui.add_space(8.0);
+                                            ui.vertical(|ui|{
+                                                ui.add_space(12.0);
+                                                ui.colored_label(TEAL_GREEN, "Type");
+                                                egui::ComboBox::new("gen_2_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_2_type_tracker.lock().unwrap()))
+                                                    .width(86.0)
+                                                    .height(336.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Off, "Off");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Sine, "Sine");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Tri, "Tri");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Saw, "Saw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::RSaw, "Rsaw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::WSaw, "WSaw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::SSaw, "SSaw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::RASaw, "RASaw");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Ramp, "Ramp");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Square, "Square");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::RSquare, "RSquare");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Pulse, "Pulse");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Noise, "Noise");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Sampler, "Sampler");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Granulizer, "Granulizer");
+                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
+                                                    }).response.on_hover_text_at_pointer("The type of generator to use.");
+                                                let (new_type, sub_type) = match *gen_2_type_tracker.lock().unwrap() {
+                                                    GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
+                                                    GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
+                                                    GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
+                                                    GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
+                                                    GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
+                                                    GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
+                                                    GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
+                                                    GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
+                                                    GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
+                                                    GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
+                                                    GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
+                                                    GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
+                                                    GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
+                                                    GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
+                                                    GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
+                                                    GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
+                                                };
+                                                if *gen_2_type_override_set.lock().unwrap() != GeneratorType::Off {
+                                                    // This happens on plugin preset load
+                                                    *gen_2_type_tracker.lock().unwrap() = *gen_2_type_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_2_type, new_type);
+                                                    setter.set_parameter( &params.osc_2_type, sub_type);
+                                                    *gen_2_type_override_set.lock().unwrap() = GeneratorType::Off;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if new_type.clone() != params.audio_module_2_type.value() || sub_type != params.osc_2_type.value() {
+                                                        setter.set_parameter( &params.audio_module_2_type, new_type);
+                                                        setter.set_parameter( &params.osc_2_type, sub_type);
+                                                    }
+                                                }
+                                                
+                                                ui.colored_label(TEAL_GREEN, "Filter Assign");
+                                                egui::ComboBox::new("gen_2_routing_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_2_filter_tracker.lock().unwrap()))
+                                                    .width(70.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Bypass, "Bypass");
+                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Filter1, "Filter1");
+                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Filter2, "Filter2");
+                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Both, "Both");
+                                                    }).response.on_hover_text_at_pointer("Filter routing(s) for the generator");
+                                                // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                // Set the new value FROM the override field
+                                                if *gen_2_routing_override_set.lock().unwrap() != AMFilterRouting::UNSETROUTING {
+                                                    // This happens on plugin preset load
+                                                    *gen_2_filter_tracker.lock().unwrap() = *gen_2_routing_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_2_routing, gen_2_filter_tracker.lock().unwrap().clone());
+                                                    *gen_2_routing_override_set.lock().unwrap() = AMFilterRouting::UNSETROUTING;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if *gen_2_filter_tracker.lock().unwrap() != params.audio_module_2_routing.value() {
+                                                        setter.set_parameter( &params.audio_module_2_routing, gen_2_filter_tracker.lock().unwrap().clone());
+                                                    }
+                                                }
+                                            });
+                                            /*
                                             let audio_module_2_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_2_type,
                                                 setter,
@@ -986,16 +1099,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_line_color(TEAL_GREEN)
                                                 .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_2_knob);
-                                            let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_2_level,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
-                                            ui.add(audio_module_2_level_knob);
+                                            
                                             let audio_module_2_filter_routing = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_2_routing,
                                                 setter,
@@ -1007,10 +1111,104 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_2_filter_routing);
                                         });
-                                        ui.add_space(32.0);
+                                        */
+                                            let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
+                                                &params.audio_module_2_level,
+                                                setter,
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
+                                            ui.add(audio_module_2_level_knob);
+                                        });
+                                        ui.add_space(46.0);
 
                                         ui.horizontal(|ui| {
-                                            ui.add_space(4.0);
+                                            ui.add_space(8.0);
+                                            ui.vertical(|ui|{
+                                                ui.add_space(12.0);
+                                                ui.colored_label(TEAL_GREEN, "Type");
+                                                egui::ComboBox::new("gen_3_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_3_type_tracker.lock().unwrap()))
+                                                    .width(86.0)
+                                                    .height(336.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Off, "Off");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Sine, "Sine");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Tri, "Tri");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Saw, "Saw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::RSaw, "Rsaw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::WSaw, "WSaw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::SSaw, "SSaw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::RASaw, "RASaw");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Ramp, "Ramp");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Square, "Square");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::RSquare, "RSquare");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Pulse, "Pulse");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Noise, "Noise");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Sampler, "Sampler");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Granulizer, "Granulizer");
+                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
+                                                    }).response.on_hover_text_at_pointer("The type of generator to use.");
+                                                let (new_type, sub_type) = match *gen_3_type_tracker.lock().unwrap() {
+                                                    GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
+                                                    GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
+                                                    GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
+                                                    GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
+                                                    GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
+                                                    GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
+                                                    GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
+                                                    GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
+                                                    GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
+                                                    GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
+                                                    GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
+                                                    GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
+                                                    GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
+                                                    GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
+                                                    GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
+                                                    GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
+                                                };
+                                                if *gen_3_type_override_set.lock().unwrap() != GeneratorType::Off {
+                                                    // This happens on plugin preset load
+                                                    *gen_3_type_tracker.lock().unwrap() = *gen_3_type_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_3_type, new_type);
+                                                    setter.set_parameter( &params.osc_3_type, sub_type);
+                                                    *gen_3_type_override_set.lock().unwrap() = GeneratorType::Off;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if new_type.clone() != params.audio_module_3_type.value() || sub_type != params.osc_3_type.value() {
+                                                        setter.set_parameter( &params.audio_module_3_type, new_type);
+                                                        setter.set_parameter( &params.osc_3_type, sub_type);
+                                                    }
+                                                }
+                                                
+                                                ui.colored_label(TEAL_GREEN, "Filter Assign");
+                                                egui::ComboBox::new("gen_3_routing_combobox", "")
+                                                    .selected_text(format!("{:?}", *gen_3_filter_tracker.lock().unwrap()))
+                                                    .width(70.0)
+                                                    .show_ui(ui, |ui| {
+                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Bypass, "Bypass");
+                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Filter1, "Filter1");
+                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Filter2, "Filter2");
+                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Both, "Both");
+                                                    }).response.on_hover_text_at_pointer("Filter routing(s) for the generator");
+                                                // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
+                                                // Set the new value FROM the override field
+                                                if *gen_3_routing_override_set.lock().unwrap() != AMFilterRouting::UNSETROUTING {
+                                                    // This happens on plugin preset load
+                                                    *gen_3_filter_tracker.lock().unwrap() = *gen_3_routing_override_set.lock().unwrap();
+                                                    setter.set_parameter( &params.audio_module_3_routing, gen_3_filter_tracker.lock().unwrap().clone());
+                                                    *gen_3_routing_override_set.lock().unwrap() = AMFilterRouting::UNSETROUTING;
+                                                } else {
+                                                    // Set the new value in our params FROM the GUI
+                                                    if *gen_3_filter_tracker.lock().unwrap() != params.audio_module_3_routing.value() {
+                                                        setter.set_parameter( &params.audio_module_3_routing, gen_3_filter_tracker.lock().unwrap().clone());
+                                                    }
+                                                }
+                                            });
+                                            /*
                                             let audio_module_3_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_3_type,
                                                 setter,
@@ -1021,16 +1219,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_line_color(TEAL_GREEN)
                                                 .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
                                             ui.add(audio_module_3_knob);
-                                            let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_3_level,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
-                                            ui.add(audio_module_3_level_knob);
                                             let audio_module_3_filter_routing = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_3_routing,
                                                 setter,
@@ -1041,6 +1229,17 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                 .set_line_color(TEAL_GREEN)
                                                 .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
                                             ui.add(audio_module_3_filter_routing);
+                                            */
+                                            let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
+                                                &params.audio_module_3_level,
+                                                setter,
+                                                KNOB_SIZE,
+                                                KnobLayout::Vertical)
+                                                .preset_style(ui_knob::KnobStyle::Preset1)
+                                                .set_fill_color(DARK_GREY_UI_COLOR)
+                                                .set_line_color(TEAL_GREEN)
+                                                .set_text_size(TEXT_SIZE).set_hover_text("The output gain of the generator".to_string());
+                                            ui.add(audio_module_3_level_knob);
                                         });
                                         ui.add_space(32.0);
                                     });
@@ -1268,6 +1467,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    true,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1279,6 +1479,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1290,6 +1491,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1303,6 +1505,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    true,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1314,6 +1517,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1325,6 +1529,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1338,6 +1543,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    true,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1349,6 +1555,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1360,6 +1567,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1373,6 +1581,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    true,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1384,6 +1593,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -1395,6 +1605,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     5.1,
                                                                     2.0,
                                                                     ButtonLayout::HorizontalInline,
+                                                                    false,
                                                                 )
                                                                 .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                                 .with_line_color(YELLOW_MUSTARD),
@@ -2612,6 +2823,7 @@ A4I: Averaged 4 Pole Integrator".to_string());
                                                                 5.1,
                                                                 2.0,
                                                                 ButtonLayout::HorizontalInline,
+                                                                true,
                                                             )
                                                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                             .with_line_color(YELLOW_MUSTARD),
@@ -2623,6 +2835,7 @@ A4I: Averaged 4 Pole Integrator".to_string());
                                                                 5.1,
                                                                 2.0,
                                                                 ButtonLayout::HorizontalInline,
+                                                                false,
                                                             )
                                                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                             .with_line_color(YELLOW_MUSTARD),
@@ -2634,6 +2847,7 @@ A4I: Averaged 4 Pole Integrator".to_string());
                                                                 5.1,
                                                                 2.0,
                                                                 ButtonLayout::HorizontalInline,
+                                                                false,
                                                             )
                                                             .with_background_color(MEDIUM_GREY_UI_COLOR)
                                                             .with_line_color(YELLOW_MUSTARD),
@@ -3087,19 +3301,6 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                     setter.set_parameter(&params.param_import_preset, false);
 
                                                                     drop(locked_lib);
-                                                                    
-                                                                    // PRESET LOAD
-                                                                    // This is manually here to make sure it appears for long loads from different threads
-                                                                    // Create the loading popup here.
-                                                                    let screen_size = Rect::from_x_y_ranges(
-                                                                    RangeInclusive::new(0.0, WIDTH as f32),
-                                                                    RangeInclusive::new(0.0, HEIGHT as f32));
-                                                                    let popup_size = Vec2::new(400.0, 200.0);
-                                                                    let popup_pos = screen_size.center();
-                                                                
-                                                                    // Draw the loading popup content here.
-                                                                    ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                                                    ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
                                                                 
                                                                     // GUI thread misses this without this call here for some reason
                                                                     (
@@ -3112,6 +3313,12 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                         *mod_dest_override_3.lock().unwrap(),
                                                                         *mod_dest_override_4.lock().unwrap(),
                                                                         *preset_category_override.lock().unwrap(),
+                                                                        *gen_1_routing_override_set.lock().unwrap(),
+                                                                        *gen_2_routing_override_set.lock().unwrap(),
+                                                                        *gen_3_routing_override_set.lock().unwrap(),
+                                                                        *gen_1_type_override_set.lock().unwrap(),
+                                                                        *gen_2_type_override_set.lock().unwrap(),
+                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -3178,19 +3385,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                         if let Some(dialog) = &mut dvar {
                                                             if dialog.show(egui_ctx).selected() {
                                                               if let Some(file) = dialog.path() {
-                                                                let default_name: String;
-                                                                // This is manually here to make sure it appears for long loads from different threads
-                                                                // Create the loading popup here.
-                                                                let screen_size = Rect::from_x_y_ranges(
-                                                                RangeInclusive::new(0.0, WIDTH as f32),
-                                                                RangeInclusive::new(0.0, HEIGHT as f32));
-                                                                let popup_size = Vec2::new(400.0, 200.0);
-                                                                let popup_pos = screen_size.center();
-                                                                
-                                                                // Draw the loading popup content here.
-                                                                ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                                                                ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-                                                                
+                                                                let default_name: String;                                                                
                                                                 let opened_file = Some(file.to_path_buf());
                                                                 let unserialized: Vec<ActuatePresetV131>;
                                                                 (default_name, unserialized) = Actuate::load_preset_bank(opened_file);
@@ -3235,6 +3430,12 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                         *mod_dest_override_3.lock().unwrap(),
                                                                         *mod_dest_override_4.lock().unwrap(),
                                                                         *preset_category_override.lock().unwrap(),
+                                                                        *gen_1_routing_override_set.lock().unwrap(),
+                                                                        *gen_2_routing_override_set.lock().unwrap(),
+                                                                        *gen_3_routing_override_set.lock().unwrap(),
+                                                                        *gen_1_type_override_set.lock().unwrap(),
+                                                                        *gen_2_type_override_set.lock().unwrap(),
+                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -3292,6 +3493,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                     .auto_shrink([false; 2])
                                                     .max_height(200.0)
                                                     .max_width(400.0)
+                                                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                                                     .show(ui, |ui|{
                                                         ui.set_min_width(400.0);
                                                         ui.vertical(|ui|{
@@ -3374,6 +3576,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                         .override_text_color(Color32::DARK_GRAY);
                                                                     ui.add(high_freq_knob);
                                                                 });
+                                                                ui.colored_label(TEAL_GREEN, "This AREA is scrollable!");
                                                                 ui.separator();
                                                             });
                                                             ui.separator();
@@ -3613,19 +3816,6 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                     });
                                 });
                             });
-
-                        if params.loading.value() || loading.load(Ordering::SeqCst) {
-                            // Create the loading popup here.
-                            let screen_size = Rect::from_x_y_ranges(
-                                RangeInclusive::new(0.0, WIDTH as f32),
-                                RangeInclusive::new(0.0, HEIGHT as f32));
-                            let popup_size = Vec2::new(400.0, 200.0);
-                            let popup_pos = screen_size.center();
-
-                            // Draw the loading popup content here.
-                            ui.painter().rect_filled(Rect::from_center_size(Pos2 { x: popup_pos.x, y: popup_pos.y }, popup_size), 10.0, Color32::GRAY);
-                            ui.painter().text(popup_pos, Align2::CENTER_CENTER, "Loading...", LOADING_FONT, Color32::BLACK);
-                        }
 
                         // Sanity resetting inbetween channel processing
                         if params.param_next_preset.value() {

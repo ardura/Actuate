@@ -5,6 +5,25 @@ use std::fmt;
 use nih_plug::params::enums::Enum;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, PartialEq, Enum, Clone, Copy)]
+pub enum GeneratorType {
+    Off,
+    Sine,
+    Tri,
+    Saw,
+    RSaw,
+    WSaw,
+    SSaw,
+    RASaw,
+    Ramp,
+    Square,
+    RSquare,
+    Pulse,
+    Noise,
+    Sampler,
+    Granulizer,
+    Additive,
+}
 
 // Gui for which filter to display on bottom
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
@@ -64,8 +83,9 @@ pub enum ModulationDestination {
 }
 
 // Values for Audio Module Routing to filters
-#[derive(Enum, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, Enum, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum AMFilterRouting {
+    UNSETROUTING,
     Bypass,
     Filter1,
     Filter2,
@@ -149,6 +169,12 @@ impl fmt::Display for ModulationSource {
 }
 
 impl fmt::Display for ModulationDestination {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl fmt::Display for AMFilterRouting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }

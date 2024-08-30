@@ -1,6 +1,6 @@
 [package]
 name = "Actuate"
-version = "1.3.1"
+version = "1.3.2"
 edition = "2021"
 authors = ["Ardura <azviscarra@gmail.com>"]
 license = "GPL-3.0-or-later"
@@ -19,11 +19,11 @@ hound = "3.5.0"
 lazy_static = "1.4.0"
 
 # Nih plug update
-nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "cd1c66b054a8ff7d44084369b7022a0272ac690e", features = ["assert_process_allocs"] }
-nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "cd1c66b054a8ff7d44084369b7022a0272ac690e" }
+nih_plug = { git = "https://github.com/ardura/nih-plug.git", rev = "de315f902d7b5a75f80bc9d4164e4485bf2b34a1", features = ["assert_process_allocs"] }
+nih_plug_egui = { git = "https://github.com/ardura/nih-plug.git", rev = "de315f902d7b5a75f80bc9d4164e4485bf2b34a1" }
 
 # egui_file fork for nih-plug/Actuate
-egui_file = { git = "https://github.com/ardura/egui_file.git", rev = "03dd37a395e08d7ed224dee8d05dcd55302d7d79" }
+egui_file = { git = "https://github.com/ardura/egui_file.git", rev = "33c96389cd1c5e40c5d2ece87ef7f86a1df53cb2" }
 
 num-complex = "0.4.4"
 num-traits = "0.2.17"

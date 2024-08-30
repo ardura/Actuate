@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.3.1
+Version 1.3.2
 
 #####################################
 
@@ -25,7 +25,7 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 */
 
 #![allow(non_snake_case)]
-use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
+use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, GeneratorType, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV131, ModulationStruct};
 use flate2::{read::GzDecoder,write::GzEncoder,Compression};
 use nih_plug::{prelude::*, util::db_to_gain};
@@ -86,7 +86,6 @@ pub const FONT_COLOR: Color32 = Color32::from_rgb(248, 248, 248);
 
 // Fonts
 const FONT: nih_plug_egui::egui::FontId = FontId::proportional(12.0);
-const LOADING_FONT: nih_plug_egui::egui::FontId = FontId::proportional(20.0);
 const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::proportional(11.0);
 
 // This is the struct of the actual plugin object that tracks everything
@@ -162,6 +161,14 @@ pub struct Actuate {
     mod_override_dest_3: Arc<Mutex<ModulationDestination>>,
     mod_override_dest_4: Arc<Mutex<ModulationDestination>>,
     preset_category_override: Arc<Mutex<PresetType>>,
+
+    // Other overrides for preset loading
+    gen_1_routing_override: Arc<Mutex<AMFilterRouting>>,
+    gen_2_routing_override: Arc<Mutex<AMFilterRouting>>,
+    gen_3_routing_override: Arc<Mutex<AMFilterRouting>>,
+    gen_1_type_override: Arc<Mutex<GeneratorType>>,
+    gen_2_type_override: Arc<Mutex<GeneratorType>>,
+    gen_3_type_override: Arc<Mutex<GeneratorType>>,
 
     // Preset Lib Default
     preset_lib_name: Arc<Mutex<String>>,
@@ -376,6 +383,12 @@ impl Default for Actuate {
             mod_override_dest_3: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
             mod_override_dest_4: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
             preset_category_override: Arc::new(Mutex::new(PresetType::Select)),
+            gen_1_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
+            gen_2_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
+            gen_3_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
+            gen_1_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
+            gen_2_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
+            gen_3_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
 
             // Preset Library DEFAULT
             preset_lib_name: Arc::new(Mutex::new(String::from("Default"))),
@@ -1274,7 +1287,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.5,
                 },
             )
@@ -1290,7 +1303,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.5,
                 },
             )
@@ -1303,10 +1316,10 @@ impl ActuateParams {
             }),
             osc_1_sustain: FloatParam::new(
                 "Sustain",
-                999.9,
+                1999.9,
                 FloatRange::Linear {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                 },
             )
             .with_step_size(0.0001)
@@ -1321,7 +1334,7 @@ impl ActuateParams {
                 5.0,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.5,
                 },
             )
@@ -1407,7 +1420,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.5,
                 },
             )
@@ -1423,7 +1436,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.5,
                 },
             )
@@ -1436,10 +1449,10 @@ impl ActuateParams {
             }),
             osc_2_sustain: FloatParam::new(
                 "Sustain",
-                999.9,
+                1999.9,
                 FloatRange::Linear {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                 },
             )
             .with_step_size(0.0001)
@@ -1454,7 +1467,7 @@ impl ActuateParams {
                 5.0,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.5,
                 },
             )
@@ -1540,7 +1553,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.5,
                 },
             )
@@ -1556,7 +1569,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.5,
                 },
             )
@@ -1569,10 +1582,10 @@ impl ActuateParams {
             }),
             osc_3_sustain: FloatParam::new(
                 "Sustain",
-                999.9,
+                1999.9,
                 FloatRange::Linear {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                 },
             )
             .with_step_size(0.0001)
@@ -1587,7 +1600,7 @@ impl ActuateParams {
                 5.0,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.5,
                 },
             )
@@ -1890,7 +1903,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -1905,7 +1918,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -1917,10 +1930,10 @@ impl ActuateParams {
             }),
             filter_env_sustain: FloatParam::new(
                 "Env Sustain",
-                999.9,
+                1999.9,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -1935,7 +1948,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2047,7 +2060,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2062,7 +2075,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2074,10 +2087,10 @@ impl ActuateParams {
             }),
             filter_env_sustain_2: FloatParam::new(
                 "Env Sustain",
-                999.9,
+                1999.9,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2092,7 +2105,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2141,7 +2154,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2156,7 +2169,7 @@ impl ActuateParams {
                 300.0,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2171,7 +2184,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2186,7 +2199,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2236,7 +2249,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2251,7 +2264,7 @@ impl ActuateParams {
                 300.0,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2266,7 +2279,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -2281,7 +2294,7 @@ impl ActuateParams {
                 0.0001,
                 FloatRange::Skewed {
                     min: 0.0001,
-                    max: 999.9,
+                    max: 1999.9,
                     factor: 0.2,
                 },
             )
@@ -3453,7 +3466,7 @@ impl ActuateParams {
                     0.0001,
                     FloatRange::Skewed {
                         min: 0.0001,
-                        max: 999.9,
+                        max: 1999.9,
                         factor: 0.2,
                     },
                 )
@@ -3468,7 +3481,7 @@ impl ActuateParams {
                     0.0001,
                     FloatRange::Skewed {
                         min: 0.0001,
-                        max: 999.9,
+                        max: 1999.9,
                         factor: 0.2,
                     },
                 )
@@ -3480,10 +3493,10 @@ impl ActuateParams {
                 }),
             fm_sustain: FloatParam::new(
                     "FM Sustain",
-                    999.9,
+                    1999.9,
                     FloatRange::Skewed {
                         min: 0.0001,
-                        max: 999.9,
+                        max: 1999.9,
                         factor: 0.2,
                     },
                 )
@@ -3498,7 +3511,7 @@ impl ActuateParams {
                     0.0001,
                     FloatRange::Skewed {
                         min: 0.0001,
-                        max: 999.9,
+                        max: 1999.9,
                         factor: 0.2,
                     },
                 )
@@ -4981,13 +4994,13 @@ impl Actuate {
                 self.fm_rel_smoother_3 = self.fm_rel_smoother_1.clone();
                 // Reset our filter release to be at sustain level to start
                 self.fm_rel_smoother_1.reset(
-                    self.params.fm_one_to_two.value() * (self.params.fm_sustain.value() / 999.9),
+                    self.params.fm_one_to_two.value() * (self.params.fm_sustain.value() / 1999.9),
                 );
                 self.fm_rel_smoother_2.reset(
-                    self.params.fm_one_to_three.value() * (self.params.fm_sustain.value() / 999.9),
+                    self.params.fm_one_to_three.value() * (self.params.fm_sustain.value() / 1999.9),
                 );
                 self.fm_rel_smoother_3.reset(
-                    self.params.fm_two_to_three.value() * (self.params.fm_sustain.value() / 999.9),
+                    self.params.fm_two_to_three.value() * (self.params.fm_sustain.value() / 1999.9),
                 );
                 // Move release to the cutoff to end
                 self.fm_rel_smoother_1
@@ -5067,15 +5080,15 @@ impl Actuate {
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.fm_dec_smoother_1.set_target(
                     self.sample_rate,
-                    self.params.fm_sustain.value() / 999.9,
+                    self.params.fm_sustain.value() / 1999.9,
                 );
                 self.fm_dec_smoother_2.set_target(
                     self.sample_rate,
-                    self.params.fm_sustain.value() / 999.9,
+                    self.params.fm_sustain.value() / 1999.9,
                 );
                 self.fm_dec_smoother_3.set_target(
                     self.sample_rate,
-                    self.params.fm_sustain.value() / 999.9,
+                    self.params.fm_sustain.value() / 1999.9,
                 );
             }
             // If our decay has finished move to sustain state
@@ -5209,7 +5222,7 @@ impl Actuate {
             let mut right_output: f32 = 0.0;
 
             match self.params.audio_module_1_routing.value() {
-                AMFilterRouting::Bypass => {
+                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
                     left_output += wave1_l;
                     right_output += wave1_r;
                 },
@@ -5230,7 +5243,7 @@ impl Actuate {
             }
             //#[allow(unused_assignments)]
             match self.params.audio_module_2_routing.value() {
-                AMFilterRouting::Bypass => {
+                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
                     left_output += wave2_l;
                     right_output += wave2_r;
                 },
@@ -5251,7 +5264,7 @@ impl Actuate {
             }
             //#[allow(unused_assignments)]
             match self.params.audio_module_3_routing.value() {
-                AMFilterRouting::Bypass => {
+                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
                     left_output += wave3_l;
                     right_output += wave3_r;
                 },
@@ -5880,6 +5893,12 @@ impl Actuate {
         ModulationDestination,
         ModulationDestination,
         PresetType,
+        AMFilterRouting,
+        AMFilterRouting,
+        AMFilterRouting,
+        GeneratorType,
+        GeneratorType,
+        GeneratorType,
     ) {
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset[current_preset_index as usize];
@@ -6052,6 +6071,99 @@ impl Actuate {
         let mod_dest_2_override = loaded_preset.mod_dest_2.clone();
         let mod_dest_3_override = loaded_preset.mod_dest_3.clone();
         let mod_dest_4_override = loaded_preset.mod_dest_4.clone();
+        let gen_1_routing_override = loaded_preset.mod1_audio_module_routing.clone();
+        let gen_2_routing_override = loaded_preset.mod2_audio_module_routing.clone();
+        let gen_3_routing_override = loaded_preset.mod3_audio_module_routing.clone();
+        let gen_1_type_override = match loaded_preset.mod1_audio_module_type {
+            AudioModuleType::Off => {
+                GeneratorType::Off
+            },
+            AudioModuleType::Osc => {
+                match loaded_preset.mod1_osc_type {
+                    VoiceType::Sine => GeneratorType::Sine,
+                    VoiceType::Tri => GeneratorType::Tri,
+                    VoiceType::Saw => GeneratorType::Saw,
+                    VoiceType::RSaw => GeneratorType::RSaw,
+                    VoiceType::WSaw => GeneratorType::WSaw,
+                    VoiceType::SSaw => GeneratorType::SSaw,
+                    VoiceType::RASaw => GeneratorType::RASaw,
+                    VoiceType::Ramp => GeneratorType::Ramp,
+                    VoiceType::Square => GeneratorType::Square,
+                    VoiceType::RSquare => GeneratorType::RSquare,
+                    VoiceType::Pulse => GeneratorType::Pulse,
+                    VoiceType::Noise => GeneratorType::Noise,
+                }
+            },
+            AudioModuleType::Sampler => {
+                GeneratorType::Sampler
+            },
+            AudioModuleType::Granulizer => {
+                GeneratorType::Granulizer
+            },
+            AudioModuleType::Additive => {
+                GeneratorType::Additive
+            }
+        };
+        let gen_2_type_override = match loaded_preset.mod2_audio_module_type {
+            AudioModuleType::Off => {
+                GeneratorType::Off
+            },
+            AudioModuleType::Osc => {
+                match loaded_preset.mod2_osc_type {
+                    VoiceType::Sine => GeneratorType::Sine,
+                    VoiceType::Tri => GeneratorType::Tri,
+                    VoiceType::Saw => GeneratorType::Saw,
+                    VoiceType::RSaw => GeneratorType::RSaw,
+                    VoiceType::WSaw => GeneratorType::WSaw,
+                    VoiceType::SSaw => GeneratorType::SSaw,
+                    VoiceType::RASaw => GeneratorType::RASaw,
+                    VoiceType::Ramp => GeneratorType::Ramp,
+                    VoiceType::Square => GeneratorType::Square,
+                    VoiceType::RSquare => GeneratorType::RSquare,
+                    VoiceType::Pulse => GeneratorType::Pulse,
+                    VoiceType::Noise => GeneratorType::Noise,
+                }
+            },
+            AudioModuleType::Sampler => {
+                GeneratorType::Sampler
+            },
+            AudioModuleType::Granulizer => {
+                GeneratorType::Granulizer
+            },
+            AudioModuleType::Additive => {
+                GeneratorType::Additive
+            }
+        };
+        let gen_3_type_override = match loaded_preset.mod3_audio_module_type {
+            AudioModuleType::Off => {
+                GeneratorType::Off
+            },
+            AudioModuleType::Osc => {
+                match loaded_preset.mod3_osc_type {
+                    VoiceType::Sine => GeneratorType::Sine,
+                    VoiceType::Tri => GeneratorType::Tri,
+                    VoiceType::Saw => GeneratorType::Saw,
+                    VoiceType::RSaw => GeneratorType::RSaw,
+                    VoiceType::WSaw => GeneratorType::WSaw,
+                    VoiceType::SSaw => GeneratorType::SSaw,
+                    VoiceType::RASaw => GeneratorType::RASaw,
+                    VoiceType::Ramp => GeneratorType::Ramp,
+                    VoiceType::Square => GeneratorType::Square,
+                    VoiceType::RSquare => GeneratorType::RSquare,
+                    VoiceType::Pulse => GeneratorType::Pulse,
+                    VoiceType::Noise => GeneratorType::Noise,
+                }
+            },
+            AudioModuleType::Sampler => {
+                GeneratorType::Sampler
+            },
+            AudioModuleType::Granulizer => {
+                GeneratorType::Granulizer
+            },
+            AudioModuleType::Additive => {
+                GeneratorType::Additive
+            }
+        };
 
         setter.set_parameter(&params.use_fx, loaded_preset.use_fx);
         setter.set_parameter(&params.pre_use_eq, loaded_preset.pre_use_eq);
@@ -6402,6 +6514,12 @@ impl Actuate {
             mod_dest_3_override,
             mod_dest_4_override,
             preset_category_override,
+            gen_1_routing_override,
+            gen_2_routing_override,
+            gen_3_routing_override,
+            gen_1_type_override,
+            gen_2_type_override,
+            gen_3_type_override,
         )
     }
 
@@ -6848,6 +6966,7 @@ impl Actuate {
                 || note_off_filter_controller2
                 || note_off_filter_controller3
             {
+                let old_filter_state = self.filter_state_1;
                 self.filter_state_1 = OscState::Releasing;
                 self.filter_rel_smoother_1 = match self.params.filter_env_rel_curve.value() {
                     SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
@@ -6865,8 +6984,29 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_1.reset(
-                    self.params.filter_cutoff.value()
-                        * (self.params.filter_env_sustain.value() / 999.9),
+                    //(//self.params.filter_cutoff.value()
+                        //+
+                        match old_filter_state {
+                            OscState::Attacking => self.filter_atk_smoother_1.next(),
+                            OscState::Decaying | OscState::Releasing => self.filter_dec_smoother_1.next(),
+                            OscState::Sustaining => self.filter_dec_smoother_1.next(),
+                            OscState::Off => self.params.filter_cutoff.value(),
+                        }
+                        /*
+                         // This scales the peak env to be much gentler for the TILT filter
+                         match self.params.filter_alg_type.value() {
+                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
+                            FilterAlgorithms::TILT => adv_scale_value(
+                                self.params.filter_env_peak.value(),
+                                -19980.0,
+                                19980.0,
+                                -5000.0,
+                                5000.0,
+                            ),
+                        }*/
+                    //)
+                    //* (self.params.filter_env_sustain.value() / 1999.9)
+                    ,
                 );
                 // Move release to the cutoff to end
                 self.filter_rel_smoother_1
@@ -6935,6 +7075,7 @@ impl Actuate {
                 };
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_1.reset(
+                    /*
                     (self.params.filter_cutoff.value()
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
@@ -6948,14 +7089,30 @@ impl Actuate {
                                     5000.0,
                                 ),
                             }
-                        ))
+                        )
+                    )
+                    */
+                    self.filter_atk_smoother_1.next()
                     .clamp(20.0, 20000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_1.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff.value()
-                        * (self.params.filter_env_sustain.value() / 999.9),
+                    (
+                        self.params.filter_cutoff.value()
+                        +   // This scales the peak env to be much gentler for the TILT filter
+                        match self.params.filter_alg_type.value() {
+                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
+                            FilterAlgorithms::TILT => adv_scale_value(
+                                self.params.filter_env_peak.value(),
+                                -19980.0,
+                                19980.0,
+                                -5000.0,
+                                5000.0,
+                            ),
+                        }
+                    )
+                    * (self.params.filter_env_sustain.value() / 1999.9),
                 );
             }
             // If our decay has finished move to sustain state
@@ -6969,7 +7126,10 @@ impl Actuate {
                 OscState::Attacking => {
                     (self.filter_atk_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
                 }
-                OscState::Decaying | OscState::Sustaining => {
+                OscState::Decaying => {
+                    (self.filter_dec_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
+                OscState::Sustaining => {
                     (self.filter_dec_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
                 }
                 OscState::Releasing => {
@@ -7105,6 +7265,7 @@ impl Actuate {
                 || note_off_filter_controller2
                 || note_off_filter_controller3
             {
+                let old_filter_state = self.filter_state_2;
                 self.filter_state_2 = OscState::Releasing;
                 self.filter_rel_smoother_2 = match self.params.filter_env_rel_curve_2.value() {
                     SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
@@ -7122,8 +7283,27 @@ impl Actuate {
                 };
                 // Reset our filter release to be at sustain level to start
                 self.filter_rel_smoother_2.reset(
-                    self.params.filter_cutoff_2.value()
-                        * (self.params.filter_env_sustain_2.value() / 999.9),
+                    /*self.params.filter_cutoff_2.value()
+                        * (self.params.filter_env_sustain_2.value() / 1999.9)
+                        +   // This scales the peak env to be much gentler for the TILT filter
+                        match self.params.filter_alg_type_2.value() {
+                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
+                            FilterAlgorithms::TILT => adv_scale_value(
+                                self.params.filter_env_peak_2.value(),
+                                -19980.0,
+                                19980.0,
+                                -5000.0,
+                                5000.0,
+                            ),
+                        },
+                    */
+                    //self.filter_dec_smoother_2.next(),
+                    match old_filter_state {
+                        OscState::Attacking => self.filter_atk_smoother_2.next(),
+                        OscState::Decaying | OscState::Releasing => self.filter_dec_smoother_2.next(),
+                        OscState::Sustaining => self.filter_dec_smoother_2.next(),
+                        OscState::Off => self.params.filter_cutoff_2.value(),
+                    }
                 );
                 // Move release to the cutoff to end
                 self.filter_rel_smoother_2
@@ -7192,7 +7372,7 @@ impl Actuate {
                 };
                 // This makes our filter decay start at env peak point
                 self.filter_dec_smoother_2.reset(
-                    (self.params.filter_cutoff_2.value()
+                    /*(self.params.filter_cutoff_2.value()
                         + (
                             // This scales the peak env to be much gentler for the TILT filter
                             match self.params.filter_alg_type_2.value() {
@@ -7205,14 +7385,27 @@ impl Actuate {
                                     5000.0,
                                 ),
                             }
-                        ))
+                        ))*/
+                    self.filter_atk_smoother_2.next()
                     .clamp(20.0, 20000.0),
                 );
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
                 self.filter_dec_smoother_2.set_target(
                     self.sample_rate,
-                    self.params.filter_cutoff_2.value()
-                        * (self.params.filter_env_sustain_2.value() / 999.9),
+                    (self.params.filter_cutoff_2.value()
+                            +   // This scales the peak env to be much gentler for the TILT filter
+                            match self.params.filter_alg_type_2.value() {
+                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
+                                FilterAlgorithms::TILT => adv_scale_value(
+                                    self.params.filter_env_peak_2.value(),
+                                    -19980.0,
+                                    19980.0,
+                                    -5000.0,
+                                    5000.0,
+                                ),
+                            }
+                        )
+                        * (self.params.filter_env_sustain_2.value() / 1999.9)
                 );
             }
             // If our decay has finished move to sustain state
@@ -7226,7 +7419,10 @@ impl Actuate {
                 OscState::Attacking => {
                     (self.filter_atk_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
                 }
-                OscState::Decaying | OscState::Sustaining => {
+                OscState::Decaying => {
+                    (self.filter_dec_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
+                }
+                OscState::Sustaining => {
                     (self.filter_dec_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
                 }
                 OscState::Releasing => {
@@ -7420,7 +7616,7 @@ lazy_static::lazy_static!(
         mod1_osc_detune: 0.0,
         mod1_osc_attack: 0.0001,
         mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 999.9,
+        mod1_osc_sustain: 1999.9,
         mod1_osc_release: 5.0,
         mod1_osc_retrigger: RetriggerStyle::Retrigger,
         mod1_osc_atk_curve: SmoothStyle::Linear,
@@ -7450,7 +7646,7 @@ lazy_static::lazy_static!(
         mod2_osc_detune: 0.0,
         mod2_osc_attack: 0.0001,
         mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 999.9,
+        mod2_osc_sustain: 1999.9,
         mod2_osc_release: 5.0,
         mod2_osc_retrigger: RetriggerStyle::Retrigger,
         mod2_osc_atk_curve: SmoothStyle::Linear,
@@ -7480,7 +7676,7 @@ lazy_static::lazy_static!(
         mod3_osc_detune: 0.0,
         mod3_osc_attack: 0.0001,
         mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 999.9,
+        mod3_osc_sustain: 1999.9,
         mod3_osc_release: 5.0,
         mod3_osc_retrigger: RetriggerStyle::Retrigger,
         mod3_osc_atk_curve: SmoothStyle::Linear,
@@ -7500,7 +7696,7 @@ lazy_static::lazy_static!(
         filter_env_peak: 0.0,
         filter_env_attack: 0.0,
         filter_env_decay: 0.0001,
-        filter_env_sustain: 999.9,
+        filter_env_sustain: 1999.9,
         filter_env_release: 5.0,
         filter_env_atk_curve: SmoothStyle::Linear,
         filter_env_dec_curve: SmoothStyle::Linear,
@@ -7518,7 +7714,7 @@ lazy_static::lazy_static!(
         filter_env_peak_2: 0.0,
         filter_env_attack_2: 0.0,
         filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 999.9,
+        filter_env_sustain_2: 1999.9,
         filter_env_release_2: 5.0,
         filter_env_atk_curve_2: SmoothStyle::Linear,
         filter_env_dec_curve_2: SmoothStyle::Linear,
@@ -7694,7 +7890,7 @@ lazy_static::lazy_static!(
         mod1_osc_detune: 0.0,
         mod1_osc_attack: 0.0001,
         mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 999.9,
+        mod1_osc_sustain: 1999.9,
         mod1_osc_release: 5.0,
         mod1_osc_retrigger: RetriggerStyle::Retrigger,
         mod1_osc_atk_curve: SmoothStyle::Linear,
@@ -7724,7 +7920,7 @@ lazy_static::lazy_static!(
         mod2_osc_detune: 0.0,
         mod2_osc_attack: 0.0001,
         mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 999.9,
+        mod2_osc_sustain: 1999.9,
         mod2_osc_release: 5.0,
         mod2_osc_retrigger: RetriggerStyle::Retrigger,
         mod2_osc_atk_curve: SmoothStyle::Linear,
@@ -7754,7 +7950,7 @@ lazy_static::lazy_static!(
         mod3_osc_detune: 0.0,
         mod3_osc_attack: 0.0001,
         mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 999.9,
+        mod3_osc_sustain: 1999.9,
         mod3_osc_release: 5.0,
         mod3_osc_retrigger: RetriggerStyle::Retrigger,
         mod3_osc_atk_curve: SmoothStyle::Linear,
@@ -7774,7 +7970,7 @@ lazy_static::lazy_static!(
         filter_env_peak: 0.0,
         filter_env_attack: 0.0,
         filter_env_decay: 0.0001,
-        filter_env_sustain: 999.9,
+        filter_env_sustain: 1999.9,
         filter_env_release: 5.0,
         filter_env_atk_curve: SmoothStyle::Linear,
         filter_env_dec_curve: SmoothStyle::Linear,
@@ -7792,7 +7988,7 @@ lazy_static::lazy_static!(
         filter_env_peak_2: 0.0,
         filter_env_attack_2: 0.0,
         filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 999.9,
+        filter_env_sustain_2: 1999.9,
         filter_env_release_2: 5.0,
         filter_env_atk_curve_2: SmoothStyle::Linear,
         filter_env_dec_curve_2: SmoothStyle::Linear,
@@ -7969,7 +8165,7 @@ lazy_static::lazy_static!(
         mod1_osc_detune: 0.0,
         mod1_osc_attack: 0.0001,
         mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 999.9,
+        mod1_osc_sustain: 1999.9,
         mod1_osc_release: 5.0,
         mod1_osc_retrigger: RetriggerStyle::Retrigger,
         mod1_osc_atk_curve: SmoothStyle::Linear,
@@ -7999,7 +8195,7 @@ lazy_static::lazy_static!(
         mod2_osc_detune: 0.0,
         mod2_osc_attack: 0.0001,
         mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 999.9,
+        mod2_osc_sustain: 1999.9,
         mod2_osc_release: 5.0,
         mod2_osc_retrigger: RetriggerStyle::Retrigger,
         mod2_osc_atk_curve: SmoothStyle::Linear,
@@ -8029,7 +8225,7 @@ lazy_static::lazy_static!(
         mod3_osc_detune: 0.0,
         mod3_osc_attack: 0.0001,
         mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 999.9,
+        mod3_osc_sustain: 1999.9,
         mod3_osc_release: 5.0,
         mod3_osc_retrigger: RetriggerStyle::Retrigger,
         mod3_osc_atk_curve: SmoothStyle::Linear,
@@ -8049,7 +8245,7 @@ lazy_static::lazy_static!(
         filter_env_peak: 0.0,
         filter_env_attack: 0.0,
         filter_env_decay: 0.0001,
-        filter_env_sustain: 999.9,
+        filter_env_sustain: 1999.9,
         filter_env_release: 5.0,
         filter_env_atk_curve: SmoothStyle::Linear,
         filter_env_dec_curve: SmoothStyle::Linear,
@@ -8067,7 +8263,7 @@ lazy_static::lazy_static!(
         filter_env_peak_2: 0.0,
         filter_env_attack_2: 0.0,
         filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 999.9,
+        filter_env_sustain_2: 1999.9,
         filter_env_release_2: 5.0,
         filter_env_atk_curve_2: SmoothStyle::Linear,
         filter_env_dec_curve_2: SmoothStyle::Linear,
@@ -8257,7 +8453,7 @@ lazy_static::lazy_static!(
         mod1_osc_detune: 0.0,
         mod1_osc_attack: 0.0001,
         mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 999.9,
+        mod1_osc_sustain: 1999.9,
         mod1_osc_release: 5.0,
         mod1_osc_retrigger: RetriggerStyle::Retrigger,
         mod1_osc_atk_curve: SmoothStyle::Linear,
@@ -8287,7 +8483,7 @@ lazy_static::lazy_static!(
         mod2_osc_detune: 0.0,
         mod2_osc_attack: 0.0001,
         mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 999.9,
+        mod2_osc_sustain: 1999.9,
         mod2_osc_release: 5.0,
         mod2_osc_retrigger: RetriggerStyle::Retrigger,
         mod2_osc_atk_curve: SmoothStyle::Linear,
@@ -8317,7 +8513,7 @@ lazy_static::lazy_static!(
         mod3_osc_detune: 0.0,
         mod3_osc_attack: 0.0001,
         mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 999.9,
+        mod3_osc_sustain: 1999.9,
         mod3_osc_release: 5.0,
         mod3_osc_retrigger: RetriggerStyle::Retrigger,
         mod3_osc_atk_curve: SmoothStyle::Linear,
@@ -8337,7 +8533,7 @@ lazy_static::lazy_static!(
         filter_env_peak: 0.0,
         filter_env_attack: 0.0,
         filter_env_decay: 0.0001,
-        filter_env_sustain: 999.9,
+        filter_env_sustain: 1999.9,
         filter_env_release: 5.0,
         filter_env_atk_curve: SmoothStyle::Linear,
         filter_env_dec_curve: SmoothStyle::Linear,
@@ -8355,7 +8551,7 @@ lazy_static::lazy_static!(
         filter_env_peak_2: 0.0,
         filter_env_attack_2: 0.0,
         filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 999.9,
+        filter_env_sustain_2: 1999.9,
         filter_env_release_2: 5.0,
         filter_env_atk_curve_2: SmoothStyle::Linear,
         filter_env_dec_curve_2: SmoothStyle::Linear,
@@ -8435,7 +8631,7 @@ lazy_static::lazy_static!(
         fm_cycles: 1,
         fm_attack: 0.0001,
         fm_decay: 0.0001,
-        fm_sustain: 999.9,
+        fm_sustain: 1999.9,
         fm_release: 0.0001,
         fm_attack_curve: SmoothStyle::Linear,
         fm_decay_curve: SmoothStyle::Linear,
@@ -8555,7 +8751,7 @@ lazy_static::lazy_static!(
         mod1_osc_detune: 0.0,
         mod1_osc_attack: 0.0001,
         mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 999.9,
+        mod1_osc_sustain: 1999.9,
         mod1_osc_release: 5.0,
         mod1_osc_retrigger: RetriggerStyle::Retrigger,
         mod1_osc_atk_curve: SmoothStyle::Linear,
@@ -8585,7 +8781,7 @@ lazy_static::lazy_static!(
         mod2_osc_detune: 0.0,
         mod2_osc_attack: 0.0001,
         mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 999.9,
+        mod2_osc_sustain: 1999.9,
         mod2_osc_release: 5.0,
         mod2_osc_retrigger: RetriggerStyle::Retrigger,
         mod2_osc_atk_curve: SmoothStyle::Linear,
@@ -8615,7 +8811,7 @@ lazy_static::lazy_static!(
         mod3_osc_detune: 0.0,
         mod3_osc_attack: 0.0001,
         mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 999.9,
+        mod3_osc_sustain: 1999.9,
         mod3_osc_release: 5.0,
         mod3_osc_retrigger: RetriggerStyle::Retrigger,
         mod3_osc_atk_curve: SmoothStyle::Linear,
@@ -8635,7 +8831,7 @@ lazy_static::lazy_static!(
         filter_env_peak: 0.0,
         filter_env_attack: 0.0,
         filter_env_decay: 0.0001,
-        filter_env_sustain: 999.9,
+        filter_env_sustain: 1999.9,
         filter_env_release: 5.0,
         filter_env_atk_curve: SmoothStyle::Linear,
         filter_env_dec_curve: SmoothStyle::Linear,
@@ -8653,7 +8849,7 @@ lazy_static::lazy_static!(
         filter_env_peak_2: 0.0,
         filter_env_attack_2: 0.0,
         filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 999.9,
+        filter_env_sustain_2: 1999.9,
         filter_env_release_2: 5.0,
         filter_env_atk_curve_2: SmoothStyle::Linear,
         filter_env_dec_curve_2: SmoothStyle::Linear,
@@ -8733,7 +8929,7 @@ lazy_static::lazy_static!(
         fm_cycles: 1,
         fm_attack: 0.0001,
         fm_decay: 0.0001,
-        fm_sustain: 999.9,
+        fm_sustain: 1999.9,
         fm_release: 0.0001,
         fm_attack_curve: SmoothStyle::Linear,
         fm_decay_curve: SmoothStyle::Linear,
@@ -8902,7 +9098,7 @@ lazy_static::lazy_static!(
         mod1_osc_detune: 0.0,
         mod1_osc_attack: 0.0001,
         mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 999.9,
+        mod1_osc_sustain: 1999.9,
         mod1_osc_release: 5.0,
         mod1_osc_retrigger: RetriggerStyle::Retrigger,
         mod1_osc_atk_curve: SmoothStyle::Linear,
@@ -8932,7 +9128,7 @@ lazy_static::lazy_static!(
         mod2_osc_detune: 0.0,
         mod2_osc_attack: 0.0001,
         mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 999.9,
+        mod2_osc_sustain: 1999.9,
         mod2_osc_release: 5.0,
         mod2_osc_retrigger: RetriggerStyle::Retrigger,
         mod2_osc_atk_curve: SmoothStyle::Linear,
@@ -8962,7 +9158,7 @@ lazy_static::lazy_static!(
         mod3_osc_detune: 0.0,
         mod3_osc_attack: 0.0001,
         mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 999.9,
+        mod3_osc_sustain: 1999.9,
         mod3_osc_release: 5.0,
         mod3_osc_retrigger: RetriggerStyle::Retrigger,
         mod3_osc_atk_curve: SmoothStyle::Linear,
@@ -8982,7 +9178,7 @@ lazy_static::lazy_static!(
         filter_env_peak: 0.0,
         filter_env_attack: 0.0001,
         filter_env_decay: 0.0001,
-        filter_env_sustain: 999.9,
+        filter_env_sustain: 1999.9,
         filter_env_release: 5.0,
         filter_env_atk_curve: SmoothStyle::Linear,
         filter_env_dec_curve: SmoothStyle::Linear,
@@ -9000,7 +9196,7 @@ lazy_static::lazy_static!(
         filter_env_peak_2: 0.0,
         filter_env_attack_2: 0.0001,
         filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 999.9,
+        filter_env_sustain_2: 1999.9,
         filter_env_release_2: 5.0,
         filter_env_atk_curve_2: SmoothStyle::Linear,
         filter_env_dec_curve_2: SmoothStyle::Linear,
@@ -9081,7 +9277,7 @@ lazy_static::lazy_static!(
         fm_cycles: 1,
         fm_attack: 0.0001,
         fm_decay: 0.0001,
-        fm_sustain: 999.9,
+        fm_sustain: 1999.9,
         fm_release: 0.0001,
         fm_attack_curve: SmoothStyle::Linear,
         fm_decay_curve: SmoothStyle::Linear,
