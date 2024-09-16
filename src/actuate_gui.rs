@@ -24,6 +24,11 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let clear_voices: Arc<AtomicBool> = Arc::clone(&instance.clear_voices);
         let reload_entire_preset: Arc<AtomicBool> = Arc::clone(&instance.reload_entire_preset);
         let browse_preset_active: Arc<AtomicBool> = Arc::clone(&instance.browsing_presets);
+        let import_preset_active: Arc<AtomicBool> = Arc::clone(&instance.importing_presets);
+        let export_preset_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_presets);
+        let import_bank_active: Arc<AtomicBool> = Arc::clone(&instance.importing_banks);
+        let export_bank_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_banks);
+        let safety_clip_output: Arc<Mutex<bool>> = Arc::clone(&instance.safety_clip_output);
         let current_preset: Arc<AtomicU32> = Arc::clone(&instance.current_preset);
         let AM1: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_1);
         let AM2: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_2);
@@ -877,6 +882,8 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         .set_text_size(TEXT_SIZE)
                                         .set_hover_text("Master volume level for Actuate".to_string());
                                     ui.add(master_knob);
+
+                                    ui.checkbox(&mut safety_clip_output.lock().unwrap(), "Safety Clip Output");
                                 });
                                 const KNOB_SIZE: f32 = 28.0;
                                 const TEXT_SIZE: f32 = 11.0;
@@ -3272,15 +3279,21 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                     let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 1.2, SMALLER_FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(update_current_preset);
-                                                    let import_preset = BoolButton::BoolButton::for_param(&params.param_import_preset, setter, 5.0, 1.2, SMALLER_FONT)
-                                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                                    if ui.add(import_preset).clicked() || params.param_import_preset.value() {
-                                                        // hehe
+                                                    // Studio One changes (compatible for all DAWs)
+                                                    let import_preset_button = ui.button(RichText::new("Import Preset")
+                                                        .font(FONT)
+                                                        .background_color(DARK_GREY_UI_COLOR)
+                                                        .color(TEAL_GREEN)
+                                                    );
+                                                    if import_preset_button.clicked() {
+                                                        import_preset_active.store(true, Ordering::SeqCst);
+                                                    }
+                                                    if import_preset_active.load(Ordering::SeqCst) {
                                                         let dialock = dialog_main.clone();
                                                         let mut dialog = dialock.lock().unwrap();
                                                         dialog.open();
                                                         let mut dvar = Some(dialog);
-                                                        
+
                                                         if let Some(dialog) = &mut dvar {
                                                             if dialog.show(egui_ctx).selected() {
                                                               if let Some(file) = dialog.path() {
@@ -3298,7 +3311,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                     *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
                                                                     *arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
 
-                                                                    setter.set_parameter(&params.param_import_preset, false);
+                                                                    import_preset_active.store(false, Ordering::SeqCst);
 
                                                                     drop(locked_lib);
                                                                 
@@ -3332,15 +3345,23 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                             }
                                                             match dialog.state() {
                                                                 State::Cancelled | State::Closed => {
-                                                                    setter.set_parameter(&params.param_import_preset, false);
+                                                                    import_preset_active.store(false, Ordering::SeqCst);
                                                                 },
                                                                 _ => {}
                                                             }
                                                         }
+
                                                     }
-                                                    let export_preset = BoolButton::BoolButton::for_param(&params.param_export_preset, setter, 5.0, 1.2, SMALLER_FONT)
-                                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                                    if ui.add(export_preset).clicked() || params.param_export_preset.value() {
+                                                    // Studio One changes (compatible for all DAWs)
+                                                    let export_preset_button = ui.button(RichText::new("Export Preset")
+                                                        .font(FONT)
+                                                        .background_color(DARK_GREY_UI_COLOR)
+                                                        .color(TEAL_GREEN)
+                                                    );
+                                                    if export_preset_button.clicked() {
+                                                        export_preset_active.store(true, Ordering::SeqCst);
+                                                    }
+                                                    if export_preset_active.load(Ordering::SeqCst) {
                                                         let save_dialock = save_dialog_main.clone();
                                                         let mut save_dialog = save_dialock.lock().unwrap();
                                                         save_dialog.open();
@@ -3352,13 +3373,13 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                 let locked_lib = arc_preset.lock().unwrap();
                                                                 Actuate::export_preset(saved_file, locked_lib[current_preset_index as usize].clone());
                                                                 drop(locked_lib);
-                                                                setter.set_parameter(&params.param_export_preset, false);
+                                                                export_preset_active.store(false, Ordering::SeqCst);
                                                               }
                                                             }
 
                                                             match s_dialog.state() {
                                                                 State::Cancelled | State::Closed => {
-                                                                    setter.set_parameter(&params.param_export_preset, false);
+                                                                    export_preset_active.store(false, Ordering::SeqCst);
                                                                 },
                                                                 _ => {}
                                                             }
@@ -3370,9 +3391,16 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                 });
                                                 ui.horizontal(|ui|{
                                                     ui.add_space(90.0);
-                                                    let load_bank_button = BoolButton::BoolButton::for_param(&params.param_load_bank, setter, 3.5, 1.2, FONT)
-                                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                                    if ui.add(load_bank_button).clicked() || params.param_load_bank.value() {
+                                                    // Studio One changes (compatible for all DAWs)
+                                                    let import_bank_button = ui.button(RichText::new("Load Bank")
+                                                        .font(FONT)
+                                                        .background_color(DARK_GREY_UI_COLOR)
+                                                        .color(TEAL_GREEN)
+                                                    );
+                                                    if import_bank_button.clicked() {
+                                                        import_bank_active.store(true, Ordering::SeqCst);
+                                                    }
+                                                    if import_bank_active.load(Ordering::SeqCst) {
                                                         // Move to info tab on preset change
                                                         *lfo_select.lock().unwrap() = LFOSelect::INFO;
                                                     
@@ -3444,7 +3472,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                         &mut AM1L,
                                                                         &mut AM2L,
                                                                         &mut AM3L,);
-                                                                    setter.set_parameter(&params.param_load_bank, false);
+                                                                    import_bank_active.store(false, Ordering::SeqCst);
                                                                     *preset_lib_name_tracker.lock().unwrap() = filename.to_string_lossy().to_string();
                                                                 }
                                                               }
@@ -3452,15 +3480,22 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                         
                                                             match dialog.state() {
                                                                 State::Cancelled | State::Closed => {
-                                                                    setter.set_parameter(&params.param_load_bank, false);
+                                                                    import_bank_active.store(false, Ordering::SeqCst);
                                                                 },
                                                                 _ => {}
                                                             }
                                                         }
                                                     }
-                                                    let save_bank_button = BoolButton::BoolButton::for_param(&params.param_save_bank, setter, 3.5, 1.2, FONT)
-                                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                                    if ui.add(save_bank_button).clicked() || params.param_save_bank.value() {
+                                                    // Studio One changes (compatible for all DAWs)
+                                                    let export_bank_button = ui.button(RichText::new("Save Bank")
+                                                        .font(FONT)
+                                                        .background_color(DARK_GREY_UI_COLOR)
+                                                        .color(TEAL_GREEN)
+                                                    );
+                                                    if export_bank_button.clicked() {
+                                                        export_bank_active.store(true, Ordering::SeqCst);
+                                                    }
+                                                    if export_bank_active.load(Ordering::SeqCst) {
                                                         // Name the preset bank
                                                         let bank_save_dialock = bank_save_dialog_main.clone();
                                                         let mut save_dialog = bank_save_dialock.lock().unwrap();
@@ -3474,13 +3509,13 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                 let mut locked_lib = arc_preset.lock().unwrap();
                                                                 Actuate::save_preset_bank(&mut locked_lib, saved_file);
                                                                 drop(locked_lib);
-                                                                setter.set_parameter(&params.param_save_bank, false);
+                                                                export_bank_active.store(false, Ordering::SeqCst);
                                                               }
                                                             }
                                                         
                                                             match s_dialog.state() {
                                                                 State::Cancelled | State::Closed => {
-                                                                    setter.set_parameter(&params.param_save_bank, false);
+                                                                    export_bank_active.store(false, Ordering::SeqCst);
                                                                 },
                                                                 _ => {}
                                                             }
