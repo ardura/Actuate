@@ -28,6 +28,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let export_preset_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_presets);
         let import_bank_active: Arc<AtomicBool> = Arc::clone(&instance.importing_banks);
         let export_bank_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_banks);
+        let safety_clip_output: Arc<Mutex<bool>> = Arc::clone(&instance.safety_clip_output);
         let current_preset: Arc<AtomicU32> = Arc::clone(&instance.current_preset);
         let AM1: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_1);
         let AM2: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_2);
@@ -881,6 +882,8 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         .set_text_size(TEXT_SIZE)
                                         .set_hover_text("Master volume level for Actuate".to_string());
                                     ui.add(master_knob);
+
+                                    ui.checkbox(&mut safety_clip_output.lock().unwrap(), "Safety Clip Output");
                                 });
                                 const KNOB_SIZE: f32 = 28.0;
                                 const TEXT_SIZE: f32 = 11.0;

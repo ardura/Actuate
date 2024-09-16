@@ -108,6 +108,8 @@ pub struct Actuate {
     current_preset: Arc<AtomicU32>,
     update_current_preset: Arc<AtomicBool>,
 
+    safety_clip_output: Arc<Mutex<bool>>,
+
     current_note_on_velocity: Arc<AtomicF32>,
 
     // Managing resample logic
@@ -279,6 +281,10 @@ impl Default for Actuate {
         let importing_banks = Arc::new(AtomicBool::new(false));
         let exporting_banks = Arc::new(AtomicBool::new(false));
         // End Studio One fix for internal windows
+
+        // Safety Clipper
+        let safety_clip_output = Arc::new(Mutex::new(false));
+
         let current_preset = Arc::new(AtomicU32::new(0));
         let update_current_preset = Arc::new(AtomicBool::new(false));
 
@@ -298,6 +304,7 @@ impl Default for Actuate {
             file_dialog: file_dialog,
             file_open_buffer_timer: file_open_buffer_timer,
             browsing_presets: browsing_presets,
+            safety_clip_output: safety_clip_output,
             importing_banks: importing_banks,
             importing_presets: importing_presets,
             exporting_banks: exporting_banks,
@@ -5684,9 +5691,15 @@ impl Actuate {
             // Final output to DAW
             ////////////////////////////////////////////////////////////////////////////////////////
 
-            // Reassign our output signal
-            *channel_samples.get_mut(0).unwrap() = left_output * self.params.master_level.value();
-            *channel_samples.get_mut(1).unwrap() = right_output * self.params.master_level.value();
+            if *self.safety_clip_output.lock().unwrap() {
+                // Reassign our output signal
+                *channel_samples.get_mut(0).unwrap() = (left_output * self.params.master_level.value()).clamp(-1.0, 1.0);
+                *channel_samples.get_mut(1).unwrap() = (right_output * self.params.master_level.value()).clamp(-1.0, 1.0);
+            } else {
+                // Reassign our output signal
+                *channel_samples.get_mut(0).unwrap() = left_output * self.params.master_level.value();
+                *channel_samples.get_mut(1).unwrap() = right_output * self.params.master_level.value();
+            }
         }
     }
 
