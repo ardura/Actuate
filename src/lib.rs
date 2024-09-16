@@ -101,6 +101,10 @@ pub struct Actuate {
     file_dialog: Arc<AtomicBool>,
     file_open_buffer_timer: Arc<AtomicU32>,
     browsing_presets: Arc<AtomicBool>,
+    importing_presets: Arc<AtomicBool>,
+    exporting_presets: Arc<AtomicBool>,
+    importing_banks: Arc<AtomicBool>,
+    exporting_banks: Arc<AtomicBool>,
     current_preset: Arc<AtomicU32>,
     update_current_preset: Arc<AtomicBool>,
 
@@ -269,6 +273,12 @@ impl Default for Actuate {
         let file_dialog = Arc::new(AtomicBool::new(false));
         let file_open_buffer_timer = Arc::new(AtomicU32::new(0));
         let browsing_presets = Arc::new(AtomicBool::new(false));
+        // Studio One fix for internal windows
+        let importing_presets = Arc::new(AtomicBool::new(false));
+        let exporting_presets = Arc::new(AtomicBool::new(false));
+        let importing_banks = Arc::new(AtomicBool::new(false));
+        let exporting_banks = Arc::new(AtomicBool::new(false));
+        // End Studio One fix for internal windows
         let current_preset = Arc::new(AtomicU32::new(0));
         let update_current_preset = Arc::new(AtomicBool::new(false));
 
@@ -288,6 +298,10 @@ impl Default for Actuate {
             file_dialog: file_dialog,
             file_open_buffer_timer: file_open_buffer_timer,
             browsing_presets: browsing_presets,
+            importing_banks: importing_banks,
+            importing_presets: importing_presets,
+            exporting_banks: exporting_banks,
+            exporting_presets: exporting_presets,
             current_preset: current_preset,
             update_current_preset: update_current_preset,
 
@@ -1129,6 +1143,9 @@ pub struct ActuateParams {
     pub stereo_algorithm: EnumParam<StereoAlgorithm>,
 
     // UI Non-param Params
+    
+    // I'm cursed to have these now that older actuates used them
+    // They are not used
     #[id = "param_load_bank"]
     pub param_load_bank: BoolParam,
     #[id = "param_save_bank"]
@@ -1137,6 +1154,8 @@ pub struct ActuateParams {
     pub param_import_preset: BoolParam,
     #[id = "param_export_preset"]
     pub param_export_preset: BoolParam,
+    // I'm cursed to have these now that older actuates used them
+
     #[id = "param_next_preset"]
     pub param_next_preset: BoolParam,
     #[id = "param_prev_preset"]
@@ -1226,21 +1245,21 @@ impl ActuateParams {
 
             audio_module_1_level: FloatParam::new(
                 "Level",
-                0.5,
+                0.1,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_value_to_string(formatters::v2s_f32_percentage(0))
             .with_unit("%"),
             audio_module_2_level: FloatParam::new(
                 "Level",
-                0.5,
+                0.1,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_value_to_string(formatters::v2s_f32_percentage(0))
             .with_unit("%"),
             audio_module_3_level: FloatParam::new(
                 "Level",
-                0.5,
+                0.1,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_value_to_string(formatters::v2s_f32_percentage(0))
