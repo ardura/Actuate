@@ -5,6 +5,8 @@ use std::fmt;
 use nih_plug::params::enums::Enum;
 use serde::{Deserialize, Serialize};
 
+/*
+
 #[derive(Debug, PartialEq, Enum, Clone, Copy)]
 pub enum GeneratorType {
     Off,
@@ -23,7 +25,9 @@ pub enum GeneratorType {
     Sampler,
     Granulizer,
     Additive,
+    UNSETTYPE,
 }
+*/
 
 // Gui for which filter to display on bottom
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

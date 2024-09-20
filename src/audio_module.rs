@@ -48,10 +48,23 @@ use Oscillator::VoiceType;
 #[derive(Debug, Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum AudioModuleType {
     Off,
-    Osc,
+    Osc,        // Has to remain here for older patch compatibility but not used
     Sampler,
     Granulizer,
     Additive,
+    Sine,       // These Osc values are added as of the generator dropdown menu stuff
+    Tri,
+    Saw,
+    RSaw,
+    WSaw,
+    SSaw,
+    RASaw,
+    Ramp,
+    Square,
+    RSquare,
+    Pulse,
+    Noise,
+    UNSET_AM,
 }
 
 #[derive(Clone)]
@@ -574,12 +587,27 @@ impl AudioModule {
         const DISABLED_SPACE: f32 = 104.0;
 
         match am_type.value() {
+            AudioModuleType::UNSET_AM => {
+                ui.label("UNSET - Err");
+            }
             AudioModuleType::Off => {
                 // Blank space
                 ui.label("Disabled");
                 ui.add_space(DISABLED_SPACE);
             }
-            AudioModuleType::Osc => {
+            AudioModuleType::Osc |
+            AudioModuleType::Sine |
+            AudioModuleType::Tri |
+            AudioModuleType::Saw |
+            AudioModuleType::RSaw |
+            AudioModuleType::WSaw |
+            AudioModuleType::SSaw |
+            AudioModuleType::RASaw |
+            AudioModuleType::Ramp |
+            AudioModuleType::Square |
+            AudioModuleType::RSquare |
+            AudioModuleType::Pulse |
+            AudioModuleType::Noise => {
                 const KNOB_SIZE: f32 = 22.0;
                 const TEXT_SIZE: f32 = 10.0;
                 // Oscillator
@@ -1732,7 +1760,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
 
     // Index proper params from knobs
     // This lets us have a copy for voices, and also track changes like restretch changing or ADR slopes
-    pub fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) {
+    pub fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) -> (AudioModuleType, VoiceType) {
         match voice_index {
             1 => {
                 self.audio_module_type = params.audio_module_1_type.value();
@@ -2030,6 +2058,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
             }
             _ => {}
         }
+        (self.audio_module_type, self.osc_type)
     }
 
     // I was looking at the PolyModSynth Example and decided on this
@@ -2589,7 +2618,20 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                 let uni_phase = match self.osc_retrigger {
                                     RetriggerStyle::UniRandom => {
                                         match self.audio_module_type {
-                                            AudioModuleType::Osc | AudioModuleType::Additive => {
+                                            AudioModuleType::Osc | 
+                                            AudioModuleType::Additive |
+                                            AudioModuleType::Sine |
+                                            AudioModuleType::Tri |
+                                            AudioModuleType::Saw |
+                                            AudioModuleType::RSaw |
+                                            AudioModuleType::WSaw |
+                                            AudioModuleType::SSaw |
+                                            AudioModuleType::RASaw |
+                                            AudioModuleType::Ramp |
+                                            AudioModuleType::Square |
+                                            AudioModuleType::RSquare |
+                                            AudioModuleType::Pulse |
+                                            AudioModuleType::Noise => {
                                                 let mut rng = rand::thread_rng();
                                                 rng.gen_range(0.0..1.0)
                                             },
@@ -2609,7 +2651,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                                     0.0
                                                 }
                                             },
-                                            AudioModuleType::Off => {
+                                            AudioModuleType::Off | AudioModuleType::UNSET_AM => {
                                                 0.0
                                             },
                                         }
@@ -2656,13 +2698,26 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     _voice_type: self.osc_type,
                                     _angle: unison_angles[unison_voice],
                                     sample_pos: match self.audio_module_type {
-                                        AudioModuleType::Osc | AudioModuleType::Additive => {
+                                        AudioModuleType::Osc |
+                                        AudioModuleType::Additive |
+                                        AudioModuleType::Sine |
+                                        AudioModuleType::Tri |
+                                        AudioModuleType::Saw |
+                                        AudioModuleType::RSaw |
+                                        AudioModuleType::WSaw |
+                                        AudioModuleType::SSaw |
+                                        AudioModuleType::RASaw |
+                                        AudioModuleType::Ramp |
+                                        AudioModuleType::Square |
+                                        AudioModuleType::RSquare |
+                                        AudioModuleType::Pulse |
+                                        AudioModuleType::Noise => {
                                             0
                                         },
                                         AudioModuleType::Granulizer | AudioModuleType::Sampler => {
                                             uni_phase as usize
                                         },
-                                        AudioModuleType::Off => {
+                                        AudioModuleType::Off | AudioModuleType::UNSET_AM => {
                                             0
                                         },
                                     },
@@ -3486,7 +3541,19 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
         let output_signal_l: f32;
         let output_signal_r: f32;
         (output_signal_l, output_signal_r) = match self.audio_module_type {
-            AudioModuleType::Osc => {
+            AudioModuleType::Osc |
+            AudioModuleType::Sine |
+            AudioModuleType::Tri |
+            AudioModuleType::Saw |
+            AudioModuleType::RSaw |
+            AudioModuleType::WSaw |
+            AudioModuleType::SSaw |
+            AudioModuleType::RASaw |
+            AudioModuleType::Ramp |
+            AudioModuleType::Square |
+            AudioModuleType::RSquare |
+            AudioModuleType::Pulse |
+            AudioModuleType::Noise => {
                 let mut summed_voices_l: f32 = 0.0;
                 let mut summed_voices_r: f32 = 0.0;
                 let mut stereo_voices_l: f32 = 0.0;
@@ -4162,7 +4229,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
 
                 (summed_voices_l, summed_voices_r)
             }
-            AudioModuleType::Off => {
+            AudioModuleType::Off | AudioModuleType::UNSET_AM => {
                 // Do nothing, return 0.0
                 (0.0, 0.0)
             }

@@ -25,7 +25,7 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 */
 
 #![allow(non_snake_case)]
-use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, GeneratorType, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
+use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV131, ModulationStruct};
 use flate2::{read::GzDecoder,write::GzEncoder,Compression};
 use nih_plug::{prelude::*, util::db_to_gain};
@@ -172,9 +172,6 @@ pub struct Actuate {
     gen_1_routing_override: Arc<Mutex<AMFilterRouting>>,
     gen_2_routing_override: Arc<Mutex<AMFilterRouting>>,
     gen_3_routing_override: Arc<Mutex<AMFilterRouting>>,
-    gen_1_type_override: Arc<Mutex<GeneratorType>>,
-    gen_2_type_override: Arc<Mutex<GeneratorType>>,
-    gen_3_type_override: Arc<Mutex<GeneratorType>>,
 
     // Preset Lib Default
     preset_lib_name: Arc<Mutex<String>>,
@@ -269,7 +266,7 @@ pub struct Actuate {
 impl Default for Actuate {
     fn default() -> Self {
         // These are persistent fields to trigger updates like Diopser
-        let update_something = Arc::new(AtomicBool::new(false));
+        let update_something = Arc::new(AtomicBool::new(true));
         let clear_voices = Arc::new(AtomicBool::new(false));
         let reload_entire_preset = Arc::new(AtomicBool::new(false));
         let file_dialog = Arc::new(AtomicBool::new(false));
@@ -407,9 +404,6 @@ impl Default for Actuate {
             gen_1_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
             gen_2_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
             gen_3_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
-            gen_1_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
-            gen_2_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
-            gen_3_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
 
             // Preset Library DEFAULT
             preset_lib_name: Arc::new(Mutex::new(String::from("Default"))),
@@ -5928,9 +5922,6 @@ impl Actuate {
         AMFilterRouting,
         AMFilterRouting,
         AMFilterRouting,
-        GeneratorType,
-        GeneratorType,
-        GeneratorType,
     ) {
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset[current_preset_index as usize];
@@ -6107,6 +6098,7 @@ impl Actuate {
         let gen_2_routing_override = loaded_preset.mod2_audio_module_routing.clone();
         let gen_3_routing_override = loaded_preset.mod3_audio_module_routing.clone();
         let gen_1_type_override = match loaded_preset.mod1_audio_module_type {
+            AudioModuleType::UNSET_AM => GeneratorType::UNSETTYPE,
             AudioModuleType::Off => {
                 GeneratorType::Off
             },
@@ -6126,6 +6118,41 @@ impl Actuate {
                     VoiceType::Noise => GeneratorType::Noise,
                 }
             },
+            AudioModuleType::Osc |
+            AudioModuleType::Sine |
+            AudioModuleType::Tri => {
+                GeneratorType::Tri
+            }
+            AudioModuleType::Saw => {
+                GeneratorType::Saw
+            }
+            AudioModuleType::RSaw => {
+                GeneratorType::RSaw
+            }
+            AudioModuleType::WSaw => {
+                GeneratorType::WSaw
+            }
+            AudioModuleType::SSaw => {
+                GeneratorType::SSaw
+            }
+            AudioModuleType::RASaw => {
+                GeneratorType::RASaw
+            }
+            AudioModuleType::Ramp => {
+                GeneratorType::Ramp
+            }
+            AudioModuleType::Square => {
+                GeneratorType::Square
+            }
+            AudioModuleType::RSquare => {
+                GeneratorType::RSquare
+            }
+            AudioModuleType::Pulse => {
+                GeneratorType::Noise
+            }
+            AudioModuleType::Noise => {
+                GeneratorType::Noise
+            }
             AudioModuleType::Sampler => {
                 GeneratorType::Sampler
             },
@@ -6137,6 +6164,7 @@ impl Actuate {
             }
         };
         let gen_2_type_override = match loaded_preset.mod2_audio_module_type {
+            AudioModuleType::UNSET_AM => GeneratorType::UNSETTYPE,
             AudioModuleType::Off => {
                 GeneratorType::Off
             },
@@ -6167,6 +6195,7 @@ impl Actuate {
             }
         };
         let gen_3_type_override = match loaded_preset.mod3_audio_module_type {
+            AudioModuleType::UNSET_AM => GeneratorType::UNSETTYPE,
             AudioModuleType::Off => {
                 GeneratorType::Off
             },

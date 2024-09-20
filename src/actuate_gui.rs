@@ -9,7 +9,7 @@ use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichTe
 
 use crate::{
     actuate_enums::{
-        AMFilterRouting, FilterAlgorithms, GeneratorType, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType, Oscillator::VoiceType}, Actuate, ActuateParams, CustomWidgets::{
+        AMFilterRouting, FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType, Oscillator::VoiceType}, Actuate, ActuateParams, CustomWidgets::{
             slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, 
             BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, 
             CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
@@ -60,12 +60,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             Arc::new(Mutex::new(AMFilterRouting::Filter1));
         let gen_3_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
             Arc::new(Mutex::new(AMFilterRouting::Filter1));
-        let gen_1_type_tracker_outside: Arc<Mutex<GeneratorType>> =
-            Arc::new(Mutex::new(GeneratorType::Off));
-        let gen_2_type_tracker_outside: Arc<Mutex<GeneratorType>> =
-            Arc::new(Mutex::new(GeneratorType::Off));
-        let gen_3_type_tracker_outside: Arc<Mutex<GeneratorType>> =
-            Arc::new(Mutex::new(GeneratorType::Off));
 
         let preset_category_tracker_outside: Arc<Mutex<PresetType>> =
             Arc::new(Mutex::new(PresetType::Select));
@@ -82,9 +76,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let gen_1_routing_override_set = instance.gen_1_routing_override.clone();
         let gen_2_routing_override_set = instance.gen_2_routing_override.clone();
         let gen_3_routing_override_set = instance.gen_3_routing_override.clone();
-        let gen_1_type_override_set = instance.gen_1_type_override.clone();
-        let gen_2_type_override_set = instance.gen_2_type_override.clone();
-        let gen_3_type_override_set = instance.gen_3_type_override.clone();
 
         let filter_acid = instance.filter_acid.clone();
         let filter_analog = instance.filter_analog.clone();
@@ -206,11 +197,69 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         let gen_1_filter_tracker = gen_1_filter_tracker_outside.clone();
                         let gen_2_filter_tracker = gen_2_filter_tracker_outside.clone();
                         let gen_3_filter_tracker = gen_3_filter_tracker_outside.clone();
-                        let gen_1_type_tracker = gen_1_type_tracker_outside.clone();
-                        let gen_2_type_tracker = gen_2_type_tracker_outside.clone();
-                        let gen_3_type_tracker = gen_3_type_tracker_outside.clone();
                         let preset_category_tracker = preset_category_tracker_outside.clone();
                         let preset_lib_name_tracker = arc_preset_lib_name.clone();
+
+                        /*
+                        // Fix reload of plugin from project load
+                        if *gen_1_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE || params.audio_module_1_type.value() != AudioModuleType::UNSET_AM {
+                            let (new_type, sub_type) = match *gen_1_type_tracker.lock().unwrap() {
+                                GeneratorType::UNSETTYPE => (AudioModuleType::UNSET_AM, VoiceType::Sine),
+                                GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
+                                GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
+                                GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
+                                GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
+                                GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
+                                GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
+                                GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
+                                GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
+                                GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
+                                GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
+                                GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
+                                GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
+                                GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
+                                GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
+                                GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
+                                GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
+                            };
+                            let try_load = match new_type {
+                                AudioModuleType::Off => GeneratorType::Off,
+                                AudioModuleType::Additive => GeneratorType::Additive,
+                                AudioModuleType::Granulizer => GeneratorType::Granulizer,
+                                AudioModuleType::Sampler => GeneratorType::Sampler,
+                                AudioModuleType::Osc => match sub_type {
+                                    VoiceType::Noise => GeneratorType::Noise,
+                                    VoiceType::Pulse => GeneratorType::Pulse,
+                                    VoiceType::Saw => GeneratorType::Saw,
+                                    VoiceType::SSaw => GeneratorType::SSaw,
+                                    VoiceType::Sine => GeneratorType::Sine,
+                                    VoiceType::Square => GeneratorType::Square,
+                                    VoiceType::WSaw => GeneratorType::WSaw,
+                                    VoiceType::RSaw => GeneratorType::RSaw,
+                                    VoiceType::RASaw => GeneratorType::RASaw,
+                                    VoiceType::RSquare => GeneratorType::RSquare,
+                                    VoiceType::Ramp => GeneratorType::Ramp,
+                                    VoiceType::Tri => GeneratorType::Tri,
+                                }
+                            };
+                            if try_load != *gen_1_type_tracker.lock().unwrap() {
+                                *gen_1_type_tracker.lock().unwrap() = try_load;
+                            }
+                            AM1.lock()
+                                .unwrap()
+                                .consume_params(params.clone(), 1);
+                        }
+                        if *gen_2_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE || params.audio_module_2_type.value() != AudioModuleType::UNSET_AM {
+                            AM2.lock()
+                                .unwrap()
+                                .consume_params(params.clone(), 2);
+                        }
+                        if *gen_3_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE || params.audio_module_3_type.value() != AudioModuleType::UNSET_AM {
+                            AM3.lock()
+                                .unwrap()
+                                .consume_params(params.clone(), 3);
+                        }
+                        */
 
                         // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
                         // It runs if there is peristent sample data but not sample data in the audio module
@@ -284,9 +333,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     *gen_1_routing_override_set.lock().unwrap(),
                                     *gen_2_routing_override_set.lock().unwrap(),
                                     *gen_3_routing_override_set.lock().unwrap(),
-                                    *gen_1_type_override_set.lock().unwrap(),
-                                    *gen_2_type_override_set.lock().unwrap(),
-                                    *gen_3_type_override_set.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -332,9 +378,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     *gen_1_routing_override_set.lock().unwrap(),
                                     *gen_2_routing_override_set.lock().unwrap(),
                                     *gen_3_routing_override_set.lock().unwrap(),
-                                    *gen_1_type_override_set.lock().unwrap(),
-                                    *gen_2_type_override_set.lock().unwrap(),
-                                    *gen_3_type_override_set.lock().unwrap(),
                                 ) = Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
@@ -620,9 +663,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                         *gen_1_routing_override_set.lock().unwrap(),
                                                                         *gen_2_routing_override_set.lock().unwrap(),
                                                                         *gen_3_routing_override_set.lock().unwrap(),
-                                                                        *gen_1_type_override_set.lock().unwrap(),
-                                                                        *gen_2_type_override_set.lock().unwrap(),
-                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -755,9 +795,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                         *gen_1_routing_override_set.lock().unwrap(),
                                                                         *gen_2_routing_override_set.lock().unwrap(),
                                                                         *gen_3_routing_override_set.lock().unwrap(),
-                                                                        *gen_1_type_override_set.lock().unwrap(),
-                                                                        *gen_2_type_override_set.lock().unwrap(),
-                                                                        *gen_3_type_override_set.lock().unwrap(),
                                                                     ) = Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
@@ -920,6 +957,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                         ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
                                                     }).response.on_hover_text_at_pointer("The type of generator to use.");
                                                 let (new_type, sub_type) = match *gen_1_type_tracker.lock().unwrap() {
+                                                    GeneratorType::UNSETTYPE => (AudioModuleType::UNSET_AM, VoiceType::Sine),
                                                     GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
                                                     GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
                                                     GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
@@ -937,18 +975,43 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
                                                     GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
                                                 };
-                                                if *gen_1_type_override_set.lock().unwrap() != GeneratorType::Off {
+                                                if *gen_1_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE {
                                                     // This happens on plugin preset load
                                                     *gen_1_type_tracker.lock().unwrap() = *gen_1_type_override_set.lock().unwrap();
                                                     setter.set_parameter( &params.audio_module_1_type, new_type);
                                                     setter.set_parameter( &params.osc_1_type, sub_type);
-                                                    *gen_1_type_override_set.lock().unwrap() = GeneratorType::Off;
+                                                    *gen_1_type_override_set.lock().unwrap() = GeneratorType::UNSETTYPE;
                                                 } else {
                                                     // Set the new value in our params FROM the GUI
                                                     if new_type.clone() != params.audio_module_1_type.value() || sub_type != params.osc_1_type.value() {
                                                         setter.set_parameter( &params.audio_module_1_type, new_type);
                                                         setter.set_parameter( &params.osc_1_type, sub_type);
-                                                    }
+                                                    } 
+                                                    /*else {
+                                                        let try_load = match new_type {
+                                                            AudioModuleType::Off => GeneratorType::Off,
+                                                            AudioModuleType::Additive => GeneratorType::Additive,
+                                                            AudioModuleType::Granulizer => GeneratorType::Granulizer,
+                                                            AudioModuleType::Sampler => GeneratorType::Sampler,
+                                                            AudioModuleType::Osc => match sub_type {
+                                                                VoiceType::Noise => GeneratorType::Noise,
+                                                                VoiceType::Pulse => GeneratorType::Pulse,
+                                                                VoiceType::Saw => GeneratorType::Saw,
+                                                                VoiceType::SSaw => GeneratorType::SSaw,
+                                                                VoiceType::Sine => GeneratorType::Sine,
+                                                                VoiceType::Square => GeneratorType::Square,
+                                                                VoiceType::WSaw => GeneratorType::WSaw,
+                                                                VoiceType::RSaw => GeneratorType::RSaw,
+                                                                VoiceType::RASaw => GeneratorType::RASaw,
+                                                                VoiceType::RSquare => GeneratorType::RSquare,
+                                                                VoiceType::Ramp => GeneratorType::Ramp,
+                                                                VoiceType::Tri => GeneratorType::Tri,
+                                                            }
+                                                        };
+                                                        if try_load != *gen_1_type_tracker.lock().unwrap() {
+                                                            *gen_1_type_tracker.lock().unwrap() = try_load;
+                                                        }
+                                                    }*/
                                                 }
                                                 
                                                 ui.colored_label(TEAL_GREEN, "Filter Assign");
@@ -1040,6 +1103,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                         ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
                                                     }).response.on_hover_text_at_pointer("The type of generator to use.");
                                                 let (new_type, sub_type) = match *gen_2_type_tracker.lock().unwrap() {
+                                                    GeneratorType::UNSETTYPE => (AudioModuleType::UNSET_AM, VoiceType::Sine),
                                                     GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
                                                     GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
                                                     GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
@@ -1057,18 +1121,43 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
                                                     GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
                                                 };
-                                                if *gen_2_type_override_set.lock().unwrap() != GeneratorType::Off {
+                                                if *gen_2_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE {
                                                     // This happens on plugin preset load
                                                     *gen_2_type_tracker.lock().unwrap() = *gen_2_type_override_set.lock().unwrap();
                                                     setter.set_parameter( &params.audio_module_2_type, new_type);
                                                     setter.set_parameter( &params.osc_2_type, sub_type);
-                                                    *gen_2_type_override_set.lock().unwrap() = GeneratorType::Off;
+                                                    *gen_2_type_override_set.lock().unwrap() = GeneratorType::UNSETTYPE;
                                                 } else {
                                                     // Set the new value in our params FROM the GUI
                                                     if new_type.clone() != params.audio_module_2_type.value() || sub_type != params.osc_2_type.value() {
                                                         setter.set_parameter( &params.audio_module_2_type, new_type);
                                                         setter.set_parameter( &params.osc_2_type, sub_type);
                                                     }
+                                                    /* else {
+                                                        let try_load = match new_type {
+                                                            AudioModuleType::Off => GeneratorType::Off,
+                                                            AudioModuleType::Additive => GeneratorType::Additive,
+                                                            AudioModuleType::Granulizer => GeneratorType::Granulizer,
+                                                            AudioModuleType::Sampler => GeneratorType::Sampler,
+                                                            AudioModuleType::Osc => match sub_type {
+                                                                VoiceType::Noise => GeneratorType::Noise,
+                                                                VoiceType::Pulse => GeneratorType::Pulse,
+                                                                VoiceType::Saw => GeneratorType::Saw,
+                                                                VoiceType::SSaw => GeneratorType::SSaw,
+                                                                VoiceType::Sine => GeneratorType::Sine,
+                                                                VoiceType::Square => GeneratorType::Square,
+                                                                VoiceType::WSaw => GeneratorType::WSaw,
+                                                                VoiceType::RSaw => GeneratorType::RSaw,
+                                                                VoiceType::RASaw => GeneratorType::RASaw,
+                                                                VoiceType::RSquare => GeneratorType::RSquare,
+                                                                VoiceType::Ramp => GeneratorType::Ramp,
+                                                                VoiceType::Tri => GeneratorType::Tri,
+                                                            }
+                                                        };
+                                                        if try_load != *gen_2_type_tracker.lock().unwrap() {
+                                                            *gen_2_type_tracker.lock().unwrap() = try_load;
+                                                        }
+                                                    }*/
                                                 }
                                                 
                                                 ui.colored_label(TEAL_GREEN, "Filter Assign");
@@ -1160,6 +1249,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                         ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
                                                     }).response.on_hover_text_at_pointer("The type of generator to use.");
                                                 let (new_type, sub_type) = match *gen_3_type_tracker.lock().unwrap() {
+                                                    GeneratorType::UNSETTYPE => (AudioModuleType::UNSET_AM, VoiceType::Sine),
                                                     GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
                                                     GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
                                                     GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
@@ -1177,18 +1267,44 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
                                                     GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
                                                 };
-                                                if *gen_3_type_override_set.lock().unwrap() != GeneratorType::Off {
+                                                if *gen_3_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE {
                                                     // This happens on plugin preset load
                                                     *gen_3_type_tracker.lock().unwrap() = *gen_3_type_override_set.lock().unwrap();
                                                     setter.set_parameter( &params.audio_module_3_type, new_type);
                                                     setter.set_parameter( &params.osc_3_type, sub_type);
-                                                    *gen_3_type_override_set.lock().unwrap() = GeneratorType::Off;
+                                                    *gen_3_type_override_set.lock().unwrap() = GeneratorType::UNSETTYPE;
                                                 } else {
                                                     // Set the new value in our params FROM the GUI
                                                     if new_type.clone() != params.audio_module_3_type.value() || sub_type != params.osc_3_type.value() {
                                                         setter.set_parameter( &params.audio_module_3_type, new_type);
                                                         setter.set_parameter( &params.osc_3_type, sub_type);
+                                                    } 
+                                                    /*else {
+                                                        let try_load = match new_type {
+                                                            AudioModuleType::Off => GeneratorType::Off,
+                                                            AudioModuleType::Additive => GeneratorType::Additive,
+                                                            AudioModuleType::Granulizer => GeneratorType::Granulizer,
+                                                            AudioModuleType::Sampler => GeneratorType::Sampler,
+                                                            AudioModuleType::Osc => match sub_type {
+                                                                VoiceType::Noise => GeneratorType::Noise,
+                                                                VoiceType::Pulse => GeneratorType::Pulse,
+                                                                VoiceType::Saw => GeneratorType::Saw,
+                                                                VoiceType::SSaw => GeneratorType::SSaw,
+                                                                VoiceType::Sine => GeneratorType::Sine,
+                                                                VoiceType::Square => GeneratorType::Square,
+                                                                VoiceType::WSaw => GeneratorType::WSaw,
+                                                                VoiceType::RSaw => GeneratorType::RSaw,
+                                                                VoiceType::RASaw => GeneratorType::RASaw,
+                                                                VoiceType::RSquare => GeneratorType::RSquare,
+                                                                VoiceType::Ramp => GeneratorType::Ramp,
+                                                                VoiceType::Tri => GeneratorType::Tri,
+                                                            }
+                                                        };
+                                                        if try_load != *gen_3_type_tracker.lock().unwrap() {
+                                                            *gen_3_type_tracker.lock().unwrap() = try_load;
+                                                        }
                                                     }
+                                                    */
                                                 }
                                                 
                                                 ui.colored_label(TEAL_GREEN, "Filter Assign");
