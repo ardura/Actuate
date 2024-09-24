@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.3.3
+Version 1.3.4
 
 #####################################
 
@@ -27,13 +27,12 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 #![allow(non_snake_case)]
 use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV131, ModulationStruct};
-use flate2::{read::GzDecoder,write::GzEncoder,Compression};
 use nih_plug::{prelude::*, util::db_to_gain};
 use nih_plug_egui::{
     egui::{Color32, FontId}, EguiState
 };
 use std::{
-    fs::File, io::{Read, Write}, path::PathBuf, sync::{
+    fs::File, io::{Read}, path::PathBuf, sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
         Arc, Mutex,
     }
@@ -42,15 +41,17 @@ use std::{
 // My Files/crates
 use audio_module::{
     AudioModule, AudioModuleType,
-    Oscillator::{self, OscState, RetriggerStyle, SmoothStyle, VoiceType},
+    Oscillator::{self, OscState, RetriggerStyle, SmoothStyle},
     frequency_modulation,
 };
 use fx::{
     abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, A4I_Filter::{self, A4iFilter}, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType,StateVariableFilter}, V4Filter::{self, V4FilterStruct}, VCFilter::ResponseType as VCResponseType
 };
 
+// This is here in meantime until new Actuate versions past this one!
+#[allow(unused_imports)]
 use old_preset_structs::{
-    load_unserialized_old, load_unserialized_v114, load_unserialized_v122, load_unserialized_v123, load_unserialized_v125, load_unserialized_v126, load_unserialized_v130, ActuatePresetV123, ActuatePresetV125, ActuatePresetV126, ActuatePresetV130
+    _load_unserialized_v130, ActuatePresetV130
 };
 
 mod actuate_gui;
@@ -157,27 +158,11 @@ pub struct Actuate {
     lfo_2: LFOController::LFOController,
     lfo_3: LFOController::LFOController,
 
-    // Modulation overrides for preset loading
-    mod_override_source_1: Arc<Mutex<ModulationSource>>,
-    mod_override_source_2: Arc<Mutex<ModulationSource>>,
-    mod_override_source_3: Arc<Mutex<ModulationSource>>,
-    mod_override_source_4: Arc<Mutex<ModulationSource>>,
-    mod_override_dest_1: Arc<Mutex<ModulationDestination>>,
-    mod_override_dest_2: Arc<Mutex<ModulationDestination>>,
-    mod_override_dest_3: Arc<Mutex<ModulationDestination>>,
-    mod_override_dest_4: Arc<Mutex<ModulationDestination>>,
-    preset_category_override: Arc<Mutex<PresetType>>,
-
-    // Other overrides for preset loading
-    gen_1_routing_override: Arc<Mutex<AMFilterRouting>>,
-    gen_2_routing_override: Arc<Mutex<AMFilterRouting>>,
-    gen_3_routing_override: Arc<Mutex<AMFilterRouting>>,
-
     // Preset Lib Default
     preset_lib_name: Arc<Mutex<String>>,
     preset_name: Arc<Mutex<String>>,
     preset_info: Arc<Mutex<String>>,
-    preset_category: Arc<Mutex<PresetType>>,
+    //preset_category: Arc<Mutex<PresetType>>,
     preset_lib: Arc<Mutex<Vec<ActuatePresetV131>>>,
 
     // Used for DC Offset calculations
@@ -391,25 +376,11 @@ impl Default for Actuate {
             lfo_2: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
             lfo_3: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
 
-            // Modulation Overrides
-            mod_override_source_1: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
-            mod_override_source_2: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
-            mod_override_source_3: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
-            mod_override_source_4: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
-            mod_override_dest_1: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
-            mod_override_dest_2: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
-            mod_override_dest_3: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
-            mod_override_dest_4: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
-            preset_category_override: Arc::new(Mutex::new(PresetType::Select)),
-            gen_1_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
-            gen_2_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
-            gen_3_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
-
             // Preset Library DEFAULT
             preset_lib_name: Arc::new(Mutex::new(String::from("Default"))),
             preset_name: Arc::new(Mutex::new(String::new())),
             preset_info: Arc::new(Mutex::new(String::new())),
-            preset_category: Arc::new(Mutex::new(PresetType::Select)),
+            //preset_category: Arc::new(Mutex::new(PresetType::Select)),
             preset_lib: Arc::new(Mutex::new(vec![
                 DEFAULT_PRESET.clone();
                 PRESET_BANK_SIZE
@@ -552,8 +523,6 @@ pub struct ActuateParams {
     pub filter_cutoff_link: BoolParam,
 
     // Controls for when audio_module_1_type is Osc
-    #[id = "osc_1_type"]
-    pub osc_1_type: EnumParam<VoiceType>,
     #[id = "osc_1_octave"]
     pub osc_1_octave: IntParam,
     #[id = "osc_1_semitones"]
@@ -584,8 +553,6 @@ pub struct ActuateParams {
     pub osc_1_stereo: FloatParam,
 
     // Controls for when audio_module_2_type is Osc
-    #[id = "osc_2_type"]
-    pub osc_2_type: EnumParam<VoiceType>,
     #[id = "osc_2_octave"]
     pub osc_2_octave: IntParam,
     #[id = "osc_2_semitones"]
@@ -616,8 +583,6 @@ pub struct ActuateParams {
     pub osc_2_stereo: FloatParam,
 
     // Controls for when audio_module_3_type is Osc
-    #[id = "osc_3_type"]
-    pub osc_3_type: EnumParam<VoiceType>,
     #[id = "osc_3_octave"]
     pub osc_3_octave: IntParam,
     #[id = "osc_3_semitones"]
@@ -1231,7 +1196,7 @@ impl ActuateParams {
                 .with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 64, IntRange::Linear { min: 1, max: 512 }),
 
-            audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc).with_callback({
+            audio_module_1_type: EnumParam::new("Type", AudioModuleType::Sine).with_callback({
                 let clear_voices = clear_voices.clone();
                 Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
             }),
@@ -1274,10 +1239,6 @@ impl ActuateParams {
 
             // Oscillators
             ////////////////////////////////////////////////////////////////////////////////////
-            osc_1_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
             osc_1_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 })
                 .with_callback({
                     let update_something = update_something.clone();
@@ -1407,10 +1368,6 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
 
-            osc_2_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
             osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 })
                 .with_callback({
                     let update_something = update_something.clone();
@@ -1540,10 +1497,6 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
 
-            osc_3_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
             osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 })
                 .with_callback({
                     let update_something = update_something.clone();
@@ -5718,19 +5671,11 @@ impl Actuate {
                 preset.mod2_sample_lib.clear();
                 preset.mod3_sample_lib.clear();
 
-                // Serialize to MessagePack bytes
-                let serialized_data = rmp_serde::to_vec::<ActuatePresetV131>(&preset);
-
-                if let Err(err) = serialized_data {
-                    eprintln!("Error serializing data: {}", err);
-                    return;
-                }
-
-                // Compress the serialized data using different GzEncoder
-                let compressed_data = Self::compress_bytes(&serialized_data.unwrap());
+                // Serialize to json
+                let serialized_data = serde_json::to_string(&preset);
 
                 // Now you can write the compressed data to the file
-                if let Err(err) = std::fs::write(&location, &compressed_data) {
+                if let Err(err) = std::fs::write(&location, serialized_data.unwrap()) {
                     eprintln!("Error writing compressed data to file: {}", err);
                     return;
                 }
@@ -5751,49 +5696,20 @@ impl Actuate {
                 .to_string();
 
             // Read the compressed data from the file
-            let mut compressed_data = Vec::new();
+            let mut file_data = String::new();
             if let Err(err) = std::fs::File::open(&return_name)
-                .and_then(|mut file| file.read_to_end(&mut compressed_data))
+                .and_then(|mut file| file.read_to_string(&mut file_data))
             {
                 eprintln!("Error reading compressed data from file: {}", err);
                 return (err.to_string(), Option::None);
             }
 
-            // Decompress the data
-            let decompressed_data = Self::decompress_bytes(&compressed_data);
-            if let Err(err) = decompressed_data {
-                eprintln!("Error decompressing data: {}", err);
-                return (err.to_string(), Option::None);
-            }
-
-            // Deserialize the MessagePack data
-            let file_string_data = decompressed_data.unwrap();
-
             // Deserialize into preset struct - return default empty lib if error
-            let mut unserialized: ActuatePresetV131 = rmp_serde::from_slice(&file_string_data)
-                .unwrap_or(ERROR_PRESET.clone());
+            let unserialized: ActuatePresetV131 = serde_json::from_slice(file_data.as_bytes()).unwrap_or(ERROR_PRESET.clone());
 
             // This if cascade tries to load each predecessor format of presets
             if unserialized.preset_name.contains("Error") {
-                unserialized = load_unserialized_v130(file_string_data.clone());
-                if unserialized.preset_name.contains("Error") {
-                    unserialized = load_unserialized_v126(file_string_data.clone());
-                    if unserialized.preset_name.contains("Error") {
-                        unserialized = load_unserialized_v125(file_string_data.clone());
-                        if unserialized.preset_name.contains("Error") {
-                            unserialized = load_unserialized_v123(file_string_data.clone());
-                            if unserialized.preset_name.contains("Error") {
-                                unserialized = load_unserialized_v122(file_string_data.clone());
-                                if unserialized.preset_name.contains("Error") {
-                                    unserialized = load_unserialized_v114(file_string_data.clone());
-                                    if unserialized.preset_name.contains("Error") {
-                                        unserialized = load_unserialized_old(file_string_data.clone());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                //unserialized = load_unserialized_v130(file_data.clone());
             }
 
             return (return_name, Some(unserialized));
@@ -5809,26 +5725,16 @@ impl Actuate {
             return_name = loading_bank.to_str().unwrap_or("Invalid Path").to_string();
 
             // Read the compressed data from the file
-            let mut compressed_data = Vec::new();
+            let mut file_data = String::new();
             if let Err(err) = std::fs::File::open(&return_name)
-                .and_then(|mut file| file.read_to_end(&mut compressed_data))
+                .and_then(|mut file| file.read_to_string(&mut file_data))
             {
                 eprintln!("Error reading compressed data from file: {}", err);
                 return (err.to_string(), Vec::new());
             }
 
-            // Decompress the data
-            let decompressed_data = Self::decompress_bytes(&compressed_data);
-            if let Err(err) = decompressed_data {
-                eprintln!("Error decompressing data: {}", err);
-                return (err.to_string(), Vec::new());
-            }
-
-            // Deserialize the MessagePack data
-            let file_string_data = decompressed_data.unwrap();
-
             // Deserialize into preset struct - return default empty lib if error
-            let unserialized: Vec<ActuatePresetV131> = rmp_serde::from_slice(&file_string_data)
+            let unserialized: Vec<ActuatePresetV131> = serde_json::from_slice(&file_data.as_bytes())
                 .unwrap_or(vec![
                     ERROR_PRESET.clone();
                     PRESET_BANK_SIZE
@@ -5836,6 +5742,8 @@ impl Actuate {
 
             // Attempt loading 1.3.0 bank if error
             if unserialized[0].preset_name.contains("Error") {
+                /*
+
                 // Deserialize into preset struct - return default empty lib if error
                 let unserialized: Vec<ActuatePresetV130> = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(vec![
@@ -5847,54 +5755,9 @@ impl Actuate {
                 for v130_preset in unserialized.iter() {
                     converted.push(old_preset_structs::convert_preset_v130(v130_preset.clone()));
                 }
-                // Attempt loading 1.2.6 bank if error
-                if unserialized[0].preset_name.contains("Error") {
-                    // Deserialize into preset struct - return default empty lib if error
-                    let unserialized: Vec<ActuatePresetV126> = rmp_serde::from_slice(&file_string_data)
-                    .unwrap_or(vec![
-                        ERROR_PRESETV126.clone();
-                        PRESET_BANK_SIZE
-                    ]);
-                    // Convert each v1.2.6 entry into latest
-                    let mut converted: Vec<ActuatePresetV131> = Vec::new();
-                    for v126_preset in unserialized.iter() {
-                        converted.push(old_preset_structs::convert_preset_v126(v126_preset.clone()));
-                    }
-
-                    // Attempt loading 1.2.5 bank if error
-                    if unserialized[0].preset_name.contains("Error") {
-                        let unserialized: Vec<ActuatePresetV125> = rmp_serde::from_slice(&file_string_data)
-                            .unwrap_or(vec![
-                                ERROR_PRESETV125.clone();
-                                PRESET_BANK_SIZE
-                            ]);
-                        // Convert each v1.2.5 entry into latest
-                        let mut converted: Vec<ActuatePresetV131> = Vec::new();
-                        for v125_preset in unserialized.iter() {
-                            converted.push(old_preset_structs::convert_preset_v125(v125_preset.clone()));
-                        }
-
-                        // Attempt loading 1.2.3 bank if error
-                        if unserialized[0].preset_name.contains("Error") {
-                            let unserialized: Vec<ActuatePresetV123> = rmp_serde::from_slice(&file_string_data)
-                                .unwrap_or(vec![
-                                    ERROR_PRESETV123.clone();
-                                    PRESET_BANK_SIZE
-                                ]);
-                            // Convert each v1.2.3 entry into latest
-                            let mut converted: Vec<ActuatePresetV131> = Vec::new();
-                            for v123_preset in unserialized.iter() {
-                                converted.push(old_preset_structs::convert_preset_v123(v123_preset.clone()));
-                            }
-                            return (return_name, converted);
-                        }
-                        return (return_name, converted);
-                    }
-                    return (return_name, converted);
-                }
                 return (return_name, converted);
+                */
             }
-
             return (return_name, unserialized);
         }
         return (String::from("Error"), Vec::new());
@@ -5909,19 +5772,6 @@ impl Actuate {
         AMod1: &mut AudioModule,
         AMod2: &mut AudioModule,
         AMod3: &mut AudioModule,
-    ) -> (
-        ModulationSource,
-        ModulationSource,
-        ModulationSource,
-        ModulationSource,
-        ModulationDestination,
-        ModulationDestination,
-        ModulationDestination,
-        ModulationDestination,
-        PresetType,
-        AMFilterRouting,
-        AMFilterRouting,
-        AMFilterRouting,
     ) {
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset[current_preset_index as usize];
@@ -5941,7 +5791,6 @@ impl Actuate {
         setter.set_parameter(&params.loop_sample_1, loaded_preset.mod1_loop_wavetable);
         setter.set_parameter(&params.single_cycle_1, loaded_preset.mod1_single_cycle);
         setter.set_parameter(&params.restretch_1, loaded_preset.mod1_restretch);
-        setter.set_parameter(&params.osc_1_type, loaded_preset.mod1_osc_type);
         setter.set_parameter(&params.osc_1_octave, loaded_preset.mod1_osc_octave);
         setter.set_parameter(&params.osc_1_semitones, loaded_preset.mod1_osc_semitones);
         setter.set_parameter(&params.osc_1_detune, loaded_preset.mod1_osc_detune);
@@ -5983,7 +5832,6 @@ impl Actuate {
         setter.set_parameter(&params.loop_sample_2, loaded_preset.mod2_loop_wavetable);
         setter.set_parameter(&params.single_cycle_2, loaded_preset.mod2_single_cycle);
         setter.set_parameter(&params.restretch_2, loaded_preset.mod2_restretch);
-        setter.set_parameter(&params.osc_2_type, loaded_preset.mod2_osc_type);
         setter.set_parameter(&params.osc_2_octave, loaded_preset.mod2_osc_octave);
         setter.set_parameter(&params.osc_2_semitones, loaded_preset.mod2_osc_semitones);
         setter.set_parameter(&params.osc_2_detune, loaded_preset.mod2_osc_detune);
@@ -6025,7 +5873,6 @@ impl Actuate {
         setter.set_parameter(&params.loop_sample_3, loaded_preset.mod3_loop_wavetable);
         setter.set_parameter(&params.single_cycle_3, loaded_preset.mod3_single_cycle);
         setter.set_parameter(&params.restretch_3, loaded_preset.mod3_restretch);
-        setter.set_parameter(&params.osc_3_type, loaded_preset.mod3_osc_type);
         setter.set_parameter(&params.osc_3_octave, loaded_preset.mod3_osc_octave);
         setter.set_parameter(&params.osc_3_semitones, loaded_preset.mod3_osc_semitones);
         setter.set_parameter(&params.osc_3_detune, loaded_preset.mod3_osc_detune);
@@ -6086,145 +5933,6 @@ impl Actuate {
         setter.set_parameter(&params.mod_amount_knob_4, loaded_preset.mod_amount_4);
         setter.set_parameter(&params.mod_destination_4, loaded_preset.mod_dest_4.clone());
         setter.set_parameter(&params.mod_source_4, loaded_preset.mod_source_4.clone());
-        let mod_source_1_override = loaded_preset.mod_source_1.clone();
-        let mod_source_2_override = loaded_preset.mod_source_2.clone();
-        let mod_source_3_override = loaded_preset.mod_source_3.clone();
-        let mod_source_4_override = loaded_preset.mod_source_4.clone();
-        let mod_dest_1_override = loaded_preset.mod_dest_1.clone();
-        let mod_dest_2_override = loaded_preset.mod_dest_2.clone();
-        let mod_dest_3_override = loaded_preset.mod_dest_3.clone();
-        let mod_dest_4_override = loaded_preset.mod_dest_4.clone();
-        let gen_1_routing_override = loaded_preset.mod1_audio_module_routing.clone();
-        let gen_2_routing_override = loaded_preset.mod2_audio_module_routing.clone();
-        let gen_3_routing_override = loaded_preset.mod3_audio_module_routing.clone();
-        let gen_1_type_override = match loaded_preset.mod1_audio_module_type {
-            AudioModuleType::UNSET_AM => GeneratorType::UNSETTYPE,
-            AudioModuleType::Off => {
-                GeneratorType::Off
-            },
-            AudioModuleType::Osc => {
-                match loaded_preset.mod1_osc_type {
-                    VoiceType::Sine => GeneratorType::Sine,
-                    VoiceType::Tri => GeneratorType::Tri,
-                    VoiceType::Saw => GeneratorType::Saw,
-                    VoiceType::RSaw => GeneratorType::RSaw,
-                    VoiceType::WSaw => GeneratorType::WSaw,
-                    VoiceType::SSaw => GeneratorType::SSaw,
-                    VoiceType::RASaw => GeneratorType::RASaw,
-                    VoiceType::Ramp => GeneratorType::Ramp,
-                    VoiceType::Square => GeneratorType::Square,
-                    VoiceType::RSquare => GeneratorType::RSquare,
-                    VoiceType::Pulse => GeneratorType::Pulse,
-                    VoiceType::Noise => GeneratorType::Noise,
-                }
-            },
-            AudioModuleType::Osc |
-            AudioModuleType::Sine |
-            AudioModuleType::Tri => {
-                GeneratorType::Tri
-            }
-            AudioModuleType::Saw => {
-                GeneratorType::Saw
-            }
-            AudioModuleType::RSaw => {
-                GeneratorType::RSaw
-            }
-            AudioModuleType::WSaw => {
-                GeneratorType::WSaw
-            }
-            AudioModuleType::SSaw => {
-                GeneratorType::SSaw
-            }
-            AudioModuleType::RASaw => {
-                GeneratorType::RASaw
-            }
-            AudioModuleType::Ramp => {
-                GeneratorType::Ramp
-            }
-            AudioModuleType::Square => {
-                GeneratorType::Square
-            }
-            AudioModuleType::RSquare => {
-                GeneratorType::RSquare
-            }
-            AudioModuleType::Pulse => {
-                GeneratorType::Noise
-            }
-            AudioModuleType::Noise => {
-                GeneratorType::Noise
-            }
-            AudioModuleType::Sampler => {
-                GeneratorType::Sampler
-            },
-            AudioModuleType::Granulizer => {
-                GeneratorType::Granulizer
-            },
-            AudioModuleType::Additive => {
-                GeneratorType::Additive
-            }
-        };
-        let gen_2_type_override = match loaded_preset.mod2_audio_module_type {
-            AudioModuleType::UNSET_AM => GeneratorType::UNSETTYPE,
-            AudioModuleType::Off => {
-                GeneratorType::Off
-            },
-            AudioModuleType::Osc => {
-                match loaded_preset.mod2_osc_type {
-                    VoiceType::Sine => GeneratorType::Sine,
-                    VoiceType::Tri => GeneratorType::Tri,
-                    VoiceType::Saw => GeneratorType::Saw,
-                    VoiceType::RSaw => GeneratorType::RSaw,
-                    VoiceType::WSaw => GeneratorType::WSaw,
-                    VoiceType::SSaw => GeneratorType::SSaw,
-                    VoiceType::RASaw => GeneratorType::RASaw,
-                    VoiceType::Ramp => GeneratorType::Ramp,
-                    VoiceType::Square => GeneratorType::Square,
-                    VoiceType::RSquare => GeneratorType::RSquare,
-                    VoiceType::Pulse => GeneratorType::Pulse,
-                    VoiceType::Noise => GeneratorType::Noise,
-                }
-            },
-            AudioModuleType::Sampler => {
-                GeneratorType::Sampler
-            },
-            AudioModuleType::Granulizer => {
-                GeneratorType::Granulizer
-            },
-            AudioModuleType::Additive => {
-                GeneratorType::Additive
-            }
-        };
-        let gen_3_type_override = match loaded_preset.mod3_audio_module_type {
-            AudioModuleType::UNSET_AM => GeneratorType::UNSETTYPE,
-            AudioModuleType::Off => {
-                GeneratorType::Off
-            },
-            AudioModuleType::Osc => {
-                match loaded_preset.mod3_osc_type {
-                    VoiceType::Sine => GeneratorType::Sine,
-                    VoiceType::Tri => GeneratorType::Tri,
-                    VoiceType::Saw => GeneratorType::Saw,
-                    VoiceType::RSaw => GeneratorType::RSaw,
-                    VoiceType::WSaw => GeneratorType::WSaw,
-                    VoiceType::SSaw => GeneratorType::SSaw,
-                    VoiceType::RASaw => GeneratorType::RASaw,
-                    VoiceType::Ramp => GeneratorType::Ramp,
-                    VoiceType::Square => GeneratorType::Square,
-                    VoiceType::RSquare => GeneratorType::RSquare,
-                    VoiceType::Pulse => GeneratorType::Pulse,
-                    VoiceType::Noise => GeneratorType::Noise,
-                }
-            },
-            AudioModuleType::Sampler => {
-                GeneratorType::Sampler
-            },
-            AudioModuleType::Granulizer => {
-                GeneratorType::Granulizer
-            },
-            AudioModuleType::Additive => {
-                GeneratorType::Additive
-            }
-        };
 
         setter.set_parameter(&params.use_fx, loaded_preset.use_fx);
         setter.set_parameter(&params.pre_use_eq, loaded_preset.pre_use_eq);
@@ -6359,6 +6067,7 @@ impl Actuate {
         );
         setter.set_parameter(&params.filter_routing, loaded_preset.filter_routing.clone());
 
+        /*
         #[allow(unreachable_patterns)]
         let preset_category_override = match loaded_preset.preset_category {
             PresetType::Bass
@@ -6381,6 +6090,7 @@ impl Actuate {
             // This should be unreachable since unserialize will fail before we get here anyways actually
             _ => PresetType::Select,
         };
+        */
 
         // 1.2.1 Pitch update
         setter.set_parameter(&params.pitch_enable, loaded_preset.pitch_enable);
@@ -6564,24 +6274,6 @@ impl Actuate {
             },
             _ => {},
         }
-
-        (
-            mod_source_1_override,
-            mod_source_2_override,
-            mod_source_3_override,
-            mod_source_4_override,
-            mod_dest_1_override,
-            mod_dest_2_override,
-            mod_dest_3_override,
-            mod_dest_4_override,
-            preset_category_override,
-            gen_1_routing_override,
-            gen_2_routing_override,
-            gen_3_routing_override,
-            gen_1_type_override,
-            gen_2_type_override,
-            gen_3_type_override,
-        )
     }
 
     fn save_preset_bank(preset_store: &mut Vec<ActuatePresetV131>, saving_bank: Option<PathBuf>) {
@@ -6607,19 +6299,15 @@ impl Actuate {
                 }
 
                 // Serialize to MessagePack bytes
-                let serialized_data =
-                    rmp_serde::to_vec::<&Vec<ActuatePresetV131>>(&preset_store.as_ref());
+                let serialized_data = serde_json::to_string(&preset_store);
 
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
                     return;
                 }
 
-                // Compress the serialized data using different GzEncoder
-                let compressed_data = Self::compress_bytes(&serialized_data.unwrap());
-
                 // Now you can write the compressed data to the file
-                if let Err(err) = std::fs::write(&location, &compressed_data) {
+                if let Err(err) = std::fs::write(&location, &serialized_data.unwrap()) {
                     eprintln!("Error writing compressed data to file: {}", err);
                     return;
                 }
@@ -6627,20 +6315,6 @@ impl Actuate {
                 eprintln!("Error creating file at location: {:?}", location);
             }
         }
-    }
-
-    // Functions to compress bytes and decompress using gz
-    fn compress_bytes(data: &[u8]) -> Vec<u8> {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
-        encoder.write_all(data).unwrap();
-        encoder.finish().unwrap()
-    }
-
-    fn decompress_bytes(compressed_data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
-        let mut decoder = GzDecoder::new(compressed_data);
-        let mut decompressed_data = Vec::new();
-        decoder.read_to_end(&mut decompressed_data)?;
-        Ok(decompressed_data)
     }
 
     // Update our current preset
@@ -6696,7 +6370,6 @@ impl Actuate {
                 mod1_grain_hold: AM1.grain_hold,
 
                 // Osc module knob storage
-                mod1_osc_type: AM1.osc_type,
                 mod1_osc_octave: AM1.osc_octave,
                 mod1_osc_semitones: AM1.osc_semitones,
                 mod1_osc_detune: AM1.osc_detune,
@@ -6731,7 +6404,6 @@ impl Actuate {
                 mod2_grain_hold: AM2.grain_hold,
 
                 // Osc module knob storage
-                mod2_osc_type: AM2.osc_type,
                 mod2_osc_octave: AM2.osc_octave,
                 mod2_osc_semitones: AM2.osc_semitones,
                 mod2_osc_detune: AM2.osc_detune,
@@ -6766,7 +6438,6 @@ impl Actuate {
                 mod3_grain_hold: AM3.grain_hold,
 
                 // Osc module knob storage
-                mod3_osc_type: AM3.osc_type,
                 mod3_osc_octave: AM3.osc_octave,
                 mod3_osc_semitones: AM3.osc_semitones,
                 mod3_osc_detune: AM3.osc_detune,
@@ -7634,843 +7305,6 @@ fn adv_scale_value(input: f32, in_min: f32, in_max: f32, out_min: f32, out_max: 
 
 
 lazy_static::lazy_static!(
-    static ref ERROR_PRESETV123: ActuatePresetV123 = ActuatePresetV123 {
-        preset_name: String::from("Error Loading"),
-        preset_info: String::from("Corrupt or incompatible versions"),
-        preset_category: PresetType::Select,
-        tag_acid: false,
-        tag_analog: false,
-        tag_bright: false,
-        tag_chord: false,
-        tag_crisp: false,
-        tag_deep: false,
-        tag_delicate: false,
-        tag_hard: false,
-        tag_harsh: false,
-        tag_lush: false,
-        tag_mellow: false,
-        tag_resonant: false,
-        tag_rich: false,
-        tag_sharp: false,
-        tag_silky: false,
-        tag_smooth: false,
-        tag_soft: false,
-        tag_stab: false,
-        tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
-        mod1_audio_module_level: 1.0,
-        mod1_audio_module_routing: AMFilterRouting::Filter1,
-        mod1_loaded_sample: vec![vec![0.0, 0.0]],
-        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod1_loop_wavetable: false,
-        mod1_single_cycle: false,
-        mod1_restretch: true,
-        mod1_prev_restretch: false,
-        mod1_grain_hold: 200,
-        mod1_grain_gap: 200,
-        mod1_start_position: 0.0,
-        mod1_end_position: 1.0,
-        mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
-        mod1_osc_octave: 0,
-        mod1_osc_semitones: 0,
-        mod1_osc_detune: 0.0,
-        mod1_osc_attack: 0.0001,
-        mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 1999.9,
-        mod1_osc_release: 5.0,
-        mod1_osc_retrigger: RetriggerStyle::Retrigger,
-        mod1_osc_atk_curve: SmoothStyle::Linear,
-        mod1_osc_dec_curve: SmoothStyle::Linear,
-        mod1_osc_rel_curve: SmoothStyle::Linear,
-        mod1_osc_unison: 1,
-        mod1_osc_unison_detune: 0.0,
-        mod1_osc_stereo: 0.0,
-
-        mod2_audio_module_type: AudioModuleType::Off,
-        mod2_audio_module_level: 1.0,
-        mod2_audio_module_routing: AMFilterRouting::Filter1,
-        mod2_loaded_sample: vec![vec![0.0, 0.0]],
-        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod2_loop_wavetable: false,
-        mod2_single_cycle: false,
-        mod2_restretch: true,
-        mod2_prev_restretch: false,
-        mod2_grain_hold: 200,
-        mod2_grain_gap: 200,
-        mod2_start_position: 0.0,
-        mod2_end_position: 1.0,
-        mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
-        mod2_osc_octave: 0,
-        mod2_osc_semitones: 0,
-        mod2_osc_detune: 0.0,
-        mod2_osc_attack: 0.0001,
-        mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 1999.9,
-        mod2_osc_release: 5.0,
-        mod2_osc_retrigger: RetriggerStyle::Retrigger,
-        mod2_osc_atk_curve: SmoothStyle::Linear,
-        mod2_osc_dec_curve: SmoothStyle::Linear,
-        mod2_osc_rel_curve: SmoothStyle::Linear,
-        mod2_osc_unison: 1,
-        mod2_osc_unison_detune: 0.0,
-        mod2_osc_stereo: 0.0,
-
-        mod3_audio_module_type: AudioModuleType::Off,
-        mod3_audio_module_level: 1.0,
-        mod3_audio_module_routing: AMFilterRouting::Filter1,
-        mod3_loaded_sample: vec![vec![0.0, 0.0]],
-        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod3_loop_wavetable: false,
-        mod3_single_cycle: false,
-        mod3_restretch: true,
-        mod3_prev_restretch: false,
-        mod3_grain_hold: 200,
-        mod3_grain_gap: 200,
-        mod3_start_position: 0.0,
-        mod3_end_position: 1.0,
-        mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
-        mod3_osc_octave: 0,
-        mod3_osc_semitones: 0,
-        mod3_osc_detune: 0.0,
-        mod3_osc_attack: 0.0001,
-        mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 1999.9,
-        mod3_osc_release: 5.0,
-        mod3_osc_retrigger: RetriggerStyle::Retrigger,
-        mod3_osc_atk_curve: SmoothStyle::Linear,
-        mod3_osc_dec_curve: SmoothStyle::Linear,
-        mod3_osc_rel_curve: SmoothStyle::Linear,
-        mod3_osc_unison: 1,
-        mod3_osc_unison_detune: 0.0,
-        mod3_osc_stereo: 0.0,
-
-        filter_wet: 1.0,
-        filter_cutoff: 20000.0,
-        filter_resonance: 1.0,
-        filter_res_type: ResonanceType::Default,
-        filter_lp_amount: 1.0,
-        filter_hp_amount: 0.0,
-        filter_bp_amount: 0.0,
-        filter_env_peak: 0.0,
-        filter_env_attack: 0.0,
-        filter_env_decay: 0.0001,
-        filter_env_sustain: 1999.9,
-        filter_env_release: 5.0,
-        filter_env_atk_curve: SmoothStyle::Linear,
-        filter_env_dec_curve: SmoothStyle::Linear,
-        filter_env_rel_curve: SmoothStyle::Linear,
-        filter_alg_type: FilterAlgorithms::SVF,
-        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
-
-        filter_wet_2: 1.0,
-        filter_cutoff_2: 20000.0,
-        filter_resonance_2: 1.0,
-        filter_res_type_2: ResonanceType::Default,
-        filter_lp_amount_2: 1.0,
-        filter_hp_amount_2: 0.0,
-        filter_bp_amount_2: 0.0,
-        filter_env_peak_2: 0.0,
-        filter_env_attack_2: 0.0,
-        filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 1999.9,
-        filter_env_release_2: 5.0,
-        filter_env_atk_curve_2: SmoothStyle::Linear,
-        filter_env_dec_curve_2: SmoothStyle::Linear,
-        filter_env_rel_curve_2: SmoothStyle::Linear,
-        filter_alg_type_2: FilterAlgorithms::SVF,
-        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
-
-        filter_routing: FilterRouting::Parallel,
-        filter_cutoff_link: false,
-
-        pitch_enable: false,
-        pitch_env_atk_curve: SmoothStyle::Linear,
-        pitch_env_dec_curve: SmoothStyle::Linear,
-        pitch_env_rel_curve: SmoothStyle::Linear,
-        pitch_env_attack: 0.0,
-        pitch_env_decay: 300.0,
-        pitch_env_sustain: 0.0,
-        pitch_env_release: 0.0,
-        pitch_env_peak: 0.0,
-        pitch_routing: PitchRouting::Osc1,
-
-        pitch_enable_2: false,
-        pitch_env_peak_2: 0.0,
-        pitch_env_atk_curve_2: SmoothStyle::Linear,
-        pitch_env_dec_curve_2: SmoothStyle::Linear,
-        pitch_env_rel_curve_2: SmoothStyle::Linear,
-        pitch_env_attack_2: 0.0,
-        pitch_env_decay_2: 300.0,
-        pitch_env_release_2: 0.0,
-        pitch_env_sustain_2: 0.0,
-        pitch_routing_2: PitchRouting::Osc1,
-
-        // LFOs
-        lfo1_enable: false,
-        lfo2_enable: false,
-        lfo3_enable: false,
-
-        lfo1_freq: 2.0,
-        lfo1_retrigger: LFOController::LFORetrigger::None,
-        lfo1_sync: true,
-        lfo1_snap: LFOController::LFOSnapValues::Half,
-        lfo1_waveform: LFOController::Waveform::Sine,
-        lfo1_phase: 0.0,
-
-        lfo2_freq: 2.0,
-        lfo2_retrigger: LFOController::LFORetrigger::None,
-        lfo2_sync: true,
-        lfo2_snap: LFOController::LFOSnapValues::Half,
-        lfo2_waveform: LFOController::Waveform::Sine,
-        lfo2_phase: 0.0,
-
-        lfo3_freq: 2.0,
-        lfo3_retrigger: LFOController::LFORetrigger::None,
-        lfo3_sync: true,
-        lfo3_snap: LFOController::LFOSnapValues::Half,
-        lfo3_waveform: LFOController::Waveform::Sine,
-        lfo3_phase: 0.0,
-
-        // Modulations
-        mod_source_1: ModulationSource::None,
-        mod_source_2: ModulationSource::None,
-        mod_source_3: ModulationSource::None,
-        mod_source_4: ModulationSource::None,
-        mod_dest_1: ModulationDestination::None,
-        mod_dest_2: ModulationDestination::None,
-        mod_dest_3: ModulationDestination::None,
-        mod_dest_4: ModulationDestination::None,
-        mod_amount_1: 0.0,
-        mod_amount_2: 0.0,
-        mod_amount_3: 0.0,
-        mod_amount_4: 0.0,
-
-        // EQ
-        pre_use_eq: false,
-        pre_low_freq: 800.0,
-        pre_mid_freq: 3000.0,
-        pre_high_freq: 10000.0,
-        pre_low_gain: 0.0,
-        pre_mid_gain: 0.0,
-        pre_high_gain: 0.0,
-
-        // FX
-        use_fx: true,
-
-        use_compressor: false,
-        comp_amt: 0.5,
-        comp_atk: 0.5,
-        comp_rel: 0.5,
-        comp_drive: 0.5,
-
-        use_abass: false,
-        abass_amount: 0.0011,
-
-        use_saturation: false,
-        sat_amount: 0.0,
-        sat_type: SaturationType::Tape,
-
-        use_delay: false,
-        delay_amount: 0.5,
-        delay_time: DelaySnapValues::Quarter,
-        delay_decay: 0.5,
-        delay_type: DelayType::Stereo,
-
-        use_reverb: false,
-        reverb_amount: 0.85,
-        reverb_size: 1.0,
-        reverb_feedback: 0.28,
-
-        use_phaser: false,
-        phaser_amount: 0.5,
-        phaser_depth: 0.5,
-        phaser_rate: 0.5,
-        phaser_feedback: 0.5,
-
-        use_buffermod: false,
-        buffermod_amount: 0.5,
-        buffermod_depth: 0.5,
-        buffermod_rate: 0.5,
-        buffermod_spread: 0.0,
-        buffermod_timing: 620.0,
-
-        use_flanger: false,
-        flanger_amount: 0.5,
-        flanger_depth: 0.5,
-        flanger_rate: 0.5,
-        flanger_feedback: 0.5,
-
-        use_limiter: false,
-        limiter_threshold: 0.5,
-        limiter_knee: 0.5,
-    };
-
-    static ref ERROR_PRESETV125: ActuatePresetV125 = ActuatePresetV125 {
-        preset_name: String::from("Error Loading"),
-        preset_info: String::from("Corrupt or incompatible versions"),
-        preset_category: PresetType::Select,
-        tag_acid: false,
-        tag_analog: false,
-        tag_bright: false,
-        tag_chord: false,
-        tag_crisp: false,
-        tag_deep: false,
-        tag_delicate: false,
-        tag_hard: false,
-        tag_harsh: false,
-        tag_lush: false,
-        tag_mellow: false,
-        tag_resonant: false,
-        tag_rich: false,
-        tag_sharp: false,
-        tag_silky: false,
-        tag_smooth: false,
-        tag_soft: false,
-        tag_stab: false,
-        tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
-        mod1_audio_module_level: 1.0,
-        mod1_audio_module_routing: AMFilterRouting::Filter1,
-        mod1_loaded_sample: vec![vec![0.0, 0.0]],
-        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod1_loop_wavetable: false,
-        mod1_single_cycle: false,
-        mod1_restretch: true,
-        mod1_prev_restretch: false,
-        mod1_grain_hold: 200,
-        mod1_grain_gap: 200,
-        mod1_start_position: 0.0,
-        mod1_end_position: 1.0,
-        mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
-        mod1_osc_octave: 0,
-        mod1_osc_semitones: 0,
-        mod1_osc_detune: 0.0,
-        mod1_osc_attack: 0.0001,
-        mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 1999.9,
-        mod1_osc_release: 5.0,
-        mod1_osc_retrigger: RetriggerStyle::Retrigger,
-        mod1_osc_atk_curve: SmoothStyle::Linear,
-        mod1_osc_dec_curve: SmoothStyle::Linear,
-        mod1_osc_rel_curve: SmoothStyle::Linear,
-        mod1_osc_unison: 1,
-        mod1_osc_unison_detune: 0.0,
-        mod1_osc_stereo: 0.0,
-
-        mod2_audio_module_type: AudioModuleType::Off,
-        mod2_audio_module_level: 1.0,
-        mod2_audio_module_routing: AMFilterRouting::Filter1,
-        mod2_loaded_sample: vec![vec![0.0, 0.0]],
-        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod2_loop_wavetable: false,
-        mod2_single_cycle: false,
-        mod2_restretch: true,
-        mod2_prev_restretch: false,
-        mod2_grain_hold: 200,
-        mod2_grain_gap: 200,
-        mod2_start_position: 0.0,
-        mod2_end_position: 1.0,
-        mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
-        mod2_osc_octave: 0,
-        mod2_osc_semitones: 0,
-        mod2_osc_detune: 0.0,
-        mod2_osc_attack: 0.0001,
-        mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 1999.9,
-        mod2_osc_release: 5.0,
-        mod2_osc_retrigger: RetriggerStyle::Retrigger,
-        mod2_osc_atk_curve: SmoothStyle::Linear,
-        mod2_osc_dec_curve: SmoothStyle::Linear,
-        mod2_osc_rel_curve: SmoothStyle::Linear,
-        mod2_osc_unison: 1,
-        mod2_osc_unison_detune: 0.0,
-        mod2_osc_stereo: 0.0,
-
-        mod3_audio_module_type: AudioModuleType::Off,
-        mod3_audio_module_level: 1.0,
-        mod3_audio_module_routing: AMFilterRouting::Filter1,
-        mod3_loaded_sample: vec![vec![0.0, 0.0]],
-        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod3_loop_wavetable: false,
-        mod3_single_cycle: false,
-        mod3_restretch: true,
-        mod3_prev_restretch: false,
-        mod3_grain_hold: 200,
-        mod3_grain_gap: 200,
-        mod3_start_position: 0.0,
-        mod3_end_position: 1.0,
-        mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
-        mod3_osc_octave: 0,
-        mod3_osc_semitones: 0,
-        mod3_osc_detune: 0.0,
-        mod3_osc_attack: 0.0001,
-        mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 1999.9,
-        mod3_osc_release: 5.0,
-        mod3_osc_retrigger: RetriggerStyle::Retrigger,
-        mod3_osc_atk_curve: SmoothStyle::Linear,
-        mod3_osc_dec_curve: SmoothStyle::Linear,
-        mod3_osc_rel_curve: SmoothStyle::Linear,
-        mod3_osc_unison: 1,
-        mod3_osc_unison_detune: 0.0,
-        mod3_osc_stereo: 0.0,
-
-        filter_wet: 1.0,
-        filter_cutoff: 20000.0,
-        filter_resonance: 1.0,
-        filter_res_type: ResonanceType::Default,
-        filter_lp_amount: 1.0,
-        filter_hp_amount: 0.0,
-        filter_bp_amount: 0.0,
-        filter_env_peak: 0.0,
-        filter_env_attack: 0.0,
-        filter_env_decay: 0.0001,
-        filter_env_sustain: 1999.9,
-        filter_env_release: 5.0,
-        filter_env_atk_curve: SmoothStyle::Linear,
-        filter_env_dec_curve: SmoothStyle::Linear,
-        filter_env_rel_curve: SmoothStyle::Linear,
-        filter_alg_type: FilterAlgorithms::SVF,
-        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
-
-        filter_wet_2: 1.0,
-        filter_cutoff_2: 20000.0,
-        filter_resonance_2: 1.0,
-        filter_res_type_2: ResonanceType::Default,
-        filter_lp_amount_2: 1.0,
-        filter_hp_amount_2: 0.0,
-        filter_bp_amount_2: 0.0,
-        filter_env_peak_2: 0.0,
-        filter_env_attack_2: 0.0,
-        filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 1999.9,
-        filter_env_release_2: 5.0,
-        filter_env_atk_curve_2: SmoothStyle::Linear,
-        filter_env_dec_curve_2: SmoothStyle::Linear,
-        filter_env_rel_curve_2: SmoothStyle::Linear,
-        filter_alg_type_2: FilterAlgorithms::SVF,
-        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
-
-        filter_routing: FilterRouting::Parallel,
-        filter_cutoff_link: false,
-
-        pitch_enable: false,
-        pitch_env_atk_curve: SmoothStyle::Linear,
-        pitch_env_dec_curve: SmoothStyle::Linear,
-        pitch_env_rel_curve: SmoothStyle::Linear,
-        pitch_env_attack: 0.0,
-        pitch_env_decay: 300.0,
-        pitch_env_sustain: 0.0,
-        pitch_env_release: 0.0,
-        pitch_env_peak: 0.0,
-        pitch_routing: PitchRouting::Osc1,
-
-        pitch_enable_2: false,
-        pitch_env_peak_2: 0.0,
-        pitch_env_atk_curve_2: SmoothStyle::Linear,
-        pitch_env_dec_curve_2: SmoothStyle::Linear,
-        pitch_env_rel_curve_2: SmoothStyle::Linear,
-        pitch_env_attack_2: 0.0,
-        pitch_env_decay_2: 300.0,
-        pitch_env_release_2: 0.0,
-        pitch_env_sustain_2: 0.0,
-        pitch_routing_2: PitchRouting::Osc1,
-
-        // LFOs
-        lfo1_enable: false,
-        lfo2_enable: false,
-        lfo3_enable: false,
-
-        lfo1_freq: 2.0,
-        lfo1_retrigger: LFOController::LFORetrigger::None,
-        lfo1_sync: true,
-        lfo1_snap: LFOController::LFOSnapValues::Half,
-        lfo1_waveform: LFOController::Waveform::Sine,
-        lfo1_phase: 0.0,
-
-        lfo2_freq: 2.0,
-        lfo2_retrigger: LFOController::LFORetrigger::None,
-        lfo2_sync: true,
-        lfo2_snap: LFOController::LFOSnapValues::Half,
-        lfo2_waveform: LFOController::Waveform::Sine,
-        lfo2_phase: 0.0,
-
-        lfo3_freq: 2.0,
-        lfo3_retrigger: LFOController::LFORetrigger::None,
-        lfo3_sync: true,
-        lfo3_snap: LFOController::LFOSnapValues::Half,
-        lfo3_waveform: LFOController::Waveform::Sine,
-        lfo3_phase: 0.0,
-
-        // Modulations
-        mod_source_1: ModulationSource::None,
-        mod_source_2: ModulationSource::None,
-        mod_source_3: ModulationSource::None,
-        mod_source_4: ModulationSource::None,
-        mod_dest_1: ModulationDestination::None,
-        mod_dest_2: ModulationDestination::None,
-        mod_dest_3: ModulationDestination::None,
-        mod_dest_4: ModulationDestination::None,
-        mod_amount_1: 0.0,
-        mod_amount_2: 0.0,
-        mod_amount_3: 0.0,
-        mod_amount_4: 0.0,
-
-        // EQ
-        pre_use_eq: false,
-        pre_low_freq: 800.0,
-        pre_mid_freq: 3000.0,
-        pre_high_freq: 10000.0,
-        pre_low_gain: 0.0,
-        pre_mid_gain: 0.0,
-        pre_high_gain: 0.0,
-
-        // FX
-        use_fx: true,
-
-        use_compressor: false,
-        comp_amt: 0.5,
-        comp_atk: 0.5,
-        comp_rel: 0.5,
-        comp_drive: 0.5,
-
-        use_abass: false,
-        abass_amount: 0.0011,
-
-        use_saturation: false,
-        sat_amount: 0.0,
-        sat_type: SaturationType::Tape,
-
-        use_delay: false,
-        delay_amount: 0.5,
-        delay_time: DelaySnapValues::Quarter,
-        delay_decay: 0.5,
-        delay_type: DelayType::Stereo,
-
-        use_reverb: false,
-        reverb_model: ReverbModel::Default,
-        reverb_amount: 0.85,
-        reverb_size: 1.0,
-        reverb_feedback: 0.28,
-
-        use_phaser: false,
-        phaser_amount: 0.5,
-        phaser_depth: 0.5,
-        phaser_rate: 0.5,
-        phaser_feedback: 0.5,
-
-        use_buffermod: false,
-        buffermod_amount: 0.5,
-        buffermod_depth: 0.5,
-        buffermod_rate: 0.5,
-        buffermod_spread: 0.0,
-        buffermod_timing: 620.0,
-
-        use_flanger: false,
-        flanger_amount: 0.5,
-        flanger_depth: 0.5,
-        flanger_rate: 0.5,
-        flanger_feedback: 0.5,
-
-        use_limiter: false,
-        limiter_threshold: 0.5,
-        limiter_knee: 0.5,
-    };
-
-    static ref ERROR_PRESETV126: ActuatePresetV126 = ActuatePresetV126 {
-        preset_name: String::from("Error Loading"),
-        preset_info: String::from("Corrupt or incompatible versions"),
-        preset_category: PresetType::Select,
-        tag_acid: false,
-        tag_analog: false,
-        tag_bright: false,
-        tag_chord: false,
-        tag_crisp: false,
-        tag_deep: false,
-        tag_delicate: false,
-        tag_hard: false,
-        tag_harsh: false,
-        tag_lush: false,
-        tag_mellow: false,
-        tag_resonant: false,
-        tag_rich: false,
-        tag_sharp: false,
-        tag_silky: false,
-        tag_smooth: false,
-        tag_soft: false,
-        tag_stab: false,
-        tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
-        mod1_audio_module_level: 1.0,
-        mod1_audio_module_routing: AMFilterRouting::Filter1,
-        mod1_loaded_sample: vec![vec![0.0, 0.0]],
-        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod1_loop_wavetable: false,
-        mod1_single_cycle: false,
-        mod1_restretch: true,
-        mod1_prev_restretch: false,
-        mod1_grain_hold: 200,
-        mod1_grain_gap: 200,
-        mod1_start_position: 0.0,
-        mod1_end_position: 1.0,
-        mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
-        mod1_osc_octave: 0,
-        mod1_osc_semitones: 0,
-        mod1_osc_detune: 0.0,
-        mod1_osc_attack: 0.0001,
-        mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 1999.9,
-        mod1_osc_release: 5.0,
-        mod1_osc_retrigger: RetriggerStyle::Retrigger,
-        mod1_osc_atk_curve: SmoothStyle::Linear,
-        mod1_osc_dec_curve: SmoothStyle::Linear,
-        mod1_osc_rel_curve: SmoothStyle::Linear,
-        mod1_osc_unison: 1,
-        mod1_osc_unison_detune: 0.0,
-        mod1_osc_stereo: 0.0,
-
-        mod2_audio_module_type: AudioModuleType::Off,
-        mod2_audio_module_level: 1.0,
-        mod2_audio_module_routing: AMFilterRouting::Filter1,
-        mod2_loaded_sample: vec![vec![0.0, 0.0]],
-        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod2_loop_wavetable: false,
-        mod2_single_cycle: false,
-        mod2_restretch: true,
-        mod2_prev_restretch: false,
-        mod2_grain_hold: 200,
-        mod2_grain_gap: 200,
-        mod2_start_position: 0.0,
-        mod2_end_position: 1.0,
-        mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
-        mod2_osc_octave: 0,
-        mod2_osc_semitones: 0,
-        mod2_osc_detune: 0.0,
-        mod2_osc_attack: 0.0001,
-        mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 1999.9,
-        mod2_osc_release: 5.0,
-        mod2_osc_retrigger: RetriggerStyle::Retrigger,
-        mod2_osc_atk_curve: SmoothStyle::Linear,
-        mod2_osc_dec_curve: SmoothStyle::Linear,
-        mod2_osc_rel_curve: SmoothStyle::Linear,
-        mod2_osc_unison: 1,
-        mod2_osc_unison_detune: 0.0,
-        mod2_osc_stereo: 0.0,
-
-        mod3_audio_module_type: AudioModuleType::Off,
-        mod3_audio_module_level: 1.0,
-        mod3_audio_module_routing: AMFilterRouting::Filter1,
-        mod3_loaded_sample: vec![vec![0.0, 0.0]],
-        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod3_loop_wavetable: false,
-        mod3_single_cycle: false,
-        mod3_restretch: true,
-        mod3_prev_restretch: false,
-        mod3_grain_hold: 200,
-        mod3_grain_gap: 200,
-        mod3_start_position: 0.0,
-        mod3_end_position: 1.0,
-        mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
-        mod3_osc_octave: 0,
-        mod3_osc_semitones: 0,
-        mod3_osc_detune: 0.0,
-        mod3_osc_attack: 0.0001,
-        mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 1999.9,
-        mod3_osc_release: 5.0,
-        mod3_osc_retrigger: RetriggerStyle::Retrigger,
-        mod3_osc_atk_curve: SmoothStyle::Linear,
-        mod3_osc_dec_curve: SmoothStyle::Linear,
-        mod3_osc_rel_curve: SmoothStyle::Linear,
-        mod3_osc_unison: 1,
-        mod3_osc_unison_detune: 0.0,
-        mod3_osc_stereo: 0.0,
-
-        filter_wet: 1.0,
-        filter_cutoff: 20000.0,
-        filter_resonance: 1.0,
-        filter_res_type: ResonanceType::Default,
-        filter_lp_amount: 1.0,
-        filter_hp_amount: 0.0,
-        filter_bp_amount: 0.0,
-        filter_env_peak: 0.0,
-        filter_env_attack: 0.0,
-        filter_env_decay: 0.0001,
-        filter_env_sustain: 1999.9,
-        filter_env_release: 5.0,
-        filter_env_atk_curve: SmoothStyle::Linear,
-        filter_env_dec_curve: SmoothStyle::Linear,
-        filter_env_rel_curve: SmoothStyle::Linear,
-        filter_alg_type: FilterAlgorithms::SVF,
-        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
-
-        filter_wet_2: 1.0,
-        filter_cutoff_2: 20000.0,
-        filter_resonance_2: 1.0,
-        filter_res_type_2: ResonanceType::Default,
-        filter_lp_amount_2: 1.0,
-        filter_hp_amount_2: 0.0,
-        filter_bp_amount_2: 0.0,
-        filter_env_peak_2: 0.0,
-        filter_env_attack_2: 0.0,
-        filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 1999.9,
-        filter_env_release_2: 5.0,
-        filter_env_atk_curve_2: SmoothStyle::Linear,
-        filter_env_dec_curve_2: SmoothStyle::Linear,
-        filter_env_rel_curve_2: SmoothStyle::Linear,
-        filter_alg_type_2: FilterAlgorithms::SVF,
-        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
-
-        filter_routing: FilterRouting::Parallel,
-        filter_cutoff_link: false,
-
-        pitch_enable: false,
-        pitch_env_atk_curve: SmoothStyle::Linear,
-        pitch_env_dec_curve: SmoothStyle::Linear,
-        pitch_env_rel_curve: SmoothStyle::Linear,
-        pitch_env_attack: 0.0,
-        pitch_env_decay: 300.0,
-        pitch_env_sustain: 0.0,
-        pitch_env_release: 0.0,
-        pitch_env_peak: 0.0,
-        pitch_routing: PitchRouting::Osc1,
-
-        pitch_enable_2: false,
-        pitch_env_peak_2: 0.0,
-        pitch_env_atk_curve_2: SmoothStyle::Linear,
-        pitch_env_dec_curve_2: SmoothStyle::Linear,
-        pitch_env_rel_curve_2: SmoothStyle::Linear,
-        pitch_env_attack_2: 0.0,
-        pitch_env_decay_2: 300.0,
-        pitch_env_release_2: 0.0,
-        pitch_env_sustain_2: 0.0,
-        pitch_routing_2: PitchRouting::Osc1,
-
-        // LFOs
-        lfo1_enable: false,
-        lfo2_enable: false,
-        lfo3_enable: false,
-
-        lfo1_freq: 2.0,
-        lfo1_retrigger: LFOController::LFORetrigger::None,
-        lfo1_sync: true,
-        lfo1_snap: LFOController::LFOSnapValues::Half,
-        lfo1_waveform: LFOController::Waveform::Sine,
-        lfo1_phase: 0.0,
-
-        lfo2_freq: 2.0,
-        lfo2_retrigger: LFOController::LFORetrigger::None,
-        lfo2_sync: true,
-        lfo2_snap: LFOController::LFOSnapValues::Half,
-        lfo2_waveform: LFOController::Waveform::Sine,
-        lfo2_phase: 0.0,
-
-        lfo3_freq: 2.0,
-        lfo3_retrigger: LFOController::LFORetrigger::None,
-        lfo3_sync: true,
-        lfo3_snap: LFOController::LFOSnapValues::Half,
-        lfo3_waveform: LFOController::Waveform::Sine,
-        lfo3_phase: 0.0,
-
-        // Modulations
-        mod_source_1: ModulationSource::None,
-        mod_source_2: ModulationSource::None,
-        mod_source_3: ModulationSource::None,
-        mod_source_4: ModulationSource::None,
-        mod_dest_1: ModulationDestination::None,
-        mod_dest_2: ModulationDestination::None,
-        mod_dest_3: ModulationDestination::None,
-        mod_dest_4: ModulationDestination::None,
-        mod_amount_1: 0.0,
-        mod_amount_2: 0.0,
-        mod_amount_3: 0.0,
-        mod_amount_4: 0.0,
-
-        // EQ
-        pre_use_eq: false,
-        pre_low_freq: 800.0,
-        pre_mid_freq: 3000.0,
-        pre_high_freq: 10000.0,
-        pre_low_gain: 0.0,
-        pre_mid_gain: 0.0,
-        pre_high_gain: 0.0,
-
-        // FM
-        fm_attack: 0.5,
-        fm_attack_curve: SmoothStyle::Linear,
-        fm_decay: 0.5,
-        fm_decay_curve: SmoothStyle::Linear,
-        fm_release: 0.5,
-        fm_release_curve: SmoothStyle::Linear,
-        fm_sustain: 0.5,
-        fm_cycles: 1,
-        fm_one_to_three: 0.0,
-        fm_one_to_two: 0.0,
-        fm_two_to_three: 0.0,
-
-        // FX
-        use_fx: true,
-
-        use_compressor: false,
-        comp_amt: 0.5,
-        comp_atk: 0.5,
-        comp_rel: 0.5,
-        comp_drive: 0.5,
-
-        use_abass: false,
-        abass_amount: 0.0011,
-
-        use_saturation: false,
-        sat_amount: 0.0,
-        sat_type: SaturationType::Tape,
-
-        use_delay: false,
-        delay_amount: 0.5,
-        delay_time: DelaySnapValues::Quarter,
-        delay_decay: 0.5,
-        delay_type: DelayType::Stereo,
-
-        use_reverb: false,
-        reverb_model: ReverbModel::Default,
-        reverb_amount: 0.85,
-        reverb_size: 1.0,
-        reverb_feedback: 0.28,
-
-        use_phaser: false,
-        phaser_amount: 0.5,
-        phaser_depth: 0.5,
-        phaser_rate: 0.5,
-        phaser_feedback: 0.5,
-
-        use_buffermod: false,
-        buffermod_amount: 0.5,
-        buffermod_depth: 0.5,
-        buffermod_rate: 0.5,
-        buffermod_spread: 0.0,
-        buffermod_timing: 620.0,
-
-        use_flanger: false,
-        flanger_amount: 0.5,
-        flanger_depth: 0.5,
-        flanger_rate: 0.5,
-        flanger_feedback: 0.5,
-
-        use_limiter: false,
-        limiter_threshold: 0.5,
-        limiter_knee: 0.5,
-    };
-
     static ref ERROR_PRESETV130: ActuatePresetV130 = ActuatePresetV130 {
         preset_name: String::from("Error Loading"),
         preset_info: String::from("Corrupt or incompatible versions"),
@@ -8494,7 +7328,7 @@ lazy_static::lazy_static!(
         tag_soft: false,
         tag_stab: false,
         tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_type: AudioModuleType::Sine,
         mod1_audio_module_level: 1.0,
         mod1_audio_module_routing: AMFilterRouting::Filter1,
         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -8508,7 +7342,6 @@ lazy_static::lazy_static!(
         mod1_start_position: 0.0,
         mod1_end_position: 1.0,
         mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
         mod1_osc_octave: 0,
         mod1_osc_semitones: 0,
         mod1_osc_detune: 0.0,
@@ -8538,7 +7371,6 @@ lazy_static::lazy_static!(
         mod2_start_position: 0.0,
         mod2_end_position: 1.0,
         mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
         mod2_osc_octave: 0,
         mod2_osc_semitones: 0,
         mod2_osc_detune: 0.0,
@@ -8568,7 +7400,6 @@ lazy_static::lazy_static!(
         mod3_start_position: 0.0,
         mod3_end_position: 1.0,
         mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
         mod3_osc_octave: 0,
         mod3_osc_semitones: 0,
         mod3_osc_detune: 0.0,
@@ -8792,7 +7623,7 @@ lazy_static::lazy_static!(
         tag_soft: false,
         tag_stab: false,
         tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_type: AudioModuleType::Sine,
         mod1_audio_module_level: 1.0,
         mod1_audio_module_routing: AMFilterRouting::Filter1,
         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -8806,7 +7637,6 @@ lazy_static::lazy_static!(
         mod1_start_position: 0.0,
         mod1_end_position: 1.0,
         mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
         mod1_osc_octave: 0,
         mod1_osc_semitones: 0,
         mod1_osc_detune: 0.0,
@@ -8836,7 +7666,6 @@ lazy_static::lazy_static!(
         mod2_start_position: 0.0,
         mod2_end_position: 1.0,
         mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
         mod2_osc_octave: 0,
         mod2_osc_semitones: 0,
         mod2_osc_detune: 0.0,
@@ -8866,7 +7695,6 @@ lazy_static::lazy_static!(
         mod3_start_position: 0.0,
         mod3_end_position: 1.0,
         mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
         mod3_osc_octave: 0,
         mod3_osc_semitones: 0,
         mod3_osc_detune: 0.0,
@@ -9139,7 +7967,7 @@ lazy_static::lazy_static!(
         tag_soft: false,
         tag_stab: false,
         tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_type: AudioModuleType::Sine,
         mod1_audio_module_level: 1.0,
         mod1_audio_module_routing: AMFilterRouting::Filter1,
         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -9153,7 +7981,6 @@ lazy_static::lazy_static!(
         mod1_start_position: 0.0,
         mod1_end_position: 1.0,
         mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
         mod1_osc_octave: 0,
         mod1_osc_semitones: 0,
         mod1_osc_detune: 0.0,
@@ -9183,7 +8010,6 @@ lazy_static::lazy_static!(
         mod2_start_position: 0.0,
         mod2_end_position: 1.0,
         mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
         mod2_osc_octave: 0,
         mod2_osc_semitones: 0,
         mod2_osc_detune: 0.0,
@@ -9213,7 +8039,6 @@ lazy_static::lazy_static!(
         mod3_start_position: 0.0,
         mod3_end_position: 1.0,
         mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
         mod3_osc_octave: 0,
         mod3_osc_semitones: 0,
         mod3_osc_detune: 0.0,

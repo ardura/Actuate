@@ -7,12 +7,12 @@ use egui_file::{FileDialog, State};
 use nih_plug::{context::gui::AsyncExecutor, editor::Editor};
 use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2}, widgets::ParamSlider};
 
+use crate::CustomWidgets::ComboBoxParam;
+#[allow(unused_imports)]
 use crate::{
     actuate_enums::{
-        AMFilterRouting, FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType, Oscillator::VoiceType}, Actuate, ActuateParams, CustomWidgets::{
-            slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, 
-            BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, 
-            CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
+        AMFilterRouting, FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType}, Actuate, ActuateParams, CustomWidgets::{
+            slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
 
 pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExecutor<Actuate>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = instance.params.clone();
@@ -20,7 +20,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let arc_preset: Arc<Mutex<Vec<ActuatePresetV131>>> = Arc::clone(&instance.preset_lib);
         let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&instance.preset_name);
         let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&instance.preset_info);
-        let arc_preset_category: Arc<Mutex<PresetType>> = Arc::clone(&instance.preset_category);
+        //let arc_preset_category: Arc<Mutex<PresetType>> = Arc::clone(&instance.preset_category);
         let clear_voices: Arc<AtomicBool> = Arc::clone(&instance.clear_voices);
         let reload_entire_preset: Arc<AtomicBool> = Arc::clone(&instance.reload_entire_preset);
         let browse_preset_active: Arc<AtomicBool> = Arc::clone(&instance.browsing_presets);
@@ -38,44 +38,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let filter_select_outside: Arc<Mutex<UIBottomSelection>> =
             Arc::new(Mutex::new(UIBottomSelection::Filter1));
         let lfo_select_outside: Arc<Mutex<LFOSelect>> = Arc::new(Mutex::new(LFOSelect::INFO));
-        let mod_source_1_tracker_outside: Arc<Mutex<ModulationSource>> =
-            Arc::new(Mutex::new(ModulationSource::None));
-        let mod_source_2_tracker_outside: Arc<Mutex<ModulationSource>> =
-            Arc::new(Mutex::new(ModulationSource::None));
-        let mod_source_3_tracker_outside: Arc<Mutex<ModulationSource>> =
-            Arc::new(Mutex::new(ModulationSource::None));
-        let mod_source_4_tracker_outside: Arc<Mutex<ModulationSource>> =
-            Arc::new(Mutex::new(ModulationSource::None));
-        let mod_dest_1_tracker_outside: Arc<Mutex<ModulationDestination>> =
-            Arc::new(Mutex::new(ModulationDestination::None));
-        let mod_dest_2_tracker_outside: Arc<Mutex<ModulationDestination>> =
-            Arc::new(Mutex::new(ModulationDestination::None));
-        let mod_dest_3_tracker_outside: Arc<Mutex<ModulationDestination>> =
-            Arc::new(Mutex::new(ModulationDestination::None));
-        let mod_dest_4_tracker_outside: Arc<Mutex<ModulationDestination>> =
-            Arc::new(Mutex::new(ModulationDestination::None));
-        let gen_1_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
-            Arc::new(Mutex::new(AMFilterRouting::Filter1));
-        let gen_2_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
-            Arc::new(Mutex::new(AMFilterRouting::Filter1));
-        let gen_3_filter_tracker_outside: Arc<Mutex<AMFilterRouting>> =
-            Arc::new(Mutex::new(AMFilterRouting::Filter1));
-
-        let preset_category_tracker_outside: Arc<Mutex<PresetType>> =
-            Arc::new(Mutex::new(PresetType::Select));
-
-        let mod_source_override_1 = instance.mod_override_source_1.clone();
-        let mod_source_override_2 = instance.mod_override_source_2.clone();
-        let mod_source_override_3 = instance.mod_override_source_3.clone();
-        let mod_source_override_4 = instance.mod_override_source_4.clone();
-        let mod_dest_override_1 = instance.mod_override_dest_1.clone();
-        let mod_dest_override_2 = instance.mod_override_dest_2.clone();
-        let mod_dest_override_3 = instance.mod_override_dest_3.clone();
-        let mod_dest_override_4 = instance.mod_override_dest_4.clone();
-        let preset_category_override = instance.preset_category_override.clone();
-        let gen_1_routing_override_set = instance.gen_1_routing_override.clone();
-        let gen_2_routing_override_set = instance.gen_2_routing_override.clone();
-        let gen_3_routing_override_set = instance.gen_3_routing_override.clone();
 
         let filter_acid = instance.filter_acid.clone();
         let filter_analog = instance.filter_analog.clone();
@@ -186,80 +148,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         let current_preset_index = current_preset.load(Ordering::SeqCst);
                         let filter_select = filter_select_outside.clone();
                         let lfo_select = lfo_select_outside.clone();
-                        let mod_source_1_tracker = mod_source_1_tracker_outside.clone();
-                        let mod_source_2_tracker = mod_source_2_tracker_outside.clone();
-                        let mod_source_3_tracker = mod_source_3_tracker_outside.clone();
-                        let mod_source_4_tracker = mod_source_4_tracker_outside.clone();
-                        let mod_dest_1_tracker = mod_dest_1_tracker_outside.clone();
-                        let mod_dest_2_tracker = mod_dest_2_tracker_outside.clone();
-                        let mod_dest_3_tracker = mod_dest_3_tracker_outside.clone();
-                        let mod_dest_4_tracker = mod_dest_4_tracker_outside.clone();
-                        let gen_1_filter_tracker = gen_1_filter_tracker_outside.clone();
-                        let gen_2_filter_tracker = gen_2_filter_tracker_outside.clone();
-                        let gen_3_filter_tracker = gen_3_filter_tracker_outside.clone();
-                        let preset_category_tracker = preset_category_tracker_outside.clone();
                         let preset_lib_name_tracker = arc_preset_lib_name.clone();
-
-                        /*
-                        // Fix reload of plugin from project load
-                        if *gen_1_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE || params.audio_module_1_type.value() != AudioModuleType::UNSET_AM {
-                            let (new_type, sub_type) = match *gen_1_type_tracker.lock().unwrap() {
-                                GeneratorType::UNSETTYPE => (AudioModuleType::UNSET_AM, VoiceType::Sine),
-                                GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
-                                GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
-                                GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
-                                GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
-                                GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
-                                GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
-                                GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
-                                GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
-                                GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
-                                GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
-                                GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
-                                GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
-                                GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
-                                GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
-                                GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
-                                GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
-                            };
-                            let try_load = match new_type {
-                                AudioModuleType::Off => GeneratorType::Off,
-                                AudioModuleType::Additive => GeneratorType::Additive,
-                                AudioModuleType::Granulizer => GeneratorType::Granulizer,
-                                AudioModuleType::Sampler => GeneratorType::Sampler,
-                                AudioModuleType::Osc => match sub_type {
-                                    VoiceType::Noise => GeneratorType::Noise,
-                                    VoiceType::Pulse => GeneratorType::Pulse,
-                                    VoiceType::Saw => GeneratorType::Saw,
-                                    VoiceType::SSaw => GeneratorType::SSaw,
-                                    VoiceType::Sine => GeneratorType::Sine,
-                                    VoiceType::Square => GeneratorType::Square,
-                                    VoiceType::WSaw => GeneratorType::WSaw,
-                                    VoiceType::RSaw => GeneratorType::RSaw,
-                                    VoiceType::RASaw => GeneratorType::RASaw,
-                                    VoiceType::RSquare => GeneratorType::RSquare,
-                                    VoiceType::Ramp => GeneratorType::Ramp,
-                                    VoiceType::Tri => GeneratorType::Tri,
-                                }
-                            };
-                            if try_load != *gen_1_type_tracker.lock().unwrap() {
-                                *gen_1_type_tracker.lock().unwrap() = try_load;
-                            }
-                            AM1.lock()
-                                .unwrap()
-                                .consume_params(params.clone(), 1);
-                        }
-                        if *gen_2_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE || params.audio_module_2_type.value() != AudioModuleType::UNSET_AM {
-                            AM2.lock()
-                                .unwrap()
-                                .consume_params(params.clone(), 2);
-                        }
-                        if *gen_3_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE || params.audio_module_3_type.value() != AudioModuleType::UNSET_AM {
-                            AM3.lock()
-                                .unwrap()
-                                .consume_params(params.clone(), 3);
-                        }
-                        */
 
                         // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
                         // It runs if there is peristent sample data but not sample data in the audio module
@@ -320,20 +209,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
 
                                 // GUI thread misses this without this call here for some reason
-                                (
-                                    *mod_source_override_1.lock().unwrap(),
-                                    *mod_source_override_2.lock().unwrap(),
-                                    *mod_source_override_3.lock().unwrap(),
-                                    *mod_source_override_4.lock().unwrap(),
-                                    *mod_dest_override_1.lock().unwrap(),
-                                    *mod_dest_override_2.lock().unwrap(),
-                                    *mod_dest_override_3.lock().unwrap(),
-                                    *mod_dest_override_4.lock().unwrap(),
-                                    *preset_category_override.lock().unwrap(),
-                                    *gen_1_routing_override_set.lock().unwrap(),
-                                    *gen_2_routing_override_set.lock().unwrap(),
-                                    *gen_3_routing_override_set.lock().unwrap(),
-                                ) = Actuate::reload_entire_preset(
+                                Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
                                     (current_preset_index + 1) as usize,
@@ -341,9 +217,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     &mut AM1.lock().unwrap(),
                                     &mut AM2.lock().unwrap(),
                                     &mut AM3.lock().unwrap(),);
-
-                                // This is the gui value only - the preset type itinstance is loaded in the preset already
-                                *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
 
                                 // This is set for the process thread
                                 reload_entire_preset.store(true, Ordering::SeqCst);
@@ -365,20 +238,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
 
                                 // GUI thread misses this without this call here for some reason
-                                (
-                                    *mod_source_override_1.lock().unwrap(),
-                                    *mod_source_override_2.lock().unwrap(),
-                                    *mod_source_override_3.lock().unwrap(),
-                                    *mod_source_override_4.lock().unwrap(),
-                                    *mod_dest_override_1.lock().unwrap(),
-                                    *mod_dest_override_2.lock().unwrap(),
-                                    *mod_dest_override_3.lock().unwrap(),
-                                    *mod_dest_override_4.lock().unwrap(),
-                                    *preset_category_override.lock().unwrap(),
-                                    *gen_1_routing_override_set.lock().unwrap(),
-                                    *gen_2_routing_override_set.lock().unwrap(),
-                                    *gen_3_routing_override_set.lock().unwrap(),
-                                ) = Actuate::reload_entire_preset(
+                                Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
                                     (current_preset_index - 1) as usize,
@@ -386,9 +246,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     &mut AM1.lock().unwrap(),
                                     &mut AM2.lock().unwrap(),
                                     &mut AM3.lock().unwrap(),);
-
-                                // This is the gui value only - the preset type itinstance is loaded in the preset already
-                                *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
 
                                 // This is set for the process thread
                                 reload_entire_preset.store(true, Ordering::SeqCst);
@@ -490,22 +347,22 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
-                                        .on_hover_text("by Ardura!");
+                                        .on_hover_text("v1.3.4 by Ardura!");
                                     ui.add_space(2.0);
                                     ui.separator();
 
-                                    let prev_preset_button = BoolButton::BoolButton::for_param(&params.param_prev_preset, setter, 1.5, 0.9, FONT)
+                                    let prev_preset_button = BoolButton::BoolButton::for_param(&params.param_prev_preset, setter, 1.0, 0.8, SMALLER_FONT)
                                         .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(prev_preset_button);
                                     ui.label(RichText::new("Preset")
                                         .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
-                                        .size(16.0));
+                                        .size(12.0));
                                     ui.label(RichText::new(current_preset_index.to_string())
                                         .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
-                                        .size(16.0));
-                                    let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.5, 0.9, FONT)
+                                        .size(12.0));
+                                    let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.0, 0.8, SMALLER_FONT)
                                         .with_background_color(DARK_GREY_UI_COLOR);
                                     ui.add(next_preset_button);
 
@@ -515,6 +372,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
                                     );
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("Preset Info").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     if browse.clicked() {
                                         browse_preset_active.store(true, Ordering::SeqCst);
                                     }
@@ -650,20 +508,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     *lfo_select.lock().unwrap() = LFOSelect::INFO;
         
                                                                     // GUI thread misses this without this call here for some reason
-                                                                    (
-                                                                        *mod_source_override_1.lock().unwrap(),
-                                                                        *mod_source_override_2.lock().unwrap(),
-                                                                        *mod_source_override_3.lock().unwrap(),
-                                                                        *mod_source_override_4.lock().unwrap(),
-                                                                        *mod_dest_override_1.lock().unwrap(),
-                                                                        *mod_dest_override_2.lock().unwrap(),
-                                                                        *mod_dest_override_3.lock().unwrap(),
-                                                                        *mod_dest_override_4.lock().unwrap(),
-                                                                        *preset_category_override.lock().unwrap(),
-                                                                        *gen_1_routing_override_set.lock().unwrap(),
-                                                                        *gen_2_routing_override_set.lock().unwrap(),
-                                                                        *gen_3_routing_override_set.lock().unwrap(),
-                                                                    ) = Actuate::reload_entire_preset(
+                                                                    Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
                                                                         row,
@@ -677,7 +522,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     let temp_current_preset = arc_preset.lock().unwrap()[row].clone();
                                                                     *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
                                                                     *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
-                                                                    *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
         
                                                                     // This is set for the process thread
                                                                     reload_entire_preset.store(true, Ordering::SeqCst);
@@ -782,20 +626,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     *lfo_select.lock().unwrap() = LFOSelect::INFO;
         
                                                                     // GUI thread misses this without this call here for some reason
-                                                                    (
-                                                                        *mod_source_override_1.lock().unwrap(),
-                                                                        *mod_source_override_2.lock().unwrap(),
-                                                                        *mod_source_override_3.lock().unwrap(),
-                                                                        *mod_source_override_4.lock().unwrap(),
-                                                                        *mod_dest_override_1.lock().unwrap(),
-                                                                        *mod_dest_override_2.lock().unwrap(),
-                                                                        *mod_dest_override_3.lock().unwrap(),
-                                                                        *mod_dest_override_4.lock().unwrap(),
-                                                                        *preset_category_override.lock().unwrap(),
-                                                                        *gen_1_routing_override_set.lock().unwrap(),
-                                                                        *gen_2_routing_override_set.lock().unwrap(),
-                                                                        *gen_3_routing_override_set.lock().unwrap(),
-                                                                    ) = Actuate::reload_entire_preset(
+                                                                    Actuate::reload_entire_preset(
                                                                         setter,
                                                                         params.clone(),
                                                                         *r_index,
@@ -809,7 +640,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                     let temp_current_preset = arc_preset.lock().unwrap()[*r_index].clone();
                                                                     *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
                                                                     *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
-                                                                    *arc_preset_category.lock().unwrap() = *preset_category_override.lock().unwrap();
         
                                                                     // This is set for the process thread
                                                                     reload_entire_preset.store(true, Ordering::SeqCst);
@@ -893,21 +723,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             });
                                         });
                                     }
-                                    ui.separator();
-                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.5, 1.0, FONT);
+                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.5, 1.0, SMALLER_FONT);
                                     ui.add(use_fx_toggle).on_hover_text("Enable or disable FX processing");
                                     ui.separator();
-                                    let max_voice_knob = ui_knob::ArcKnob::for_param(
-                                        &params.voice_limit,
-                                        setter,
-                                        11.0,
-                                        KnobLayout::HorizontalInline)
-                                        .preset_style(ui_knob::KnobStyle::Preset1)
-                                        .set_fill_color(DARK_GREY_UI_COLOR)
-                                        .set_line_color(YELLOW_MUSTARD)
-                                        .set_text_size(TEXT_SIZE)
-                                        .set_hover_text("The maximum number of voices that can be playing at once".to_string());
-                                    ui.add(max_voice_knob);
                                     let master_knob = ui_knob::ArcKnob::for_param(
                                         &params.master_level,
                                         setter,
@@ -919,8 +737,211 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         .set_text_size(TEXT_SIZE)
                                         .set_hover_text("Master volume level for Actuate".to_string());
                                     ui.add(master_knob);
+                                    // Studio One changes (compatible for all DAWs)
+                                    let import_bank_button = ui.button(RichText::new("Load Bank")
+                                        .font(SMALLER_FONT)
+                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .color(TEAL_GREEN)
+                                    );
+                                    if import_bank_button.clicked() {
+                                        import_bank_active.store(true, Ordering::SeqCst);
+                                    }
+                                    if import_bank_active.load(Ordering::SeqCst) {
+                                        // Move to info tab on preset change
+                                        *lfo_select.lock().unwrap() = LFOSelect::INFO;
+                                    
+                                        // hehe
+                                        let bank_dialock = bank_dialog_main.clone();
+                                        let mut dialog = bank_dialock.lock().unwrap();
+                                        dialog.open();
+                                        let mut dvar = Some(dialog);
 
-                                    ui.checkbox(&mut safety_clip_output.lock().unwrap(), "Safety Clip Output");
+                                        if let Some(dialog) = &mut dvar {
+                                            if dialog.show(egui_ctx).selected() {
+                                              if let Some(file) = dialog.path() {
+                                                let default_name: String;                                                                
+                                                let opened_file = Some(file.to_path_buf());
+                                                let unserialized: Vec<ActuatePresetV131>;
+                                                (default_name, unserialized) = Actuate::load_preset_bank(opened_file);
+                                                let temppath = default_name.clone();
+                                                let path = Path::new(&temppath);
+                                                if let Some(filename) = path.file_name() {
+                                                    let mut locked_lib = arc_preset.lock().unwrap();
+                                                
+                                                    // Load our items into our library from the unserialized save file
+                                                    for (item_index, item) in unserialized.iter().enumerate() {
+                                                        // If our item exists then update it
+                                                        if let Some(existing_item) = locked_lib.get_mut(item_index) {
+                                                            *existing_item = item.clone();
+                                                        } else {
+                                                            // item_index is out of bounds in locked_lib
+                                                            // These get dropped as the preset size should be the same all around
+                                                        }
+                                                    }
+                                                
+                                                    // Create missing samples on current preset
+                                                    let mut AM1L = AM1.lock().unwrap();
+                                                    let mut AM2L = AM2.lock().unwrap();
+                                                    let mut AM3L = AM3.lock().unwrap();
+                                                    AM1L.regenerate_samples();
+                                                    AM2L.regenerate_samples();
+                                                    AM3L.regenerate_samples();
+                                                
+                                                    let temp_preset = &locked_lib[current_preset_index as usize];
+                                                    *arc_preset_name.lock().unwrap() =  temp_preset.preset_name.clone();
+                                                    *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
+                                                    //*arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
+                                                
+                                                    drop(locked_lib);
+                                                
+                                                    Actuate::reload_entire_preset(
+                                                        setter,
+                                                        params.clone(),
+                                                        current_preset_index as usize,
+                                                        &arc_preset.lock().unwrap(),
+                                                        &mut AM1L,
+                                                        &mut AM2L,
+                                                        &mut AM3L,);
+                                                    import_bank_active.store(false, Ordering::SeqCst);
+                                                    *preset_lib_name_tracker.lock().unwrap() = filename.to_string_lossy().to_string();
+                                                }
+                                              }
+                                            }
+                                        
+                                            match dialog.state() {
+                                                State::Cancelled | State::Closed => {
+                                                    import_bank_active.store(false, Ordering::SeqCst);
+                                                },
+                                                _ => {}
+                                            }
+                                        }
+                                    }
+                                    // Studio One changes (compatible for all DAWs)
+                                    let export_bank_button = ui.button(RichText::new("Save Bank")
+                                        .font(SMALLER_FONT)
+                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .color(TEAL_GREEN)
+                                    );
+                                    if export_bank_button.clicked() {
+                                        export_bank_active.store(true, Ordering::SeqCst);
+                                    }
+                                    if export_bank_active.load(Ordering::SeqCst) {
+                                        // Name the preset bank
+                                        let bank_save_dialock = bank_save_dialog_main.clone();
+                                        let mut save_dialog = bank_save_dialock.lock().unwrap();
+                                        save_dialog.open();
+                                        let mut dvar = Some(save_dialog);
+
+                                        if let Some(s_dialog) = &mut dvar {
+                                            if s_dialog.show(egui_ctx).selected() {
+                                              if let Some(file) = s_dialog.path() {
+                                                let saved_file = Some(file.to_path_buf());
+                                                let mut locked_lib = arc_preset.lock().unwrap();
+                                                Actuate::save_preset_bank(&mut locked_lib, saved_file);
+                                                drop(locked_lib);
+                                                export_bank_active.store(false, Ordering::SeqCst);
+                                              }
+                                            }
+                                        
+                                            match s_dialog.state() {
+                                                State::Cancelled | State::Closed => {
+                                                    export_bank_active.store(false, Ordering::SeqCst);
+                                                },
+                                                _ => {}
+                                            }
+                                        }
+                                    }
+                                    // Studio One changes (compatible for all DAWs)
+                                    let import_preset_button = ui.button(RichText::new("Import Preset")
+                                        .font(SMALLER_FONT)
+                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .color(TEAL_GREEN)
+                                    );
+                                    if import_preset_button.clicked() {
+                                        import_preset_active.store(true, Ordering::SeqCst);
+                                    }
+                                    if import_preset_active.load(Ordering::SeqCst) {
+                                        let dialock = dialog_main.clone();
+                                        let mut dialog = dialock.lock().unwrap();
+                                        dialog.open();
+                                        let mut dvar = Some(dialog);
+
+                                        if let Some(dialog) = &mut dvar {
+                                            if dialog.show(egui_ctx).selected() {
+                                              if let Some(file) = dialog.path() {
+                                                let opened_file = Some(file.to_path_buf());
+                                                let unserialized: Option<ActuatePresetV131>;
+                                                (_, unserialized) = Actuate::import_preset(opened_file);
+
+                                                if unserialized.is_some() {
+                                                    let mut locked_lib = arc_preset.lock().unwrap();
+                                                    locked_lib[current_preset_index as usize] =
+                                                        unserialized.unwrap();
+                                                    let temp_preset =
+                                                        &locked_lib[current_preset_index as usize];
+                                                    *arc_preset_name.lock().unwrap() =  temp_preset.preset_name.clone();
+                                                    *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
+                                                    //*arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
+
+                                                    import_preset_active.store(false, Ordering::SeqCst);
+
+                                                    drop(locked_lib);
+                                                
+                                                    // GUI thread misses this without this call here for some reason
+                                                    Actuate::reload_entire_preset(
+                                                        setter,
+                                                        params.clone(),
+                                                        (current_preset_index) as usize,
+                                                        &arc_preset.lock().unwrap(),
+                                                        &mut AM1.lock().unwrap(),
+                                                        &mut AM2.lock().unwrap(),
+                                                        &mut AM3.lock().unwrap(),);
+                                                }
+                                              }
+                                            }
+                                            match dialog.state() {
+                                                State::Cancelled | State::Closed => {
+                                                    import_preset_active.store(false, Ordering::SeqCst);
+                                                },
+                                                _ => {}
+                                            }
+                                        }
+
+                                    }
+                                    // Studio One changes (compatible for all DAWs)
+                                    let export_preset_button = ui.button(RichText::new("Export Preset")
+                                        .font(SMALLER_FONT)
+                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .color(TEAL_GREEN)
+                                    );
+                                    if export_preset_button.clicked() {
+                                        export_preset_active.store(true, Ordering::SeqCst);
+                                    }
+                                    if export_preset_active.load(Ordering::SeqCst) {
+                                        let save_dialock = save_dialog_main.clone();
+                                        let mut save_dialog = save_dialock.lock().unwrap();
+                                        save_dialog.open();
+                                        let mut dvar = Some(save_dialog);
+                                        if let Some(s_dialog) = &mut dvar {
+                                            if s_dialog.show(egui_ctx).selected() {
+                                              if let Some(file) = s_dialog.path() {
+                                                let saved_file = Some(file.to_path_buf());
+                                                let locked_lib = arc_preset.lock().unwrap();
+                                                Actuate::export_preset(saved_file, locked_lib[current_preset_index as usize].clone());
+                                                drop(locked_lib);
+                                                export_preset_active.store(false, Ordering::SeqCst);
+                                              }
+                                            }
+
+                                            match s_dialog.state() {
+                                                State::Cancelled | State::Closed => {
+                                                    export_preset_active.store(false, Ordering::SeqCst);
+                                                },
+                                                _ => {}
+                                            }
+                                        }
+                                    }
+                                    ui.checkbox(&mut safety_clip_output.lock().unwrap(), "Safety Clip").on_hover_text("Clip the output at 0dB to save your ears/speakers");
                                 });
                                 const KNOB_SIZE: f32 = 28.0;
                                 const TEXT_SIZE: f32 = 11.0;
@@ -934,133 +955,38 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             ui.vertical(|ui|{
                                                 ui.add_space(12.0);
                                                 ui.colored_label(TEAL_GREEN, "Type");
-                                                egui::ComboBox::new("gen_1_combobox", "")
-                                                    .selected_text(format!("{:?}", *gen_1_type_tracker.lock().unwrap()))
-                                                    .width(86.0)
-                                                    .height(336.0)
-                                                    .show_ui(ui, |ui| {
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Off, "Off");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Sine, "Sine");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Tri, "Tri");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Saw, "Saw");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::RSaw, "Rsaw");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::WSaw, "WSaw");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::SSaw, "SSaw");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::RASaw, "RASaw");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Ramp, "Ramp");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Square, "Square");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::RSquare, "RSquare");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Pulse, "Pulse");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Noise, "Noise");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Sampler, "Sampler");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Granulizer, "Granulizer");
-                                                        ui.selectable_value(&mut *gen_1_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
-                                                    }).response.on_hover_text_at_pointer("The type of generator to use.");
-                                                let (new_type, sub_type) = match *gen_1_type_tracker.lock().unwrap() {
-                                                    GeneratorType::UNSETTYPE => (AudioModuleType::UNSET_AM, VoiceType::Sine),
-                                                    GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
-                                                    GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
-                                                    GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
-                                                    GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
-                                                    GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
-                                                    GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
-                                                    GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
-                                                    GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
-                                                    GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
-                                                    GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
-                                                    GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
-                                                    GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
-                                                    GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
-                                                    GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
-                                                    GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
-                                                    GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
-                                                };
-                                                if *gen_1_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE {
-                                                    // This happens on plugin preset load
-                                                    *gen_1_type_tracker.lock().unwrap() = *gen_1_type_override_set.lock().unwrap();
-                                                    setter.set_parameter( &params.audio_module_1_type, new_type);
-                                                    setter.set_parameter( &params.osc_1_type, sub_type);
-                                                    *gen_1_type_override_set.lock().unwrap() = GeneratorType::UNSETTYPE;
-                                                } else {
-                                                    // Set the new value in our params FROM the GUI
-                                                    if new_type.clone() != params.audio_module_1_type.value() || sub_type != params.osc_1_type.value() {
-                                                        setter.set_parameter( &params.audio_module_1_type, new_type);
-                                                        setter.set_parameter( &params.osc_1_type, sub_type);
-                                                    } 
-                                                    /*else {
-                                                        let try_load = match new_type {
-                                                            AudioModuleType::Off => GeneratorType::Off,
-                                                            AudioModuleType::Additive => GeneratorType::Additive,
-                                                            AudioModuleType::Granulizer => GeneratorType::Granulizer,
-                                                            AudioModuleType::Sampler => GeneratorType::Sampler,
-                                                            AudioModuleType::Osc => match sub_type {
-                                                                VoiceType::Noise => GeneratorType::Noise,
-                                                                VoiceType::Pulse => GeneratorType::Pulse,
-                                                                VoiceType::Saw => GeneratorType::Saw,
-                                                                VoiceType::SSaw => GeneratorType::SSaw,
-                                                                VoiceType::Sine => GeneratorType::Sine,
-                                                                VoiceType::Square => GeneratorType::Square,
-                                                                VoiceType::WSaw => GeneratorType::WSaw,
-                                                                VoiceType::RSaw => GeneratorType::RSaw,
-                                                                VoiceType::RASaw => GeneratorType::RASaw,
-                                                                VoiceType::RSquare => GeneratorType::RSquare,
-                                                                VoiceType::Ramp => GeneratorType::Ramp,
-                                                                VoiceType::Tri => GeneratorType::Tri,
-                                                            }
-                                                        };
-                                                        if try_load != *gen_1_type_tracker.lock().unwrap() {
-                                                            *gen_1_type_tracker.lock().unwrap() = try_load;
-                                                        }
-                                                    }*/
-                                                }
+                                                let cb1 = ComboBoxParam::ParamComboBox::for_param(&params.audio_module_1_type, setter, vec![
+                                                    String::from("Off"),
+                                                    String::from("Sine"),
+                                                    String::from("Tri"),
+                                                    String::from("Saw"),
+                                                    String::from("RSaw"),
+                                                    String::from("WSaw"),
+                                                    String::from("SSaw"),
+                                                    String::from("RASaw"),
+                                                    String::from("Ramp"),
+                                                    String::from("Square"),
+                                                    String::from("RSquare"),
+                                                    String::from("Pulse"),
+                                                    String::from("Noise"),
+                                                    String::from("Sampler"),
+                                                    String::from("Granulizer"),
+                                                    String::from("Additive"),
+                                                ],
+                                                "cb1".to_string());
+                                                ui.add(cb1);
                                                 
                                                 ui.colored_label(TEAL_GREEN, "Filter Assign");
-                                                egui::ComboBox::new("gen_1_routing_combobox", "")
-                                                    .selected_text(format!("{:?}", *gen_1_filter_tracker.lock().unwrap()))
-                                                    .width(70.0)
-                                                    .show_ui(ui, |ui| {
-                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Bypass, "Bypass");
-                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Filter1, "Filter1");
-                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Filter2, "Filter2");
-                                                        ui.selectable_value(&mut *gen_1_filter_tracker.lock().unwrap(), AMFilterRouting::Both, "Both");
-                                                    }).response.on_hover_text_at_pointer("Filter routing(s) for the generator");
-                                                // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                // Set the new value FROM the override field
-                                                if *gen_1_routing_override_set.lock().unwrap() != AMFilterRouting::UNSETROUTING {
-                                                    // This happens on plugin preset load
-                                                    *gen_1_filter_tracker.lock().unwrap() = *gen_1_routing_override_set.lock().unwrap();
-                                                    setter.set_parameter( &params.audio_module_1_routing, gen_1_filter_tracker.lock().unwrap().clone());
-                                                    *gen_1_routing_override_set.lock().unwrap() = AMFilterRouting::UNSETROUTING;
-                                                } else {
-                                                    // Set the new value in our params FROM the GUI
-                                                    if *gen_1_filter_tracker.lock().unwrap() != params.audio_module_1_routing.value() {
-                                                        setter.set_parameter( &params.audio_module_1_routing, gen_1_filter_tracker.lock().unwrap().clone());
-                                                    }
-                                                }
+                                                let fr1 = ComboBoxParam::ParamComboBox::for_param(&params.audio_module_1_routing, setter, vec![
+                                                    String::from("Bypass"),
+                                                    String::from("Filter1"),
+                                                    String::from("Filter2"),
+                                                    String::from("Both"),
+                                                ],
+                                                "fr1".to_string());
+                                                ui.add(fr1);
                                             });
-                                            /*
-                                            let audio_module_1_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_1_type,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                    .preset_style(ui_knob::KnobStyle::Preset1)
-                                                    .set_fill_color(DARK_GREY_UI_COLOR)
-                                                    .set_line_color(TEAL_GREEN)
-                                                    .set_text_size(TEXT_SIZE)
-                                                    .set_hover_text("The type of generator to use".to_string());
-                                            ui.add(audio_module_1_knob);
-                                            let audio_module_1_filter_routing = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_1_routing,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
-                                            ui.add(audio_module_1_filter_routing);
-                                            */
+
                                             let audio_module_1_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_1_level,
                                                 setter,
@@ -1080,134 +1006,38 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             ui.vertical(|ui|{
                                                 ui.add_space(12.0);
                                                 ui.colored_label(TEAL_GREEN, "Type");
-                                                egui::ComboBox::new("gen_2_combobox", "")
-                                                    .selected_text(format!("{:?}", *gen_2_type_tracker.lock().unwrap()))
-                                                    .width(86.0)
-                                                    .height(336.0)
-                                                    .show_ui(ui, |ui| {
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Off, "Off");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Sine, "Sine");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Tri, "Tri");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Saw, "Saw");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::RSaw, "Rsaw");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::WSaw, "WSaw");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::SSaw, "SSaw");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::RASaw, "RASaw");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Ramp, "Ramp");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Square, "Square");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::RSquare, "RSquare");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Pulse, "Pulse");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Noise, "Noise");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Sampler, "Sampler");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Granulizer, "Granulizer");
-                                                        ui.selectable_value(&mut *gen_2_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
-                                                    }).response.on_hover_text_at_pointer("The type of generator to use.");
-                                                let (new_type, sub_type) = match *gen_2_type_tracker.lock().unwrap() {
-                                                    GeneratorType::UNSETTYPE => (AudioModuleType::UNSET_AM, VoiceType::Sine),
-                                                    GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
-                                                    GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
-                                                    GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
-                                                    GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
-                                                    GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
-                                                    GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
-                                                    GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
-                                                    GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
-                                                    GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
-                                                    GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
-                                                    GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
-                                                    GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
-                                                    GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
-                                                    GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
-                                                    GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
-                                                    GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
-                                                };
-                                                if *gen_2_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE {
-                                                    // This happens on plugin preset load
-                                                    *gen_2_type_tracker.lock().unwrap() = *gen_2_type_override_set.lock().unwrap();
-                                                    setter.set_parameter( &params.audio_module_2_type, new_type);
-                                                    setter.set_parameter( &params.osc_2_type, sub_type);
-                                                    *gen_2_type_override_set.lock().unwrap() = GeneratorType::UNSETTYPE;
-                                                } else {
-                                                    // Set the new value in our params FROM the GUI
-                                                    if new_type.clone() != params.audio_module_2_type.value() || sub_type != params.osc_2_type.value() {
-                                                        setter.set_parameter( &params.audio_module_2_type, new_type);
-                                                        setter.set_parameter( &params.osc_2_type, sub_type);
-                                                    }
-                                                    /* else {
-                                                        let try_load = match new_type {
-                                                            AudioModuleType::Off => GeneratorType::Off,
-                                                            AudioModuleType::Additive => GeneratorType::Additive,
-                                                            AudioModuleType::Granulizer => GeneratorType::Granulizer,
-                                                            AudioModuleType::Sampler => GeneratorType::Sampler,
-                                                            AudioModuleType::Osc => match sub_type {
-                                                                VoiceType::Noise => GeneratorType::Noise,
-                                                                VoiceType::Pulse => GeneratorType::Pulse,
-                                                                VoiceType::Saw => GeneratorType::Saw,
-                                                                VoiceType::SSaw => GeneratorType::SSaw,
-                                                                VoiceType::Sine => GeneratorType::Sine,
-                                                                VoiceType::Square => GeneratorType::Square,
-                                                                VoiceType::WSaw => GeneratorType::WSaw,
-                                                                VoiceType::RSaw => GeneratorType::RSaw,
-                                                                VoiceType::RASaw => GeneratorType::RASaw,
-                                                                VoiceType::RSquare => GeneratorType::RSquare,
-                                                                VoiceType::Ramp => GeneratorType::Ramp,
-                                                                VoiceType::Tri => GeneratorType::Tri,
-                                                            }
-                                                        };
-                                                        if try_load != *gen_2_type_tracker.lock().unwrap() {
-                                                            *gen_2_type_tracker.lock().unwrap() = try_load;
-                                                        }
-                                                    }*/
-                                                }
+                                                let cb2 = ComboBoxParam::ParamComboBox::for_param(&params.audio_module_2_type, setter, vec![
+                                                    String::from("Off"),
+                                                    String::from("Sine"),
+                                                    String::from("Tri"),
+                                                    String::from("Saw"),
+                                                    String::from("RSaw"),
+                                                    String::from("WSaw"),
+                                                    String::from("SSaw"),
+                                                    String::from("RASaw"),
+                                                    String::from("Ramp"),
+                                                    String::from("Square"),
+                                                    String::from("RSquare"),
+                                                    String::from("Pulse"),
+                                                    String::from("Noise"),
+                                                    String::from("Sampler"),
+                                                    String::from("Granulizer"),
+                                                    String::from("Additive"),
+                                                ],
+                                                "cb2".to_string());
+                                                ui.add(cb2);
                                                 
                                                 ui.colored_label(TEAL_GREEN, "Filter Assign");
-                                                egui::ComboBox::new("gen_2_routing_combobox", "")
-                                                    .selected_text(format!("{:?}", *gen_2_filter_tracker.lock().unwrap()))
-                                                    .width(70.0)
-                                                    .show_ui(ui, |ui| {
-                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Bypass, "Bypass");
-                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Filter1, "Filter1");
-                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Filter2, "Filter2");
-                                                        ui.selectable_value(&mut *gen_2_filter_tracker.lock().unwrap(), AMFilterRouting::Both, "Both");
-                                                    }).response.on_hover_text_at_pointer("Filter routing(s) for the generator");
-                                                // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                // Set the new value FROM the override field
-                                                if *gen_2_routing_override_set.lock().unwrap() != AMFilterRouting::UNSETROUTING {
-                                                    // This happens on plugin preset load
-                                                    *gen_2_filter_tracker.lock().unwrap() = *gen_2_routing_override_set.lock().unwrap();
-                                                    setter.set_parameter( &params.audio_module_2_routing, gen_2_filter_tracker.lock().unwrap().clone());
-                                                    *gen_2_routing_override_set.lock().unwrap() = AMFilterRouting::UNSETROUTING;
-                                                } else {
-                                                    // Set the new value in our params FROM the GUI
-                                                    if *gen_2_filter_tracker.lock().unwrap() != params.audio_module_2_routing.value() {
-                                                        setter.set_parameter( &params.audio_module_2_routing, gen_2_filter_tracker.lock().unwrap().clone());
-                                                    }
-                                                }
+                                                let fr2 = ComboBoxParam::ParamComboBox::for_param(&params.audio_module_2_routing, setter, vec![
+                                                    String::from("Bypass"),
+                                                    String::from("Filter1"),
+                                                    String::from("Filter2"),
+                                                    String::from("Both"),
+                                                ],
+                                                "fr2".to_string());
+                                                ui.add(fr2);
                                             });
-                                            /*
-                                            let audio_module_2_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_2_type,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
-                                            ui.add(audio_module_2_knob);
-                                            
-                                            let audio_module_2_filter_routing = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_2_routing,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
-                                            ui.add(audio_module_2_filter_routing);
-                                        });
-                                        */
+
                                             let audio_module_2_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_2_level,
                                                 setter,
@@ -1226,133 +1056,37 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             ui.vertical(|ui|{
                                                 ui.add_space(12.0);
                                                 ui.colored_label(TEAL_GREEN, "Type");
-                                                egui::ComboBox::new("gen_3_combobox", "")
-                                                    .selected_text(format!("{:?}", *gen_3_type_tracker.lock().unwrap()))
-                                                    .width(86.0)
-                                                    .height(336.0)
-                                                    .show_ui(ui, |ui| {
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Off, "Off");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Sine, "Sine");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Tri, "Tri");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Saw, "Saw");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::RSaw, "Rsaw");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::WSaw, "WSaw");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::SSaw, "SSaw");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::RASaw, "RASaw");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Ramp, "Ramp");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Square, "Square");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::RSquare, "RSquare");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Pulse, "Pulse");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Noise, "Noise");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Sampler, "Sampler");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Granulizer, "Granulizer");
-                                                        ui.selectable_value(&mut *gen_3_type_tracker.lock().unwrap(), GeneratorType::Additive, "Additive");
-                                                    }).response.on_hover_text_at_pointer("The type of generator to use.");
-                                                let (new_type, sub_type) = match *gen_3_type_tracker.lock().unwrap() {
-                                                    GeneratorType::UNSETTYPE => (AudioModuleType::UNSET_AM, VoiceType::Sine),
-                                                    GeneratorType::Off => (AudioModuleType::Off, VoiceType::Sine),
-                                                    GeneratorType::Sine => (AudioModuleType::Osc, VoiceType::Sine),
-                                                    GeneratorType::Tri => (AudioModuleType::Osc, VoiceType::Tri),
-                                                    GeneratorType::Saw => (AudioModuleType::Osc, VoiceType::Saw),
-                                                    GeneratorType::RSaw => (AudioModuleType::Osc, VoiceType::RSaw),
-                                                    GeneratorType::WSaw => (AudioModuleType::Osc, VoiceType::WSaw),
-                                                    GeneratorType::SSaw => (AudioModuleType::Osc, VoiceType::SSaw),
-                                                    GeneratorType::RASaw => (AudioModuleType::Osc, VoiceType::RASaw),
-                                                    GeneratorType::Ramp => (AudioModuleType::Osc, VoiceType::Ramp),
-                                                    GeneratorType::Square => (AudioModuleType::Osc, VoiceType::Square),
-                                                    GeneratorType::RSquare => (AudioModuleType::Osc, VoiceType::RSquare),
-                                                    GeneratorType::Pulse => (AudioModuleType::Osc, VoiceType::Pulse),
-                                                    GeneratorType::Noise => (AudioModuleType::Osc, VoiceType::Noise),
-                                                    GeneratorType::Sampler => (AudioModuleType::Sampler, VoiceType::Sine),
-                                                    GeneratorType::Granulizer => (AudioModuleType::Granulizer, VoiceType::Sine),
-                                                    GeneratorType::Additive => (AudioModuleType::Additive, VoiceType::Sine),
-                                                };
-                                                if *gen_3_type_override_set.lock().unwrap() != GeneratorType::UNSETTYPE {
-                                                    // This happens on plugin preset load
-                                                    *gen_3_type_tracker.lock().unwrap() = *gen_3_type_override_set.lock().unwrap();
-                                                    setter.set_parameter( &params.audio_module_3_type, new_type);
-                                                    setter.set_parameter( &params.osc_3_type, sub_type);
-                                                    *gen_3_type_override_set.lock().unwrap() = GeneratorType::UNSETTYPE;
-                                                } else {
-                                                    // Set the new value in our params FROM the GUI
-                                                    if new_type.clone() != params.audio_module_3_type.value() || sub_type != params.osc_3_type.value() {
-                                                        setter.set_parameter( &params.audio_module_3_type, new_type);
-                                                        setter.set_parameter( &params.osc_3_type, sub_type);
-                                                    } 
-                                                    /*else {
-                                                        let try_load = match new_type {
-                                                            AudioModuleType::Off => GeneratorType::Off,
-                                                            AudioModuleType::Additive => GeneratorType::Additive,
-                                                            AudioModuleType::Granulizer => GeneratorType::Granulizer,
-                                                            AudioModuleType::Sampler => GeneratorType::Sampler,
-                                                            AudioModuleType::Osc => match sub_type {
-                                                                VoiceType::Noise => GeneratorType::Noise,
-                                                                VoiceType::Pulse => GeneratorType::Pulse,
-                                                                VoiceType::Saw => GeneratorType::Saw,
-                                                                VoiceType::SSaw => GeneratorType::SSaw,
-                                                                VoiceType::Sine => GeneratorType::Sine,
-                                                                VoiceType::Square => GeneratorType::Square,
-                                                                VoiceType::WSaw => GeneratorType::WSaw,
-                                                                VoiceType::RSaw => GeneratorType::RSaw,
-                                                                VoiceType::RASaw => GeneratorType::RASaw,
-                                                                VoiceType::RSquare => GeneratorType::RSquare,
-                                                                VoiceType::Ramp => GeneratorType::Ramp,
-                                                                VoiceType::Tri => GeneratorType::Tri,
-                                                            }
-                                                        };
-                                                        if try_load != *gen_3_type_tracker.lock().unwrap() {
-                                                            *gen_3_type_tracker.lock().unwrap() = try_load;
-                                                        }
-                                                    }
-                                                    */
-                                                }
+                                                let cb3 = ComboBoxParam::ParamComboBox::for_param(&params.audio_module_3_type, setter, vec![
+                                                    String::from("Off"),
+                                                    String::from("Sine"),
+                                                    String::from("Tri"),
+                                                    String::from("Saw"),
+                                                    String::from("RSaw"),
+                                                    String::from("WSaw"),
+                                                    String::from("SSaw"),
+                                                    String::from("RASaw"),
+                                                    String::from("Ramp"),
+                                                    String::from("Square"),
+                                                    String::from("RSquare"),
+                                                    String::from("Pulse"),
+                                                    String::from("Noise"),
+                                                    String::from("Sampler"),
+                                                    String::from("Granulizer"),
+                                                    String::from("Additive"),
+                                                ],
+                                                "cb3".to_string());
+                                                ui.add(cb3);
                                                 
                                                 ui.colored_label(TEAL_GREEN, "Filter Assign");
-                                                egui::ComboBox::new("gen_3_routing_combobox", "")
-                                                    .selected_text(format!("{:?}", *gen_3_filter_tracker.lock().unwrap()))
-                                                    .width(70.0)
-                                                    .show_ui(ui, |ui| {
-                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Bypass, "Bypass");
-                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Filter1, "Filter1");
-                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Filter2, "Filter2");
-                                                        ui.selectable_value(&mut *gen_3_filter_tracker.lock().unwrap(), AMFilterRouting::Both, "Both");
-                                                    }).response.on_hover_text_at_pointer("Filter routing(s) for the generator");
-                                                // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                // Set the new value FROM the override field
-                                                if *gen_3_routing_override_set.lock().unwrap() != AMFilterRouting::UNSETROUTING {
-                                                    // This happens on plugin preset load
-                                                    *gen_3_filter_tracker.lock().unwrap() = *gen_3_routing_override_set.lock().unwrap();
-                                                    setter.set_parameter( &params.audio_module_3_routing, gen_3_filter_tracker.lock().unwrap().clone());
-                                                    *gen_3_routing_override_set.lock().unwrap() = AMFilterRouting::UNSETROUTING;
-                                                } else {
-                                                    // Set the new value in our params FROM the GUI
-                                                    if *gen_3_filter_tracker.lock().unwrap() != params.audio_module_3_routing.value() {
-                                                        setter.set_parameter( &params.audio_module_3_routing, gen_3_filter_tracker.lock().unwrap().clone());
-                                                    }
-                                                }
+                                                let fr3 = ComboBoxParam::ParamComboBox::for_param(&params.audio_module_3_routing, setter, vec![
+                                                    String::from("Bypass"),
+                                                    String::from("Filter1"),
+                                                    String::from("Filter2"),
+                                                    String::from("Both"),
+                                                ],
+                                                "fr3".to_string());
+                                                ui.add(fr3);
                                             });
-                                            /*
-                                            let audio_module_3_knob = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_3_type,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("The type of generator to use".to_string());
-                                            ui.add(audio_module_3_knob);
-                                            let audio_module_3_filter_routing = ui_knob::ArcKnob::for_param(
-                                                &params.audio_module_3_routing,
-                                                setter,
-                                                KNOB_SIZE,
-                                                KnobLayout::Vertical)
-                                                .preset_style(ui_knob::KnobStyle::Preset1)
-                                                .set_fill_color(DARK_GREY_UI_COLOR)
-                                                .set_line_color(TEAL_GREEN)
-                                                .set_text_size(TEXT_SIZE).set_hover_text("Filter routing(s) for the generator".to_string());
-                                            ui.add(audio_module_3_filter_routing);
-                                            */
                                             let audio_module_3_level_knob = ui_knob::ArcKnob::for_param(
                                                 &params.audio_module_3_level,
                                                 setter,
@@ -1386,14 +1120,13 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     ui.selectable_value(&mut *filter_select.lock().unwrap(), UIBottomSelection::Pitch2, RichText::new("Pitch 2").background_color(DARKEST_BOTTOM_UI_COLOR));
                                     // Jank spacing stuff :)
                                     ui.add_space(304.0);
-                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("INFO").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Modulation").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO1, RichText::new("LFO 1").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO2, RichText::new("LFO 2").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::LFO3, RichText::new("LFO 3").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FM, RichText::new("FM").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
-                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
-                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Modulation, RichText::new("Modulation").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::FX, RichText::new("FX").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
+                                    ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::Misc, RichText::new("Misc").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                 });
 
                                 ////////////////////////////////////////////////////////////
@@ -2840,6 +2573,18 @@ A4I: Averaged 4 Pole Integrator".to_string());
                                             },
                                             LFOSelect::Misc => {
                                                 ui.vertical(|ui|{
+                                                    let max_voice_knob = ui_knob::ArcKnob::for_param(
+                                                        &params.voice_limit,
+                                                        setter,
+                                                        11.0,
+                                                        KnobLayout::HorizontalInline)
+                                                        .preset_style(ui_knob::KnobStyle::Preset1)
+                                                        .set_fill_color(DARK_GREY_UI_COLOR)
+                                                        .set_line_color(YELLOW_MUSTARD)
+                                                        .set_text_size(TEXT_SIZE)
+                                                        .set_hover_text("The maximum number of voices that can be playing at once".to_string());
+                                                    ui.add(max_voice_knob);
+                                                    ui.separator();
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Link Cutoff 2 to Cutoff 1")
                                                             .font(FONT)
@@ -2848,6 +2593,7 @@ A4I: Averaged 4 Pole Integrator".to_string());
                                                         let filter_cutoff_link = toggle_switch::ToggleSwitch::for_param(&params.filter_cutoff_link, setter);
                                                         ui.add(filter_cutoff_link);
                                                     });
+                                                    ui.separator();
                                                     ui.horizontal(|ui|{
                                                         ui.label(RichText::new("Stereo Behavior")
                                                             .font(FONT)
@@ -3013,62 +2759,38 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                                 .set_show_label(false);
                                                         ui.add(mod_1_knob);
                                                         ui.separator();
-                                                        egui::ComboBox::new("mod_source_supported", "")
-                                                            .selected_text(format!("{:?}", *mod_source_1_tracker.lock().unwrap()))
-                                                            .width(70.0)
-                                                            .show_ui(ui, |ui| {
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::None, "None");
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
-                                                                ui.selectable_value(&mut *mod_source_1_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
-                                                            });
-                                                            // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                            if *mod_source_override_1.lock().unwrap() != ModulationSource::UnsetModulation {
-                                                                // This happens on plugin preset load
-                                                                *mod_source_1_tracker.lock().unwrap() = *mod_source_override_1.lock().unwrap();
-                                                                setter.set_parameter( &params.mod_source_1, mod_source_1_tracker.lock().unwrap().clone());
-                                                                *mod_source_override_1.lock().unwrap() = ModulationSource::UnsetModulation;
-                                                            } else {
-                                                                if *mod_source_1_tracker.lock().unwrap() != params.mod_source_1.value() {
-                                                                    setter.set_parameter( &params.mod_source_1, mod_source_1_tracker.lock().unwrap().clone());
-                                                                }
-                                                            }
+                                                        let ms1 = ComboBoxParam::ParamComboBox::for_param(&params.mod_source_1, setter, vec![
+                                                            String::from("None"),
+                                                            String::from("Velocity"),
+                                                            String::from("LFO1"),
+                                                            String::from("LFO2"),
+                                                            String::from("LFO3"),
+                                                        ],
+                                                        "ms1".to_string());
+                                                        ui.add(ms1);
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT));
-                                                        egui::ComboBox::new("mod_dest_1_ID", "")
-                                                            .selected_text(format!("{:?}", *mod_dest_1_tracker.lock().unwrap()))
-                                                            .width(100.0)
-                                                            .show_ui(ui, |ui|{
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::None, "None");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::All_Gain, "All Gain");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1_Gain, "Osc1 Gain");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc2_Gain, "Osc2 Gain");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc3_Gain, "Osc3 Gain");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::All_Detune, "All Detune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc2Detune, "Osc2 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc3Detune, "Osc3 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::All_UniDetune, "All UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_1_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
-                                                            });
-                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                        if *mod_dest_override_1.lock().unwrap() != ModulationDestination::UnsetModulation {
-                                                            // This happens on plugin preset load
-                                                            *mod_dest_1_tracker.lock().unwrap() = *mod_dest_override_1.lock().unwrap();
-                                                            setter.set_parameter( &params.mod_destination_1, mod_dest_1_tracker.lock().unwrap().clone());
-                                                            *mod_dest_override_1.lock().unwrap() = ModulationDestination::UnsetModulation;
-                                                        } else {
-                                                            if *mod_dest_1_tracker.lock().unwrap() != params.mod_destination_1.value() {
-                                                                setter.set_parameter( &params.mod_destination_1, mod_dest_1_tracker.lock().unwrap().clone());
-                                                            }
-                                                        }
+                                                        let md1 = ComboBoxParam::ParamComboBox::for_param(&params.mod_destination_1, setter, vec![
+                                                            String::from("None"),
+                                                            String::from("Cutoff_1"),
+                                                            String::from("Cutoff_2"),
+                                                            String::from("Resonance_1"),
+                                                            String::from("Resonance_2"),
+                                                            String::from("All_Gain"),
+                                                            String::from("Osc1_Gain"),
+                                                            String::from("Osc2_Gain"),
+                                                            String::from("Osc3_Gain"),
+                                                            String::from("All_Detune"),
+                                                            String::from("Osc1Detune"),
+                                                            String::from("Osc2Detune"),
+                                                            String::from("Osc3Detune"),
+                                                            String::from("All_UniDetune"),
+                                                            String::from("Osc1UniDetune"),
+                                                            String::from("Osc2UniDetune"),
+                                                            String::from("Osc3UniDetune"),
+                                                        ],
+                                                        "md1".to_string());
+                                                        ui.add(md1);
                                                     });
                                                     ui.separator();
 
@@ -3086,62 +2808,38 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                             .set_show_label(false);
                                                         ui.add(mod_2_knob);
                                                         ui.separator();
-                                                        egui::ComboBox::new("mod_source_2_ID","")
-                                                            .selected_text(format!("{:?}", *mod_source_2_tracker.lock().unwrap()))
-                                                            .width(70.0)
-                                                            .show_ui(ui, |ui|{
-                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::None, "None");
-                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
-                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
-                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
-                                                                ui.selectable_value(&mut *mod_source_2_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
-                                                            });
-                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                        if *mod_source_override_2.lock().unwrap() != ModulationSource::UnsetModulation {
-                                                            // This happens on plugin preset load
-                                                            *mod_source_2_tracker.lock().unwrap() = *mod_source_override_2.lock().unwrap();
-                                                            setter.set_parameter( &params.mod_source_2, mod_source_2_tracker.lock().unwrap().clone());
-                                                            *mod_source_override_2.lock().unwrap() = ModulationSource::UnsetModulation;
-                                                        } else {
-                                                            if *mod_source_2_tracker.lock().unwrap() != params.mod_source_2.value() {
-                                                                setter.set_parameter( &params.mod_source_2, mod_source_2_tracker.lock().unwrap().clone());
-                                                            }
-                                                        }
+                                                        let ms2 = ComboBoxParam::ParamComboBox::for_param(&params.mod_source_2, setter, vec![
+                                                            String::from("None"),
+                                                            String::from("Velocity"),
+                                                            String::from("LFO1"),
+                                                            String::from("LFO2"),
+                                                            String::from("LFO3"),
+                                                        ],
+                                                        "ms2".to_string());
+                                                        ui.add(ms2);
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT));
-                                                        egui::ComboBox::new("mod_dest_2_ID", "")
-                                                            .selected_text(format!("{:?}", *mod_dest_2_tracker.lock().unwrap()))
-                                                            .width(100.0)
-                                                            .show_ui(ui, |ui|{
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::None, "None");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::All_Gain, "All Gain");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1_Gain, "Osc1 Gain");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc2_Gain, "Osc2 Gain");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc3_Gain, "Osc3 Gain");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::All_Detune, "All Detune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc2Detune, "Osc2 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc3Detune, "Osc3 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::All_UniDetune, "All UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_2_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
-                                                            });
-                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                        if *mod_dest_override_2.lock().unwrap() != ModulationDestination::UnsetModulation {
-                                                            // This happens on plugin preset load
-                                                            *mod_dest_2_tracker.lock().unwrap() = *mod_dest_override_2.lock().unwrap();
-                                                            setter.set_parameter( &params.mod_destination_2, mod_dest_2_tracker.lock().unwrap().clone());
-                                                            *mod_dest_override_2.lock().unwrap() = ModulationDestination::UnsetModulation;
-                                                        } else {
-                                                            if *mod_dest_2_tracker.lock().unwrap() != params.mod_destination_2.value() {
-                                                                setter.set_parameter( &params.mod_destination_2, mod_dest_2_tracker.lock().unwrap().clone());
-                                                            }
-                                                        }
+                                                        let md2 = ComboBoxParam::ParamComboBox::for_param(&params.mod_destination_2, setter, vec![
+                                                            String::from("None"),
+                                                            String::from("Cutoff_1"),
+                                                            String::from("Cutoff_2"),
+                                                            String::from("Resonance_1"),
+                                                            String::from("Resonance_2"),
+                                                            String::from("All_Gain"),
+                                                            String::from("Osc1_Gain"),
+                                                            String::from("Osc2_Gain"),
+                                                            String::from("Osc3_Gain"),
+                                                            String::from("All_Detune"),
+                                                            String::from("Osc1Detune"),
+                                                            String::from("Osc2Detune"),
+                                                            String::from("Osc3Detune"),
+                                                            String::from("All_UniDetune"),
+                                                            String::from("Osc1UniDetune"),
+                                                            String::from("Osc2UniDetune"),
+                                                            String::from("Osc3UniDetune"),
+                                                        ],
+                                                        "md2".to_string());
+                                                        ui.add(md2);
                                                     });
                                                     ui.separator();
 
@@ -3159,62 +2857,38 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                             .set_show_label(false);
                                                         ui.add(mod_3_knob);
                                                         ui.separator();
-                                                        egui::ComboBox::new("mod_source_3_ID","")
-                                                            .selected_text(format!("{:?}", *mod_source_3_tracker.lock().unwrap()))
-                                                            .width(70.0)
-                                                            .show_ui(ui, |ui|{
-                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::None, "None");
-                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
-                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
-                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
-                                                                ui.selectable_value(&mut *mod_source_3_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
-                                                            });
-                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                        if *mod_source_override_3.lock().unwrap() != ModulationSource::UnsetModulation {
-                                                            // This happens on plugin preset load
-                                                            *mod_source_3_tracker.lock().unwrap() = *mod_source_override_3.lock().unwrap();
-                                                            setter.set_parameter( &params.mod_source_3, mod_source_3_tracker.lock().unwrap().clone());
-                                                            *mod_source_override_3.lock().unwrap() = ModulationSource::UnsetModulation;
-                                                        } else {
-                                                            if *mod_source_3_tracker.lock().unwrap() != params.mod_source_3.value() {
-                                                                setter.set_parameter( &params.mod_source_3, mod_source_3_tracker.lock().unwrap().clone());
-                                                            }
-                                                        }
+                                                        let ms3 = ComboBoxParam::ParamComboBox::for_param(&params.mod_source_3, setter, vec![
+                                                            String::from("None"),
+                                                            String::from("Velocity"),
+                                                            String::from("LFO1"),
+                                                            String::from("LFO2"),
+                                                            String::from("LFO3"),
+                                                        ],
+                                                        "ms3".to_string());
+                                                        ui.add(ms3);
                                                         ui.label(RichText::new("Mods")
                                                             .font(FONT));
-                                                        egui::ComboBox::new("mod_dest_3_ID", "")
-                                                            .selected_text(format!("{:?}", *mod_dest_3_tracker.lock().unwrap()))
-                                                            .width(100.0)
-                                                            .show_ui(ui, |ui|{
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::None, "None");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::All_Gain, "All Gain");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1_Gain, "Osc1 Gain");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc2_Gain, "Osc2 Gain");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc3_Gain, "Osc3 Gain");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::All_Detune, "All Detune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc2Detune, "Osc2 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc3Detune, "Osc3 Detune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::All_UniDetune, "All UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
-                                                                ui.selectable_value(&mut *mod_dest_3_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
-                                                            });
-                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                        if *mod_dest_override_3.lock().unwrap() != ModulationDestination::UnsetModulation {
-                                                            // This happens on plugin preset load
-                                                            *mod_dest_3_tracker.lock().unwrap() = *mod_dest_override_3.lock().unwrap();
-                                                            setter.set_parameter( &params.mod_destination_3, mod_dest_3_tracker.lock().unwrap().clone());
-                                                            *mod_dest_override_3.lock().unwrap() = ModulationDestination::UnsetModulation;
-                                                        } else {
-                                                            if *mod_dest_3_tracker.lock().unwrap() != params.mod_destination_3.value() {
-                                                                setter.set_parameter( &params.mod_destination_3, mod_dest_3_tracker.lock().unwrap().clone());
-                                                            }
-                                                        }
+                                                        let md3 = ComboBoxParam::ParamComboBox::for_param(&params.mod_destination_3, setter, vec![
+                                                            String::from("None"),
+                                                            String::from("Cutoff_1"),
+                                                            String::from("Cutoff_2"),
+                                                            String::from("Resonance_1"),
+                                                            String::from("Resonance_2"),
+                                                            String::from("All_Gain"),
+                                                            String::from("Osc1_Gain"),
+                                                            String::from("Osc2_Gain"),
+                                                            String::from("Osc3_Gain"),
+                                                            String::from("All_Detune"),
+                                                            String::from("Osc1Detune"),
+                                                            String::from("Osc2Detune"),
+                                                            String::from("Osc3Detune"),
+                                                            String::from("All_UniDetune"),
+                                                            String::from("Osc1UniDetune"),
+                                                            String::from("Osc2UniDetune"),
+                                                            String::from("Osc3UniDetune"),
+                                                        ],
+                                                        "md3".to_string());
+                                                        ui.add(md3);
                                                     });
                                                     ui.separator();
 
@@ -3232,61 +2906,38 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                             .set_show_label(false);
                                                         ui.add(mod_4_knob);
                                                         ui.separator();
-                                                        egui::ComboBox::new("mod_source_4_ID","")
-                                                            .selected_text(format!("{:?}", *mod_source_4_tracker.lock().unwrap()))
-                                                            .width(70.0)
-                                                            .show_ui(ui, |ui|{
-                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::None, "None");
-                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::Velocity, "Velocity");
-                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::LFO1, "LFO 1");
-                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::LFO2, "LFO 2");
-                                                                ui.selectable_value(&mut *mod_source_4_tracker.lock().unwrap(), ModulationSource::LFO3, "LFO 3");
-                                                            });
-                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                        if *mod_source_override_4.lock().unwrap() != ModulationSource::UnsetModulation {
-                                                            // This happens on plugin preset load
-                                                            *mod_source_4_tracker.lock().unwrap() = *mod_source_override_4.lock().unwrap();
-                                                            setter.set_parameter( &params.mod_source_4, mod_source_4_tracker.lock().unwrap().clone());
-                                                            *mod_source_override_4.lock().unwrap() = ModulationSource::UnsetModulation;
-                                                        } else {
-                                                            if *mod_source_4_tracker.lock().unwrap() != params.mod_source_4.value() {
-                                                                setter.set_parameter( &params.mod_source_4, mod_source_4_tracker.lock().unwrap().clone());
-                                                            }
-                                                        }
+                                                        let ms4 = ComboBoxParam::ParamComboBox::for_param(&params.mod_source_4, setter, vec![
+                                                            String::from("None"),
+                                                            String::from("Velocity"),
+                                                            String::from("LFO1"),
+                                                            String::from("LFO2"),
+                                                            String::from("LFO3"),
+                                                        ],
+                                                        "ms4".to_string());
+                                                        ui.add(ms4);
                                                         ui.label(RichText::new("Mods")
-                                                            .font(FONT));                                                        egui::ComboBox::new("mod_dest_4_ID", "")
-                                                        .selected_text(format!("{:?}", *mod_dest_4_tracker.lock().unwrap()))
-                                                        .width(100.0)
-                                                        .show_ui(ui, |ui|{
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::None, "None");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Cutoff_1, "Cutoff 1");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Cutoff_2, "Cutoff 2");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Resonance_1, "Resonance 1");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Resonance_2, "Resonance 2");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::All_Gain, "All Gain");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1_Gain, "Osc1 Gain");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc2_Gain, "Osc2 Gain");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc3_Gain, "Osc3 Gain");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::All_Detune, "All Detune");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1Detune, "Osc1 Detune");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc2Detune, "Osc2 Detune");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc3Detune, "Osc3 Detune");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::All_UniDetune, "All UniDetune");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc1UniDetune, "Osc1 UniDetune");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc2UniDetune, "Osc2 UniDetune");
-                                                            ui.selectable_value(&mut *mod_dest_4_tracker.lock().unwrap(), ModulationDestination::Osc3UniDetune, "Osc3 UniDetune");
-                                                        });
-                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                        if *mod_dest_override_4.lock().unwrap() != ModulationDestination::UnsetModulation {
-                                                            // This happens on plugin preset load
-                                                            *mod_dest_4_tracker.lock().unwrap() = *mod_dest_override_4.lock().unwrap();
-                                                            setter.set_parameter( &params.mod_destination_4, mod_dest_4_tracker.lock().unwrap().clone());
-                                                            *mod_dest_override_4.lock().unwrap() = ModulationDestination::UnsetModulation;
-                                                        } else {
-                                                            if *mod_dest_4_tracker.lock().unwrap() != params.mod_destination_4.value() {
-                                                                setter.set_parameter( &params.mod_destination_4, mod_dest_4_tracker.lock().unwrap().clone());
-                                                            }
-                                                        }
+                                                            .font(FONT));
+                                                        let md4 = ComboBoxParam::ParamComboBox::for_param(&params.mod_destination_4, setter, vec![
+                                                            String::from("None"),
+                                                            String::from("Cutoff_1"),
+                                                            String::from("Cutoff_2"),
+                                                            String::from("Resonance_1"),
+                                                            String::from("Resonance_2"),
+                                                            String::from("All_Gain"),
+                                                            String::from("Osc1_Gain"),
+                                                            String::from("Osc2_Gain"),
+                                                            String::from("Osc3_Gain"),
+                                                            String::from("All_Detune"),
+                                                            String::from("Osc1Detune"),
+                                                            String::from("Osc2Detune"),
+                                                            String::from("Osc3Detune"),
+                                                            String::from("All_UniDetune"),
+                                                            String::from("Osc1UniDetune"),
+                                                            String::from("Osc2UniDetune"),
+                                                            String::from("Osc3UniDetune"),
+                                                        ],
+                                                        "md4".to_string());
+                                                        ui.add(md4);
                                                     });
                                                     ui.separator();
                                                 });
@@ -3302,33 +2953,21 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                     ui.label(RichText::new("Category:")
                                                             .font(FONT)
                                                             .size(12.0));
-                                                        egui::ComboBox::new("preset_category", "")
-                                                        .selected_text(format!("{:?}", *preset_category_tracker.lock().unwrap()))
-                                                        .width(150.0)
-                                                        .show_ui(ui, |ui|{
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Select, "Select");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Atmosphere, "Atmosphere");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Bass, "Bass");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::FX, "FX");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Keys, "Keys");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Lead, "Lead");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Pad, "Pad");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Percussion, "Percussion");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Pluck, "Pluck");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Synth, "Synth");
-                                                            ui.selectable_value(&mut *preset_category_tracker.lock().unwrap(), PresetType::Other, "Other");
-                                                        });
-                                                        // This was a workaround for updating combobox on preset load but otherwise updating preset through combobox selection
-                                                        if *preset_category_override.lock().unwrap() != PresetType::Select {
-                                                            // This happens on plugin preset load
-                                                            *preset_category_tracker.lock().unwrap() = *preset_category_override.lock().unwrap();
-                                                            setter.set_parameter( &params.preset_category, preset_category_tracker.lock().unwrap().clone());
-                                                            *preset_category_override.lock().unwrap() = PresetType::Select;
-                                                        } else {
-                                                            if *preset_category_tracker.lock().unwrap() != params.preset_category.value() {
-                                                                setter.set_parameter( &params.preset_category, preset_category_tracker.lock().unwrap().clone());
-                                                            }
-                                                        }
+
+                                                        let preset_category_box = ComboBoxParam::ParamComboBox::for_param(&params.preset_category, setter, vec![
+                                                            String::from("Select"),
+                                                            String::from("Atmosphere"),
+                                                            String::from("Bass"),
+                                                            String::from("Keys"),
+                                                            String::from("Lead"),
+                                                            String::from("Pad"),
+                                                            String::from("Percussion"),
+                                                            String::from("Pluck"),
+                                                            String::from("Synth"),
+                                                            String::from("Other"),
+                                                        ],
+                                                        "preset_category_box".to_string());
+                                                        ui.add(preset_category_box);
                                                 });
 
                                                 ui.horizontal(|ui|{
@@ -3392,251 +3031,12 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                                 });
                                                 ui.separator();
                                                 ui.horizontal(|ui| {
-                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.0, 1.2, SMALLER_FONT)
+                                                    let update_current_preset = BoolButton::BoolButton::for_param(&params.param_update_current_preset, setter, 5.2, 1.5, FONT)
                                                         .with_background_color(DARK_GREY_UI_COLOR);
                                                     ui.add(update_current_preset);
-                                                    // Studio One changes (compatible for all DAWs)
-                                                    let import_preset_button = ui.button(RichText::new("Import Preset")
-                                                        .font(FONT)
-                                                        .background_color(DARK_GREY_UI_COLOR)
-                                                        .color(TEAL_GREEN)
-                                                    );
-                                                    if import_preset_button.clicked() {
-                                                        import_preset_active.store(true, Ordering::SeqCst);
-                                                    }
-                                                    if import_preset_active.load(Ordering::SeqCst) {
-                                                        let dialock = dialog_main.clone();
-                                                        let mut dialog = dialock.lock().unwrap();
-                                                        dialog.open();
-                                                        let mut dvar = Some(dialog);
-
-                                                        if let Some(dialog) = &mut dvar {
-                                                            if dialog.show(egui_ctx).selected() {
-                                                              if let Some(file) = dialog.path() {
-                                                                let opened_file = Some(file.to_path_buf());
-                                                                let unserialized: Option<ActuatePresetV131>;
-                                                                (_, unserialized) = Actuate::import_preset(opened_file);
-
-                                                                if unserialized.is_some() {
-                                                                    let mut locked_lib = arc_preset.lock().unwrap();
-                                                                    locked_lib[current_preset_index as usize] =
-                                                                        unserialized.unwrap();
-                                                                    let temp_preset =
-                                                                        &locked_lib[current_preset_index as usize];
-                                                                    *arc_preset_name.lock().unwrap() =  temp_preset.preset_name.clone();
-                                                                    *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
-                                                                    *arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
-
-                                                                    import_preset_active.store(false, Ordering::SeqCst);
-
-                                                                    drop(locked_lib);
-                                                                
-                                                                    // GUI thread misses this without this call here for some reason
-                                                                    (
-                                                                        *mod_source_override_1.lock().unwrap(),
-                                                                        *mod_source_override_2.lock().unwrap(),
-                                                                        *mod_source_override_3.lock().unwrap(),
-                                                                        *mod_source_override_4.lock().unwrap(),
-                                                                        *mod_dest_override_1.lock().unwrap(),
-                                                                        *mod_dest_override_2.lock().unwrap(),
-                                                                        *mod_dest_override_3.lock().unwrap(),
-                                                                        *mod_dest_override_4.lock().unwrap(),
-                                                                        *preset_category_override.lock().unwrap(),
-                                                                        *gen_1_routing_override_set.lock().unwrap(),
-                                                                        *gen_2_routing_override_set.lock().unwrap(),
-                                                                        *gen_3_routing_override_set.lock().unwrap(),
-                                                                        *gen_1_type_override_set.lock().unwrap(),
-                                                                        *gen_2_type_override_set.lock().unwrap(),
-                                                                        *gen_3_type_override_set.lock().unwrap(),
-                                                                    ) = Actuate::reload_entire_preset(
-                                                                        setter,
-                                                                        params.clone(),
-                                                                        (current_preset_index) as usize,
-                                                                        &arc_preset.lock().unwrap(),
-                                                                        &mut AM1.lock().unwrap(),
-                                                                        &mut AM2.lock().unwrap(),
-                                                                        &mut AM3.lock().unwrap(),);
-                                                                }
-                                                              }
-                                                            }
-                                                            match dialog.state() {
-                                                                State::Cancelled | State::Closed => {
-                                                                    import_preset_active.store(false, Ordering::SeqCst);
-                                                                },
-                                                                _ => {}
-                                                            }
-                                                        }
-
-                                                    }
-                                                    // Studio One changes (compatible for all DAWs)
-                                                    let export_preset_button = ui.button(RichText::new("Export Preset")
-                                                        .font(FONT)
-                                                        .background_color(DARK_GREY_UI_COLOR)
-                                                        .color(TEAL_GREEN)
-                                                    );
-                                                    if export_preset_button.clicked() {
-                                                        export_preset_active.store(true, Ordering::SeqCst);
-                                                    }
-                                                    if export_preset_active.load(Ordering::SeqCst) {
-                                                        let save_dialock = save_dialog_main.clone();
-                                                        let mut save_dialog = save_dialock.lock().unwrap();
-                                                        save_dialog.open();
-                                                        let mut dvar = Some(save_dialog);
-                                                        if let Some(s_dialog) = &mut dvar {
-                                                            if s_dialog.show(egui_ctx).selected() {
-                                                              if let Some(file) = s_dialog.path() {
-                                                                let saved_file = Some(file.to_path_buf());
-                                                                let locked_lib = arc_preset.lock().unwrap();
-                                                                Actuate::export_preset(saved_file, locked_lib[current_preset_index as usize].clone());
-                                                                drop(locked_lib);
-                                                                export_preset_active.store(false, Ordering::SeqCst);
-                                                              }
-                                                            }
-
-                                                            match s_dialog.state() {
-                                                                State::Cancelled | State::Closed => {
-                                                                    export_preset_active.store(false, Ordering::SeqCst);
-                                                                },
-                                                                _ => {}
-                                                            }
-                                                        }
-                                                    }
                                                     ui.separator();
-                                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.8, 1.2, FONT);
+                                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.8, 1.2, SMALLER_FONT);
                                                     ui.add(use_fx_toggle);
-                                                });
-                                                ui.horizontal(|ui|{
-                                                    ui.add_space(90.0);
-                                                    // Studio One changes (compatible for all DAWs)
-                                                    let import_bank_button = ui.button(RichText::new("Load Bank")
-                                                        .font(FONT)
-                                                        .background_color(DARK_GREY_UI_COLOR)
-                                                        .color(TEAL_GREEN)
-                                                    );
-                                                    if import_bank_button.clicked() {
-                                                        import_bank_active.store(true, Ordering::SeqCst);
-                                                    }
-                                                    if import_bank_active.load(Ordering::SeqCst) {
-                                                        // Move to info tab on preset change
-                                                        *lfo_select.lock().unwrap() = LFOSelect::INFO;
-                                                    
-                                                        // hehe
-                                                        let bank_dialock = bank_dialog_main.clone();
-                                                        let mut dialog = bank_dialock.lock().unwrap();
-                                                        dialog.open();
-                                                        let mut dvar = Some(dialog);
-
-                                                        if let Some(dialog) = &mut dvar {
-                                                            if dialog.show(egui_ctx).selected() {
-                                                              if let Some(file) = dialog.path() {
-                                                                let default_name: String;                                                                
-                                                                let opened_file = Some(file.to_path_buf());
-                                                                let unserialized: Vec<ActuatePresetV131>;
-                                                                (default_name, unserialized) = Actuate::load_preset_bank(opened_file);
-                                                                let temppath = default_name.clone();
-                                                                let path = Path::new(&temppath);
-                                                                if let Some(filename) = path.file_name() {
-                                                                    let mut locked_lib = arc_preset.lock().unwrap();
-                                                            
-                                                                    // Load our items into our library from the unserialized save file
-                                                                    for (item_index, item) in unserialized.iter().enumerate() {
-                                                                        // If our item exists then update it
-                                                                        if let Some(existing_item) = locked_lib.get_mut(item_index) {
-                                                                            *existing_item = item.clone();
-                                                                        } else {
-                                                                            // item_index is out of bounds in locked_lib
-                                                                            // These get dropped as the preset size should be the same all around
-                                                                        }
-                                                                    }
-                                                                
-                                                                    // Create missing samples on current preset
-                                                                    let mut AM1L = AM1.lock().unwrap();
-                                                                    let mut AM2L = AM2.lock().unwrap();
-                                                                    let mut AM3L = AM3.lock().unwrap();
-                                                                    AM1L.regenerate_samples();
-                                                                    AM2L.regenerate_samples();
-                                                                    AM3L.regenerate_samples();
-                                                                
-                                                                    let temp_preset = &locked_lib[current_preset_index as usize];
-                                                                    *arc_preset_name.lock().unwrap() =  temp_preset.preset_name.clone();
-                                                                    *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
-                                                                    *arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
-                                                                
-                                                                    drop(locked_lib);
-                                                                
-                                                                    (
-                                                                        *mod_source_override_1.lock().unwrap(),
-                                                                        *mod_source_override_2.lock().unwrap(),
-                                                                        *mod_source_override_3.lock().unwrap(),
-                                                                        *mod_source_override_4.lock().unwrap(),
-                                                                        *mod_dest_override_1.lock().unwrap(),
-                                                                        *mod_dest_override_2.lock().unwrap(),
-                                                                        *mod_dest_override_3.lock().unwrap(),
-                                                                        *mod_dest_override_4.lock().unwrap(),
-                                                                        *preset_category_override.lock().unwrap(),
-                                                                        *gen_1_routing_override_set.lock().unwrap(),
-                                                                        *gen_2_routing_override_set.lock().unwrap(),
-                                                                        *gen_3_routing_override_set.lock().unwrap(),
-                                                                        *gen_1_type_override_set.lock().unwrap(),
-                                                                        *gen_2_type_override_set.lock().unwrap(),
-                                                                        *gen_3_type_override_set.lock().unwrap(),
-                                                                    ) = Actuate::reload_entire_preset(
-                                                                        setter,
-                                                                        params.clone(),
-                                                                        current_preset_index as usize,
-                                                                        &arc_preset.lock().unwrap(),
-                                                                        &mut AM1L,
-                                                                        &mut AM2L,
-                                                                        &mut AM3L,);
-                                                                    import_bank_active.store(false, Ordering::SeqCst);
-                                                                    *preset_lib_name_tracker.lock().unwrap() = filename.to_string_lossy().to_string();
-                                                                }
-                                                              }
-                                                            }
-                                                        
-                                                            match dialog.state() {
-                                                                State::Cancelled | State::Closed => {
-                                                                    import_bank_active.store(false, Ordering::SeqCst);
-                                                                },
-                                                                _ => {}
-                                                            }
-                                                        }
-                                                    }
-                                                    // Studio One changes (compatible for all DAWs)
-                                                    let export_bank_button = ui.button(RichText::new("Save Bank")
-                                                        .font(FONT)
-                                                        .background_color(DARK_GREY_UI_COLOR)
-                                                        .color(TEAL_GREEN)
-                                                    );
-                                                    if export_bank_button.clicked() {
-                                                        export_bank_active.store(true, Ordering::SeqCst);
-                                                    }
-                                                    if export_bank_active.load(Ordering::SeqCst) {
-                                                        // Name the preset bank
-                                                        let bank_save_dialock = bank_save_dialog_main.clone();
-                                                        let mut save_dialog = bank_save_dialock.lock().unwrap();
-                                                        save_dialog.open();
-                                                        let mut dvar = Some(save_dialog);
-
-                                                        if let Some(s_dialog) = &mut dvar {
-                                                            if s_dialog.show(egui_ctx).selected() {
-                                                              if let Some(file) = s_dialog.path() {
-                                                                let saved_file = Some(file.to_path_buf());
-                                                                let mut locked_lib = arc_preset.lock().unwrap();
-                                                                Actuate::save_preset_bank(&mut locked_lib, saved_file);
-                                                                drop(locked_lib);
-                                                                export_bank_active.store(false, Ordering::SeqCst);
-                                                              }
-                                                            }
-                                                        
-                                                            match s_dialog.state() {
-                                                                State::Cancelled | State::Closed => {
-                                                                    export_bank_active.store(false, Ordering::SeqCst);
-                                                                },
-                                                                _ => {}
-                                                            }
-                                                        }
-                                                    }
                                                 });
                                             },
                                             LFOSelect::FX => {

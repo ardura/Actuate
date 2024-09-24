@@ -42,13 +42,11 @@ use crate::{
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
-use Oscillator::VoiceType;
 
 // When you create a new audio module, you should add it here
 #[derive(Debug, Enum, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub enum AudioModuleType {
     Off,
-    Osc,        // Has to remain here for older patch compatibility but not used
     Sampler,
     Granulizer,
     Additive,
@@ -64,7 +62,7 @@ pub enum AudioModuleType {
     RSquare,
     Pulse,
     Noise,
-    UNSET_AM,
+    UnsetAm,
 }
 
 #[derive(Clone)]
@@ -121,7 +119,7 @@ pub struct SingleVoice {
     _decay_time: f32,
     _release_time: f32,
     _retrigger: RetriggerStyle,
-    _voice_type: Oscillator::VoiceType,
+    _voice_type: AudioModuleType,
 
     // This is only used for unison detunes
     _angle: f32,
@@ -190,7 +188,6 @@ pub struct AudioModule {
     // Stored params from main lib here on a per-module basis
 
     // Osc module knob storage
-    pub osc_type: VoiceType,
     pub osc_octave: i32,
     pub osc_semitones: i32,
     pub osc_detune: f32,
@@ -285,7 +282,7 @@ impl Default for AudioModule {
         Self {
             // Audio modules will use these
             sample_rate: 44100.0,
-            audio_module_type: AudioModuleType::Osc,
+            audio_module_type: AudioModuleType::Sine,
             two_voice_stereo_flipper: true,
 
             // Granulizer/Sampler
@@ -302,7 +299,6 @@ impl Default for AudioModule {
             grain_crossfade: 50,
 
             // Osc module knob storage
-            osc_type: VoiceType::Sine,
             osc_octave: 0,
             osc_semitones: 0,
             osc_detune: 0.0,
@@ -407,7 +403,6 @@ impl AudioModule {
         module3: &Arc<std::sync::Mutex<AudioModule>>,
     ) {
         let am_type;
-        let osc_voice;
         let osc_retrigger;
         let osc_octave;
         let osc_semitones;
@@ -450,7 +445,6 @@ impl AudioModule {
         match index {
             1 => {
                 am_type = &params.audio_module_1_type;
-                osc_voice = &params.osc_1_type;
                 osc_retrigger = &params.osc_1_retrigger;
                 osc_octave = &params.osc_1_octave;
                 osc_semitones = &params.osc_1_semitones;
@@ -493,7 +487,6 @@ impl AudioModule {
             },
             2 => {
                 am_type = &params.audio_module_2_type;
-                osc_voice = &params.osc_2_type;
                 osc_retrigger = &params.osc_2_retrigger;
                 osc_octave = &params.osc_2_octave;
                 osc_semitones = &params.osc_2_semitones;
@@ -536,7 +529,6 @@ impl AudioModule {
             },
             3 => {
                 am_type = &params.audio_module_3_type;
-                osc_voice = &params.osc_3_type;
                 osc_retrigger = &params.osc_3_retrigger;
                 osc_octave = &params.osc_3_octave;
                 osc_semitones = &params.osc_3_semitones;
@@ -587,7 +579,7 @@ impl AudioModule {
         const DISABLED_SPACE: f32 = 104.0;
 
         match am_type.value() {
-            AudioModuleType::UNSET_AM => {
+            AudioModuleType::UnsetAm => {
                 ui.label("UNSET - Err");
             }
             AudioModuleType::Off => {
@@ -595,7 +587,6 @@ impl AudioModule {
                 ui.label("Disabled");
                 ui.add_space(DISABLED_SPACE);
             }
-            AudioModuleType::Osc |
             AudioModuleType::Sine |
             AudioModuleType::Tri |
             AudioModuleType::Saw |
@@ -616,7 +607,7 @@ impl AudioModule {
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
                             /*let osc_1_type_knob = ui_knob::ArcKnob::for_param(
-                                osc_voice,
+                                _osc_voice,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -1760,11 +1751,10 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
 
     // Index proper params from knobs
     // This lets us have a copy for voices, and also track changes like restretch changing or ADR slopes
-    pub fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) -> (AudioModuleType, VoiceType) {
+    pub fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) -> AudioModuleType {
         match voice_index {
             1 => {
                 self.audio_module_type = params.audio_module_1_type.value();
-                self.osc_type = params.osc_1_type.value();
                 if self.osc_octave != params.osc_1_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_1_octave.value();
                     for voice in self.playing_voices.voices.iter_mut() {
@@ -1862,7 +1852,6 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
             }
             2 => {
                 self.audio_module_type = params.audio_module_2_type.value();
-                self.osc_type = params.osc_2_type.value();
                 if self.osc_octave != params.osc_2_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_2_octave.value();
                     for voice in self.playing_voices.voices.iter_mut() {
@@ -1960,7 +1949,6 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
             }
             3 => {
                 self.audio_module_type = params.audio_module_3_type.value();
-                self.osc_type = params.osc_3_type.value();
                 if self.osc_octave != params.osc_3_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_3_octave.value();
                     for voice in self.playing_voices.voices.iter_mut() {
@@ -2058,7 +2046,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
             }
             _ => {}
         }
-        (self.audio_module_type, self.osc_type)
+        self.audio_module_type
     }
 
     // I was looking at the PolyModSynth Example and decided on this
@@ -2318,13 +2306,6 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             }
                             RetriggerStyle::Random | RetriggerStyle::UniRandom => {
                                 match self.audio_module_type {
-                                    AudioModuleType::Osc | AudioModuleType::Additive => {
-                                        // Get a random phase to use
-                                        // Poly solution is to pass the phase to the struct
-                                        // instead of the osc alone
-                                        let mut rng = rand::thread_rng();
-                                        new_phase = rng.gen_range(0.0..1.0);
-                                    }
                                     AudioModuleType::Sampler => {
                                         let mut rng = rand::thread_rng();
                                         // Prevent panic when no sample loaded yet
@@ -2338,7 +2319,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                                 new_phase = 0.0;
                                             }
                                         }
-                                    }
+                                    },
                                     AudioModuleType::Granulizer => {
                                         let mut rng = rand::thread_rng();
                                         // Prevent panic when no sample loaded yet
@@ -2352,8 +2333,14 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                                 new_phase = 0.0;
                                             }
                                         }
+                                    },
+                                    _ => {
+                                        // Get a random phase to use
+                                        // Poly solution is to pass the phase to the struct
+                                        // instead of the osc alone
+                                        let mut rng = rand::thread_rng();
+                                        new_phase = rng.gen_range(0.0..1.0);
                                     }
-                                    _ => {}
                                 }
                             }
                             RetriggerStyle::Free => {
@@ -2554,7 +2541,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             _decay_time: self.osc_decay,
                             _release_time: self.osc_release,
                             _retrigger: self.osc_retrigger,
-                            _voice_type: self.osc_type,
+                            _voice_type: self.audio_module_type,
                             _angle: 0.0,
                             sample_pos: scaled_sample_pos,
                             loop_it: self.loop_wavetable,
@@ -2601,8 +2588,21 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         self.playing_voices.voices.push_back(new_voice);
 
                         // Add unison voices to our voice tracking deque
-                        if self.osc_unison > 1 && ( self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler
-                            || self.audio_module_type == AudioModuleType::Additive ) {
+                        if self.osc_unison > 1 && ( 
+                            self.audio_module_type == AudioModuleType::Sine ||
+                            self.audio_module_type == AudioModuleType::Tri ||
+                            self.audio_module_type == AudioModuleType::Saw ||
+                            self.audio_module_type == AudioModuleType::RSaw ||
+                            self.audio_module_type == AudioModuleType::WSaw ||
+                            self.audio_module_type == AudioModuleType::SSaw ||
+                            self.audio_module_type == AudioModuleType::RASaw ||
+                            self.audio_module_type == AudioModuleType::Ramp ||
+                            self.audio_module_type == AudioModuleType::Square ||
+                            self.audio_module_type == AudioModuleType::RSquare ||
+                            self.audio_module_type == AudioModuleType::Pulse ||
+                            self.audio_module_type == AudioModuleType::Noise ||
+                            self.audio_module_type == AudioModuleType::Sampler ||
+                            self.audio_module_type == AudioModuleType::Additive ) {
                             let unison_even_voices = if self.osc_unison % 2 == 0 {
                                 self.osc_unison
                             } else {
@@ -2618,7 +2618,6 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                 let uni_phase = match self.osc_retrigger {
                                     RetriggerStyle::UniRandom => {
                                         match self.audio_module_type {
-                                            AudioModuleType::Osc | 
                                             AudioModuleType::Additive |
                                             AudioModuleType::Sine |
                                             AudioModuleType::Tri |
@@ -2651,7 +2650,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                                     0.0
                                                 }
                                             },
-                                            AudioModuleType::Off | AudioModuleType::UNSET_AM => {
+                                            AudioModuleType::Off | AudioModuleType::UnsetAm => {
                                                 0.0
                                             },
                                         }
@@ -2695,10 +2694,9 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     _decay_time: self.osc_decay,
                                     _release_time: self.osc_release,
                                     _retrigger: self.osc_retrigger,
-                                    _voice_type: self.osc_type,
+                                    _voice_type: self.audio_module_type,
                                     _angle: unison_angles[unison_voice],
                                     sample_pos: match self.audio_module_type {
-                                        AudioModuleType::Osc |
                                         AudioModuleType::Additive |
                                         AudioModuleType::Sine |
                                         AudioModuleType::Tri |
@@ -2717,7 +2715,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                         AudioModuleType::Granulizer | AudioModuleType::Sampler => {
                                             uni_phase as usize
                                         },
-                                        AudioModuleType::Off | AudioModuleType::UNSET_AM => {
+                                        AudioModuleType::Off | AudioModuleType::UnsetAm => {
                                             0
                                         },
                                     },
@@ -2796,7 +2794,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     _decay_time: self.osc_decay,
                                     _release_time: self.osc_release,
                                     _retrigger: self.osc_retrigger,
-                                    _voice_type: self.osc_type,
+                                    _voice_type: self.audio_module_type,
                                     _angle: 0.0,
                                     sample_pos: 0,
                                     loop_it: self.loop_wavetable,
@@ -2815,7 +2813,19 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                 },
                             );
 
-                            if self.osc_unison > 1 && ( self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler )
+                            if self.osc_unison > 1 && ( self.audio_module_type == AudioModuleType::Sine ||
+                                self.audio_module_type == AudioModuleType::Tri ||
+                                self.audio_module_type == AudioModuleType::Saw ||
+                                self.audio_module_type == AudioModuleType::RSaw ||
+                                self.audio_module_type == AudioModuleType::WSaw ||
+                                self.audio_module_type == AudioModuleType::SSaw ||
+                                self.audio_module_type == AudioModuleType::RASaw ||
+                                self.audio_module_type == AudioModuleType::Ramp ||
+                                self.audio_module_type == AudioModuleType::Square ||
+                                self.audio_module_type == AudioModuleType::RSquare ||
+                                self.audio_module_type == AudioModuleType::Pulse ||
+                                self.audio_module_type == AudioModuleType::Noise ||
+                                self.audio_module_type == AudioModuleType::Sampler )
                             {
                                 self.unison_voices.voices.resize(
                                     voice_max as usize,
@@ -2852,7 +2862,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                         _decay_time: self.osc_decay,
                                         _release_time: self.osc_release,
                                         _retrigger: self.osc_retrigger,
-                                        _voice_type: self.osc_type,
+                                        _voice_type: self.audio_module_type,
                                         _angle: 0.0,
                                         sample_pos: 0,
                                         grain_start_pos: 0,
@@ -2878,7 +2888,19 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             voice.state != OscState::Off &&
                             !(voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0)
                         });
-                        if self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler {
+                        if self.audio_module_type == AudioModuleType::Sine ||
+                        self.audio_module_type == AudioModuleType::Tri ||
+                        self.audio_module_type == AudioModuleType::Saw ||
+                        self.audio_module_type == AudioModuleType::RSaw ||
+                        self.audio_module_type == AudioModuleType::WSaw ||
+                        self.audio_module_type == AudioModuleType::SSaw ||
+                        self.audio_module_type == AudioModuleType::RASaw ||
+                        self.audio_module_type == AudioModuleType::Ramp ||
+                        self.audio_module_type == AudioModuleType::Square ||
+                        self.audio_module_type == AudioModuleType::RSquare ||
+                        self.audio_module_type == AudioModuleType::Pulse ||
+                        self.audio_module_type == AudioModuleType::Noise ||
+                        self.audio_module_type == AudioModuleType::Sampler {
                             self.unison_voices.voices.retain(|unison_voice| {
                                 unison_voice.state != OscState::Off
                             });
@@ -2913,7 +2935,20 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             _ => shifted_note + semi_shift,
                         };
 
-                        if self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Sampler || self.audio_module_type == AudioModuleType::Additive {
+                        if self.audio_module_type == AudioModuleType::Sine ||
+                        self.audio_module_type == AudioModuleType::Tri ||
+                        self.audio_module_type == AudioModuleType::Saw ||
+                        self.audio_module_type == AudioModuleType::RSaw ||
+                        self.audio_module_type == AudioModuleType::WSaw ||
+                        self.audio_module_type == AudioModuleType::SSaw ||
+                        self.audio_module_type == AudioModuleType::RASaw ||
+                        self.audio_module_type == AudioModuleType::Ramp ||
+                        self.audio_module_type == AudioModuleType::Square ||
+                        self.audio_module_type == AudioModuleType::RSquare ||
+                        self.audio_module_type == AudioModuleType::Pulse ||
+                        self.audio_module_type == AudioModuleType::Noise ||
+                        self.audio_module_type == AudioModuleType::Sampler ||
+                        self.audio_module_type == AudioModuleType::Additive {
                             // Update the matching unison voices
                             for unison_voice in self.unison_voices.voices.iter_mut() {
                                 if unison_voice.note == shifted_note
@@ -3016,7 +3051,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 _decay_time: self.osc_decay,
                 _release_time: self.osc_release,
                 _retrigger: self.osc_retrigger,
-                _voice_type: self.osc_type,
+                _voice_type: self.audio_module_type,
                 _angle: 0.0,
                 sample_pos: 0,
                 loop_it: self.loop_wavetable,
@@ -3147,9 +3182,9 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
         }
          
         for voice in self.playing_voices.voices.iter_mut() {
-            if self.audio_module_type == AudioModuleType::Osc
-                || self.audio_module_type == AudioModuleType::Sampler
-                || self.audio_module_type == AudioModuleType::Additive
+            if self.audio_module_type != AudioModuleType::Granulizer
+                && self.audio_module_type != AudioModuleType::Off
+                && self.audio_module_type != AudioModuleType::UnsetAm
             {
                 // Move our phase outside of the midi events
                 // I couldn't find much on how to model this so I based it off previous note phase
@@ -3164,7 +3199,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 }
 
                 // Move our pitch envelopes if this is an Osc
-                if self.audio_module_type == AudioModuleType::Osc && voice.pitch_enabled {
+                if voice.pitch_enabled {
                     // Attack is over so use decay amount to reach sustain level - reusing current smoother
                     if voice.pitch_attack.steps_left() == 0
                         && voice.pitch_state == OscState::Attacking
@@ -3202,7 +3237,10 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                     voice.pitch_current = 0.0;
                     voice.pitch_state = OscState::Off;
                 }
-                if (self.audio_module_type == AudioModuleType::Osc || self.audio_module_type == AudioModuleType::Additive) && voice.pitch_enabled_2 {
+                if (self.audio_module_type != AudioModuleType::Granulizer
+                && self.audio_module_type != AudioModuleType::Off
+                && self.audio_module_type != AudioModuleType::Sampler
+                && self.audio_module_type != AudioModuleType::UnsetAm) && voice.pitch_enabled_2 {
                     // Attack is over so use decay amount to reach sustain level - reusing current smoother
                     if voice.pitch_attack_2.steps_left() == 0
                         && voice.pitch_state_2 == OscState::Attacking
@@ -3394,7 +3432,19 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
         }
 
         match self.audio_module_type {
-            AudioModuleType::Osc | AudioModuleType::Sampler | AudioModuleType::Additive => {
+            AudioModuleType::Sine |
+            AudioModuleType::Tri |
+            AudioModuleType::Saw |
+            AudioModuleType::RSaw |
+            AudioModuleType::WSaw |
+            AudioModuleType::SSaw |
+            AudioModuleType::RASaw |
+            AudioModuleType::Ramp |
+            AudioModuleType::Square |
+            AudioModuleType::RSquare |
+            AudioModuleType::Pulse |
+            AudioModuleType::Noise |
+            AudioModuleType::Additive => {
                 // Update our matching unison voices
                 for unison_voice in self.unison_voices.voices.iter_mut() {
                     // Move our phase outside of the midi events
@@ -3410,7 +3460,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                     }
 
                     // Move our pitch envelopes if this is an Osc
-                    if self.audio_module_type == AudioModuleType::Osc && unison_voice.pitch_enabled
+                    if unison_voice.pitch_enabled
                     {
                         // Attack is over so use decay amount to reach sustain level - reusing current smoother
                         if unison_voice.pitch_attack.steps_left() == 0
@@ -3449,8 +3499,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         unison_voice.pitch_current = 0.0;
                         unison_voice.pitch_state = OscState::Off;
                     }
-                    if self.audio_module_type == AudioModuleType::Osc
-                        && unison_voice.pitch_enabled_2
+                    if unison_voice.pitch_enabled_2
                     {
                         // Attack is over so use decay amount to reach sustain level - reusing current smoother
                         if unison_voice.pitch_attack_2.steps_left() == 0
@@ -3541,7 +3590,6 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
         let output_signal_l: f32;
         let output_signal_r: f32;
         (output_signal_l, output_signal_r) = match self.audio_module_type {
-            AudioModuleType::Osc |
             AudioModuleType::Sine |
             AudioModuleType::Tri |
             AudioModuleType::Saw |
@@ -3632,46 +3680,45 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             util::f32_midi_note_to_freq(base_note).min(nyquist) / self.sample_rate;
                     }
 
-                    if self.audio_module_type == AudioModuleType::Osc {
-                        center_voices += match self.osc_type {
-                            VoiceType::Sine => {
-                                Oscillator::get_sine(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::Tri => {
-                                Oscillator::get_tri(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::Saw => {
-                                Oscillator::get_saw(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::RSaw => {
-                                Oscillator::get_rsaw(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::WSaw => {
-                                Oscillator::get_wsaw(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::RASaw => {
-                                Oscillator::get_rasaw(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::SSaw => {
-                                Oscillator::get_ssaw(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::Ramp => {
-                                Oscillator::get_ramp(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::Square => {
-                                Oscillator::get_square(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::RSquare => {
-                                Oscillator::get_rsquare(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::Pulse => {
-                                Oscillator::get_pulse(voice.phase) * temp_osc_gain_multiplier
-                            }
-                            VoiceType::Noise => {
-                                self.noise_obj.generate_sample() * temp_osc_gain_multiplier
-                            }
-                        };
-                    }
+                    center_voices += match self.audio_module_type {
+                        AudioModuleType::Sine => {
+                            Oscillator::get_sine(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::Tri => {
+                            Oscillator::get_tri(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::Saw => {
+                            Oscillator::get_saw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::RSaw => {
+                            Oscillator::get_rsaw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::WSaw => {
+                            Oscillator::get_wsaw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::RASaw => {
+                            Oscillator::get_rasaw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::SSaw => {
+                            Oscillator::get_ssaw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::Ramp => {
+                            Oscillator::get_ramp(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::Square => {
+                            Oscillator::get_square(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::RSquare => {
+                            Oscillator::get_rsquare(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::Pulse => {
+                            Oscillator::get_pulse(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::Noise => {
+                            self.noise_obj.generate_sample() * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::Additive | AudioModuleType::Granulizer | AudioModuleType::Off | AudioModuleType::UnsetAm | AudioModuleType::Sampler => 0.0,
+                    };
                 }
                 // Stereo applies to unison voices
                 for unison_voice in self.unison_voices.voices.iter_mut() {
@@ -3751,58 +3798,57 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                     }
 
                     if self.osc_unison > 1 {
-                        let mut temp_unison_voice: f32 = 0.0;
-                        if self.audio_module_type == AudioModuleType::Osc {
-                            temp_unison_voice = match self.osc_type {
-                                VoiceType::Sine => {
-                                    Oscillator::get_sine(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::Tri => {
-                                    Oscillator::get_tri(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::Saw => {
-                                    Oscillator::get_saw(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::RSaw => {
-                                    Oscillator::get_rsaw(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::WSaw => {
-                                    Oscillator::get_wsaw(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::SSaw => {
-                                    Oscillator::get_ssaw(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::RASaw => {
-                                    Oscillator::get_rasaw(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::Ramp => {
-                                    Oscillator::get_ramp(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::Square => {
-                                    Oscillator::get_square(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::RSquare => {
-                                    Oscillator::get_rsquare(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::Pulse => {
-                                    Oscillator::get_pulse(unison_voice.phase)
-                                        * temp_osc_gain_multiplier
-                                }
-                                VoiceType::Noise => {
-                                    self.noise_obj.generate_sample() * temp_osc_gain_multiplier
-                                }
-                            };
-                        }
+                        let temp_unison_voice: f32;
+                        temp_unison_voice = match self.audio_module_type {
+                            AudioModuleType::Sine => {
+                                Oscillator::get_sine(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::Tri => {
+                                Oscillator::get_tri(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::Saw => {
+                                Oscillator::get_saw(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::RSaw => {
+                                Oscillator::get_rsaw(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::WSaw => {
+                                Oscillator::get_wsaw(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::SSaw => {
+                                Oscillator::get_ssaw(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::RASaw => {
+                                Oscillator::get_rasaw(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::Ramp => {
+                                Oscillator::get_ramp(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::Square => {
+                                Oscillator::get_square(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::RSquare => {
+                                Oscillator::get_rsquare(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::Pulse => {
+                                Oscillator::get_pulse(unison_voice.phase)
+                                    * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::Noise => {
+                                self.noise_obj.generate_sample() * temp_osc_gain_multiplier
+                            },
+                            _ => 0.0,
+                        };
 
                         // Create our stereo pan for unison
 
@@ -4229,7 +4275,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
 
                 (summed_voices_l, summed_voices_r)
             }
-            AudioModuleType::Off | AudioModuleType::UNSET_AM => {
+            AudioModuleType::Off | AudioModuleType::UnsetAm => {
                 // Do nothing, return 0.0
                 (0.0, 0.0)
             }

@@ -2,145 +2,113 @@
 // Ardura
 // ----------------------------------------------------------------------------
 
-use std::{fmt::Debug, hash::RandomState, sync::Arc};
-use nih_plug::{
-    params::EnumParam, prelude::{Enum, Param, ParamSetter}, wrapper::clap::lazy_static
-};
-use nih_plug_egui::egui::{self, vec2, Color32, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget, WidgetText};
-use nih_plug_egui::widgets::util as nUtil;
-use parking_lot::Mutex;
+use nih_plug::prelude::{Param, ParamSetter};
+use nih_plug_egui::egui::{ComboBox, Response, Ui, Widget};
 
-use crate::audio_module::AudioModuleType;
-
-lazy_static! {
-    static ref DRAG_NORMALIZED_START_VALUE_MEMORY_ID: egui::Id = egui::Id::new((file!(), 0));
-    static ref DRAG_AMOUNT_MEMORY_ID: egui::Id = egui::Id::new((file!(), 1));
-    static ref VALUE_ENTRY_MEMORY_ID: egui::Id = egui::Id::new((file!(), 2));
-}
-
-#[must_use = "You should put this widget in an ui with `ui.add(widget);`"]
-pub struct ComboBoxParam<'a, P: Param> {
+pub struct ParamComboBox<'a, P: Param> {
     param: &'a P,
     setter: &'a ParamSetter<'a>,
-    current_value: AudioModuleType,
+
+    id_name: String,
+
+    options: Vec<String>, // Options for the ComboBox
 }
 
-impl<'a, P: Param> ComboBoxParam<'a, P> {
-    /// Create a new slider for a parameter. Use the other methods to modify the slider before
-    /// passing it to [`Ui::add()`].
-    pub fn for_param(param: &'a P, setter: &'a ParamSetter<'a>) -> Self {
+impl<'a, P: Param> ParamComboBox<'a, P> {
+    pub fn for_param(param: &'a P, setter: &'a ParamSetter<'a>, options: Vec<String>, id_name: String) -> Self {
+        Self { param, setter, options, id_name }
+    }
+
+    fn set_selected_value(&self, selected_value: String) {
+        // Convert the selected value back to the normalized parameter value and set it.
+        if let Some(normalized_value) = self.param.string_to_normalized_value(&selected_value) {
+            let value = self.param.preview_plain(normalized_value);
+            if value != self.param.modulated_plain_value() {
+                self.setter.set_parameter(self.param, value);
+            }
+        }
+    }
+
+    fn get_current_value(&self) -> String {
+        self.param.to_string()
+    }
+}
+
+impl<'a, P: Param> Widget for ParamComboBox<'a, P> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        // Store the current value to check for changes later
+        let mut current_value = self.get_current_value();
+        let mut changed = false; // Flag to detect change
+
+        let response = ComboBox::from_id_source(self.param.name().to_owned() + &self.id_name)
+            .selected_text(current_value.clone())
+            .show_ui(ui, |ui| {
+                for option in &self.options {
+                    // Update current_value and set changed flag if a new option is selected
+                    if ui.selectable_value(&mut current_value, option.clone(), option).clicked() {
+                        changed = true;
+                    }
+                }
+            })
+            .response
+            .on_hover_text("Select a parameter value");
+
+        // If the value has changed, call set_selected_value
+        if changed {
+            self.set_selected_value(current_value);
+        }
+
+        response
+    }
+}
+
+
+/*
+use nih_plug::prelude::{Param, ParamSetter};
+use nih_plug_egui::egui::{ComboBox, Response, Ui, Widget};
+
+pub struct ParamComboBox<'a, P: Param> {
+    param: &'a P,
+    setter: &'a ParamSetter<'a>,
+
+    options: Vec<String>,  // Options for the ComboBox
+}
+
+impl<'a, P: Param> ParamComboBox<'a, P> {
+    pub fn for_param(param: &'a P, setter: &'a ParamSetter<'a>, options: Vec<String>) -> Self {
         Self {
             param,
             setter,
+            options,
         }
     }
 
-    fn plain_value(&self) -> P::Plain {
-        self.param.modulated_plain_value()
+    fn set_selected_value(&self, selected_value: String) {
+        // Convert the selected value back to the normalized parameter value and set it.
+        if let Some(normalized_value) = self.param.string_to_normalized_value(&selected_value) {
+            let value = self.param.preview_plain(normalized_value);
+            if value != self.param.modulated_plain_value() {
+                self.setter.set_parameter(self.param, value);
+            }
+        }
     }
 
-    fn normalized_value(&self) -> f32 {
-        self.param.modulated_normalized_value()
-    }
-
-    fn string_value(&self) -> String {
+    fn get_current_value(&self) -> String {
         self.param.to_string()
     }
+}
 
-    fn set_normalized_value(&self, normalized: f32) {
-        // This snaps to the nearest plain value if the parameter is stepped in some way.
-        // TODO: As an optimization, we could add a `const CONTINUOUS: bool` to the parameter to
-        //       avoid this normalized->plain->normalized conversion for parameters that don't need
-        //       it
-        let value = self.param.preview_plain(normalized);
-        if value != self.plain_value() {
-            self.setter.set_parameter(self.param, value);
-        }
-    }
-
-    /// Begin and end drag still need to be called when using this..
-    fn reset_param(&self) {
-        self.setter
-            .set_parameter(self.param, self.param.default_plain_value());
-    }
-
-    fn slider_ui(&self, ui: &mut Ui, response: &mut Response) {
-        let cb = egui::ComboBox::new(self.param.name(), "")
-            //.selected_text(format!("{:?}", self.param.unmodulated_plain_value()))
-            .selected_text(self.param.normalized_value_to_string(self.param.unmodulated_normalized_value(), false))
-            .width(86.0)
-            .height(336.0)
+impl<'a, P: Param> Widget for ParamComboBox<'a, P> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        ComboBox::from_label(self.param.name())
+            .selected_text(self.get_current_value())
             .show_ui(ui, |ui| {
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Off, "Off");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Sine, "Sine");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Tri, "Tri");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Saw, "Saw");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::RSaw, "Rsaw");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::WSaw, "WSaw");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::SSaw, "SSaw");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::RASaw, "RASaw");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Ramp, "Ramp");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Square, "Square");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::RSquare, "RSquare");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Pulse, "Pulse");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Noise, "Noise");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Sampler, "Sampler");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Granulizer, "Granulizer");
-                ui.selectable_value(&mut self.current_value, AudioModuleType::Additive, "Additive");
-            }).response.on_hover_text_at_pointer("The type of generator to use.");
-        if cb.clicked() {
-            match self.current_value {
-                AudioModuleType::Off => { self.set_normalized_value(0.0);}
-                AudioModuleType::Sine => { self.set_normalized_value(0.0);}
-                AudioModuleType::Tri => { self.set_normalized_value(0.0);}
-                AudioModuleType::Saw => { self.set_normalized_value(0.0);}
-                AudioModuleType::RSaw => { self.set_normalized_value(0.0);}
-                AudioModuleType::WSaw => { self.set_normalized_value(0.0);}
-                AudioModuleType::SSaw => { self.set_normalized_value(0.0);}
-                AudioModuleType::RASaw => { self.set_normalized_value(0.0);}
-                AudioModuleType::Ramp => { self.set_normalized_value(0.0);}
-                AudioModuleType::Square => { self.set_normalized_value(0.0);}
-                AudioModuleType::RSquare => { self.set_normalized_value(0.0);}
-                AudioModuleType::Pulse => { self.set_normalized_value(0.0);}
-                AudioModuleType::Noise => { self.set_normalized_value(0.0);}
-                AudioModuleType::Sampler => { self.set_normalized_value(0.0);}
-                AudioModuleType::Granulizer => { self.set_normalized_value(0.0);}
-                AudioModuleType::Additive => { self.set_normalized_value(0.0);}
-            }
-            self.set_normalized_value(normalized);
-            response.mark_changed();
-        }
-        if response.double_clicked() {
-            self.reset_param();
-            response.mark_changed();
-        }
+                for option in &self.options {
+                    ui.selectable_value(&mut self.get_current_value(), option.clone(), option);
+                }
+            })
+            .response
+            .on_hover_text("Select a parameter value")
     }
 }
-
-
-impl<P: Param> Widget for ComboBoxParam<'_, P> {
-    fn ui(mut self, ui: &mut Ui) -> Response {
-        ui.horizontal(|ui| {
-            let cb_width = 86.0;
-            let cb_height = 15.0;
-            let mut response = ui
-                .vertical(|ui| {
-                    ui.allocate_space(vec2(cb_width, cb_height));
-                    let response = ui.allocate_response(
-                        vec2(cb_width, cb_height),
-                        Sense::click(),
-                    );
-                    let (kb_edit_id, _) =
-                        ui.allocate_space(vec2(cb_width, cb_height));
-
-                    response
-                })
-                .inner;
-
-            self.slider_ui(ui, &mut response);
-
-            response
-        })
-        .inner
-    }
-}
+*/
