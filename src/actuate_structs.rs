@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm}, audio_module::{AudioModuleType, Oscillator::{self, RetriggerStyle, SmoothStyle, VoiceType}}, fx::{delay::{DelaySnapValues, DelayType}, saturation::SaturationType, ArduraFilter, StateVariableFilter::ResonanceType}, LFOController};
+use crate::{actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm}, audio_module::{AudioModuleType, Oscillator::{self, RetriggerStyle, SmoothStyle}}, fx::{delay::{DelaySnapValues, DelayType}, saturation::SaturationType, ArduraFilter, StateVariableFilter::ResonanceType}, LFOController};
 
 /// Modulation struct for passing mods to audio modules
 #[derive(Serialize, Deserialize, Clone)]
@@ -67,7 +67,6 @@ pub struct ActuatePresetV131 {
     pub mod1_grain_crossfade: i32,
 
     // Osc module knob storage
-    pub mod1_osc_type: VoiceType,
     pub mod1_osc_octave: i32,
     pub mod1_osc_semitones: i32,
     pub mod1_osc_detune: f32,
@@ -102,7 +101,6 @@ pub struct ActuatePresetV131 {
     pub mod2_grain_crossfade: i32,
 
     // Osc module knob storage
-    pub mod2_osc_type: VoiceType,
     pub mod2_osc_octave: i32,
     pub mod2_osc_semitones: i32,
     pub mod2_osc_detune: f32,
@@ -137,7 +135,6 @@ pub struct ActuatePresetV131 {
     pub mod3_grain_crossfade: i32,
 
     // Osc module knob storage
-    pub mod3_osc_type: VoiceType,
     pub mod3_osc_octave: i32,
     pub mod3_osc_semitones: i32,
     pub mod3_osc_detune: f32,

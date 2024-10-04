@@ -44,7 +44,7 @@ impl Default for StateVariableFilter {
             sample_rate: 44100.0,
             sample_rate_quad: 44100.0 * 4.0,
             sample_rate_half: 22050.0,
-            q: 0.0,
+            q: 0.1,
             frequency: 20000.0,
             double_pi_freq: 2.0 * PI * 20000.0,
             low_output: 0.0,
@@ -144,13 +144,26 @@ impl StateVariableFilter {
             }
         };
 
+        let rd_input = remove_denormals(input);
+
         // Oversample by running multiple iterations
         for _ in 0..self.oversample {
             self.low_output += normalized_freq * self.band_output;
-            self.high_output = input - self.low_output - self.q * self.band_output;
+            self.high_output = rd_input - self.low_output - self.q * self.band_output;
             self.band_output += resonance * self.high_output;
             self.low_output += resonance * self.band_output;
         }
+        self.low_output = remove_denormals(self.low_output);
+        self.band_output = remove_denormals(self.band_output);
+        self.high_output = remove_denormals(self.high_output);
         (self.low_output, self.band_output, self.high_output)
+    }
+}
+
+fn remove_denormals(x: f32) -> f32 {
+    if x.abs() < 1e-30 {
+        0.0
+    } else {
+        x
     }
 }
