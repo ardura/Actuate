@@ -27,7 +27,7 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 #![allow(non_snake_case)]
 use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV131, ModulationStruct};
-use nih_plug::{prelude::*, util::db_to_gain};
+use nih_plug::{prelude::*};
 use nih_plug_egui::{
     egui::{Color32, FontId}, EguiState
 };
@@ -45,7 +45,7 @@ use audio_module::{
     frequency_modulation,
 };
 use fx::{
-    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, A4I_Filter::{self, A4iFilter}, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType,StateVariableFilter}, V4Filter::{self, V4FilterStruct}, VCFilter::ResponseType as VCResponseType
+    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType,StateVariableFilter}, VCFilter::ResponseType as VCResponseType
 };
 
 // This is here in meantime until new Actuate versions past this one!
@@ -123,35 +123,6 @@ pub struct Actuate {
     audio_module_2: Arc<Mutex<AudioModule>>,
     audio_module_3: Arc<Mutex<AudioModule>>,
 
-    // SVF Filters
-    filter_l_1: StateVariableFilter,
-    filter_r_1: StateVariableFilter,
-    // TILT Filters
-    tilt_filter_l_1: ArduraFilter::ArduraFilter,
-    tilt_filter_r_1: ArduraFilter::ArduraFilter,
-    // VCF Filters
-    vcf_filter_l_1: fx::VCFilter::VCFilter,
-    vcf_filter_r_1: fx::VCFilter::VCFilter,
-    // Filter state variables
-    filter_state_1: OscState,
-    filter_atk_smoother_1: Smoother<f32>,
-    filter_dec_smoother_1: Smoother<f32>,
-    filter_rel_smoother_1: Smoother<f32>,
-
-    // SVF Filters
-    filter_l_2: StateVariableFilter,
-    filter_r_2: StateVariableFilter,
-    // TILT Filters
-    tilt_filter_l_2: ArduraFilter::ArduraFilter,
-    tilt_filter_r_2: ArduraFilter::ArduraFilter,
-    // VCF Filters
-    vcf_filter_l_2: fx::VCFilter::VCFilter,
-    vcf_filter_r_2: fx::VCFilter::VCFilter,
-    // Filter state variables
-    filter_state_2: OscState,
-    filter_atk_smoother_2: Smoother<f32>,
-    filter_dec_smoother_2: Smoother<f32>,
-    filter_rel_smoother_2: Smoother<f32>,
 
     // LFOs!
     lfo_1: LFOController::LFOController,
@@ -168,18 +139,6 @@ pub struct Actuate {
     // Used for DC Offset calculations
     dc_filter_l: StateVariableFilter,
     dc_filter_r: StateVariableFilter,
-
-    // V4 Filter
-    V4F_l_1: V4Filter::V4FilterStruct,
-    V4F_l_2: V4Filter::V4FilterStruct,
-    V4F_r_1: V4Filter::V4FilterStruct,
-    V4F_r_2: V4Filter::V4FilterStruct,
-
-    // A4I Filter
-    A4I_l_1: A4I_Filter::A4iFilter,
-    A4I_l_2: A4I_Filter::A4iFilter,
-    A4I_r_1: A4I_Filter::A4iFilter,
-    A4I_r_2: A4I_Filter::A4iFilter,
 
     fm_state: OscState,
     fm_atk_smoother_1: Smoother<f32>,
@@ -305,71 +264,6 @@ impl Default for Actuate {
             audio_module_2: Arc::new(Mutex::new(AudioModule::default())),
             audio_module_3: Arc::new(Mutex::new(AudioModule::default())),
 
-            // SVF Filters
-            filter_l_2: StateVariableFilter::default().set_oversample(4),
-            filter_r_2: StateVariableFilter::default().set_oversample(4),
-            // TILT Filters
-            tilt_filter_l_2: ArduraFilter::ArduraFilter::new(
-                44100.0,
-                20000.0,
-                1.0,
-                ResponseType::Lowpass,
-            ),
-            tilt_filter_r_2: ArduraFilter::ArduraFilter::new(
-                44100.0,
-                20000.0,
-                1.0,
-                ResponseType::Lowpass,
-            ),
-            // VCF Filters
-            vcf_filter_l_1: fx::VCFilter::VCFilter::new(),
-            vcf_filter_r_1: fx::VCFilter::VCFilter::new(),
-
-            // V4Filter
-            V4F_l_1: V4FilterStruct::default(),
-            V4F_r_1: V4FilterStruct::default(),
-
-            // A4I Filter
-            A4I_l_1: A4iFilter::new(44100.0, 20000.0, 0.0),
-            A4I_r_1: A4iFilter::new(44100.0, 20000.0, 0.0),
-
-            filter_state_2: OscState::Off,
-            filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
-            filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
-            filter_rel_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
-
-            // SVF Filters
-            filter_l_1: StateVariableFilter::default().set_oversample(4),
-            filter_r_1: StateVariableFilter::default().set_oversample(4),
-            // TILT Filters
-            tilt_filter_l_1: ArduraFilter::ArduraFilter::new(
-                44100.0,
-                20000.0,
-                1.0,
-                ResponseType::Lowpass,
-            ),
-            tilt_filter_r_1: ArduraFilter::ArduraFilter::new(
-                44100.0,
-                20000.0,
-                1.0,
-                ResponseType::Lowpass,
-            ),
-            // VCF Filters
-            vcf_filter_l_2: fx::VCFilter::VCFilter::new(),
-            vcf_filter_r_2: fx::VCFilter::VCFilter::new(),
-
-            // V4Filter
-            V4F_l_2: V4FilterStruct::default(),
-            V4F_r_2: V4FilterStruct::default(),
-
-            // A4I Filter
-            A4I_l_2: A4iFilter::new(44100.0, 20000.0, 0.0),
-            A4I_r_2: A4iFilter::new(44100.0, 20000.0, 0.0),
-
-            filter_state_1: OscState::Off,
-            filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
-            filter_dec_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
-            filter_rel_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
 
             //LFOs
             lfo_1: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
@@ -1196,17 +1090,32 @@ impl ActuateParams {
                 .with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 64, IntRange::Linear { min: 1, max: 512 }),
 
-            audio_module_1_type: EnumParam::new("Type", AudioModuleType::Sine).with_callback({
-                let clear_voices = clear_voices.clone();
-                Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
+            audio_module_1_type: EnumParam::new("Type", AudioModuleType::Sine)
+            //.with_callback({
+            //    let clear_voices = clear_voices.clone();
+            //    Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
+            //})
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
-            audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
-                let clear_voices = clear_voices.clone();
-                Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
+            audio_module_2_type: EnumParam::new("Type", AudioModuleType::Sine)
+            //.with_callback({
+            //    let clear_voices = clear_voices.clone();
+            //    Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
+            //})
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
-            audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
-                let clear_voices = clear_voices.clone();
-                Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
+            audio_module_3_type: EnumParam::new("Type", AudioModuleType::Sine)
+            //.with_callback({
+            //    let clear_voices = clear_voices.clone();
+            //    Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
+            //})
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
 
             audio_module_1_level: FloatParam::new(
@@ -1231,11 +1140,23 @@ impl ActuateParams {
             .with_value_to_string(formatters::v2s_f32_percentage(0))
             .with_unit("%"),
 
-            audio_module_1_routing: EnumParam::new("Routing", AMFilterRouting::Filter1),
-            audio_module_2_routing: EnumParam::new("Routing", AMFilterRouting::Filter1),
-            audio_module_3_routing: EnumParam::new("Routing", AMFilterRouting::Filter1),
+            audio_module_1_routing: EnumParam::new("Routing", AMFilterRouting::Filter1).with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
+            audio_module_2_routing: EnumParam::new("Routing", AMFilterRouting::Filter1).with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
+            audio_module_3_routing: EnumParam::new("Routing", AMFilterRouting::Filter1).with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
 
-            filter_routing: EnumParam::new("Filter Routing", FilterRouting::Parallel),
+            filter_routing: EnumParam::new("Filter Routing", FilterRouting::Parallel).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
 
             // Oscillators
             ////////////////////////////////////////////////////////////////////////////////////
@@ -1345,7 +1266,7 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            osc_1_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 })
+            osc_1_unison: IntParam::new("Multiply", 1, IntRange::Linear { min: 1, max: 9 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -1474,7 +1395,7 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            osc_2_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 })
+            osc_2_unison: IntParam::new("Multiply", 1, IntRange::Linear { min: 1, max: 9 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -1603,7 +1524,7 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            osc_3_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 })
+            osc_3_unison: IntParam::new("Multiply", 1, IntRange::Linear { min: 1, max: 9 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -1853,9 +1774,18 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
-            filter_alg_type: EnumParam::new("Filter Alg", FilterAlgorithms::SVF),
-            tilt_filter_type: EnumParam::new("Filter Type", ResponseType::Lowpass),
-            vcf_filter_type: EnumParam::new("Filter Type", VCResponseType::Lowpass),
+            filter_alg_type: EnumParam::new("Filter Alg", FilterAlgorithms::SVF).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            tilt_filter_type: EnumParam::new("Filter Type", ResponseType::Lowpass).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            vcf_filter_type: EnumParam::new("Filter Type", VCResponseType::Lowpass).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
 
             filter_env_peak: FloatParam::new(
                 "Env Mod",
@@ -2010,9 +1940,18 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
-            filter_alg_type_2: EnumParam::new("Filter Alg", FilterAlgorithms::SVF),
-            tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass),
-            vcf_filter_type_2: EnumParam::new("Filter Type", VCResponseType::Lowpass),
+            filter_alg_type_2: EnumParam::new("Filter Alg", FilterAlgorithms::SVF).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            vcf_filter_type_2: EnumParam::new("Filter Type", VCResponseType::Lowpass).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
 
             filter_env_peak_2: FloatParam::new(
                 "Env Mod",
@@ -2197,7 +2136,10 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            pitch_enable: BoolParam::new("Pitch Enable", false),
+            pitch_enable: BoolParam::new("Pitch Enable", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             pitch_routing: EnumParam::new("Routing", PitchRouting::Osc1).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -2292,7 +2234,10 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            pitch_enable_2: BoolParam::new("Pitch Enable", false),
+            pitch_enable_2: BoolParam::new("Pitch Enable", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             pitch_routing_2: EnumParam::new("Routing", PitchRouting::Osc1).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -3822,6 +3767,9 @@ impl Actuate {
                     _ => {},
                 }
             }
+            let mut am1_lock = self.audio_module_1.lock().unwrap();
+            let mut am2_lock = self.audio_module_2.lock().unwrap();
+            let mut am3_lock = self.audio_module_3.lock().unwrap();
 
             // Prevent processing if our file dialog is open!!!
             if self.file_dialog.load(Ordering::SeqCst) {
@@ -3839,39 +3787,25 @@ impl Actuate {
             // but also allowing playing of the synth while stopped
             // midi choke doesn't seem to be working in FL
             if !context.transport().playing
-                && (self.audio_module_1.clone().lock().unwrap().get_playing()
-                    || self.audio_module_2.clone().lock().unwrap().get_playing()
-                    || self.audio_module_3.clone().lock().unwrap().get_playing())
+                && (am1_lock.get_playing() || am2_lock.get_playing() || am3_lock.get_playing())
             {
                 // Create clones here
-                let AM1 = self.audio_module_1.clone();
-                let AM2 = self.audio_module_2.clone();
-                let AM3 = self.audio_module_3.clone();
+                //let AM1 = self.audio_module_1.clone();
+                //let AM2 = self.audio_module_2.clone();
+                //let AM3 = self.audio_module_3.clone();
 
                 // For some reason this format works vs doing lock and storing it earlier
-                AM1.lock().unwrap().set_playing(false);
-                AM2.lock().unwrap().set_playing(false);
-                AM3.lock().unwrap().set_playing(false);
-                AM1.lock().unwrap().clear_voices();
-                AM2.lock().unwrap().clear_voices();
-                AM3.lock().unwrap().clear_voices();
+                am1_lock.set_playing(false);
+                am2_lock.set_playing(false);
+                am3_lock.set_playing(false);
+                am1_lock.clear_voices();
+                am2_lock.clear_voices();
+                am3_lock.clear_voices();
             }
             if context.transport().playing {
-                self.audio_module_1
-                    .clone()
-                    .lock()
-                    .unwrap()
-                    .set_playing(true);
-                self.audio_module_2
-                    .clone()
-                    .lock()
-                    .unwrap()
-                    .set_playing(true);
-                self.audio_module_3
-                    .clone()
-                    .lock()
-                    .unwrap()
-                    .set_playing(true);
+                am1_lock.set_playing(true);
+                am2_lock.set_playing(true);
+                am3_lock.set_playing(true);
             }
 
             let midi_event: Option<NoteEvent<()>> = context.next_event();
@@ -3893,31 +3827,21 @@ impl Actuate {
 
             // Trigger passing variables to the audio modules when the GUI input changes
             if self.update_something.load(Ordering::SeqCst) {
-                self.audio_module_1
-                    .lock()
-                    .unwrap()
-                    .consume_params(self.params.clone(), 1);
-                self.audio_module_2
-                    .lock()
-                    .unwrap()
-                    .consume_params(self.params.clone(), 2);
-                self.audio_module_3
-                    .lock()
-                    .unwrap()
-                    .consume_params(self.params.clone(), 3);
+                am1_lock.consume_params(self.params.clone(), 1);
+                am2_lock.consume_params(self.params.clone(), 2);
+                am3_lock.consume_params(self.params.clone(), 3);
                 // Fix Auto restretch/repitch behavior
                 if self.prev_restretch_1.load(Ordering::SeqCst) != self.params.restretch_1.value() {
                     self.prev_restretch_1.store(self.params.restretch_1.value(), Ordering::SeqCst);
-                    self.audio_module_1.lock().unwrap().regenerate_samples();
+                    am1_lock.regenerate_samples();
                 }
                 if self.prev_restretch_2.load(Ordering::SeqCst) != self.params.restretch_2.value() {
                     self.prev_restretch_2.store(self.params.restretch_2.value(), Ordering::SeqCst);
-                    
-                    self.audio_module_2.lock().unwrap().regenerate_samples();
+                    am2_lock.regenerate_samples();
                 }
                 if self.prev_restretch_3.load(Ordering::SeqCst) != self.params.restretch_3.value() {
                     self.prev_restretch_3.store(self.params.restretch_3.value(), Ordering::SeqCst);
-                    self.audio_module_3.lock().unwrap().regenerate_samples();
+                    am3_lock.regenerate_samples();
                 }
 
                 self.update_something.store(false, Ordering::SeqCst);
@@ -4843,7 +4767,8 @@ impl Actuate {
             let mut fm_wave_2: f32 = 0.0;
             // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::SeqCst)
-                && self.params.audio_module_1_type.value() != AudioModuleType::Off
+                //&& self.params.audio_module_1_type.value() != AudioModuleType::Off
+                && am1_lock.audio_module_type != AudioModuleType::Off
             {
                 // We send our sample_id position, params, current midi event, module index, current voice max, and whether any params have changed
                 (
@@ -4851,7 +4776,7 @@ impl Actuate {
                     wave1_r,
                     reset_filter_controller1,
                     note_off_filter_controller1,
-                ) = self.audio_module_1.lock().unwrap().process(
+                ) = am1_lock.process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
@@ -4867,23 +4792,44 @@ impl Actuate {
                     temp_mod_uni_vel_sum,
                     temp_mod_gain_1,
                     temp_mod_lfo_gain_1,
-                    self.params.stereo_algorithm.value()
+                    self.params.stereo_algorithm.value(),
+                    modulations_1.temp_mod_resonance_1
+                        + modulations_2.temp_mod_resonance_1
+                        + modulations_3.temp_mod_resonance_1
+                        + modulations_4.temp_mod_resonance_1,
+                    modulations_1.temp_mod_cutoff_1
+                        + modulations_2.temp_mod_cutoff_1
+                        + modulations_3.temp_mod_cutoff_1
+                        + modulations_4.temp_mod_cutoff_1,
+                    modulations_1.temp_mod_resonance_2
+                        + modulations_2.temp_mod_resonance_2
+                        + modulations_3.temp_mod_resonance_2
+                        + modulations_4.temp_mod_resonance_2,
+                    modulations_1.temp_mod_cutoff_2
+                        + modulations_2.temp_mod_cutoff_2
+                        + modulations_3.temp_mod_cutoff_2
+                        + modulations_4.temp_mod_cutoff_2,
                 );
                 // Sum to MONO
                 fm_wave_1 = (wave1_l + wave1_r)/2.0;
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
-                wave1_l *= self.params.audio_module_1_level.value() * 0.33;
-                wave1_r *= self.params.audio_module_1_level.value() * 0.33;
+                let levelAmp1 = self.params.audio_module_1_level.value();
+                wave1_l *= levelAmp1 * 0.33;
+                wave1_r *= levelAmp1 * 0.33;
             }
+
+            // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::SeqCst)
-                && self.params.audio_module_2_type.value() != AudioModuleType::Off
+                //&& self.params.audio_module_1_type.value() != AudioModuleType::Off
+                && am2_lock.audio_module_type != AudioModuleType::Off
             {
+                // We send our sample_id position, params, current midi event, module index, current voice max, and whether any params have changed
                 (
                     wave2_l,
                     wave2_r,
                     reset_filter_controller2,
                     note_off_filter_controller2,
-                ) = self.audio_module_2.lock().unwrap().process(
+                ) = am2_lock.process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
@@ -4899,23 +4845,44 @@ impl Actuate {
                     temp_mod_uni_vel_sum,
                     temp_mod_gain_2,
                     temp_mod_lfo_gain_2,
-                    self.params.stereo_algorithm.value()
+                    self.params.stereo_algorithm.value(),
+                    modulations_1.temp_mod_resonance_1
+                        + modulations_2.temp_mod_resonance_1
+                        + modulations_3.temp_mod_resonance_1
+                        + modulations_4.temp_mod_resonance_1,
+                    modulations_1.temp_mod_cutoff_1
+                        + modulations_2.temp_mod_cutoff_1
+                        + modulations_3.temp_mod_cutoff_1
+                        + modulations_4.temp_mod_cutoff_1,
+                    modulations_1.temp_mod_resonance_2
+                        + modulations_2.temp_mod_resonance_2
+                        + modulations_3.temp_mod_resonance_2
+                        + modulations_4.temp_mod_resonance_2,
+                    modulations_1.temp_mod_cutoff_2
+                        + modulations_2.temp_mod_cutoff_2
+                        + modulations_3.temp_mod_cutoff_2
+                        + modulations_4.temp_mod_cutoff_2,
                 );
                 // Sum to MONO
                 fm_wave_2 = (wave2_l + wave2_r)/2.0;
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
-                wave2_l *= self.params.audio_module_2_level.value() * 0.33;
-                wave2_r *= self.params.audio_module_2_level.value() * 0.33;
+                let levelAmp2 = self.params.audio_module_2_level.value();
+                wave2_l *= levelAmp2 * 0.33;
+                wave2_r *= levelAmp2 * 0.33;
             }
+
+            // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::SeqCst)
-                && self.params.audio_module_3_type.value() != AudioModuleType::Off
+                //&& self.params.audio_module_1_type.value() != AudioModuleType::Off
+                && am3_lock.audio_module_type != AudioModuleType::Off
             {
+                // We send our sample_id position, params, current midi event, module index, current voice max, and whether any params have changed
                 (
                     wave3_l,
                     wave3_r,
                     reset_filter_controller3,
                     note_off_filter_controller3,
-                ) = self.audio_module_3.lock().unwrap().process(
+                ) = am3_lock.process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
@@ -4931,11 +4898,28 @@ impl Actuate {
                     temp_mod_uni_vel_sum,
                     temp_mod_gain_3,
                     temp_mod_lfo_gain_3,
-                    self.params.stereo_algorithm.value()
+                    self.params.stereo_algorithm.value(),
+                    modulations_1.temp_mod_resonance_1
+                        + modulations_2.temp_mod_resonance_1
+                        + modulations_3.temp_mod_resonance_1
+                        + modulations_4.temp_mod_resonance_1,
+                    modulations_1.temp_mod_cutoff_1
+                        + modulations_2.temp_mod_cutoff_1
+                        + modulations_3.temp_mod_cutoff_1
+                        + modulations_4.temp_mod_cutoff_1,
+                    modulations_1.temp_mod_resonance_2
+                        + modulations_2.temp_mod_resonance_2
+                        + modulations_3.temp_mod_resonance_2
+                        + modulations_4.temp_mod_resonance_2,
+                    modulations_1.temp_mod_cutoff_2
+                        + modulations_2.temp_mod_cutoff_2
+                        + modulations_3.temp_mod_cutoff_2
+                        + modulations_4.temp_mod_cutoff_2,
                 );
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
-                wave3_l *= self.params.audio_module_3_level.value() * 0.33;
-                wave3_r *= self.params.audio_module_3_level.value() * 0.33;
+                let levelAmp3 = self.params.audio_module_3_level.value();
+                wave3_l *= levelAmp3 * 0.33;
+                wave3_r *= levelAmp3 * 0.33;
             }
 
             // FM Calculations
@@ -5186,230 +5170,12 @@ impl Actuate {
                 lfo_3_current = self.lfo_3.next_sample(self.sample_rate);
             }
 
-            // Define the outputs for filter routing or non-filter routing
-            let mut left_output_filter1: f32 = 0.0;
-            let mut right_output_filter1: f32 = 0.0;
-            let mut left_output_filter2: f32 = 0.0;
-            let mut right_output_filter2: f32 = 0.0;
-            let mut left_output: f32 = 0.0;
-            let mut right_output: f32 = 0.0;
+            // Define the outputs
+            let mut left_output: f32;
+            let mut right_output: f32;
 
-            match self.params.audio_module_1_routing.value() {
-                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
-                    left_output += wave1_l;
-                    right_output += wave1_r;
-                },
-                AMFilterRouting::Filter1 => {
-                    left_output_filter1 += wave1_l;
-                    right_output_filter1 += wave1_r;
-                },
-                AMFilterRouting::Filter2 => {
-                    left_output_filter2 += wave1_l;
-                    right_output_filter2 += wave1_r;
-                },
-                AMFilterRouting::Both => {
-                    left_output_filter1 += wave1_l;
-                    right_output_filter1 += wave1_r;
-                    left_output_filter2 += wave1_l;
-                    right_output_filter2 += wave1_r;
-                },
-            }
-            //#[allow(unused_assignments)]
-            match self.params.audio_module_2_routing.value() {
-                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
-                    left_output += wave2_l;
-                    right_output += wave2_r;
-                },
-                AMFilterRouting::Filter1 => {
-                    left_output_filter1 += wave2_l;
-                    right_output_filter1 += wave2_r;
-                },
-                AMFilterRouting::Filter2 => {
-                    left_output_filter2 += wave2_l;
-                    right_output_filter2 += wave2_r;
-                },
-                AMFilterRouting::Both => {
-                    left_output_filter1 += wave2_l;
-                    right_output_filter1 += wave2_r;
-                    left_output_filter2 += wave2_l;
-                    right_output_filter2 += wave2_r;
-                },
-            }
-            //#[allow(unused_assignments)]
-            match self.params.audio_module_3_routing.value() {
-                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
-                    left_output += wave3_l;
-                    right_output += wave3_r;
-                },
-                AMFilterRouting::Filter1 => {
-                    left_output_filter1 += wave3_l;
-                    right_output_filter1 += wave3_r;
-                },
-                AMFilterRouting::Filter2 => {
-                    left_output_filter2 += wave3_l;
-                    right_output_filter2 += wave3_r;
-                },
-                AMFilterRouting::Both => {
-                    left_output_filter1 += wave3_l;
-                    right_output_filter1 += wave3_r;
-                    left_output_filter2 += wave3_l;
-                    right_output_filter2 += wave3_r;
-                },
-            }
-
-            let mut filter1_processed_l: f32 = 0.0;
-            let mut filter1_processed_r: f32 = 0.0;
-            let mut filter2_processed_l: f32 = 0.0;
-            let mut filter2_processed_r: f32 = 0.0;
-
-            // I ended up doing a passthrough/sum of modulations so they can stack if that's what user desires
-            // without breaking things when they are unset
-            match self.params.filter_routing.value() {
-                FilterRouting::Parallel => {
-                    self.filter_process_1(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        left_output_filter1,
-                        right_output_filter1,
-                        &mut filter1_processed_l,
-                        &mut filter1_processed_r,
-                        modulations_1.temp_mod_cutoff_1
-                            + modulations_2.temp_mod_cutoff_1
-                            + modulations_3.temp_mod_cutoff_1
-                            + modulations_4.temp_mod_cutoff_1,
-                        //+ vel_cutoff_1,
-                        modulations_1.temp_mod_resonance_1
-                            + modulations_2.temp_mod_resonance_1
-                            + modulations_3.temp_mod_resonance_1
-                            + modulations_4.temp_mod_resonance_1,
-                        //+ vel_resonance_1,
-                    );
-                    self.filter_process_2(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        left_output_filter2,
-                        right_output_filter2,
-                        &mut filter2_processed_l,
-                        &mut filter2_processed_r,
-                        modulations_1.temp_mod_cutoff_2
-                            + modulations_2.temp_mod_cutoff_2
-                            + modulations_3.temp_mod_cutoff_2
-                            + modulations_4.temp_mod_cutoff_2,
-                        //+ vel_cutoff_2,
-                        modulations_1.temp_mod_resonance_2
-                            + modulations_2.temp_mod_resonance_2
-                            + modulations_3.temp_mod_resonance_2
-                            + modulations_4.temp_mod_resonance_2,
-                        //+ vel_resonance_2,
-                    );
-                    left_output += filter1_processed_l + filter2_processed_l;
-                    right_output += filter1_processed_r + filter2_processed_r;
-                }
-                FilterRouting::Series12 => {
-                    self.filter_process_1(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        left_output_filter1,
-                        right_output_filter1,
-                        &mut filter1_processed_l,
-                        &mut filter1_processed_r,
-                        modulations_1.temp_mod_cutoff_1
-                            + modulations_2.temp_mod_cutoff_1
-                            + modulations_3.temp_mod_cutoff_1
-                            + modulations_4.temp_mod_cutoff_1,
-                        //+ vel_cutoff_1,
-                        modulations_1.temp_mod_resonance_1
-                            + modulations_2.temp_mod_resonance_1
-                            + modulations_3.temp_mod_resonance_1
-                            + modulations_4.temp_mod_resonance_1,
-                        //+ vel_resonance_1,
-                    );
-                    self.filter_process_2(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        filter1_processed_l,
-                        filter1_processed_r,
-                        &mut filter2_processed_l,
-                        &mut filter2_processed_r,
-                        modulations_1.temp_mod_cutoff_2
-                            + modulations_2.temp_mod_cutoff_2
-                            + modulations_3.temp_mod_cutoff_2
-                            + modulations_4.temp_mod_cutoff_2,
-                        //+ vel_cutoff_2,
-                        modulations_1.temp_mod_resonance_2
-                            + modulations_2.temp_mod_resonance_2
-                            + modulations_3.temp_mod_resonance_2
-                            + modulations_4.temp_mod_resonance_2,
-                        //+ vel_resonance_2,
-                    );
-                    left_output += filter2_processed_l;
-                    right_output += filter2_processed_r;
-                }
-                FilterRouting::Series21 => {
-                    self.filter_process_2(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        left_output_filter2,
-                        right_output_filter2,
-                        &mut filter2_processed_l,
-                        &mut filter2_processed_r,
-                        modulations_1.temp_mod_cutoff_2
-                            + modulations_2.temp_mod_cutoff_2
-                            + modulations_3.temp_mod_cutoff_2
-                            + modulations_4.temp_mod_cutoff_2,
-                        //+ vel_cutoff_2,
-                        modulations_1.temp_mod_resonance_2
-                            + modulations_2.temp_mod_resonance_2
-                            + modulations_3.temp_mod_resonance_2
-                            + modulations_4.temp_mod_resonance_2,
-                        //+ vel_resonance_2,
-                    );
-                    self.filter_process_1(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        filter2_processed_l,
-                        filter2_processed_r,
-                        &mut filter1_processed_l,
-                        &mut filter1_processed_r,
-                        modulations_1.temp_mod_cutoff_1
-                            + modulations_2.temp_mod_cutoff_1
-                            + modulations_3.temp_mod_cutoff_1
-                            + modulations_4.temp_mod_cutoff_1,
-                        //+ vel_cutoff_1,
-                        modulations_1.temp_mod_resonance_1
-                            + modulations_2.temp_mod_resonance_1
-                            + modulations_3.temp_mod_resonance_1
-                            + modulations_4.temp_mod_resonance_1,
-                        //+ vel_resonance_1,
-                    );
-                    left_output += filter1_processed_l;
-                    right_output += filter1_processed_r;
-                }
-            }
+            left_output = (wave1_l + wave2_l + wave3_l)*0.33;
+            right_output = (wave1_r + wave2_r + wave3_r)*0.33;
 
             // FX
             ////////////////////////////////////////////////////////////////////////////////////////
@@ -6671,598 +6437,6 @@ impl Actuate {
                 additive_amp_3_14: self.params.additive_amp_3_14.value(),
                 additive_amp_3_15: self.params.additive_amp_3_15.value(),
             };
-    }
-
-    fn filter_process_1(
-        &mut self,
-        note_off_filter_controller1: bool,
-        note_off_filter_controller2: bool,
-        note_off_filter_controller3: bool,
-        reset_filter_controller1: bool,
-        reset_filter_controller2: bool,
-        reset_filter_controller3: bool,
-        left_input_filter1: f32,
-        right_input_filter1: f32,
-        left_output: &mut f32,
-        right_output: &mut f32,
-        filter_cutoff_mod: f32,
-        filter_resonance_mod: f32,
-    ) {
-        // Filter 1 Processing
-        ///////////////////////////////////////////////////////////////
-        if self.params.filter_wet.value() > 0.0 && !self.file_dialog.load(Ordering::SeqCst) {
-            // Filter state movement code
-            //////////////////////////////////////////
-            // If a note is ending and we should enter releasing
-            if note_off_filter_controller1
-                || note_off_filter_controller2
-                || note_off_filter_controller3
-            {
-                let old_filter_state = self.filter_state_1;
-                self.filter_state_1 = OscState::Releasing;
-                self.filter_rel_smoother_1 = match self.params.filter_env_rel_curve.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_release.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_release.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_release.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_release.value(),
-                    )),
-                };
-                // Reset our filter release to be at sustain level to start
-                self.filter_rel_smoother_1.reset(
-                    //(//self.params.filter_cutoff.value()
-                        //+
-                        match old_filter_state {
-                            OscState::Attacking => self.filter_atk_smoother_1.next(),
-                            OscState::Decaying | OscState::Releasing => self.filter_dec_smoother_1.next(),
-                            OscState::Sustaining => self.filter_dec_smoother_1.next(),
-                            OscState::Off => self.params.filter_cutoff.value(),
-                        }
-                        /*
-                         // This scales the peak env to be much gentler for the TILT filter
-                         match self.params.filter_alg_type.value() {
-                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
-                            FilterAlgorithms::TILT => adv_scale_value(
-                                self.params.filter_env_peak.value(),
-                                -19980.0,
-                                19980.0,
-                                -5000.0,
-                                5000.0,
-                            ),
-                        }*/
-                    //)
-                    //* (self.params.filter_env_sustain.value() / 1999.9)
-                    ,
-                );
-                // Move release to the cutoff to end
-                self.filter_rel_smoother_1
-                    .set_target(self.sample_rate, self.params.filter_cutoff.value());
-            }
-            // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
-            if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
-                // Set our filter in attack state
-                self.filter_state_1 = OscState::Attacking;
-                // Consume our params for smoothing
-                self.filter_atk_smoother_1 = match self.params.filter_env_atk_curve.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_attack.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_attack.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_attack.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_attack.value(),
-                    )),
-                };
-                // Reset our attack to start from the filter cutoff
-                self.filter_atk_smoother_1
-                    .reset(self.params.filter_cutoff.value());
-                // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
-                self.filter_atk_smoother_1.set_target(
-                    self.sample_rate,
-                    (self.params.filter_cutoff.value()
-                        + (
-                            // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        ))
-                    .clamp(20.0, 20000.0),
-                );
-            }
-            // If our attack has finished
-            if self.filter_atk_smoother_1.steps_left() == 0
-                && self.filter_state_1 == OscState::Attacking
-            {
-                self.filter_state_1 = OscState::Decaying;
-                self.filter_dec_smoother_1 = match self.params.filter_env_dec_curve.value() {
-                    SmoothStyle::Linear => {
-                        Smoother::new(SmoothingStyle::Linear(self.params.filter_env_decay.value()))
-                    }
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_decay.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_decay.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_decay.value(),
-                    )),
-                };
-                // This makes our filter decay start at env peak point
-                self.filter_dec_smoother_1.reset(
-                    /*
-                    (self.params.filter_cutoff.value()
-                        + (
-                            // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        )
-                    )
-                    */
-                    self.filter_atk_smoother_1.next()
-                    .clamp(20.0, 20000.0),
-                );
-                // Set up the smoother for our filter movement to go from our decay point to our sustain point
-                self.filter_dec_smoother_1.set_target(
-                    self.sample_rate,
-                    (
-                        self.params.filter_cutoff.value()
-                        +   // This scales the peak env to be much gentler for the TILT filter
-                        match self.params.filter_alg_type.value() {
-                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
-                            FilterAlgorithms::TILT => adv_scale_value(
-                                self.params.filter_env_peak.value(),
-                                -19980.0,
-                                19980.0,
-                                -5000.0,
-                                5000.0,
-                            ),
-                        }
-                    )
-                    * (self.params.filter_env_sustain.value() / 1999.9),
-                );
-            }
-            // If our decay has finished move to sustain state
-            if self.filter_dec_smoother_1.steps_left() == 0
-                && self.filter_state_1 == OscState::Decaying
-            {
-                self.filter_state_1 = OscState::Sustaining;
-            }
-            // use proper variable now that there are four filters and multiple states
-            let next_filter_step = match self.filter_state_1 {
-                OscState::Attacking => {
-                    (self.filter_atk_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Decaying => {
-                    (self.filter_dec_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Sustaining => {
-                    (self.filter_dec_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Releasing => {
-                    (self.filter_rel_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                // I don't expect this to be used
-                _ => (self.params.filter_cutoff.value() + filter_cutoff_mod).clamp(20.0, 20000.0),
-            };
-            match self.params.filter_alg_type.value() {
-                FilterAlgorithms::SVF => {
-                    // Filtering before output
-                    self.filter_l_1.update(
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.sample_rate,
-                        self.params.filter_res_type.value(),
-                    );
-                    self.filter_r_1.update(
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.sample_rate,
-                        self.params.filter_res_type.value(),
-                    );
-                    let low_l: f32;
-                    let band_l: f32;
-                    let high_l: f32;
-                    let low_r: f32;
-                    let band_r: f32;
-                    let high_r: f32;
-                    (low_l, band_l, high_l) = self.filter_l_1.process(left_input_filter1);
-                    (low_r, band_r, high_r) = self.filter_r_1.process(right_input_filter1);
-                    *left_output += (low_l * self.params.filter_lp_amount.value()
-                        + band_l * self.params.filter_bp_amount.value()
-                        + high_l * self.params.filter_hp_amount.value())
-                        * self.params.filter_wet.value()
-                        + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += (low_r * self.params.filter_lp_amount.value()
-                        + band_r * self.params.filter_bp_amount.value()
-                        + high_r * self.params.filter_hp_amount.value())
-                        * self.params.filter_wet.value()
-                        + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::TILT => {
-                    self.tilt_filter_l_1.update(
-                        self.sample_rate,
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.params.tilt_filter_type.value(),
-                    );
-                    self.tilt_filter_r_1.update(
-                        self.sample_rate,
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.params.tilt_filter_type.value(),
-                    );
-                    let tilt_out_l = self.tilt_filter_l_1.process(left_input_filter1 * db_to_gain(-12.0));
-                    let tilt_out_r = self.tilt_filter_r_1.process(right_input_filter1 * db_to_gain(-12.0));
-                    *left_output += tilt_out_l * self.params.filter_wet.value()
-                        + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += tilt_out_r * self.params.filter_wet.value()
-                        + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::VCF => {
-                    self.vcf_filter_l_1.update(
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.params.vcf_filter_type.value(),
-                        self.sample_rate,
-                    );
-                    self.vcf_filter_r_1.update(
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.params.vcf_filter_type.value(),
-                        self.sample_rate,
-                    );
-                    let vcf_out_l = self.vcf_filter_l_1.process(left_input_filter1);
-                    let vcf_out_r = self.vcf_filter_r_1.process(right_input_filter1);
-                    *left_output += vcf_out_l * self.params.filter_wet.value()
-                        + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += vcf_out_r * self.params.filter_wet.value()
-                        + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::V4 => {
-                    self.V4F_l_1.update(
-                        self.params.filter_resonance.value(),
-                        next_filter_step,
-                        self.sample_rate
-                    );
-                    self.V4F_r_1.update(
-                        self.params.filter_resonance.value(),
-                        next_filter_step,
-                        self.sample_rate
-                    );
-                    let v4f_out_l = self.V4F_l_1.process(left_input_filter1);
-                    let v4f_out_r = self.V4F_r_1.process(right_input_filter1);
-                    *left_output += v4f_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += v4f_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::A4I => {
-                    self.A4I_l_1.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
-                    self.A4I_r_1.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
-                    let a4i_out_l = self.A4I_l_1.process(left_input_filter1);
-                    let a4i_out_r = self.A4I_r_1.process(right_input_filter1);
-                    *left_output += a4i_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += a4i_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-            }
-        }
-    }
-
-    fn filter_process_2(
-        &mut self,
-        note_off_filter_controller1: bool,
-        note_off_filter_controller2: bool,
-        note_off_filter_controller3: bool,
-        reset_filter_controller1: bool,
-        reset_filter_controller2: bool,
-        reset_filter_controller3: bool,
-        left_input_filter2: f32,
-        right_input_filter2: f32,
-        left_output: &mut f32,
-        right_output: &mut f32,
-        filter_cutoff_mod: f32,
-        filter_resonance_mod: f32,
-    ) {
-        // Filter 2 Processing
-        ///////////////////////////////////////////////////////////////
-        if self.params.filter_wet_2.value() > 0.0 && !self.file_dialog.load(Ordering::SeqCst) {
-            // Filter state movement code
-            //////////////////////////////////////////
-            // If a note is ending and we should enter releasing
-            if note_off_filter_controller1
-                || note_off_filter_controller2
-                || note_off_filter_controller3
-            {
-                let old_filter_state = self.filter_state_2;
-                self.filter_state_2 = OscState::Releasing;
-                self.filter_rel_smoother_2 = match self.params.filter_env_rel_curve_2.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_release_2.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_release_2.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_release_2.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_release_2.value(),
-                    )),
-                };
-                // Reset our filter release to be at sustain level to start
-                self.filter_rel_smoother_2.reset(
-                    /*self.params.filter_cutoff_2.value()
-                        * (self.params.filter_env_sustain_2.value() / 1999.9)
-                        +   // This scales the peak env to be much gentler for the TILT filter
-                        match self.params.filter_alg_type_2.value() {
-                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
-                            FilterAlgorithms::TILT => adv_scale_value(
-                                self.params.filter_env_peak_2.value(),
-                                -19980.0,
-                                19980.0,
-                                -5000.0,
-                                5000.0,
-                            ),
-                        },
-                    */
-                    //self.filter_dec_smoother_2.next(),
-                    match old_filter_state {
-                        OscState::Attacking => self.filter_atk_smoother_2.next(),
-                        OscState::Decaying | OscState::Releasing => self.filter_dec_smoother_2.next(),
-                        OscState::Sustaining => self.filter_dec_smoother_2.next(),
-                        OscState::Off => self.params.filter_cutoff_2.value(),
-                    }
-                );
-                // Move release to the cutoff to end
-                self.filter_rel_smoother_2
-                    .set_target(self.sample_rate, self.params.filter_cutoff_2.value());
-            }
-            // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
-            if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
-                // Set our filter in attack state
-                self.filter_state_2 = OscState::Attacking;
-                // Consume our params for smoothing
-                self.filter_atk_smoother_2 = match self.params.filter_env_atk_curve_2.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_attack_2.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_attack_2.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_attack_2.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_attack_2.value(),
-                    )),
-                };
-                // Reset our attack to start from the filter cutoff
-                self.filter_atk_smoother_2
-                    .reset(self.params.filter_cutoff_2.value());
-                // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
-                self.filter_atk_smoother_2.set_target(
-                    self.sample_rate,
-                    (self.params.filter_cutoff_2.value()
-                        + (
-                            // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak_2.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        ))
-                    .clamp(20.0, 20000.0),
-                );
-            }
-            // If our attack has finished
-            if self.filter_atk_smoother_2.steps_left() == 0
-                && self.filter_state_2 == OscState::Attacking
-            {
-                self.filter_state_2 = OscState::Decaying;
-                self.filter_dec_smoother_2 = match self.params.filter_env_dec_curve_2.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_decay_2.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_decay_2.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_decay_2.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_decay_2.value(),
-                    )),
-                };
-                // This makes our filter decay start at env peak point
-                self.filter_dec_smoother_2.reset(
-                    /*(self.params.filter_cutoff_2.value()
-                        + (
-                            // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak_2.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        ))*/
-                    self.filter_atk_smoother_2.next()
-                    .clamp(20.0, 20000.0),
-                );
-                // Set up the smoother for our filter movement to go from our decay point to our sustain point
-                self.filter_dec_smoother_2.set_target(
-                    self.sample_rate,
-                    (self.params.filter_cutoff_2.value()
-                            +   // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak_2.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        )
-                        * (self.params.filter_env_sustain_2.value() / 1999.9)
-                );
-            }
-            // If our decay has finished move to sustain state
-            if self.filter_dec_smoother_2.steps_left() == 0
-                && self.filter_state_2 == OscState::Decaying
-            {
-                self.filter_state_2 = OscState::Sustaining;
-            }
-            // use proper variable now that there are four filters and multiple states
-            let next_filter_step = match self.filter_state_2 {
-                OscState::Attacking => {
-                    (self.filter_atk_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Decaying => {
-                    (self.filter_dec_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Sustaining => {
-                    (self.filter_dec_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Releasing => {
-                    (self.filter_rel_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                // I don't expect this to be used
-                _ => self.params.filter_cutoff_2.value() + filter_cutoff_mod,
-            };
-            match self.params.filter_alg_type.value() {
-                FilterAlgorithms::SVF => {
-                    // Filtering before output
-                    self.filter_l_2.update(
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.sample_rate,
-                        self.params.filter_res_type_2.value(),
-                    );
-                    self.filter_r_2.update(
-                        next_filter_step,
-                        self.params.filter_resonance_2.value() + filter_resonance_mod,
-                        self.sample_rate,
-                        self.params.filter_res_type_2.value(),
-                    );
-                    let low_l: f32;
-                    let band_l: f32;
-                    let high_l: f32;
-                    let low_r: f32;
-                    let band_r: f32;
-                    let high_r: f32;
-                    (low_l, band_l, high_l) = self.filter_l_2.process(left_input_filter2);
-                    (low_r, band_r, high_r) = self.filter_r_2.process(right_input_filter2);
-                    *left_output += (low_l * self.params.filter_lp_amount_2.value()
-                        + band_l * self.params.filter_bp_amount_2.value()
-                        + high_l * self.params.filter_hp_amount_2.value())
-                        * self.params.filter_wet_2.value()
-                        + *left_output * (1.0 - self.params.filter_wet_2.value());
-                    *right_output += (low_r * self.params.filter_lp_amount_2.value()
-                        + band_r * self.params.filter_bp_amount_2.value()
-                        + high_r * self.params.filter_hp_amount_2.value())
-                        * self.params.filter_wet_2.value()
-                        + *right_output * (1.0 - self.params.filter_wet_2.value());
-                }
-                FilterAlgorithms::TILT => {
-                    self.tilt_filter_l_2.update(
-                        self.sample_rate,
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.params.tilt_filter_type_2.value(),
-                    );
-                    self.tilt_filter_r_2.update(
-                        self.sample_rate,
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.params.tilt_filter_type_2.value(),
-                    );
-                    let tilt_out_l = self.tilt_filter_l_2.process(left_input_filter2 * db_to_gain(-12.0));
-                    let tilt_out_r = self.tilt_filter_r_2.process(right_input_filter2 * db_to_gain(-12.0));
-                    *left_output += tilt_out_l * self.params.filter_wet_2.value()
-                        + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                    *right_output += tilt_out_r * self.params.filter_wet_2.value()
-                        + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                }
-                FilterAlgorithms::VCF => {
-                    self.vcf_filter_l_2.update(
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.params.vcf_filter_type_2.value(),
-                        self.sample_rate,
-                    );
-                    self.vcf_filter_r_2.update(
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.params.vcf_filter_type_2.value(),
-                        self.sample_rate,
-                    );
-                    let vcf_out_l = self.vcf_filter_l_2.process(left_input_filter2);
-                    let vcf_out_r = self.vcf_filter_r_2.process(right_input_filter2);
-                    *left_output += vcf_out_l * self.params.filter_wet_2.value()
-                        + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                    *right_output += vcf_out_r * self.params.filter_wet_2.value()
-                        + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                }
-                FilterAlgorithms::V4 => {
-                    self.V4F_l_2.update(
-                        self.params.filter_resonance.value(),
-                        next_filter_step,
-                        self.sample_rate
-                    );
-                    self.V4F_r_2.update(
-                        self.params.filter_resonance.value(),
-                        next_filter_step,
-                        self.sample_rate
-                    );
-                    let v4f_out_l = self.V4F_l_2.process(left_input_filter2);
-                    let v4f_out_r = self.V4F_r_2.process(right_input_filter2);
-                    *left_output += v4f_out_l * self.params.filter_wet.value() + left_input_filter2 * (1.0 - self.params.filter_wet.value());
-                    *right_output += v4f_out_r * self.params.filter_wet.value() + right_input_filter2 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::A4I => {
-                    self.A4I_l_2.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
-                    self.A4I_r_2.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
-                    let a4i_out_l = self.A4I_l_2.process(left_input_filter2);
-                    let a4i_out_r = self.A4I_r_2.process(right_input_filter2);
-                    *left_output += a4i_out_l * self.params.filter_wet.value() + left_input_filter2 * (1.0 - self.params.filter_wet.value());
-                    *right_output += a4i_out_r * self.params.filter_wet.value() + right_input_filter2 * (1.0 - self.params.filter_wet.value());
-                }
-            }
-        }
     }
 }
 
