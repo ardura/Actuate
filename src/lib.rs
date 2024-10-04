@@ -232,7 +232,6 @@ impl Default for Actuate {
         Self {
             params: Arc::new(ActuateParams::new(
                 update_something.clone(),
-                clear_voices.clone(),
                 file_dialog.clone(),
                 update_current_preset.clone(),
             )),
@@ -1073,7 +1072,6 @@ pub struct ActuateParams {
 impl ActuateParams {
     fn new(
         update_something: Arc<AtomicBool>,
-        clear_voices: Arc<AtomicBool>,
         file_dialog: Arc<AtomicBool>,
         update_current_preset: Arc<AtomicBool>,
     ) -> Self {
@@ -1091,32 +1089,20 @@ impl ActuateParams {
             voice_limit: IntParam::new("Max Voices", 64, IntRange::Linear { min: 1, max: 512 }),
 
             audio_module_1_type: EnumParam::new("Type", AudioModuleType::Sine)
-            //.with_callback({
-            //    let clear_voices = clear_voices.clone();
-            //    Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
-            //})
-            .with_callback({
+                .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
+                }),
             audio_module_2_type: EnumParam::new("Type", AudioModuleType::Sine)
-            //.with_callback({
-            //    let clear_voices = clear_voices.clone();
-            //    Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
-            //})
-            .with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
             audio_module_3_type: EnumParam::new("Type", AudioModuleType::Sine)
-            //.with_callback({
-            //    let clear_voices = clear_voices.clone();
-            //    Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
-            //})
-            .with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
 
             audio_module_1_level: FloatParam::new(
                 "Level",

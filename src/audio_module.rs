@@ -80,6 +80,9 @@ struct VoiceVec {
 // into any threading issues trying to modify different vecs in the same function rather than 1 struct
 // Underscores are to get rid of the compiler warning thinking it's not used but it's stored for debugging or passed between structs
 // and still functional.
+
+// Allow dead code is for rust-analyzer getting false issues on things that are actually used
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct SingleVoice {
     /// The note's key/note, in `0..128`. Only used for the voice terminated event.
@@ -193,6 +196,8 @@ pub struct SingleVoice {
     internal_unison_voices: Vec<SingleUnisonVoice>,
 }
 
+// Allow dead code is for rust-analyzer getting false issues on things that are actually used
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct SingleUnisonVoice {
     /// The note's key/note, in `0..128`. Only used for the voice terminated event.
@@ -3123,8 +3128,8 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             A4I_r_1: A4iFilter::new(self.filter_cutoff, self.filter_cutoff, self.filter_resonance),
                             A4I_r_2: A4iFilter::new(self.filter_cutoff_2, self.filter_cutoff_2, self.filter_resonance_2),
 
-                            cutoff_modulation: 0.0,
-                            cutoff_modulation_2: 0.0,
+                            cutoff_modulation: cutoff_mod,
+                            cutoff_modulation_2: cutoff_mod_2,
                             resonance_modulation: 0.0,
                             resonance_modulation_2: 0.0,
 
@@ -3311,8 +3316,8 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                         vector.push(0.0);
                                         vector
                                     },
-                                    cutoff_modulation: 0.0,
-                                    cutoff_modulation_2: 0.0,
+                                    cutoff_modulation: cutoff_mod,
+                                    cutoff_modulation_2: cutoff_mod_2,
                                     resonance_modulation: 0.0,
                                     resonance_modulation_2: 0.0,
                                 };
@@ -3455,8 +3460,8 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     A4I_l_2: A4iFilter::new(44100.0, 20000.0, 0.0),
                                     A4I_r_1: A4iFilter::new(44100.0, 20000.0, 0.0),
                                     A4I_r_2: A4iFilter::new(44100.0, 20000.0, 0.0),
-                                    cutoff_modulation: 0.0,
-                                    cutoff_modulation_2: 0.0,
+                                    cutoff_modulation: cutoff_mod,
+                                    cutoff_modulation_2: cutoff_mod_2,
                                     resonance_modulation: 0.0,
                                     resonance_modulation_2: 0.0,
 
@@ -3725,8 +3730,8 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 A4I_l_2: A4iFilter::new(44100.0, 20000.0, 0.0),
                 A4I_r_1: A4iFilter::new(44100.0, 20000.0, 0.0),
                 A4I_r_2: A4iFilter::new(44100.0, 20000.0, 0.0),
-                cutoff_modulation: 0.0,
-                cutoff_modulation_2: 0.0,
+                cutoff_modulation: cutoff_mod,
+                cutoff_modulation_2: cutoff_mod_2,
                 resonance_modulation: 0.0,
                 resonance_modulation_2: 0.0,
 
@@ -4274,8 +4279,8 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         A4I_l_2: A4iFilter::new(self.sample_rate, self.filter_cutoff_2, 0.0),
                         A4I_r_1: A4iFilter::new(self.sample_rate, self.filter_cutoff, 0.0),
                         A4I_r_2: A4iFilter::new(self.sample_rate, self.filter_cutoff_2, 0.0),
-                        cutoff_modulation: 0.0,
-                        cutoff_modulation_2: 0.0,
+                        cutoff_modulation: cutoff_mod,
+                        cutoff_modulation_2: cutoff_mod_2,
                         resonance_modulation: 0.0,
                         resonance_modulation_2: 0.0,
 
@@ -4882,25 +4887,26 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             voice.filter_state_1 = OscState::Sustaining;
                         }
                         // use proper variable now that there are four filters and multiple states
+                        // This double addition of voice.cutoff_modulation + cutoff_mod will stack the mod at the time of the voice movement with the current
                         next_filter_step = match voice.filter_state_1 {
                             OscState::Attacking => {
-                                (voice.filter_atk_smoother_1.next() + voice.cutoff_modulation).clamp(20.0, 20000.0)
+                                (voice.filter_atk_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
                             }
                             OscState::Decaying => {
-                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation).clamp(20.0, 20000.0)
+                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
                             }
                             OscState::Sustaining => {
-                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation).clamp(20.0, 20000.0)
+                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
                             }
                             OscState::Releasing => {
                                 if self.filter_env_release <= 0.0001 {
-                                    (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation).clamp(20.0, 20000.0)    
+                                    (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)    
                                 } else {
-                                    (voice.filter_rel_smoother_1.next() + voice.cutoff_modulation).clamp(20.0, 20000.0)
+                                    (voice.filter_rel_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff + voice.cutoff_modulation).clamp(20.0, 20000.0),
+                            _ => (self.filter_cutoff + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -4962,23 +4968,23 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         // use proper variable now that there are four filters and multiple states
                         next_filter_step_2 = match voice.filter_state_2 {
                             OscState::Attacking => {
-                                (voice.filter_atk_smoother_2.next() + voice.cutoff_modulation_2).clamp(20.0, 20000.0)
+                                (voice.filter_atk_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
                             }
                             OscState::Decaying => {
-                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2).clamp(20.0, 20000.0)
+                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
                             }
                             OscState::Sustaining => {
-                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2).clamp(20.0, 20000.0)
+                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
                             }
                             OscState::Releasing => {
                                 if self.filter_env_release_2 <= 0.0001 {
-                                    (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2).clamp(20.0, 20000.0)    
+                                    (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)    
                                 } else {
-                                    (voice.filter_rel_smoother_2.next() + voice.cutoff_modulation_2).clamp(20.0, 20000.0)
+                                    (voice.filter_rel_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff_2 + voice.cutoff_modulation_2).clamp(20.0, 20000.0),
+                            _ => (self.filter_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -5426,8 +5432,9 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                     }
                 }
 
+                let mut temp_unison_voice_l = 0.0;
+                let mut temp_unison_voice_r = 0.0;
                 // Stereo applies to unison voices
-                /*
                 for unison_voice in self.unison_voices.voices.iter_mut() {
                     // Get our current gain amount for use in match below
                     let temp_osc_gain_multiplier: f32 = match unison_voice.state {
@@ -5500,7 +5507,6 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         stereo_voices_l += left_amp;
                         stereo_voices_r += right_amp;
                 }
-                */
 
                 // Sum our voices for output
                 summed_voices_l += center_voices_l;
