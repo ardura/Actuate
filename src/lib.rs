@@ -1390,13 +1390,13 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            osc_1_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 })
+            osc_1_unison: IntParam::new("Multiply", 1, IntRange::Linear { min: 1, max: 9 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
             osc_1_unison_detune: FloatParam::new(
-                "UDetune",
+                "MDetune",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
@@ -1523,13 +1523,13 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            osc_2_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 })
+            osc_2_unison: IntParam::new("Multiply", 1, IntRange::Linear { min: 1, max: 9 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
             osc_2_unison_detune: FloatParam::new(
-                "UDetune",
+                "MDetune",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
@@ -1656,13 +1656,13 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            osc_3_unison: IntParam::new("Unison", 1, IntRange::Linear { min: 1, max: 9 })
+            osc_3_unison: IntParam::new("Multiply", 1, IntRange::Linear { min: 1, max: 9 })
                 .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
             osc_3_unison_detune: FloatParam::new(
-                "UDetune",
+                "MDetune",
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )

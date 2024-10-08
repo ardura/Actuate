@@ -394,7 +394,6 @@ impl AudioModule {
         module3: &Arc<std::sync::Mutex<AudioModule>>,
     ) {
         let am_type;
-        let osc_voice;
         let osc_retrigger;
         let osc_octave;
         let osc_semitones;
@@ -437,7 +436,6 @@ impl AudioModule {
         match index {
             1 => {
                 am_type = &params.audio_module_1_type;
-                osc_voice = &params.osc_1_type;
                 osc_retrigger = &params.osc_1_retrigger;
                 osc_octave = &params.osc_1_octave;
                 osc_semitones = &params.osc_1_semitones;
@@ -480,7 +478,6 @@ impl AudioModule {
             },
             2 => {
                 am_type = &params.audio_module_2_type;
-                osc_voice = &params.osc_2_type;
                 osc_retrigger = &params.osc_2_retrigger;
                 osc_octave = &params.osc_2_octave;
                 osc_semitones = &params.osc_2_semitones;
@@ -523,7 +520,6 @@ impl AudioModule {
             },
             3 => {
                 am_type = &params.audio_module_3_type;
-                osc_voice = &params.osc_3_type;
                 osc_retrigger = &params.osc_3_retrigger;
                 osc_octave = &params.osc_3_octave;
                 osc_semitones = &params.osc_3_semitones;
@@ -587,20 +583,6 @@ impl AudioModule {
                     ui.add_space(1.0);
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
-                            /*let osc_1_type_knob = ui_knob::ArcKnob::for_param(
-                                osc_voice,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE)
-                            .set_hover_text("Oscillator wave form type".to_string());
-                            ui.add(osc_1_type_knob);
-                            */
-
                             let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
                                 osc_retrigger,
                                 setter,
@@ -635,6 +617,23 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             .set_hover_text("Adjust the MIDI input by octave".to_string());
                             ui.add(osc_1_octave_knob);
 
+                            let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
+                                osc_unison,
+                                setter,
+                                KNOB_SIZE,
+                                KnobLayout::Horizonal,
+                            )
+                            .preset_style(ui_knob::KnobStyle::Preset1)
+                            .set_fill_color(DARK_GREY_UI_COLOR)
+                            .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("How many voices should play per key/note.
+You may also know this as mixture, course, or unison".to_string());
+                            ui.add(osc_1_unison_knob);
+                        });
+
+                        ui.vertical(|ui| {
                             let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
                                 osc_semitones,
                                 setter,
@@ -648,25 +647,9 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             .set_text_size(TEXT_SIZE)
                             .set_hover_text("Adjust the MIDI input by semitone".to_string());
                             ui.add(osc_1_semitones_knob);
-                        });
 
-                        ui.vertical(|ui| {
-                            let osc_1_stereo_knob = ui_knob::ArcKnob::for_param(
-                                osc_stereo,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE)
-                            .set_hover_text("Oscillator voice stereo spread. 0 is Mono.".to_string());
-                            ui.add(osc_1_stereo_knob);
-
-                            let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
-                                osc_unison,
+                            let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
+                                osc_unison_detune,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -676,8 +659,8 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE)
-                            .set_hover_text("How many voices should play in unison".to_string());
-                            ui.add(osc_1_unison_knob);
+                            .set_hover_text("Spread the pitches of the multiplied voices apart".to_string());
+                            ui.add(osc_1_unison_detune_knob);
                         });
 
                         ui.vertical(|ui| {
@@ -695,19 +678,19 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             .set_hover_text("Move the pitch to fine tune it".to_string());
                             ui.add(osc_1_detune_knob);
 
-                            let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
-                                osc_unison_detune,
+                            let osc_1_stereo_knob = ui_knob::ArcKnob::for_param(
+                                osc_stereo,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
                             )
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                            .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE)
-                            .set_hover_text("Spread the pitches of the unison voices apart".to_string());
-                            ui.add(osc_1_unison_detune_knob);
+                            .set_hover_text("Oscillator voice stereo spread. 0 is Mono.".to_string());
+                            ui.add(osc_1_stereo_knob);
                         });
 
                         // Trying to draw background box as rect
