@@ -4,6 +4,7 @@
 use nih_plug::util;
 
 // Define the filter structure
+#[derive(Clone)]
 pub struct A4iFilter {
     poles: [OnePoleLowPassFilter; 4],
     iter: usize,
@@ -73,6 +74,7 @@ impl A4iFilter {
     
 }
 
+#[derive(Clone)]
 pub struct OnePoleLowPassFilter {
     alpha: f32,
     prev_output: f32,

@@ -11,6 +11,7 @@ pub enum ResponseType {
     Highpass,
 }
 
+#[derive(Clone)]
 pub struct VCFilter {
     // Parameters
     center_freq: f32,
@@ -30,7 +31,7 @@ impl VCFilter {
     pub fn new() -> Self {
         VCFilter {
             center_freq: 1000.0,
-            resonance: 0.0,
+            resonance: 0.1,
             shape: ResponseType::Lowpass,
             f: 0.0,
             k: 0.0,

@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.3.3
+Version 1.3.4
 
 #####################################
 
@@ -25,15 +25,14 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 */
 
 #![allow(non_snake_case)]
-use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, GeneratorType, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
+use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV131, ModulationStruct};
-use flate2::{read::GzDecoder,write::GzEncoder,Compression};
-use nih_plug::{prelude::*, util::db_to_gain};
+use nih_plug::{prelude::*};
 use nih_plug_egui::{
     egui::{Color32, FontId}, EguiState
 };
 use std::{
-    fs::File, io::{Read, Write}, path::PathBuf, sync::{
+    fs::File, io::{Read}, path::PathBuf, sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
         Arc, Mutex,
     }
@@ -42,15 +41,17 @@ use std::{
 // My Files/crates
 use audio_module::{
     AudioModule, AudioModuleType,
-    Oscillator::{self, OscState, RetriggerStyle, SmoothStyle, VoiceType},
+    Oscillator::{self, OscState, RetriggerStyle, SmoothStyle},
     frequency_modulation,
 };
 use fx::{
-    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, A4I_Filter::{self, A4iFilter}, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType,StateVariableFilter}, V4Filter::{self, V4FilterStruct}, VCFilter::ResponseType as VCResponseType
+    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType,StateVariableFilter}, VCFilter::ResponseType as VCResponseType
 };
 
+// This is here in meantime until new Actuate versions past this one!
+#[allow(unused_imports)]
 use old_preset_structs::{
-    load_unserialized_old, load_unserialized_v114, load_unserialized_v122, load_unserialized_v123, load_unserialized_v125, load_unserialized_v126, load_unserialized_v130, ActuatePresetV123, ActuatePresetV125, ActuatePresetV126, ActuatePresetV130
+    _load_unserialized_v130, ActuatePresetV130
 };
 
 mod actuate_gui;
@@ -122,82 +123,22 @@ pub struct Actuate {
     audio_module_2: Arc<Mutex<AudioModule>>,
     audio_module_3: Arc<Mutex<AudioModule>>,
 
-    // SVF Filters
-    filter_l_1: StateVariableFilter,
-    filter_r_1: StateVariableFilter,
-    // TILT Filters
-    tilt_filter_l_1: ArduraFilter::ArduraFilter,
-    tilt_filter_r_1: ArduraFilter::ArduraFilter,
-    // VCF Filters
-    vcf_filter_l_1: fx::VCFilter::VCFilter,
-    vcf_filter_r_1: fx::VCFilter::VCFilter,
-    // Filter state variables
-    filter_state_1: OscState,
-    filter_atk_smoother_1: Smoother<f32>,
-    filter_dec_smoother_1: Smoother<f32>,
-    filter_rel_smoother_1: Smoother<f32>,
-
-    // SVF Filters
-    filter_l_2: StateVariableFilter,
-    filter_r_2: StateVariableFilter,
-    // TILT Filters
-    tilt_filter_l_2: ArduraFilter::ArduraFilter,
-    tilt_filter_r_2: ArduraFilter::ArduraFilter,
-    // VCF Filters
-    vcf_filter_l_2: fx::VCFilter::VCFilter,
-    vcf_filter_r_2: fx::VCFilter::VCFilter,
-    // Filter state variables
-    filter_state_2: OscState,
-    filter_atk_smoother_2: Smoother<f32>,
-    filter_dec_smoother_2: Smoother<f32>,
-    filter_rel_smoother_2: Smoother<f32>,
 
     // LFOs!
     lfo_1: LFOController::LFOController,
     lfo_2: LFOController::LFOController,
     lfo_3: LFOController::LFOController,
 
-    // Modulation overrides for preset loading
-    mod_override_source_1: Arc<Mutex<ModulationSource>>,
-    mod_override_source_2: Arc<Mutex<ModulationSource>>,
-    mod_override_source_3: Arc<Mutex<ModulationSource>>,
-    mod_override_source_4: Arc<Mutex<ModulationSource>>,
-    mod_override_dest_1: Arc<Mutex<ModulationDestination>>,
-    mod_override_dest_2: Arc<Mutex<ModulationDestination>>,
-    mod_override_dest_3: Arc<Mutex<ModulationDestination>>,
-    mod_override_dest_4: Arc<Mutex<ModulationDestination>>,
-    preset_category_override: Arc<Mutex<PresetType>>,
-
-    // Other overrides for preset loading
-    gen_1_routing_override: Arc<Mutex<AMFilterRouting>>,
-    gen_2_routing_override: Arc<Mutex<AMFilterRouting>>,
-    gen_3_routing_override: Arc<Mutex<AMFilterRouting>>,
-    gen_1_type_override: Arc<Mutex<GeneratorType>>,
-    gen_2_type_override: Arc<Mutex<GeneratorType>>,
-    gen_3_type_override: Arc<Mutex<GeneratorType>>,
-
     // Preset Lib Default
     preset_lib_name: Arc<Mutex<String>>,
     preset_name: Arc<Mutex<String>>,
     preset_info: Arc<Mutex<String>>,
-    preset_category: Arc<Mutex<PresetType>>,
+    //preset_category: Arc<Mutex<PresetType>>,
     preset_lib: Arc<Mutex<Vec<ActuatePresetV131>>>,
 
     // Used for DC Offset calculations
     dc_filter_l: StateVariableFilter,
     dc_filter_r: StateVariableFilter,
-
-    // V4 Filter
-    V4F_l_1: V4Filter::V4FilterStruct,
-    V4F_l_2: V4Filter::V4FilterStruct,
-    V4F_r_1: V4Filter::V4FilterStruct,
-    V4F_r_2: V4Filter::V4FilterStruct,
-
-    // A4I Filter
-    A4I_l_1: A4I_Filter::A4iFilter,
-    A4I_l_2: A4I_Filter::A4iFilter,
-    A4I_r_1: A4I_Filter::A4iFilter,
-    A4I_r_2: A4I_Filter::A4iFilter,
 
     fm_state: OscState,
     fm_atk_smoother_1: Smoother<f32>,
@@ -269,7 +210,7 @@ pub struct Actuate {
 impl Default for Actuate {
     fn default() -> Self {
         // These are persistent fields to trigger updates like Diopser
-        let update_something = Arc::new(AtomicBool::new(false));
+        let update_something = Arc::new(AtomicBool::new(true));
         let clear_voices = Arc::new(AtomicBool::new(false));
         let reload_entire_preset = Arc::new(AtomicBool::new(false));
         let file_dialog = Arc::new(AtomicBool::new(false));
@@ -291,7 +232,6 @@ impl Default for Actuate {
         Self {
             params: Arc::new(ActuateParams::new(
                 update_something.clone(),
-                clear_voices.clone(),
                 file_dialog.clone(),
                 update_current_preset.clone(),
             )),
@@ -323,99 +263,17 @@ impl Default for Actuate {
             audio_module_2: Arc::new(Mutex::new(AudioModule::default())),
             audio_module_3: Arc::new(Mutex::new(AudioModule::default())),
 
-            // SVF Filters
-            filter_l_2: StateVariableFilter::default().set_oversample(4),
-            filter_r_2: StateVariableFilter::default().set_oversample(4),
-            // TILT Filters
-            tilt_filter_l_2: ArduraFilter::ArduraFilter::new(
-                44100.0,
-                20000.0,
-                1.0,
-                ResponseType::Lowpass,
-            ),
-            tilt_filter_r_2: ArduraFilter::ArduraFilter::new(
-                44100.0,
-                20000.0,
-                1.0,
-                ResponseType::Lowpass,
-            ),
-            // VCF Filters
-            vcf_filter_l_1: fx::VCFilter::VCFilter::new(),
-            vcf_filter_r_1: fx::VCFilter::VCFilter::new(),
-
-            // V4Filter
-            V4F_l_1: V4FilterStruct::default(),
-            V4F_r_1: V4FilterStruct::default(),
-
-            // A4I Filter
-            A4I_l_1: A4iFilter::new(44100.0, 20000.0, 0.0),
-            A4I_r_1: A4iFilter::new(44100.0, 20000.0, 0.0),
-
-            filter_state_2: OscState::Off,
-            filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
-            filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
-            filter_rel_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
-
-            // SVF Filters
-            filter_l_1: StateVariableFilter::default().set_oversample(4),
-            filter_r_1: StateVariableFilter::default().set_oversample(4),
-            // TILT Filters
-            tilt_filter_l_1: ArduraFilter::ArduraFilter::new(
-                44100.0,
-                20000.0,
-                1.0,
-                ResponseType::Lowpass,
-            ),
-            tilt_filter_r_1: ArduraFilter::ArduraFilter::new(
-                44100.0,
-                20000.0,
-                1.0,
-                ResponseType::Lowpass,
-            ),
-            // VCF Filters
-            vcf_filter_l_2: fx::VCFilter::VCFilter::new(),
-            vcf_filter_r_2: fx::VCFilter::VCFilter::new(),
-
-            // V4Filter
-            V4F_l_2: V4FilterStruct::default(),
-            V4F_r_2: V4FilterStruct::default(),
-
-            // A4I Filter
-            A4I_l_2: A4iFilter::new(44100.0, 20000.0, 0.0),
-            A4I_r_2: A4iFilter::new(44100.0, 20000.0, 0.0),
-
-            filter_state_1: OscState::Off,
-            filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
-            filter_dec_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
-            filter_rel_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
 
             //LFOs
             lfo_1: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
             lfo_2: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
             lfo_3: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
 
-            // Modulation Overrides
-            mod_override_source_1: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
-            mod_override_source_2: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
-            mod_override_source_3: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
-            mod_override_source_4: Arc::new(Mutex::new(ModulationSource::UnsetModulation)),
-            mod_override_dest_1: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
-            mod_override_dest_2: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
-            mod_override_dest_3: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
-            mod_override_dest_4: Arc::new(Mutex::new(ModulationDestination::UnsetModulation)),
-            preset_category_override: Arc::new(Mutex::new(PresetType::Select)),
-            gen_1_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
-            gen_2_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
-            gen_3_routing_override: Arc::new(Mutex::new(AMFilterRouting::UNSETROUTING)),
-            gen_1_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
-            gen_2_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
-            gen_3_type_override: Arc::new(Mutex::new(GeneratorType::Off)),
-
             // Preset Library DEFAULT
             preset_lib_name: Arc::new(Mutex::new(String::from("Default"))),
             preset_name: Arc::new(Mutex::new(String::new())),
             preset_info: Arc::new(Mutex::new(String::new())),
-            preset_category: Arc::new(Mutex::new(PresetType::Select)),
+            //preset_category: Arc::new(Mutex::new(PresetType::Select)),
             preset_lib: Arc::new(Mutex::new(vec![
                 DEFAULT_PRESET.clone();
                 PRESET_BANK_SIZE
@@ -558,8 +416,6 @@ pub struct ActuateParams {
     pub filter_cutoff_link: BoolParam,
 
     // Controls for when audio_module_1_type is Osc
-    #[id = "osc_1_type"]
-    pub osc_1_type: EnumParam<VoiceType>,
     #[id = "osc_1_octave"]
     pub osc_1_octave: IntParam,
     #[id = "osc_1_semitones"]
@@ -590,8 +446,6 @@ pub struct ActuateParams {
     pub osc_1_stereo: FloatParam,
 
     // Controls for when audio_module_2_type is Osc
-    #[id = "osc_2_type"]
-    pub osc_2_type: EnumParam<VoiceType>,
     #[id = "osc_2_octave"]
     pub osc_2_octave: IntParam,
     #[id = "osc_2_semitones"]
@@ -622,8 +476,6 @@ pub struct ActuateParams {
     pub osc_2_stereo: FloatParam,
 
     // Controls for when audio_module_3_type is Osc
-    #[id = "osc_3_type"]
-    pub osc_3_type: EnumParam<VoiceType>,
     #[id = "osc_3_octave"]
     pub osc_3_octave: IntParam,
     #[id = "osc_3_semitones"]
@@ -1220,7 +1072,6 @@ pub struct ActuateParams {
 impl ActuateParams {
     fn new(
         update_something: Arc<AtomicBool>,
-        clear_voices: Arc<AtomicBool>,
         file_dialog: Arc<AtomicBool>,
         update_current_preset: Arc<AtomicBool>,
     ) -> Self {
@@ -1237,18 +1088,21 @@ impl ActuateParams {
                 .with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 64, IntRange::Linear { min: 1, max: 512 }),
 
-            audio_module_1_type: EnumParam::new("Type", AudioModuleType::Osc).with_callback({
-                let clear_voices = clear_voices.clone();
-                Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
-            }),
-            audio_module_2_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
-                let clear_voices = clear_voices.clone();
-                Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
-            }),
-            audio_module_3_type: EnumParam::new("Type", AudioModuleType::Off).with_callback({
-                let clear_voices = clear_voices.clone();
-                Arc::new(move |_| clear_voices.store(true, Ordering::SeqCst))
-            }),
+            audio_module_1_type: EnumParam::new("Type", AudioModuleType::Sine)
+                .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
+            audio_module_2_type: EnumParam::new("Type", AudioModuleType::Sine)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
+            audio_module_3_type: EnumParam::new("Type", AudioModuleType::Sine)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
 
             audio_module_1_level: FloatParam::new(
                 "Level",
@@ -1272,18 +1126,26 @@ impl ActuateParams {
             .with_value_to_string(formatters::v2s_f32_percentage(0))
             .with_unit("%"),
 
-            audio_module_1_routing: EnumParam::new("Routing", AMFilterRouting::Filter1),
-            audio_module_2_routing: EnumParam::new("Routing", AMFilterRouting::Filter1),
-            audio_module_3_routing: EnumParam::new("Routing", AMFilterRouting::Filter1),
+            audio_module_1_routing: EnumParam::new("Routing", AMFilterRouting::Filter1).with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
+            audio_module_2_routing: EnumParam::new("Routing", AMFilterRouting::Filter1).with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
+            audio_module_3_routing: EnumParam::new("Routing", AMFilterRouting::Filter1).with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
 
-            filter_routing: EnumParam::new("Filter Routing", FilterRouting::Parallel),
-
-            // Oscillators
-            ////////////////////////////////////////////////////////////////////////////////////
-            osc_1_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
+            filter_routing: EnumParam::new("Filter Routing", FilterRouting::Parallel).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
+
+            // Oscillators
+            ////////////////////////////////////////////////////////////////////////////////////
             osc_1_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 })
                 .with_callback({
                     let update_something = update_something.clone();
@@ -1413,10 +1275,6 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
 
-            osc_2_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
             osc_2_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 })
                 .with_callback({
                     let update_something = update_something.clone();
@@ -1546,10 +1404,6 @@ impl ActuateParams {
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
 
-            osc_3_type: EnumParam::new("Wave", VoiceType::Sine).with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
             osc_3_octave: IntParam::new("Octave", 0, IntRange::Linear { min: -2, max: 2 })
                 .with_callback({
                     let update_something = update_something.clone();
@@ -1906,9 +1760,18 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
-            filter_alg_type: EnumParam::new("Filter Alg", FilterAlgorithms::SVF),
-            tilt_filter_type: EnumParam::new("Filter Type", ResponseType::Lowpass),
-            vcf_filter_type: EnumParam::new("Filter Type", VCResponseType::Lowpass),
+            filter_alg_type: EnumParam::new("Filter Alg", FilterAlgorithms::SVF).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            tilt_filter_type: EnumParam::new("Filter Type", ResponseType::Lowpass).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            vcf_filter_type: EnumParam::new("Filter Type", VCResponseType::Lowpass).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
 
             filter_env_peak: FloatParam::new(
                 "Env Mod",
@@ -2063,9 +1926,18 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
-            filter_alg_type_2: EnumParam::new("Filter Alg", FilterAlgorithms::SVF),
-            tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass),
-            vcf_filter_type_2: EnumParam::new("Filter Type", VCResponseType::Lowpass),
+            filter_alg_type_2: EnumParam::new("Filter Alg", FilterAlgorithms::SVF).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            vcf_filter_type_2: EnumParam::new("Filter Type", VCResponseType::Lowpass).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
 
             filter_env_peak_2: FloatParam::new(
                 "Env Mod",
@@ -2250,7 +2122,10 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            pitch_enable: BoolParam::new("Pitch Enable", false),
+            pitch_enable: BoolParam::new("Pitch Enable", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             pitch_routing: EnumParam::new("Routing", PitchRouting::Osc1).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -2345,7 +2220,10 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            pitch_enable_2: BoolParam::new("Pitch Enable", false),
+            pitch_enable_2: BoolParam::new("Pitch Enable", false).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             pitch_routing_2: EnumParam::new("Routing", PitchRouting::Osc1).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -3875,6 +3753,9 @@ impl Actuate {
                     _ => {},
                 }
             }
+            let mut am1_lock = self.audio_module_1.lock().unwrap();
+            let mut am2_lock = self.audio_module_2.lock().unwrap();
+            let mut am3_lock = self.audio_module_3.lock().unwrap();
 
             // Prevent processing if our file dialog is open!!!
             if self.file_dialog.load(Ordering::SeqCst) {
@@ -3892,39 +3773,25 @@ impl Actuate {
             // but also allowing playing of the synth while stopped
             // midi choke doesn't seem to be working in FL
             if !context.transport().playing
-                && (self.audio_module_1.clone().lock().unwrap().get_playing()
-                    || self.audio_module_2.clone().lock().unwrap().get_playing()
-                    || self.audio_module_3.clone().lock().unwrap().get_playing())
+                && (am1_lock.get_playing() || am2_lock.get_playing() || am3_lock.get_playing())
             {
                 // Create clones here
-                let AM1 = self.audio_module_1.clone();
-                let AM2 = self.audio_module_2.clone();
-                let AM3 = self.audio_module_3.clone();
+                //let AM1 = self.audio_module_1.clone();
+                //let AM2 = self.audio_module_2.clone();
+                //let AM3 = self.audio_module_3.clone();
 
                 // For some reason this format works vs doing lock and storing it earlier
-                AM1.lock().unwrap().set_playing(false);
-                AM2.lock().unwrap().set_playing(false);
-                AM3.lock().unwrap().set_playing(false);
-                AM1.lock().unwrap().clear_voices();
-                AM2.lock().unwrap().clear_voices();
-                AM3.lock().unwrap().clear_voices();
+                am1_lock.set_playing(false);
+                am2_lock.set_playing(false);
+                am3_lock.set_playing(false);
+                am1_lock.clear_voices();
+                am2_lock.clear_voices();
+                am3_lock.clear_voices();
             }
             if context.transport().playing {
-                self.audio_module_1
-                    .clone()
-                    .lock()
-                    .unwrap()
-                    .set_playing(true);
-                self.audio_module_2
-                    .clone()
-                    .lock()
-                    .unwrap()
-                    .set_playing(true);
-                self.audio_module_3
-                    .clone()
-                    .lock()
-                    .unwrap()
-                    .set_playing(true);
+                am1_lock.set_playing(true);
+                am2_lock.set_playing(true);
+                am3_lock.set_playing(true);
             }
 
             let midi_event: Option<NoteEvent<()>> = context.next_event();
@@ -3946,31 +3813,21 @@ impl Actuate {
 
             // Trigger passing variables to the audio modules when the GUI input changes
             if self.update_something.load(Ordering::SeqCst) {
-                self.audio_module_1
-                    .lock()
-                    .unwrap()
-                    .consume_params(self.params.clone(), 1);
-                self.audio_module_2
-                    .lock()
-                    .unwrap()
-                    .consume_params(self.params.clone(), 2);
-                self.audio_module_3
-                    .lock()
-                    .unwrap()
-                    .consume_params(self.params.clone(), 3);
+                am1_lock.consume_params(self.params.clone(), 1);
+                am2_lock.consume_params(self.params.clone(), 2);
+                am3_lock.consume_params(self.params.clone(), 3);
                 // Fix Auto restretch/repitch behavior
                 if self.prev_restretch_1.load(Ordering::SeqCst) != self.params.restretch_1.value() {
                     self.prev_restretch_1.store(self.params.restretch_1.value(), Ordering::SeqCst);
-                    self.audio_module_1.lock().unwrap().regenerate_samples();
+                    am1_lock.regenerate_samples();
                 }
                 if self.prev_restretch_2.load(Ordering::SeqCst) != self.params.restretch_2.value() {
                     self.prev_restretch_2.store(self.params.restretch_2.value(), Ordering::SeqCst);
-                    
-                    self.audio_module_2.lock().unwrap().regenerate_samples();
+                    am2_lock.regenerate_samples();
                 }
                 if self.prev_restretch_3.load(Ordering::SeqCst) != self.params.restretch_3.value() {
                     self.prev_restretch_3.store(self.params.restretch_3.value(), Ordering::SeqCst);
-                    self.audio_module_3.lock().unwrap().regenerate_samples();
+                    am3_lock.regenerate_samples();
                 }
 
                 self.update_something.store(false, Ordering::SeqCst);
@@ -4896,7 +4753,8 @@ impl Actuate {
             let mut fm_wave_2: f32 = 0.0;
             // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::SeqCst)
-                && self.params.audio_module_1_type.value() != AudioModuleType::Off
+                //&& self.params.audio_module_1_type.value() != AudioModuleType::Off
+                && am1_lock.audio_module_type != AudioModuleType::Off
             {
                 // We send our sample_id position, params, current midi event, module index, current voice max, and whether any params have changed
                 (
@@ -4904,7 +4762,7 @@ impl Actuate {
                     wave1_r,
                     reset_filter_controller1,
                     note_off_filter_controller1,
-                ) = self.audio_module_1.lock().unwrap().process(
+                ) = am1_lock.process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
@@ -4920,23 +4778,44 @@ impl Actuate {
                     temp_mod_uni_vel_sum,
                     temp_mod_gain_1,
                     temp_mod_lfo_gain_1,
-                    self.params.stereo_algorithm.value()
+                    self.params.stereo_algorithm.value(),
+                    modulations_1.temp_mod_resonance_1
+                        + modulations_2.temp_mod_resonance_1
+                        + modulations_3.temp_mod_resonance_1
+                        + modulations_4.temp_mod_resonance_1,
+                    modulations_1.temp_mod_cutoff_1
+                        + modulations_2.temp_mod_cutoff_1
+                        + modulations_3.temp_mod_cutoff_1
+                        + modulations_4.temp_mod_cutoff_1,
+                    modulations_1.temp_mod_resonance_2
+                        + modulations_2.temp_mod_resonance_2
+                        + modulations_3.temp_mod_resonance_2
+                        + modulations_4.temp_mod_resonance_2,
+                    modulations_1.temp_mod_cutoff_2
+                        + modulations_2.temp_mod_cutoff_2
+                        + modulations_3.temp_mod_cutoff_2
+                        + modulations_4.temp_mod_cutoff_2,
                 );
                 // Sum to MONO
                 fm_wave_1 = (wave1_l + wave1_r)/2.0;
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
-                wave1_l *= self.params.audio_module_1_level.value() * 0.33;
-                wave1_r *= self.params.audio_module_1_level.value() * 0.33;
+                let levelAmp1 = self.params.audio_module_1_level.value();
+                wave1_l *= levelAmp1 * 0.33;
+                wave1_r *= levelAmp1 * 0.33;
             }
+
+            // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::SeqCst)
-                && self.params.audio_module_2_type.value() != AudioModuleType::Off
+                //&& self.params.audio_module_1_type.value() != AudioModuleType::Off
+                && am2_lock.audio_module_type != AudioModuleType::Off
             {
+                // We send our sample_id position, params, current midi event, module index, current voice max, and whether any params have changed
                 (
                     wave2_l,
                     wave2_r,
                     reset_filter_controller2,
                     note_off_filter_controller2,
-                ) = self.audio_module_2.lock().unwrap().process(
+                ) = am2_lock.process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
@@ -4952,23 +4831,44 @@ impl Actuate {
                     temp_mod_uni_vel_sum,
                     temp_mod_gain_2,
                     temp_mod_lfo_gain_2,
-                    self.params.stereo_algorithm.value()
+                    self.params.stereo_algorithm.value(),
+                    modulations_1.temp_mod_resonance_1
+                        + modulations_2.temp_mod_resonance_1
+                        + modulations_3.temp_mod_resonance_1
+                        + modulations_4.temp_mod_resonance_1,
+                    modulations_1.temp_mod_cutoff_1
+                        + modulations_2.temp_mod_cutoff_1
+                        + modulations_3.temp_mod_cutoff_1
+                        + modulations_4.temp_mod_cutoff_1,
+                    modulations_1.temp_mod_resonance_2
+                        + modulations_2.temp_mod_resonance_2
+                        + modulations_3.temp_mod_resonance_2
+                        + modulations_4.temp_mod_resonance_2,
+                    modulations_1.temp_mod_cutoff_2
+                        + modulations_2.temp_mod_cutoff_2
+                        + modulations_3.temp_mod_cutoff_2
+                        + modulations_4.temp_mod_cutoff_2,
                 );
                 // Sum to MONO
                 fm_wave_2 = (wave2_l + wave2_r)/2.0;
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
-                wave2_l *= self.params.audio_module_2_level.value() * 0.33;
-                wave2_r *= self.params.audio_module_2_level.value() * 0.33;
+                let levelAmp2 = self.params.audio_module_2_level.value();
+                wave2_l *= levelAmp2 * 0.33;
+                wave2_r *= levelAmp2 * 0.33;
             }
+
+            // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::SeqCst)
-                && self.params.audio_module_3_type.value() != AudioModuleType::Off
+                //&& self.params.audio_module_1_type.value() != AudioModuleType::Off
+                && am3_lock.audio_module_type != AudioModuleType::Off
             {
+                // We send our sample_id position, params, current midi event, module index, current voice max, and whether any params have changed
                 (
                     wave3_l,
                     wave3_r,
                     reset_filter_controller3,
                     note_off_filter_controller3,
-                ) = self.audio_module_3.lock().unwrap().process(
+                ) = am3_lock.process(
                     sample_id,
                     midi_event.clone(),
                     sent_voice_max,
@@ -4984,11 +4884,28 @@ impl Actuate {
                     temp_mod_uni_vel_sum,
                     temp_mod_gain_3,
                     temp_mod_lfo_gain_3,
-                    self.params.stereo_algorithm.value()
+                    self.params.stereo_algorithm.value(),
+                    modulations_1.temp_mod_resonance_1
+                        + modulations_2.temp_mod_resonance_1
+                        + modulations_3.temp_mod_resonance_1
+                        + modulations_4.temp_mod_resonance_1,
+                    modulations_1.temp_mod_cutoff_1
+                        + modulations_2.temp_mod_cutoff_1
+                        + modulations_3.temp_mod_cutoff_1
+                        + modulations_4.temp_mod_cutoff_1,
+                    modulations_1.temp_mod_resonance_2
+                        + modulations_2.temp_mod_resonance_2
+                        + modulations_3.temp_mod_resonance_2
+                        + modulations_4.temp_mod_resonance_2,
+                    modulations_1.temp_mod_cutoff_2
+                        + modulations_2.temp_mod_cutoff_2
+                        + modulations_3.temp_mod_cutoff_2
+                        + modulations_4.temp_mod_cutoff_2,
                 );
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
-                wave3_l *= self.params.audio_module_3_level.value() * 0.33;
-                wave3_r *= self.params.audio_module_3_level.value() * 0.33;
+                let levelAmp3 = self.params.audio_module_3_level.value();
+                wave3_l *= levelAmp3 * 0.33;
+                wave3_r *= levelAmp3 * 0.33;
             }
 
             // FM Calculations
@@ -5239,230 +5156,12 @@ impl Actuate {
                 lfo_3_current = self.lfo_3.next_sample(self.sample_rate);
             }
 
-            // Define the outputs for filter routing or non-filter routing
-            let mut left_output_filter1: f32 = 0.0;
-            let mut right_output_filter1: f32 = 0.0;
-            let mut left_output_filter2: f32 = 0.0;
-            let mut right_output_filter2: f32 = 0.0;
-            let mut left_output: f32 = 0.0;
-            let mut right_output: f32 = 0.0;
+            // Define the outputs
+            let mut left_output: f32;
+            let mut right_output: f32;
 
-            match self.params.audio_module_1_routing.value() {
-                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
-                    left_output += wave1_l;
-                    right_output += wave1_r;
-                },
-                AMFilterRouting::Filter1 => {
-                    left_output_filter1 += wave1_l;
-                    right_output_filter1 += wave1_r;
-                },
-                AMFilterRouting::Filter2 => {
-                    left_output_filter2 += wave1_l;
-                    right_output_filter2 += wave1_r;
-                },
-                AMFilterRouting::Both => {
-                    left_output_filter1 += wave1_l;
-                    right_output_filter1 += wave1_r;
-                    left_output_filter2 += wave1_l;
-                    right_output_filter2 += wave1_r;
-                },
-            }
-            //#[allow(unused_assignments)]
-            match self.params.audio_module_2_routing.value() {
-                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
-                    left_output += wave2_l;
-                    right_output += wave2_r;
-                },
-                AMFilterRouting::Filter1 => {
-                    left_output_filter1 += wave2_l;
-                    right_output_filter1 += wave2_r;
-                },
-                AMFilterRouting::Filter2 => {
-                    left_output_filter2 += wave2_l;
-                    right_output_filter2 += wave2_r;
-                },
-                AMFilterRouting::Both => {
-                    left_output_filter1 += wave2_l;
-                    right_output_filter1 += wave2_r;
-                    left_output_filter2 += wave2_l;
-                    right_output_filter2 += wave2_r;
-                },
-            }
-            //#[allow(unused_assignments)]
-            match self.params.audio_module_3_routing.value() {
-                AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
-                    left_output += wave3_l;
-                    right_output += wave3_r;
-                },
-                AMFilterRouting::Filter1 => {
-                    left_output_filter1 += wave3_l;
-                    right_output_filter1 += wave3_r;
-                },
-                AMFilterRouting::Filter2 => {
-                    left_output_filter2 += wave3_l;
-                    right_output_filter2 += wave3_r;
-                },
-                AMFilterRouting::Both => {
-                    left_output_filter1 += wave3_l;
-                    right_output_filter1 += wave3_r;
-                    left_output_filter2 += wave3_l;
-                    right_output_filter2 += wave3_r;
-                },
-            }
-
-            let mut filter1_processed_l: f32 = 0.0;
-            let mut filter1_processed_r: f32 = 0.0;
-            let mut filter2_processed_l: f32 = 0.0;
-            let mut filter2_processed_r: f32 = 0.0;
-
-            // I ended up doing a passthrough/sum of modulations so they can stack if that's what user desires
-            // without breaking things when they are unset
-            match self.params.filter_routing.value() {
-                FilterRouting::Parallel => {
-                    self.filter_process_1(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        left_output_filter1,
-                        right_output_filter1,
-                        &mut filter1_processed_l,
-                        &mut filter1_processed_r,
-                        modulations_1.temp_mod_cutoff_1
-                            + modulations_2.temp_mod_cutoff_1
-                            + modulations_3.temp_mod_cutoff_1
-                            + modulations_4.temp_mod_cutoff_1,
-                        //+ vel_cutoff_1,
-                        modulations_1.temp_mod_resonance_1
-                            + modulations_2.temp_mod_resonance_1
-                            + modulations_3.temp_mod_resonance_1
-                            + modulations_4.temp_mod_resonance_1,
-                        //+ vel_resonance_1,
-                    );
-                    self.filter_process_2(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        left_output_filter2,
-                        right_output_filter2,
-                        &mut filter2_processed_l,
-                        &mut filter2_processed_r,
-                        modulations_1.temp_mod_cutoff_2
-                            + modulations_2.temp_mod_cutoff_2
-                            + modulations_3.temp_mod_cutoff_2
-                            + modulations_4.temp_mod_cutoff_2,
-                        //+ vel_cutoff_2,
-                        modulations_1.temp_mod_resonance_2
-                            + modulations_2.temp_mod_resonance_2
-                            + modulations_3.temp_mod_resonance_2
-                            + modulations_4.temp_mod_resonance_2,
-                        //+ vel_resonance_2,
-                    );
-                    left_output += filter1_processed_l + filter2_processed_l;
-                    right_output += filter1_processed_r + filter2_processed_r;
-                }
-                FilterRouting::Series12 => {
-                    self.filter_process_1(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        left_output_filter1,
-                        right_output_filter1,
-                        &mut filter1_processed_l,
-                        &mut filter1_processed_r,
-                        modulations_1.temp_mod_cutoff_1
-                            + modulations_2.temp_mod_cutoff_1
-                            + modulations_3.temp_mod_cutoff_1
-                            + modulations_4.temp_mod_cutoff_1,
-                        //+ vel_cutoff_1,
-                        modulations_1.temp_mod_resonance_1
-                            + modulations_2.temp_mod_resonance_1
-                            + modulations_3.temp_mod_resonance_1
-                            + modulations_4.temp_mod_resonance_1,
-                        //+ vel_resonance_1,
-                    );
-                    self.filter_process_2(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        filter1_processed_l,
-                        filter1_processed_r,
-                        &mut filter2_processed_l,
-                        &mut filter2_processed_r,
-                        modulations_1.temp_mod_cutoff_2
-                            + modulations_2.temp_mod_cutoff_2
-                            + modulations_3.temp_mod_cutoff_2
-                            + modulations_4.temp_mod_cutoff_2,
-                        //+ vel_cutoff_2,
-                        modulations_1.temp_mod_resonance_2
-                            + modulations_2.temp_mod_resonance_2
-                            + modulations_3.temp_mod_resonance_2
-                            + modulations_4.temp_mod_resonance_2,
-                        //+ vel_resonance_2,
-                    );
-                    left_output += filter2_processed_l;
-                    right_output += filter2_processed_r;
-                }
-                FilterRouting::Series21 => {
-                    self.filter_process_2(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        left_output_filter2,
-                        right_output_filter2,
-                        &mut filter2_processed_l,
-                        &mut filter2_processed_r,
-                        modulations_1.temp_mod_cutoff_2
-                            + modulations_2.temp_mod_cutoff_2
-                            + modulations_3.temp_mod_cutoff_2
-                            + modulations_4.temp_mod_cutoff_2,
-                        //+ vel_cutoff_2,
-                        modulations_1.temp_mod_resonance_2
-                            + modulations_2.temp_mod_resonance_2
-                            + modulations_3.temp_mod_resonance_2
-                            + modulations_4.temp_mod_resonance_2,
-                        //+ vel_resonance_2,
-                    );
-                    self.filter_process_1(
-                        note_off_filter_controller1,
-                        note_off_filter_controller2,
-                        note_off_filter_controller3,
-                        reset_filter_controller1,
-                        reset_filter_controller2,
-                        reset_filter_controller3,
-                        filter2_processed_l,
-                        filter2_processed_r,
-                        &mut filter1_processed_l,
-                        &mut filter1_processed_r,
-                        modulations_1.temp_mod_cutoff_1
-                            + modulations_2.temp_mod_cutoff_1
-                            + modulations_3.temp_mod_cutoff_1
-                            + modulations_4.temp_mod_cutoff_1,
-                        //+ vel_cutoff_1,
-                        modulations_1.temp_mod_resonance_1
-                            + modulations_2.temp_mod_resonance_1
-                            + modulations_3.temp_mod_resonance_1
-                            + modulations_4.temp_mod_resonance_1,
-                        //+ vel_resonance_1,
-                    );
-                    left_output += filter1_processed_l;
-                    right_output += filter1_processed_r;
-                }
-            }
+            left_output = (wave1_l + wave2_l + wave3_l)*0.33;
+            right_output = (wave1_r + wave2_r + wave3_r)*0.33;
 
             // FX
             ////////////////////////////////////////////////////////////////////////////////////////
@@ -5724,19 +5423,11 @@ impl Actuate {
                 preset.mod2_sample_lib.clear();
                 preset.mod3_sample_lib.clear();
 
-                // Serialize to MessagePack bytes
-                let serialized_data = rmp_serde::to_vec::<ActuatePresetV131>(&preset);
-
-                if let Err(err) = serialized_data {
-                    eprintln!("Error serializing data: {}", err);
-                    return;
-                }
-
-                // Compress the serialized data using different GzEncoder
-                let compressed_data = Self::compress_bytes(&serialized_data.unwrap());
+                // Serialize to json
+                let serialized_data = serde_json::to_string(&preset);
 
                 // Now you can write the compressed data to the file
-                if let Err(err) = std::fs::write(&location, &compressed_data) {
+                if let Err(err) = std::fs::write(&location, serialized_data.unwrap()) {
                     eprintln!("Error writing compressed data to file: {}", err);
                     return;
                 }
@@ -5757,49 +5448,20 @@ impl Actuate {
                 .to_string();
 
             // Read the compressed data from the file
-            let mut compressed_data = Vec::new();
+            let mut file_data = String::new();
             if let Err(err) = std::fs::File::open(&return_name)
-                .and_then(|mut file| file.read_to_end(&mut compressed_data))
+                .and_then(|mut file| file.read_to_string(&mut file_data))
             {
                 eprintln!("Error reading compressed data from file: {}", err);
                 return (err.to_string(), Option::None);
             }
 
-            // Decompress the data
-            let decompressed_data = Self::decompress_bytes(&compressed_data);
-            if let Err(err) = decompressed_data {
-                eprintln!("Error decompressing data: {}", err);
-                return (err.to_string(), Option::None);
-            }
-
-            // Deserialize the MessagePack data
-            let file_string_data = decompressed_data.unwrap();
-
             // Deserialize into preset struct - return default empty lib if error
-            let mut unserialized: ActuatePresetV131 = rmp_serde::from_slice(&file_string_data)
-                .unwrap_or(ERROR_PRESET.clone());
+            let unserialized: ActuatePresetV131 = serde_json::from_slice(file_data.as_bytes()).unwrap_or(ERROR_PRESET.clone());
 
             // This if cascade tries to load each predecessor format of presets
             if unserialized.preset_name.contains("Error") {
-                unserialized = load_unserialized_v130(file_string_data.clone());
-                if unserialized.preset_name.contains("Error") {
-                    unserialized = load_unserialized_v126(file_string_data.clone());
-                    if unserialized.preset_name.contains("Error") {
-                        unserialized = load_unserialized_v125(file_string_data.clone());
-                        if unserialized.preset_name.contains("Error") {
-                            unserialized = load_unserialized_v123(file_string_data.clone());
-                            if unserialized.preset_name.contains("Error") {
-                                unserialized = load_unserialized_v122(file_string_data.clone());
-                                if unserialized.preset_name.contains("Error") {
-                                    unserialized = load_unserialized_v114(file_string_data.clone());
-                                    if unserialized.preset_name.contains("Error") {
-                                        unserialized = load_unserialized_old(file_string_data.clone());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                //unserialized = load_unserialized_v130(file_data.clone());
             }
 
             return (return_name, Some(unserialized));
@@ -5815,26 +5477,16 @@ impl Actuate {
             return_name = loading_bank.to_str().unwrap_or("Invalid Path").to_string();
 
             // Read the compressed data from the file
-            let mut compressed_data = Vec::new();
+            let mut file_data = String::new();
             if let Err(err) = std::fs::File::open(&return_name)
-                .and_then(|mut file| file.read_to_end(&mut compressed_data))
+                .and_then(|mut file| file.read_to_string(&mut file_data))
             {
                 eprintln!("Error reading compressed data from file: {}", err);
                 return (err.to_string(), Vec::new());
             }
 
-            // Decompress the data
-            let decompressed_data = Self::decompress_bytes(&compressed_data);
-            if let Err(err) = decompressed_data {
-                eprintln!("Error decompressing data: {}", err);
-                return (err.to_string(), Vec::new());
-            }
-
-            // Deserialize the MessagePack data
-            let file_string_data = decompressed_data.unwrap();
-
             // Deserialize into preset struct - return default empty lib if error
-            let unserialized: Vec<ActuatePresetV131> = rmp_serde::from_slice(&file_string_data)
+            let unserialized: Vec<ActuatePresetV131> = serde_json::from_slice(&file_data.as_bytes())
                 .unwrap_or(vec![
                     ERROR_PRESET.clone();
                     PRESET_BANK_SIZE
@@ -5842,6 +5494,8 @@ impl Actuate {
 
             // Attempt loading 1.3.0 bank if error
             if unserialized[0].preset_name.contains("Error") {
+                /*
+
                 // Deserialize into preset struct - return default empty lib if error
                 let unserialized: Vec<ActuatePresetV130> = rmp_serde::from_slice(&file_string_data)
                 .unwrap_or(vec![
@@ -5853,54 +5507,9 @@ impl Actuate {
                 for v130_preset in unserialized.iter() {
                     converted.push(old_preset_structs::convert_preset_v130(v130_preset.clone()));
                 }
-                // Attempt loading 1.2.6 bank if error
-                if unserialized[0].preset_name.contains("Error") {
-                    // Deserialize into preset struct - return default empty lib if error
-                    let unserialized: Vec<ActuatePresetV126> = rmp_serde::from_slice(&file_string_data)
-                    .unwrap_or(vec![
-                        ERROR_PRESETV126.clone();
-                        PRESET_BANK_SIZE
-                    ]);
-                    // Convert each v1.2.6 entry into latest
-                    let mut converted: Vec<ActuatePresetV131> = Vec::new();
-                    for v126_preset in unserialized.iter() {
-                        converted.push(old_preset_structs::convert_preset_v126(v126_preset.clone()));
-                    }
-
-                    // Attempt loading 1.2.5 bank if error
-                    if unserialized[0].preset_name.contains("Error") {
-                        let unserialized: Vec<ActuatePresetV125> = rmp_serde::from_slice(&file_string_data)
-                            .unwrap_or(vec![
-                                ERROR_PRESETV125.clone();
-                                PRESET_BANK_SIZE
-                            ]);
-                        // Convert each v1.2.5 entry into latest
-                        let mut converted: Vec<ActuatePresetV131> = Vec::new();
-                        for v125_preset in unserialized.iter() {
-                            converted.push(old_preset_structs::convert_preset_v125(v125_preset.clone()));
-                        }
-
-                        // Attempt loading 1.2.3 bank if error
-                        if unserialized[0].preset_name.contains("Error") {
-                            let unserialized: Vec<ActuatePresetV123> = rmp_serde::from_slice(&file_string_data)
-                                .unwrap_or(vec![
-                                    ERROR_PRESETV123.clone();
-                                    PRESET_BANK_SIZE
-                                ]);
-                            // Convert each v1.2.3 entry into latest
-                            let mut converted: Vec<ActuatePresetV131> = Vec::new();
-                            for v123_preset in unserialized.iter() {
-                                converted.push(old_preset_structs::convert_preset_v123(v123_preset.clone()));
-                            }
-                            return (return_name, converted);
-                        }
-                        return (return_name, converted);
-                    }
-                    return (return_name, converted);
-                }
                 return (return_name, converted);
+                */
             }
-
             return (return_name, unserialized);
         }
         return (String::from("Error"), Vec::new());
@@ -5915,22 +5524,6 @@ impl Actuate {
         AMod1: &mut AudioModule,
         AMod2: &mut AudioModule,
         AMod3: &mut AudioModule,
-    ) -> (
-        ModulationSource,
-        ModulationSource,
-        ModulationSource,
-        ModulationSource,
-        ModulationDestination,
-        ModulationDestination,
-        ModulationDestination,
-        ModulationDestination,
-        PresetType,
-        AMFilterRouting,
-        AMFilterRouting,
-        AMFilterRouting,
-        GeneratorType,
-        GeneratorType,
-        GeneratorType,
     ) {
         // Try to load preset into our params if possible
         let loaded_preset = &arc_preset[current_preset_index as usize];
@@ -5950,7 +5543,6 @@ impl Actuate {
         setter.set_parameter(&params.loop_sample_1, loaded_preset.mod1_loop_wavetable);
         setter.set_parameter(&params.single_cycle_1, loaded_preset.mod1_single_cycle);
         setter.set_parameter(&params.restretch_1, loaded_preset.mod1_restretch);
-        setter.set_parameter(&params.osc_1_type, loaded_preset.mod1_osc_type);
         setter.set_parameter(&params.osc_1_octave, loaded_preset.mod1_osc_octave);
         setter.set_parameter(&params.osc_1_semitones, loaded_preset.mod1_osc_semitones);
         setter.set_parameter(&params.osc_1_detune, loaded_preset.mod1_osc_detune);
@@ -5992,7 +5584,6 @@ impl Actuate {
         setter.set_parameter(&params.loop_sample_2, loaded_preset.mod2_loop_wavetable);
         setter.set_parameter(&params.single_cycle_2, loaded_preset.mod2_single_cycle);
         setter.set_parameter(&params.restretch_2, loaded_preset.mod2_restretch);
-        setter.set_parameter(&params.osc_2_type, loaded_preset.mod2_osc_type);
         setter.set_parameter(&params.osc_2_octave, loaded_preset.mod2_osc_octave);
         setter.set_parameter(&params.osc_2_semitones, loaded_preset.mod2_osc_semitones);
         setter.set_parameter(&params.osc_2_detune, loaded_preset.mod2_osc_detune);
@@ -6034,7 +5625,6 @@ impl Actuate {
         setter.set_parameter(&params.loop_sample_3, loaded_preset.mod3_loop_wavetable);
         setter.set_parameter(&params.single_cycle_3, loaded_preset.mod3_single_cycle);
         setter.set_parameter(&params.restretch_3, loaded_preset.mod3_restretch);
-        setter.set_parameter(&params.osc_3_type, loaded_preset.mod3_osc_type);
         setter.set_parameter(&params.osc_3_octave, loaded_preset.mod3_osc_octave);
         setter.set_parameter(&params.osc_3_semitones, loaded_preset.mod3_osc_semitones);
         setter.set_parameter(&params.osc_3_detune, loaded_preset.mod3_osc_detune);
@@ -6095,107 +5685,6 @@ impl Actuate {
         setter.set_parameter(&params.mod_amount_knob_4, loaded_preset.mod_amount_4);
         setter.set_parameter(&params.mod_destination_4, loaded_preset.mod_dest_4.clone());
         setter.set_parameter(&params.mod_source_4, loaded_preset.mod_source_4.clone());
-        let mod_source_1_override = loaded_preset.mod_source_1.clone();
-        let mod_source_2_override = loaded_preset.mod_source_2.clone();
-        let mod_source_3_override = loaded_preset.mod_source_3.clone();
-        let mod_source_4_override = loaded_preset.mod_source_4.clone();
-        let mod_dest_1_override = loaded_preset.mod_dest_1.clone();
-        let mod_dest_2_override = loaded_preset.mod_dest_2.clone();
-        let mod_dest_3_override = loaded_preset.mod_dest_3.clone();
-        let mod_dest_4_override = loaded_preset.mod_dest_4.clone();
-        let gen_1_routing_override = loaded_preset.mod1_audio_module_routing.clone();
-        let gen_2_routing_override = loaded_preset.mod2_audio_module_routing.clone();
-        let gen_3_routing_override = loaded_preset.mod3_audio_module_routing.clone();
-        let gen_1_type_override = match loaded_preset.mod1_audio_module_type {
-            AudioModuleType::Off => {
-                GeneratorType::Off
-            },
-            AudioModuleType::Osc => {
-                match loaded_preset.mod1_osc_type {
-                    VoiceType::Sine => GeneratorType::Sine,
-                    VoiceType::Tri => GeneratorType::Tri,
-                    VoiceType::Saw => GeneratorType::Saw,
-                    VoiceType::RSaw => GeneratorType::RSaw,
-                    VoiceType::WSaw => GeneratorType::WSaw,
-                    VoiceType::SSaw => GeneratorType::SSaw,
-                    VoiceType::RASaw => GeneratorType::RASaw,
-                    VoiceType::Ramp => GeneratorType::Ramp,
-                    VoiceType::Square => GeneratorType::Square,
-                    VoiceType::RSquare => GeneratorType::RSquare,
-                    VoiceType::Pulse => GeneratorType::Pulse,
-                    VoiceType::Noise => GeneratorType::Noise,
-                }
-            },
-            AudioModuleType::Sampler => {
-                GeneratorType::Sampler
-            },
-            AudioModuleType::Granulizer => {
-                GeneratorType::Granulizer
-            },
-            AudioModuleType::Additive => {
-                GeneratorType::Additive
-            }
-        };
-        let gen_2_type_override = match loaded_preset.mod2_audio_module_type {
-            AudioModuleType::Off => {
-                GeneratorType::Off
-            },
-            AudioModuleType::Osc => {
-                match loaded_preset.mod2_osc_type {
-                    VoiceType::Sine => GeneratorType::Sine,
-                    VoiceType::Tri => GeneratorType::Tri,
-                    VoiceType::Saw => GeneratorType::Saw,
-                    VoiceType::RSaw => GeneratorType::RSaw,
-                    VoiceType::WSaw => GeneratorType::WSaw,
-                    VoiceType::SSaw => GeneratorType::SSaw,
-                    VoiceType::RASaw => GeneratorType::RASaw,
-                    VoiceType::Ramp => GeneratorType::Ramp,
-                    VoiceType::Square => GeneratorType::Square,
-                    VoiceType::RSquare => GeneratorType::RSquare,
-                    VoiceType::Pulse => GeneratorType::Pulse,
-                    VoiceType::Noise => GeneratorType::Noise,
-                }
-            },
-            AudioModuleType::Sampler => {
-                GeneratorType::Sampler
-            },
-            AudioModuleType::Granulizer => {
-                GeneratorType::Granulizer
-            },
-            AudioModuleType::Additive => {
-                GeneratorType::Additive
-            }
-        };
-        let gen_3_type_override = match loaded_preset.mod3_audio_module_type {
-            AudioModuleType::Off => {
-                GeneratorType::Off
-            },
-            AudioModuleType::Osc => {
-                match loaded_preset.mod3_osc_type {
-                    VoiceType::Sine => GeneratorType::Sine,
-                    VoiceType::Tri => GeneratorType::Tri,
-                    VoiceType::Saw => GeneratorType::Saw,
-                    VoiceType::RSaw => GeneratorType::RSaw,
-                    VoiceType::WSaw => GeneratorType::WSaw,
-                    VoiceType::SSaw => GeneratorType::SSaw,
-                    VoiceType::RASaw => GeneratorType::RASaw,
-                    VoiceType::Ramp => GeneratorType::Ramp,
-                    VoiceType::Square => GeneratorType::Square,
-                    VoiceType::RSquare => GeneratorType::RSquare,
-                    VoiceType::Pulse => GeneratorType::Pulse,
-                    VoiceType::Noise => GeneratorType::Noise,
-                }
-            },
-            AudioModuleType::Sampler => {
-                GeneratorType::Sampler
-            },
-            AudioModuleType::Granulizer => {
-                GeneratorType::Granulizer
-            },
-            AudioModuleType::Additive => {
-                GeneratorType::Additive
-            }
-        };
 
         setter.set_parameter(&params.use_fx, loaded_preset.use_fx);
         setter.set_parameter(&params.pre_use_eq, loaded_preset.pre_use_eq);
@@ -6330,6 +5819,7 @@ impl Actuate {
         );
         setter.set_parameter(&params.filter_routing, loaded_preset.filter_routing.clone());
 
+        /*
         #[allow(unreachable_patterns)]
         let preset_category_override = match loaded_preset.preset_category {
             PresetType::Bass
@@ -6352,6 +5842,7 @@ impl Actuate {
             // This should be unreachable since unserialize will fail before we get here anyways actually
             _ => PresetType::Select,
         };
+        */
 
         // 1.2.1 Pitch update
         setter.set_parameter(&params.pitch_enable, loaded_preset.pitch_enable);
@@ -6535,24 +6026,6 @@ impl Actuate {
             },
             _ => {},
         }
-
-        (
-            mod_source_1_override,
-            mod_source_2_override,
-            mod_source_3_override,
-            mod_source_4_override,
-            mod_dest_1_override,
-            mod_dest_2_override,
-            mod_dest_3_override,
-            mod_dest_4_override,
-            preset_category_override,
-            gen_1_routing_override,
-            gen_2_routing_override,
-            gen_3_routing_override,
-            gen_1_type_override,
-            gen_2_type_override,
-            gen_3_type_override,
-        )
     }
 
     fn save_preset_bank(preset_store: &mut Vec<ActuatePresetV131>, saving_bank: Option<PathBuf>) {
@@ -6578,19 +6051,15 @@ impl Actuate {
                 }
 
                 // Serialize to MessagePack bytes
-                let serialized_data =
-                    rmp_serde::to_vec::<&Vec<ActuatePresetV131>>(&preset_store.as_ref());
+                let serialized_data = serde_json::to_string(&preset_store);
 
                 if let Err(err) = serialized_data {
                     eprintln!("Error serializing data: {}", err);
                     return;
                 }
 
-                // Compress the serialized data using different GzEncoder
-                let compressed_data = Self::compress_bytes(&serialized_data.unwrap());
-
                 // Now you can write the compressed data to the file
-                if let Err(err) = std::fs::write(&location, &compressed_data) {
+                if let Err(err) = std::fs::write(&location, &serialized_data.unwrap()) {
                     eprintln!("Error writing compressed data to file: {}", err);
                     return;
                 }
@@ -6598,20 +6067,6 @@ impl Actuate {
                 eprintln!("Error creating file at location: {:?}", location);
             }
         }
-    }
-
-    // Functions to compress bytes and decompress using gz
-    fn compress_bytes(data: &[u8]) -> Vec<u8> {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
-        encoder.write_all(data).unwrap();
-        encoder.finish().unwrap()
-    }
-
-    fn decompress_bytes(compressed_data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
-        let mut decoder = GzDecoder::new(compressed_data);
-        let mut decompressed_data = Vec::new();
-        decoder.read_to_end(&mut decompressed_data)?;
-        Ok(decompressed_data)
     }
 
     // Update our current preset
@@ -6667,7 +6122,6 @@ impl Actuate {
                 mod1_grain_hold: AM1.grain_hold,
 
                 // Osc module knob storage
-                mod1_osc_type: AM1.osc_type,
                 mod1_osc_octave: AM1.osc_octave,
                 mod1_osc_semitones: AM1.osc_semitones,
                 mod1_osc_detune: AM1.osc_detune,
@@ -6702,7 +6156,6 @@ impl Actuate {
                 mod2_grain_hold: AM2.grain_hold,
 
                 // Osc module knob storage
-                mod2_osc_type: AM2.osc_type,
                 mod2_osc_octave: AM2.osc_octave,
                 mod2_osc_semitones: AM2.osc_semitones,
                 mod2_osc_detune: AM2.osc_detune,
@@ -6737,7 +6190,6 @@ impl Actuate {
                 mod3_grain_hold: AM3.grain_hold,
 
                 // Osc module knob storage
-                mod3_osc_type: AM3.osc_type,
                 mod3_osc_octave: AM3.osc_octave,
                 mod3_osc_semitones: AM3.osc_semitones,
                 mod3_osc_detune: AM3.osc_detune,
@@ -6972,598 +6424,6 @@ impl Actuate {
                 additive_amp_3_15: self.params.additive_amp_3_15.value(),
             };
     }
-
-    fn filter_process_1(
-        &mut self,
-        note_off_filter_controller1: bool,
-        note_off_filter_controller2: bool,
-        note_off_filter_controller3: bool,
-        reset_filter_controller1: bool,
-        reset_filter_controller2: bool,
-        reset_filter_controller3: bool,
-        left_input_filter1: f32,
-        right_input_filter1: f32,
-        left_output: &mut f32,
-        right_output: &mut f32,
-        filter_cutoff_mod: f32,
-        filter_resonance_mod: f32,
-    ) {
-        // Filter 1 Processing
-        ///////////////////////////////////////////////////////////////
-        if self.params.filter_wet.value() > 0.0 && !self.file_dialog.load(Ordering::SeqCst) {
-            // Filter state movement code
-            //////////////////////////////////////////
-            // If a note is ending and we should enter releasing
-            if note_off_filter_controller1
-                || note_off_filter_controller2
-                || note_off_filter_controller3
-            {
-                let old_filter_state = self.filter_state_1;
-                self.filter_state_1 = OscState::Releasing;
-                self.filter_rel_smoother_1 = match self.params.filter_env_rel_curve.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_release.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_release.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_release.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_release.value(),
-                    )),
-                };
-                // Reset our filter release to be at sustain level to start
-                self.filter_rel_smoother_1.reset(
-                    //(//self.params.filter_cutoff.value()
-                        //+
-                        match old_filter_state {
-                            OscState::Attacking => self.filter_atk_smoother_1.next(),
-                            OscState::Decaying | OscState::Releasing => self.filter_dec_smoother_1.next(),
-                            OscState::Sustaining => self.filter_dec_smoother_1.next(),
-                            OscState::Off => self.params.filter_cutoff.value(),
-                        }
-                        /*
-                         // This scales the peak env to be much gentler for the TILT filter
-                         match self.params.filter_alg_type.value() {
-                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
-                            FilterAlgorithms::TILT => adv_scale_value(
-                                self.params.filter_env_peak.value(),
-                                -19980.0,
-                                19980.0,
-                                -5000.0,
-                                5000.0,
-                            ),
-                        }*/
-                    //)
-                    //* (self.params.filter_env_sustain.value() / 1999.9)
-                    ,
-                );
-                // Move release to the cutoff to end
-                self.filter_rel_smoother_1
-                    .set_target(self.sample_rate, self.params.filter_cutoff.value());
-            }
-            // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
-            if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
-                // Set our filter in attack state
-                self.filter_state_1 = OscState::Attacking;
-                // Consume our params for smoothing
-                self.filter_atk_smoother_1 = match self.params.filter_env_atk_curve.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_attack.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_attack.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_attack.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_attack.value(),
-                    )),
-                };
-                // Reset our attack to start from the filter cutoff
-                self.filter_atk_smoother_1
-                    .reset(self.params.filter_cutoff.value());
-                // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
-                self.filter_atk_smoother_1.set_target(
-                    self.sample_rate,
-                    (self.params.filter_cutoff.value()
-                        + (
-                            // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        ))
-                    .clamp(20.0, 20000.0),
-                );
-            }
-            // If our attack has finished
-            if self.filter_atk_smoother_1.steps_left() == 0
-                && self.filter_state_1 == OscState::Attacking
-            {
-                self.filter_state_1 = OscState::Decaying;
-                self.filter_dec_smoother_1 = match self.params.filter_env_dec_curve.value() {
-                    SmoothStyle::Linear => {
-                        Smoother::new(SmoothingStyle::Linear(self.params.filter_env_decay.value()))
-                    }
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_decay.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_decay.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_decay.value(),
-                    )),
-                };
-                // This makes our filter decay start at env peak point
-                self.filter_dec_smoother_1.reset(
-                    /*
-                    (self.params.filter_cutoff.value()
-                        + (
-                            // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        )
-                    )
-                    */
-                    self.filter_atk_smoother_1.next()
-                    .clamp(20.0, 20000.0),
-                );
-                // Set up the smoother for our filter movement to go from our decay point to our sustain point
-                self.filter_dec_smoother_1.set_target(
-                    self.sample_rate,
-                    (
-                        self.params.filter_cutoff.value()
-                        +   // This scales the peak env to be much gentler for the TILT filter
-                        match self.params.filter_alg_type.value() {
-                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak.value(),
-                            FilterAlgorithms::TILT => adv_scale_value(
-                                self.params.filter_env_peak.value(),
-                                -19980.0,
-                                19980.0,
-                                -5000.0,
-                                5000.0,
-                            ),
-                        }
-                    )
-                    * (self.params.filter_env_sustain.value() / 1999.9),
-                );
-            }
-            // If our decay has finished move to sustain state
-            if self.filter_dec_smoother_1.steps_left() == 0
-                && self.filter_state_1 == OscState::Decaying
-            {
-                self.filter_state_1 = OscState::Sustaining;
-            }
-            // use proper variable now that there are four filters and multiple states
-            let next_filter_step = match self.filter_state_1 {
-                OscState::Attacking => {
-                    (self.filter_atk_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Decaying => {
-                    (self.filter_dec_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Sustaining => {
-                    (self.filter_dec_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Releasing => {
-                    (self.filter_rel_smoother_1.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                // I don't expect this to be used
-                _ => (self.params.filter_cutoff.value() + filter_cutoff_mod).clamp(20.0, 20000.0),
-            };
-            match self.params.filter_alg_type.value() {
-                FilterAlgorithms::SVF => {
-                    // Filtering before output
-                    self.filter_l_1.update(
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.sample_rate,
-                        self.params.filter_res_type.value(),
-                    );
-                    self.filter_r_1.update(
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.sample_rate,
-                        self.params.filter_res_type.value(),
-                    );
-                    let low_l: f32;
-                    let band_l: f32;
-                    let high_l: f32;
-                    let low_r: f32;
-                    let band_r: f32;
-                    let high_r: f32;
-                    (low_l, band_l, high_l) = self.filter_l_1.process(left_input_filter1);
-                    (low_r, band_r, high_r) = self.filter_r_1.process(right_input_filter1);
-                    *left_output += (low_l * self.params.filter_lp_amount.value()
-                        + band_l * self.params.filter_bp_amount.value()
-                        + high_l * self.params.filter_hp_amount.value())
-                        * self.params.filter_wet.value()
-                        + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += (low_r * self.params.filter_lp_amount.value()
-                        + band_r * self.params.filter_bp_amount.value()
-                        + high_r * self.params.filter_hp_amount.value())
-                        * self.params.filter_wet.value()
-                        + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::TILT => {
-                    self.tilt_filter_l_1.update(
-                        self.sample_rate,
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.params.tilt_filter_type.value(),
-                    );
-                    self.tilt_filter_r_1.update(
-                        self.sample_rate,
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.params.tilt_filter_type.value(),
-                    );
-                    let tilt_out_l = self.tilt_filter_l_1.process(left_input_filter1 * db_to_gain(-12.0));
-                    let tilt_out_r = self.tilt_filter_r_1.process(right_input_filter1 * db_to_gain(-12.0));
-                    *left_output += tilt_out_l * self.params.filter_wet.value()
-                        + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += tilt_out_r * self.params.filter_wet.value()
-                        + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::VCF => {
-                    self.vcf_filter_l_1.update(
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.params.vcf_filter_type.value(),
-                        self.sample_rate,
-                    );
-                    self.vcf_filter_r_1.update(
-                        next_filter_step,
-                        self.params.filter_resonance.value() - filter_resonance_mod,
-                        self.params.vcf_filter_type.value(),
-                        self.sample_rate,
-                    );
-                    let vcf_out_l = self.vcf_filter_l_1.process(left_input_filter1);
-                    let vcf_out_r = self.vcf_filter_r_1.process(right_input_filter1);
-                    *left_output += vcf_out_l * self.params.filter_wet.value()
-                        + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += vcf_out_r * self.params.filter_wet.value()
-                        + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::V4 => {
-                    self.V4F_l_1.update(
-                        self.params.filter_resonance.value(),
-                        next_filter_step,
-                        self.sample_rate
-                    );
-                    self.V4F_r_1.update(
-                        self.params.filter_resonance.value(),
-                        next_filter_step,
-                        self.sample_rate
-                    );
-                    let v4f_out_l = self.V4F_l_1.process(left_input_filter1);
-                    let v4f_out_r = self.V4F_r_1.process(right_input_filter1);
-                    *left_output += v4f_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += v4f_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::A4I => {
-                    self.A4I_l_1.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
-                    self.A4I_r_1.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
-                    let a4i_out_l = self.A4I_l_1.process(left_input_filter1);
-                    let a4i_out_r = self.A4I_r_1.process(right_input_filter1);
-                    *left_output += a4i_out_l * self.params.filter_wet.value() + left_input_filter1 * (1.0 - self.params.filter_wet.value());
-                    *right_output += a4i_out_r * self.params.filter_wet.value() + right_input_filter1 * (1.0 - self.params.filter_wet.value());
-                }
-            }
-        }
-    }
-
-    fn filter_process_2(
-        &mut self,
-        note_off_filter_controller1: bool,
-        note_off_filter_controller2: bool,
-        note_off_filter_controller3: bool,
-        reset_filter_controller1: bool,
-        reset_filter_controller2: bool,
-        reset_filter_controller3: bool,
-        left_input_filter2: f32,
-        right_input_filter2: f32,
-        left_output: &mut f32,
-        right_output: &mut f32,
-        filter_cutoff_mod: f32,
-        filter_resonance_mod: f32,
-    ) {
-        // Filter 2 Processing
-        ///////////////////////////////////////////////////////////////
-        if self.params.filter_wet_2.value() > 0.0 && !self.file_dialog.load(Ordering::SeqCst) {
-            // Filter state movement code
-            //////////////////////////////////////////
-            // If a note is ending and we should enter releasing
-            if note_off_filter_controller1
-                || note_off_filter_controller2
-                || note_off_filter_controller3
-            {
-                let old_filter_state = self.filter_state_2;
-                self.filter_state_2 = OscState::Releasing;
-                self.filter_rel_smoother_2 = match self.params.filter_env_rel_curve_2.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_release_2.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_release_2.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_release_2.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_release_2.value(),
-                    )),
-                };
-                // Reset our filter release to be at sustain level to start
-                self.filter_rel_smoother_2.reset(
-                    /*self.params.filter_cutoff_2.value()
-                        * (self.params.filter_env_sustain_2.value() / 1999.9)
-                        +   // This scales the peak env to be much gentler for the TILT filter
-                        match self.params.filter_alg_type_2.value() {
-                            FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
-                            FilterAlgorithms::TILT => adv_scale_value(
-                                self.params.filter_env_peak_2.value(),
-                                -19980.0,
-                                19980.0,
-                                -5000.0,
-                                5000.0,
-                            ),
-                        },
-                    */
-                    //self.filter_dec_smoother_2.next(),
-                    match old_filter_state {
-                        OscState::Attacking => self.filter_atk_smoother_2.next(),
-                        OscState::Decaying | OscState::Releasing => self.filter_dec_smoother_2.next(),
-                        OscState::Sustaining => self.filter_dec_smoother_2.next(),
-                        OscState::Off => self.params.filter_cutoff_2.value(),
-                    }
-                );
-                // Move release to the cutoff to end
-                self.filter_rel_smoother_2
-                    .set_target(self.sample_rate, self.params.filter_cutoff_2.value());
-            }
-            // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
-            if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
-                // Set our filter in attack state
-                self.filter_state_2 = OscState::Attacking;
-                // Consume our params for smoothing
-                self.filter_atk_smoother_2 = match self.params.filter_env_atk_curve_2.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_attack_2.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_attack_2.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_attack_2.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_attack_2.value(),
-                    )),
-                };
-                // Reset our attack to start from the filter cutoff
-                self.filter_atk_smoother_2
-                    .reset(self.params.filter_cutoff_2.value());
-                // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
-                self.filter_atk_smoother_2.set_target(
-                    self.sample_rate,
-                    (self.params.filter_cutoff_2.value()
-                        + (
-                            // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak_2.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        ))
-                    .clamp(20.0, 20000.0),
-                );
-            }
-            // If our attack has finished
-            if self.filter_atk_smoother_2.steps_left() == 0
-                && self.filter_state_2 == OscState::Attacking
-            {
-                self.filter_state_2 = OscState::Decaying;
-                self.filter_dec_smoother_2 = match self.params.filter_env_dec_curve_2.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.filter_env_decay_2.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.filter_env_decay_2.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.filter_env_decay_2.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.filter_env_decay_2.value(),
-                    )),
-                };
-                // This makes our filter decay start at env peak point
-                self.filter_dec_smoother_2.reset(
-                    /*(self.params.filter_cutoff_2.value()
-                        + (
-                            // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak_2.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        ))*/
-                    self.filter_atk_smoother_2.next()
-                    .clamp(20.0, 20000.0),
-                );
-                // Set up the smoother for our filter movement to go from our decay point to our sustain point
-                self.filter_dec_smoother_2.set_target(
-                    self.sample_rate,
-                    (self.params.filter_cutoff_2.value()
-                            +   // This scales the peak env to be much gentler for the TILT filter
-                            match self.params.filter_alg_type_2.value() {
-                                FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.params.filter_env_peak_2.value(),
-                                FilterAlgorithms::TILT => adv_scale_value(
-                                    self.params.filter_env_peak_2.value(),
-                                    -19980.0,
-                                    19980.0,
-                                    -5000.0,
-                                    5000.0,
-                                ),
-                            }
-                        )
-                        * (self.params.filter_env_sustain_2.value() / 1999.9)
-                );
-            }
-            // If our decay has finished move to sustain state
-            if self.filter_dec_smoother_2.steps_left() == 0
-                && self.filter_state_2 == OscState::Decaying
-            {
-                self.filter_state_2 = OscState::Sustaining;
-            }
-            // use proper variable now that there are four filters and multiple states
-            let next_filter_step = match self.filter_state_2 {
-                OscState::Attacking => {
-                    (self.filter_atk_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Decaying => {
-                    (self.filter_dec_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Sustaining => {
-                    (self.filter_dec_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                OscState::Releasing => {
-                    (self.filter_rel_smoother_2.next() + filter_cutoff_mod).clamp(20.0, 20000.0)
-                }
-                // I don't expect this to be used
-                _ => self.params.filter_cutoff_2.value() + filter_cutoff_mod,
-            };
-            match self.params.filter_alg_type.value() {
-                FilterAlgorithms::SVF => {
-                    // Filtering before output
-                    self.filter_l_2.update(
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.sample_rate,
-                        self.params.filter_res_type_2.value(),
-                    );
-                    self.filter_r_2.update(
-                        next_filter_step,
-                        self.params.filter_resonance_2.value() + filter_resonance_mod,
-                        self.sample_rate,
-                        self.params.filter_res_type_2.value(),
-                    );
-                    let low_l: f32;
-                    let band_l: f32;
-                    let high_l: f32;
-                    let low_r: f32;
-                    let band_r: f32;
-                    let high_r: f32;
-                    (low_l, band_l, high_l) = self.filter_l_2.process(left_input_filter2);
-                    (low_r, band_r, high_r) = self.filter_r_2.process(right_input_filter2);
-                    *left_output += (low_l * self.params.filter_lp_amount_2.value()
-                        + band_l * self.params.filter_bp_amount_2.value()
-                        + high_l * self.params.filter_hp_amount_2.value())
-                        * self.params.filter_wet_2.value()
-                        + *left_output * (1.0 - self.params.filter_wet_2.value());
-                    *right_output += (low_r * self.params.filter_lp_amount_2.value()
-                        + band_r * self.params.filter_bp_amount_2.value()
-                        + high_r * self.params.filter_hp_amount_2.value())
-                        * self.params.filter_wet_2.value()
-                        + *right_output * (1.0 - self.params.filter_wet_2.value());
-                }
-                FilterAlgorithms::TILT => {
-                    self.tilt_filter_l_2.update(
-                        self.sample_rate,
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.params.tilt_filter_type_2.value(),
-                    );
-                    self.tilt_filter_r_2.update(
-                        self.sample_rate,
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.params.tilt_filter_type_2.value(),
-                    );
-                    let tilt_out_l = self.tilt_filter_l_2.process(left_input_filter2 * db_to_gain(-12.0));
-                    let tilt_out_r = self.tilt_filter_r_2.process(right_input_filter2 * db_to_gain(-12.0));
-                    *left_output += tilt_out_l * self.params.filter_wet_2.value()
-                        + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                    *right_output += tilt_out_r * self.params.filter_wet_2.value()
-                        + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                }
-                FilterAlgorithms::VCF => {
-                    self.vcf_filter_l_2.update(
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.params.vcf_filter_type_2.value(),
-                        self.sample_rate,
-                    );
-                    self.vcf_filter_r_2.update(
-                        next_filter_step,
-                        self.params.filter_resonance_2.value(),
-                        self.params.vcf_filter_type_2.value(),
-                        self.sample_rate,
-                    );
-                    let vcf_out_l = self.vcf_filter_l_2.process(left_input_filter2);
-                    let vcf_out_r = self.vcf_filter_r_2.process(right_input_filter2);
-                    *left_output += vcf_out_l * self.params.filter_wet_2.value()
-                        + left_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                    *right_output += vcf_out_r * self.params.filter_wet_2.value()
-                        + right_input_filter2 * (1.0 - self.params.filter_wet_2.value());
-                }
-                FilterAlgorithms::V4 => {
-                    self.V4F_l_2.update(
-                        self.params.filter_resonance.value(),
-                        next_filter_step,
-                        self.sample_rate
-                    );
-                    self.V4F_r_2.update(
-                        self.params.filter_resonance.value(),
-                        next_filter_step,
-                        self.sample_rate
-                    );
-                    let v4f_out_l = self.V4F_l_2.process(left_input_filter2);
-                    let v4f_out_r = self.V4F_r_2.process(right_input_filter2);
-                    *left_output += v4f_out_l * self.params.filter_wet.value() + left_input_filter2 * (1.0 - self.params.filter_wet.value());
-                    *right_output += v4f_out_r * self.params.filter_wet.value() + right_input_filter2 * (1.0 - self.params.filter_wet.value());
-                }
-                FilterAlgorithms::A4I => {
-                    self.A4I_l_2.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
-                    self.A4I_r_2.update(next_filter_step, self.params.filter_resonance.value(), self.sample_rate);
-                    let a4i_out_l = self.A4I_l_2.process(left_input_filter2);
-                    let a4i_out_r = self.A4I_r_2.process(right_input_filter2);
-                    *left_output += a4i_out_l * self.params.filter_wet.value() + left_input_filter2 * (1.0 - self.params.filter_wet.value());
-                    *right_output += a4i_out_r * self.params.filter_wet.value() + right_input_filter2 * (1.0 - self.params.filter_wet.value());
-                }
-            }
-        }
-    }
 }
 
 impl ClapPlugin for Actuate {
@@ -7605,843 +6465,6 @@ fn adv_scale_value(input: f32, in_min: f32, in_max: f32, out_min: f32, out_max: 
 
 
 lazy_static::lazy_static!(
-    static ref ERROR_PRESETV123: ActuatePresetV123 = ActuatePresetV123 {
-        preset_name: String::from("Error Loading"),
-        preset_info: String::from("Corrupt or incompatible versions"),
-        preset_category: PresetType::Select,
-        tag_acid: false,
-        tag_analog: false,
-        tag_bright: false,
-        tag_chord: false,
-        tag_crisp: false,
-        tag_deep: false,
-        tag_delicate: false,
-        tag_hard: false,
-        tag_harsh: false,
-        tag_lush: false,
-        tag_mellow: false,
-        tag_resonant: false,
-        tag_rich: false,
-        tag_sharp: false,
-        tag_silky: false,
-        tag_smooth: false,
-        tag_soft: false,
-        tag_stab: false,
-        tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
-        mod1_audio_module_level: 1.0,
-        mod1_audio_module_routing: AMFilterRouting::Filter1,
-        mod1_loaded_sample: vec![vec![0.0, 0.0]],
-        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod1_loop_wavetable: false,
-        mod1_single_cycle: false,
-        mod1_restretch: true,
-        mod1_prev_restretch: false,
-        mod1_grain_hold: 200,
-        mod1_grain_gap: 200,
-        mod1_start_position: 0.0,
-        mod1_end_position: 1.0,
-        mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
-        mod1_osc_octave: 0,
-        mod1_osc_semitones: 0,
-        mod1_osc_detune: 0.0,
-        mod1_osc_attack: 0.0001,
-        mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 1999.9,
-        mod1_osc_release: 5.0,
-        mod1_osc_retrigger: RetriggerStyle::Retrigger,
-        mod1_osc_atk_curve: SmoothStyle::Linear,
-        mod1_osc_dec_curve: SmoothStyle::Linear,
-        mod1_osc_rel_curve: SmoothStyle::Linear,
-        mod1_osc_unison: 1,
-        mod1_osc_unison_detune: 0.0,
-        mod1_osc_stereo: 0.0,
-
-        mod2_audio_module_type: AudioModuleType::Off,
-        mod2_audio_module_level: 1.0,
-        mod2_audio_module_routing: AMFilterRouting::Filter1,
-        mod2_loaded_sample: vec![vec![0.0, 0.0]],
-        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod2_loop_wavetable: false,
-        mod2_single_cycle: false,
-        mod2_restretch: true,
-        mod2_prev_restretch: false,
-        mod2_grain_hold: 200,
-        mod2_grain_gap: 200,
-        mod2_start_position: 0.0,
-        mod2_end_position: 1.0,
-        mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
-        mod2_osc_octave: 0,
-        mod2_osc_semitones: 0,
-        mod2_osc_detune: 0.0,
-        mod2_osc_attack: 0.0001,
-        mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 1999.9,
-        mod2_osc_release: 5.0,
-        mod2_osc_retrigger: RetriggerStyle::Retrigger,
-        mod2_osc_atk_curve: SmoothStyle::Linear,
-        mod2_osc_dec_curve: SmoothStyle::Linear,
-        mod2_osc_rel_curve: SmoothStyle::Linear,
-        mod2_osc_unison: 1,
-        mod2_osc_unison_detune: 0.0,
-        mod2_osc_stereo: 0.0,
-
-        mod3_audio_module_type: AudioModuleType::Off,
-        mod3_audio_module_level: 1.0,
-        mod3_audio_module_routing: AMFilterRouting::Filter1,
-        mod3_loaded_sample: vec![vec![0.0, 0.0]],
-        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod3_loop_wavetable: false,
-        mod3_single_cycle: false,
-        mod3_restretch: true,
-        mod3_prev_restretch: false,
-        mod3_grain_hold: 200,
-        mod3_grain_gap: 200,
-        mod3_start_position: 0.0,
-        mod3_end_position: 1.0,
-        mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
-        mod3_osc_octave: 0,
-        mod3_osc_semitones: 0,
-        mod3_osc_detune: 0.0,
-        mod3_osc_attack: 0.0001,
-        mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 1999.9,
-        mod3_osc_release: 5.0,
-        mod3_osc_retrigger: RetriggerStyle::Retrigger,
-        mod3_osc_atk_curve: SmoothStyle::Linear,
-        mod3_osc_dec_curve: SmoothStyle::Linear,
-        mod3_osc_rel_curve: SmoothStyle::Linear,
-        mod3_osc_unison: 1,
-        mod3_osc_unison_detune: 0.0,
-        mod3_osc_stereo: 0.0,
-
-        filter_wet: 1.0,
-        filter_cutoff: 20000.0,
-        filter_resonance: 1.0,
-        filter_res_type: ResonanceType::Default,
-        filter_lp_amount: 1.0,
-        filter_hp_amount: 0.0,
-        filter_bp_amount: 0.0,
-        filter_env_peak: 0.0,
-        filter_env_attack: 0.0,
-        filter_env_decay: 0.0001,
-        filter_env_sustain: 1999.9,
-        filter_env_release: 5.0,
-        filter_env_atk_curve: SmoothStyle::Linear,
-        filter_env_dec_curve: SmoothStyle::Linear,
-        filter_env_rel_curve: SmoothStyle::Linear,
-        filter_alg_type: FilterAlgorithms::SVF,
-        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
-
-        filter_wet_2: 1.0,
-        filter_cutoff_2: 20000.0,
-        filter_resonance_2: 1.0,
-        filter_res_type_2: ResonanceType::Default,
-        filter_lp_amount_2: 1.0,
-        filter_hp_amount_2: 0.0,
-        filter_bp_amount_2: 0.0,
-        filter_env_peak_2: 0.0,
-        filter_env_attack_2: 0.0,
-        filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 1999.9,
-        filter_env_release_2: 5.0,
-        filter_env_atk_curve_2: SmoothStyle::Linear,
-        filter_env_dec_curve_2: SmoothStyle::Linear,
-        filter_env_rel_curve_2: SmoothStyle::Linear,
-        filter_alg_type_2: FilterAlgorithms::SVF,
-        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
-
-        filter_routing: FilterRouting::Parallel,
-        filter_cutoff_link: false,
-
-        pitch_enable: false,
-        pitch_env_atk_curve: SmoothStyle::Linear,
-        pitch_env_dec_curve: SmoothStyle::Linear,
-        pitch_env_rel_curve: SmoothStyle::Linear,
-        pitch_env_attack: 0.0,
-        pitch_env_decay: 300.0,
-        pitch_env_sustain: 0.0,
-        pitch_env_release: 0.0,
-        pitch_env_peak: 0.0,
-        pitch_routing: PitchRouting::Osc1,
-
-        pitch_enable_2: false,
-        pitch_env_peak_2: 0.0,
-        pitch_env_atk_curve_2: SmoothStyle::Linear,
-        pitch_env_dec_curve_2: SmoothStyle::Linear,
-        pitch_env_rel_curve_2: SmoothStyle::Linear,
-        pitch_env_attack_2: 0.0,
-        pitch_env_decay_2: 300.0,
-        pitch_env_release_2: 0.0,
-        pitch_env_sustain_2: 0.0,
-        pitch_routing_2: PitchRouting::Osc1,
-
-        // LFOs
-        lfo1_enable: false,
-        lfo2_enable: false,
-        lfo3_enable: false,
-
-        lfo1_freq: 2.0,
-        lfo1_retrigger: LFOController::LFORetrigger::None,
-        lfo1_sync: true,
-        lfo1_snap: LFOController::LFOSnapValues::Half,
-        lfo1_waveform: LFOController::Waveform::Sine,
-        lfo1_phase: 0.0,
-
-        lfo2_freq: 2.0,
-        lfo2_retrigger: LFOController::LFORetrigger::None,
-        lfo2_sync: true,
-        lfo2_snap: LFOController::LFOSnapValues::Half,
-        lfo2_waveform: LFOController::Waveform::Sine,
-        lfo2_phase: 0.0,
-
-        lfo3_freq: 2.0,
-        lfo3_retrigger: LFOController::LFORetrigger::None,
-        lfo3_sync: true,
-        lfo3_snap: LFOController::LFOSnapValues::Half,
-        lfo3_waveform: LFOController::Waveform::Sine,
-        lfo3_phase: 0.0,
-
-        // Modulations
-        mod_source_1: ModulationSource::None,
-        mod_source_2: ModulationSource::None,
-        mod_source_3: ModulationSource::None,
-        mod_source_4: ModulationSource::None,
-        mod_dest_1: ModulationDestination::None,
-        mod_dest_2: ModulationDestination::None,
-        mod_dest_3: ModulationDestination::None,
-        mod_dest_4: ModulationDestination::None,
-        mod_amount_1: 0.0,
-        mod_amount_2: 0.0,
-        mod_amount_3: 0.0,
-        mod_amount_4: 0.0,
-
-        // EQ
-        pre_use_eq: false,
-        pre_low_freq: 800.0,
-        pre_mid_freq: 3000.0,
-        pre_high_freq: 10000.0,
-        pre_low_gain: 0.0,
-        pre_mid_gain: 0.0,
-        pre_high_gain: 0.0,
-
-        // FX
-        use_fx: true,
-
-        use_compressor: false,
-        comp_amt: 0.5,
-        comp_atk: 0.5,
-        comp_rel: 0.5,
-        comp_drive: 0.5,
-
-        use_abass: false,
-        abass_amount: 0.0011,
-
-        use_saturation: false,
-        sat_amount: 0.0,
-        sat_type: SaturationType::Tape,
-
-        use_delay: false,
-        delay_amount: 0.5,
-        delay_time: DelaySnapValues::Quarter,
-        delay_decay: 0.5,
-        delay_type: DelayType::Stereo,
-
-        use_reverb: false,
-        reverb_amount: 0.85,
-        reverb_size: 1.0,
-        reverb_feedback: 0.28,
-
-        use_phaser: false,
-        phaser_amount: 0.5,
-        phaser_depth: 0.5,
-        phaser_rate: 0.5,
-        phaser_feedback: 0.5,
-
-        use_buffermod: false,
-        buffermod_amount: 0.5,
-        buffermod_depth: 0.5,
-        buffermod_rate: 0.5,
-        buffermod_spread: 0.0,
-        buffermod_timing: 620.0,
-
-        use_flanger: false,
-        flanger_amount: 0.5,
-        flanger_depth: 0.5,
-        flanger_rate: 0.5,
-        flanger_feedback: 0.5,
-
-        use_limiter: false,
-        limiter_threshold: 0.5,
-        limiter_knee: 0.5,
-    };
-
-    static ref ERROR_PRESETV125: ActuatePresetV125 = ActuatePresetV125 {
-        preset_name: String::from("Error Loading"),
-        preset_info: String::from("Corrupt or incompatible versions"),
-        preset_category: PresetType::Select,
-        tag_acid: false,
-        tag_analog: false,
-        tag_bright: false,
-        tag_chord: false,
-        tag_crisp: false,
-        tag_deep: false,
-        tag_delicate: false,
-        tag_hard: false,
-        tag_harsh: false,
-        tag_lush: false,
-        tag_mellow: false,
-        tag_resonant: false,
-        tag_rich: false,
-        tag_sharp: false,
-        tag_silky: false,
-        tag_smooth: false,
-        tag_soft: false,
-        tag_stab: false,
-        tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
-        mod1_audio_module_level: 1.0,
-        mod1_audio_module_routing: AMFilterRouting::Filter1,
-        mod1_loaded_sample: vec![vec![0.0, 0.0]],
-        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod1_loop_wavetable: false,
-        mod1_single_cycle: false,
-        mod1_restretch: true,
-        mod1_prev_restretch: false,
-        mod1_grain_hold: 200,
-        mod1_grain_gap: 200,
-        mod1_start_position: 0.0,
-        mod1_end_position: 1.0,
-        mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
-        mod1_osc_octave: 0,
-        mod1_osc_semitones: 0,
-        mod1_osc_detune: 0.0,
-        mod1_osc_attack: 0.0001,
-        mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 1999.9,
-        mod1_osc_release: 5.0,
-        mod1_osc_retrigger: RetriggerStyle::Retrigger,
-        mod1_osc_atk_curve: SmoothStyle::Linear,
-        mod1_osc_dec_curve: SmoothStyle::Linear,
-        mod1_osc_rel_curve: SmoothStyle::Linear,
-        mod1_osc_unison: 1,
-        mod1_osc_unison_detune: 0.0,
-        mod1_osc_stereo: 0.0,
-
-        mod2_audio_module_type: AudioModuleType::Off,
-        mod2_audio_module_level: 1.0,
-        mod2_audio_module_routing: AMFilterRouting::Filter1,
-        mod2_loaded_sample: vec![vec![0.0, 0.0]],
-        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod2_loop_wavetable: false,
-        mod2_single_cycle: false,
-        mod2_restretch: true,
-        mod2_prev_restretch: false,
-        mod2_grain_hold: 200,
-        mod2_grain_gap: 200,
-        mod2_start_position: 0.0,
-        mod2_end_position: 1.0,
-        mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
-        mod2_osc_octave: 0,
-        mod2_osc_semitones: 0,
-        mod2_osc_detune: 0.0,
-        mod2_osc_attack: 0.0001,
-        mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 1999.9,
-        mod2_osc_release: 5.0,
-        mod2_osc_retrigger: RetriggerStyle::Retrigger,
-        mod2_osc_atk_curve: SmoothStyle::Linear,
-        mod2_osc_dec_curve: SmoothStyle::Linear,
-        mod2_osc_rel_curve: SmoothStyle::Linear,
-        mod2_osc_unison: 1,
-        mod2_osc_unison_detune: 0.0,
-        mod2_osc_stereo: 0.0,
-
-        mod3_audio_module_type: AudioModuleType::Off,
-        mod3_audio_module_level: 1.0,
-        mod3_audio_module_routing: AMFilterRouting::Filter1,
-        mod3_loaded_sample: vec![vec![0.0, 0.0]],
-        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod3_loop_wavetable: false,
-        mod3_single_cycle: false,
-        mod3_restretch: true,
-        mod3_prev_restretch: false,
-        mod3_grain_hold: 200,
-        mod3_grain_gap: 200,
-        mod3_start_position: 0.0,
-        mod3_end_position: 1.0,
-        mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
-        mod3_osc_octave: 0,
-        mod3_osc_semitones: 0,
-        mod3_osc_detune: 0.0,
-        mod3_osc_attack: 0.0001,
-        mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 1999.9,
-        mod3_osc_release: 5.0,
-        mod3_osc_retrigger: RetriggerStyle::Retrigger,
-        mod3_osc_atk_curve: SmoothStyle::Linear,
-        mod3_osc_dec_curve: SmoothStyle::Linear,
-        mod3_osc_rel_curve: SmoothStyle::Linear,
-        mod3_osc_unison: 1,
-        mod3_osc_unison_detune: 0.0,
-        mod3_osc_stereo: 0.0,
-
-        filter_wet: 1.0,
-        filter_cutoff: 20000.0,
-        filter_resonance: 1.0,
-        filter_res_type: ResonanceType::Default,
-        filter_lp_amount: 1.0,
-        filter_hp_amount: 0.0,
-        filter_bp_amount: 0.0,
-        filter_env_peak: 0.0,
-        filter_env_attack: 0.0,
-        filter_env_decay: 0.0001,
-        filter_env_sustain: 1999.9,
-        filter_env_release: 5.0,
-        filter_env_atk_curve: SmoothStyle::Linear,
-        filter_env_dec_curve: SmoothStyle::Linear,
-        filter_env_rel_curve: SmoothStyle::Linear,
-        filter_alg_type: FilterAlgorithms::SVF,
-        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
-
-        filter_wet_2: 1.0,
-        filter_cutoff_2: 20000.0,
-        filter_resonance_2: 1.0,
-        filter_res_type_2: ResonanceType::Default,
-        filter_lp_amount_2: 1.0,
-        filter_hp_amount_2: 0.0,
-        filter_bp_amount_2: 0.0,
-        filter_env_peak_2: 0.0,
-        filter_env_attack_2: 0.0,
-        filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 1999.9,
-        filter_env_release_2: 5.0,
-        filter_env_atk_curve_2: SmoothStyle::Linear,
-        filter_env_dec_curve_2: SmoothStyle::Linear,
-        filter_env_rel_curve_2: SmoothStyle::Linear,
-        filter_alg_type_2: FilterAlgorithms::SVF,
-        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
-
-        filter_routing: FilterRouting::Parallel,
-        filter_cutoff_link: false,
-
-        pitch_enable: false,
-        pitch_env_atk_curve: SmoothStyle::Linear,
-        pitch_env_dec_curve: SmoothStyle::Linear,
-        pitch_env_rel_curve: SmoothStyle::Linear,
-        pitch_env_attack: 0.0,
-        pitch_env_decay: 300.0,
-        pitch_env_sustain: 0.0,
-        pitch_env_release: 0.0,
-        pitch_env_peak: 0.0,
-        pitch_routing: PitchRouting::Osc1,
-
-        pitch_enable_2: false,
-        pitch_env_peak_2: 0.0,
-        pitch_env_atk_curve_2: SmoothStyle::Linear,
-        pitch_env_dec_curve_2: SmoothStyle::Linear,
-        pitch_env_rel_curve_2: SmoothStyle::Linear,
-        pitch_env_attack_2: 0.0,
-        pitch_env_decay_2: 300.0,
-        pitch_env_release_2: 0.0,
-        pitch_env_sustain_2: 0.0,
-        pitch_routing_2: PitchRouting::Osc1,
-
-        // LFOs
-        lfo1_enable: false,
-        lfo2_enable: false,
-        lfo3_enable: false,
-
-        lfo1_freq: 2.0,
-        lfo1_retrigger: LFOController::LFORetrigger::None,
-        lfo1_sync: true,
-        lfo1_snap: LFOController::LFOSnapValues::Half,
-        lfo1_waveform: LFOController::Waveform::Sine,
-        lfo1_phase: 0.0,
-
-        lfo2_freq: 2.0,
-        lfo2_retrigger: LFOController::LFORetrigger::None,
-        lfo2_sync: true,
-        lfo2_snap: LFOController::LFOSnapValues::Half,
-        lfo2_waveform: LFOController::Waveform::Sine,
-        lfo2_phase: 0.0,
-
-        lfo3_freq: 2.0,
-        lfo3_retrigger: LFOController::LFORetrigger::None,
-        lfo3_sync: true,
-        lfo3_snap: LFOController::LFOSnapValues::Half,
-        lfo3_waveform: LFOController::Waveform::Sine,
-        lfo3_phase: 0.0,
-
-        // Modulations
-        mod_source_1: ModulationSource::None,
-        mod_source_2: ModulationSource::None,
-        mod_source_3: ModulationSource::None,
-        mod_source_4: ModulationSource::None,
-        mod_dest_1: ModulationDestination::None,
-        mod_dest_2: ModulationDestination::None,
-        mod_dest_3: ModulationDestination::None,
-        mod_dest_4: ModulationDestination::None,
-        mod_amount_1: 0.0,
-        mod_amount_2: 0.0,
-        mod_amount_3: 0.0,
-        mod_amount_4: 0.0,
-
-        // EQ
-        pre_use_eq: false,
-        pre_low_freq: 800.0,
-        pre_mid_freq: 3000.0,
-        pre_high_freq: 10000.0,
-        pre_low_gain: 0.0,
-        pre_mid_gain: 0.0,
-        pre_high_gain: 0.0,
-
-        // FX
-        use_fx: true,
-
-        use_compressor: false,
-        comp_amt: 0.5,
-        comp_atk: 0.5,
-        comp_rel: 0.5,
-        comp_drive: 0.5,
-
-        use_abass: false,
-        abass_amount: 0.0011,
-
-        use_saturation: false,
-        sat_amount: 0.0,
-        sat_type: SaturationType::Tape,
-
-        use_delay: false,
-        delay_amount: 0.5,
-        delay_time: DelaySnapValues::Quarter,
-        delay_decay: 0.5,
-        delay_type: DelayType::Stereo,
-
-        use_reverb: false,
-        reverb_model: ReverbModel::Default,
-        reverb_amount: 0.85,
-        reverb_size: 1.0,
-        reverb_feedback: 0.28,
-
-        use_phaser: false,
-        phaser_amount: 0.5,
-        phaser_depth: 0.5,
-        phaser_rate: 0.5,
-        phaser_feedback: 0.5,
-
-        use_buffermod: false,
-        buffermod_amount: 0.5,
-        buffermod_depth: 0.5,
-        buffermod_rate: 0.5,
-        buffermod_spread: 0.0,
-        buffermod_timing: 620.0,
-
-        use_flanger: false,
-        flanger_amount: 0.5,
-        flanger_depth: 0.5,
-        flanger_rate: 0.5,
-        flanger_feedback: 0.5,
-
-        use_limiter: false,
-        limiter_threshold: 0.5,
-        limiter_knee: 0.5,
-    };
-
-    static ref ERROR_PRESETV126: ActuatePresetV126 = ActuatePresetV126 {
-        preset_name: String::from("Error Loading"),
-        preset_info: String::from("Corrupt or incompatible versions"),
-        preset_category: PresetType::Select,
-        tag_acid: false,
-        tag_analog: false,
-        tag_bright: false,
-        tag_chord: false,
-        tag_crisp: false,
-        tag_deep: false,
-        tag_delicate: false,
-        tag_hard: false,
-        tag_harsh: false,
-        tag_lush: false,
-        tag_mellow: false,
-        tag_resonant: false,
-        tag_rich: false,
-        tag_sharp: false,
-        tag_silky: false,
-        tag_smooth: false,
-        tag_soft: false,
-        tag_stab: false,
-        tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
-        mod1_audio_module_level: 1.0,
-        mod1_audio_module_routing: AMFilterRouting::Filter1,
-        mod1_loaded_sample: vec![vec![0.0, 0.0]],
-        mod1_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod1_loop_wavetable: false,
-        mod1_single_cycle: false,
-        mod1_restretch: true,
-        mod1_prev_restretch: false,
-        mod1_grain_hold: 200,
-        mod1_grain_gap: 200,
-        mod1_start_position: 0.0,
-        mod1_end_position: 1.0,
-        mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
-        mod1_osc_octave: 0,
-        mod1_osc_semitones: 0,
-        mod1_osc_detune: 0.0,
-        mod1_osc_attack: 0.0001,
-        mod1_osc_decay: 0.0001,
-        mod1_osc_sustain: 1999.9,
-        mod1_osc_release: 5.0,
-        mod1_osc_retrigger: RetriggerStyle::Retrigger,
-        mod1_osc_atk_curve: SmoothStyle::Linear,
-        mod1_osc_dec_curve: SmoothStyle::Linear,
-        mod1_osc_rel_curve: SmoothStyle::Linear,
-        mod1_osc_unison: 1,
-        mod1_osc_unison_detune: 0.0,
-        mod1_osc_stereo: 0.0,
-
-        mod2_audio_module_type: AudioModuleType::Off,
-        mod2_audio_module_level: 1.0,
-        mod2_audio_module_routing: AMFilterRouting::Filter1,
-        mod2_loaded_sample: vec![vec![0.0, 0.0]],
-        mod2_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod2_loop_wavetable: false,
-        mod2_single_cycle: false,
-        mod2_restretch: true,
-        mod2_prev_restretch: false,
-        mod2_grain_hold: 200,
-        mod2_grain_gap: 200,
-        mod2_start_position: 0.0,
-        mod2_end_position: 1.0,
-        mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
-        mod2_osc_octave: 0,
-        mod2_osc_semitones: 0,
-        mod2_osc_detune: 0.0,
-        mod2_osc_attack: 0.0001,
-        mod2_osc_decay: 0.0001,
-        mod2_osc_sustain: 1999.9,
-        mod2_osc_release: 5.0,
-        mod2_osc_retrigger: RetriggerStyle::Retrigger,
-        mod2_osc_atk_curve: SmoothStyle::Linear,
-        mod2_osc_dec_curve: SmoothStyle::Linear,
-        mod2_osc_rel_curve: SmoothStyle::Linear,
-        mod2_osc_unison: 1,
-        mod2_osc_unison_detune: 0.0,
-        mod2_osc_stereo: 0.0,
-
-        mod3_audio_module_type: AudioModuleType::Off,
-        mod3_audio_module_level: 1.0,
-        mod3_audio_module_routing: AMFilterRouting::Filter1,
-        mod3_loaded_sample: vec![vec![0.0, 0.0]],
-        mod3_sample_lib: vec![vec![vec![0.0, 0.0]]],
-        mod3_loop_wavetable: false,
-        mod3_single_cycle: false,
-        mod3_restretch: true,
-        mod3_prev_restretch: false,
-        mod3_grain_hold: 200,
-        mod3_grain_gap: 200,
-        mod3_start_position: 0.0,
-        mod3_end_position: 1.0,
-        mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
-        mod3_osc_octave: 0,
-        mod3_osc_semitones: 0,
-        mod3_osc_detune: 0.0,
-        mod3_osc_attack: 0.0001,
-        mod3_osc_decay: 0.0001,
-        mod3_osc_sustain: 1999.9,
-        mod3_osc_release: 5.0,
-        mod3_osc_retrigger: RetriggerStyle::Retrigger,
-        mod3_osc_atk_curve: SmoothStyle::Linear,
-        mod3_osc_dec_curve: SmoothStyle::Linear,
-        mod3_osc_rel_curve: SmoothStyle::Linear,
-        mod3_osc_unison: 1,
-        mod3_osc_unison_detune: 0.0,
-        mod3_osc_stereo: 0.0,
-
-        filter_wet: 1.0,
-        filter_cutoff: 20000.0,
-        filter_resonance: 1.0,
-        filter_res_type: ResonanceType::Default,
-        filter_lp_amount: 1.0,
-        filter_hp_amount: 0.0,
-        filter_bp_amount: 0.0,
-        filter_env_peak: 0.0,
-        filter_env_attack: 0.0,
-        filter_env_decay: 0.0001,
-        filter_env_sustain: 1999.9,
-        filter_env_release: 5.0,
-        filter_env_atk_curve: SmoothStyle::Linear,
-        filter_env_dec_curve: SmoothStyle::Linear,
-        filter_env_rel_curve: SmoothStyle::Linear,
-        filter_alg_type: FilterAlgorithms::SVF,
-        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
-
-        filter_wet_2: 1.0,
-        filter_cutoff_2: 20000.0,
-        filter_resonance_2: 1.0,
-        filter_res_type_2: ResonanceType::Default,
-        filter_lp_amount_2: 1.0,
-        filter_hp_amount_2: 0.0,
-        filter_bp_amount_2: 0.0,
-        filter_env_peak_2: 0.0,
-        filter_env_attack_2: 0.0,
-        filter_env_decay_2: 0.0001,
-        filter_env_sustain_2: 1999.9,
-        filter_env_release_2: 5.0,
-        filter_env_atk_curve_2: SmoothStyle::Linear,
-        filter_env_dec_curve_2: SmoothStyle::Linear,
-        filter_env_rel_curve_2: SmoothStyle::Linear,
-        filter_alg_type_2: FilterAlgorithms::SVF,
-        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
-
-        filter_routing: FilterRouting::Parallel,
-        filter_cutoff_link: false,
-
-        pitch_enable: false,
-        pitch_env_atk_curve: SmoothStyle::Linear,
-        pitch_env_dec_curve: SmoothStyle::Linear,
-        pitch_env_rel_curve: SmoothStyle::Linear,
-        pitch_env_attack: 0.0,
-        pitch_env_decay: 300.0,
-        pitch_env_sustain: 0.0,
-        pitch_env_release: 0.0,
-        pitch_env_peak: 0.0,
-        pitch_routing: PitchRouting::Osc1,
-
-        pitch_enable_2: false,
-        pitch_env_peak_2: 0.0,
-        pitch_env_atk_curve_2: SmoothStyle::Linear,
-        pitch_env_dec_curve_2: SmoothStyle::Linear,
-        pitch_env_rel_curve_2: SmoothStyle::Linear,
-        pitch_env_attack_2: 0.0,
-        pitch_env_decay_2: 300.0,
-        pitch_env_release_2: 0.0,
-        pitch_env_sustain_2: 0.0,
-        pitch_routing_2: PitchRouting::Osc1,
-
-        // LFOs
-        lfo1_enable: false,
-        lfo2_enable: false,
-        lfo3_enable: false,
-
-        lfo1_freq: 2.0,
-        lfo1_retrigger: LFOController::LFORetrigger::None,
-        lfo1_sync: true,
-        lfo1_snap: LFOController::LFOSnapValues::Half,
-        lfo1_waveform: LFOController::Waveform::Sine,
-        lfo1_phase: 0.0,
-
-        lfo2_freq: 2.0,
-        lfo2_retrigger: LFOController::LFORetrigger::None,
-        lfo2_sync: true,
-        lfo2_snap: LFOController::LFOSnapValues::Half,
-        lfo2_waveform: LFOController::Waveform::Sine,
-        lfo2_phase: 0.0,
-
-        lfo3_freq: 2.0,
-        lfo3_retrigger: LFOController::LFORetrigger::None,
-        lfo3_sync: true,
-        lfo3_snap: LFOController::LFOSnapValues::Half,
-        lfo3_waveform: LFOController::Waveform::Sine,
-        lfo3_phase: 0.0,
-
-        // Modulations
-        mod_source_1: ModulationSource::None,
-        mod_source_2: ModulationSource::None,
-        mod_source_3: ModulationSource::None,
-        mod_source_4: ModulationSource::None,
-        mod_dest_1: ModulationDestination::None,
-        mod_dest_2: ModulationDestination::None,
-        mod_dest_3: ModulationDestination::None,
-        mod_dest_4: ModulationDestination::None,
-        mod_amount_1: 0.0,
-        mod_amount_2: 0.0,
-        mod_amount_3: 0.0,
-        mod_amount_4: 0.0,
-
-        // EQ
-        pre_use_eq: false,
-        pre_low_freq: 800.0,
-        pre_mid_freq: 3000.0,
-        pre_high_freq: 10000.0,
-        pre_low_gain: 0.0,
-        pre_mid_gain: 0.0,
-        pre_high_gain: 0.0,
-
-        // FM
-        fm_attack: 0.5,
-        fm_attack_curve: SmoothStyle::Linear,
-        fm_decay: 0.5,
-        fm_decay_curve: SmoothStyle::Linear,
-        fm_release: 0.5,
-        fm_release_curve: SmoothStyle::Linear,
-        fm_sustain: 0.5,
-        fm_cycles: 1,
-        fm_one_to_three: 0.0,
-        fm_one_to_two: 0.0,
-        fm_two_to_three: 0.0,
-
-        // FX
-        use_fx: true,
-
-        use_compressor: false,
-        comp_amt: 0.5,
-        comp_atk: 0.5,
-        comp_rel: 0.5,
-        comp_drive: 0.5,
-
-        use_abass: false,
-        abass_amount: 0.0011,
-
-        use_saturation: false,
-        sat_amount: 0.0,
-        sat_type: SaturationType::Tape,
-
-        use_delay: false,
-        delay_amount: 0.5,
-        delay_time: DelaySnapValues::Quarter,
-        delay_decay: 0.5,
-        delay_type: DelayType::Stereo,
-
-        use_reverb: false,
-        reverb_model: ReverbModel::Default,
-        reverb_amount: 0.85,
-        reverb_size: 1.0,
-        reverb_feedback: 0.28,
-
-        use_phaser: false,
-        phaser_amount: 0.5,
-        phaser_depth: 0.5,
-        phaser_rate: 0.5,
-        phaser_feedback: 0.5,
-
-        use_buffermod: false,
-        buffermod_amount: 0.5,
-        buffermod_depth: 0.5,
-        buffermod_rate: 0.5,
-        buffermod_spread: 0.0,
-        buffermod_timing: 620.0,
-
-        use_flanger: false,
-        flanger_amount: 0.5,
-        flanger_depth: 0.5,
-        flanger_rate: 0.5,
-        flanger_feedback: 0.5,
-
-        use_limiter: false,
-        limiter_threshold: 0.5,
-        limiter_knee: 0.5,
-    };
-
     static ref ERROR_PRESETV130: ActuatePresetV130 = ActuatePresetV130 {
         preset_name: String::from("Error Loading"),
         preset_info: String::from("Corrupt or incompatible versions"),
@@ -8465,7 +6488,7 @@ lazy_static::lazy_static!(
         tag_soft: false,
         tag_stab: false,
         tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_type: AudioModuleType::Sine,
         mod1_audio_module_level: 1.0,
         mod1_audio_module_routing: AMFilterRouting::Filter1,
         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -8479,7 +6502,6 @@ lazy_static::lazy_static!(
         mod1_start_position: 0.0,
         mod1_end_position: 1.0,
         mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
         mod1_osc_octave: 0,
         mod1_osc_semitones: 0,
         mod1_osc_detune: 0.0,
@@ -8509,7 +6531,6 @@ lazy_static::lazy_static!(
         mod2_start_position: 0.0,
         mod2_end_position: 1.0,
         mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
         mod2_osc_octave: 0,
         mod2_osc_semitones: 0,
         mod2_osc_detune: 0.0,
@@ -8539,7 +6560,6 @@ lazy_static::lazy_static!(
         mod3_start_position: 0.0,
         mod3_end_position: 1.0,
         mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
         mod3_osc_octave: 0,
         mod3_osc_semitones: 0,
         mod3_osc_detune: 0.0,
@@ -8763,7 +6783,7 @@ lazy_static::lazy_static!(
         tag_soft: false,
         tag_stab: false,
         tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_type: AudioModuleType::Sine,
         mod1_audio_module_level: 1.0,
         mod1_audio_module_routing: AMFilterRouting::Filter1,
         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -8777,7 +6797,6 @@ lazy_static::lazy_static!(
         mod1_start_position: 0.0,
         mod1_end_position: 1.0,
         mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
         mod1_osc_octave: 0,
         mod1_osc_semitones: 0,
         mod1_osc_detune: 0.0,
@@ -8807,7 +6826,6 @@ lazy_static::lazy_static!(
         mod2_start_position: 0.0,
         mod2_end_position: 1.0,
         mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
         mod2_osc_octave: 0,
         mod2_osc_semitones: 0,
         mod2_osc_detune: 0.0,
@@ -8837,7 +6855,6 @@ lazy_static::lazy_static!(
         mod3_start_position: 0.0,
         mod3_end_position: 1.0,
         mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
         mod3_osc_octave: 0,
         mod3_osc_semitones: 0,
         mod3_osc_detune: 0.0,
@@ -9110,7 +7127,7 @@ lazy_static::lazy_static!(
         tag_soft: false,
         tag_stab: false,
         tag_warm: false,
-        mod1_audio_module_type: AudioModuleType::Osc,
+        mod1_audio_module_type: AudioModuleType::Sine,
         mod1_audio_module_level: 1.0,
         mod1_audio_module_routing: AMFilterRouting::Filter1,
         mod1_loaded_sample: vec![vec![0.0, 0.0]],
@@ -9124,7 +7141,6 @@ lazy_static::lazy_static!(
         mod1_start_position: 0.0,
         mod1_end_position: 1.0,
         mod1_grain_crossfade: 50,
-        mod1_osc_type: VoiceType::Sine,
         mod1_osc_octave: 0,
         mod1_osc_semitones: 0,
         mod1_osc_detune: 0.0,
@@ -9154,7 +7170,6 @@ lazy_static::lazy_static!(
         mod2_start_position: 0.0,
         mod2_end_position: 1.0,
         mod2_grain_crossfade: 50,
-        mod2_osc_type: VoiceType::Sine,
         mod2_osc_octave: 0,
         mod2_osc_semitones: 0,
         mod2_osc_detune: 0.0,
@@ -9184,7 +7199,6 @@ lazy_static::lazy_static!(
         mod3_start_position: 0.0,
         mod3_end_position: 1.0,
         mod3_grain_crossfade: 50,
-        mod3_osc_type: VoiceType::Sine,
         mod3_osc_octave: 0,
         mod3_osc_semitones: 0,
         mod3_osc_detune: 0.0,
