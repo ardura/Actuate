@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm}, audio_module::{AudioModuleType, Oscillator::{self, RetriggerStyle, SmoothStyle}}, fx::{delay::{DelaySnapValues, DelayType}, saturation::SaturationType, ArduraFilter, StateVariableFilter::ResonanceType}, LFOController};
+use crate::{actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm}, audio_module::{AudioModuleType, Oscillator::{self, RetriggerStyle, SmoothStyle}}, fx::{delay::{DelaySnapValues, DelayType}, saturation::SaturationType, TiltFilter, StateVariableFilter::ResonanceType}, LFOController};
 
 /// Modulation struct for passing mods to audio modules
 #[derive(Serialize, Deserialize, Clone)]
@@ -167,7 +167,7 @@ pub struct ActuatePresetV131 {
     pub filter_env_dec_curve: Oscillator::SmoothStyle,
     pub filter_env_rel_curve: Oscillator::SmoothStyle,
     pub filter_alg_type: FilterAlgorithms,
-    pub tilt_filter_type: ArduraFilter::ResponseType,
+    pub tilt_filter_type: TiltFilter::ResponseType,
 
     pub filter_wet_2: f32,
     pub filter_cutoff_2: f32,
@@ -185,7 +185,7 @@ pub struct ActuatePresetV131 {
     pub filter_env_dec_curve_2: Oscillator::SmoothStyle,
     pub filter_env_rel_curve_2: Oscillator::SmoothStyle,
     pub filter_alg_type_2: FilterAlgorithms,
-    pub tilt_filter_type_2: ArduraFilter::ResponseType,
+    pub tilt_filter_type_2: TiltFilter::ResponseType,
 
     pub filter_routing: FilterRouting,
     pub filter_cutoff_link: bool,

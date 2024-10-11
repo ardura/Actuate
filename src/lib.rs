@@ -25,16 +25,16 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 */
 
 #![allow(non_snake_case)]
-use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm};
+use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetBrowserEntry, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV131, ModulationStruct};
 use nih_plug::{prelude::*};
 use nih_plug_egui::{
     egui::{Color32, FontId}, EguiState
 };
 use std::{
-    fs::File, io::{Read}, path::PathBuf, sync::{
+    collections::HashMap, fs::File, io::Read, path::PathBuf, sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, RwLock,
     }
 };
 
@@ -45,7 +45,7 @@ use audio_module::{
     frequency_modulation,
 };
 use fx::{
-    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, ArduraFilter::{self, ResponseType}, StateVariableFilter::{ResonanceType,StateVariableFilter}, VCFilter::ResponseType as VCResponseType
+    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, StateVariableFilter::{ResonanceType,StateVariableFilter}, TiltFilter::{self, ResponseType}, VCFilter::ResponseType as VCResponseType
 };
 
 // This is here in meantime until new Actuate versions past this one!
@@ -66,10 +66,6 @@ mod old_preset_structs;
 // Plugin sizing
 const WIDTH: u32 = 920;
 const HEIGHT: u32 = 656;
-
-// Until we have a real preset editor and browser it's better to keep the preset bank smaller
-//const OLD_PRESET_BANK_SIZE: usize = 32;
-const PRESET_BANK_SIZE: usize = 128;
 
 // File Open Buffer Timer - fixes sync issues from load/save to the gui
 const FILE_OPEN_BUFFER_MAX: u32 = 1;
@@ -104,9 +100,9 @@ pub struct Actuate {
     browsing_presets: Arc<AtomicBool>,
     importing_presets: Arc<AtomicBool>,
     exporting_presets: Arc<AtomicBool>,
-    importing_banks: Arc<AtomicBool>,
-    exporting_banks: Arc<AtomicBool>,
-    current_preset: Arc<AtomicU32>,
+    //importing_banks: Arc<AtomicBool>,
+    //exporting_banks: Arc<AtomicBool>,
+    //current_preset: Arc<AtomicU32>,
     update_current_preset: Arc<AtomicBool>,
 
     safety_clip_output: Arc<Mutex<bool>>,
@@ -130,11 +126,7 @@ pub struct Actuate {
     lfo_3: LFOController::LFOController,
 
     // Preset Lib Default
-    preset_lib_name: Arc<Mutex<String>>,
-    preset_name: Arc<Mutex<String>>,
-    preset_info: Arc<Mutex<String>>,
-    //preset_category: Arc<Mutex<PresetType>>,
-    preset_lib: Arc<Mutex<Vec<ActuatePresetV131>>>,
+    current_loaded_params: Arc<Mutex<ActuatePresetV131>>,
 
     // Used for DC Offset calculations
     dc_filter_l: StateVariableFilter,
@@ -205,6 +197,20 @@ pub struct Actuate {
     filter_soft: Arc<AtomicBool>,
     filter_stab: Arc<AtomicBool>,
     filter_warm: Arc<AtomicBool>,
+
+    // HashMap to store directories and their files (two levels deep)
+    dir_files_map: Arc<Mutex<HashMap<PathBuf, Vec<PathBuf>>>>,
+    str_files_map: Arc<Mutex<HashMap<String, Vec<PathBuf>>>>,
+
+    // Lite internal db
+    preset_browser_lite_db: 
+    Arc<
+        RwLock<
+            HashMap<String, 
+                HashMap<String, PresetBrowserEntry>
+            >
+        >
+    >,
 }
 
 impl Default for Actuate {
@@ -219,15 +225,20 @@ impl Default for Actuate {
         // Studio One fix for internal windows
         let importing_presets = Arc::new(AtomicBool::new(false));
         let exporting_presets = Arc::new(AtomicBool::new(false));
-        let importing_banks = Arc::new(AtomicBool::new(false));
-        let exporting_banks = Arc::new(AtomicBool::new(false));
+        //let importing_banks = Arc::new(AtomicBool::new(false));
+        //let exporting_banks = Arc::new(AtomicBool::new(false));
         // End Studio One fix for internal windows
 
         // Safety Clipper
         let safety_clip_output = Arc::new(Mutex::new(false));
 
-        let current_preset = Arc::new(AtomicU32::new(0));
+        //let current_preset = Arc::new(AtomicU32::new(0));
         let update_current_preset = Arc::new(AtomicBool::new(false));
+
+        // HashMap to store directories and their files (two levels deep)
+        let dir_files_map: Arc<Mutex<HashMap<PathBuf, Vec<PathBuf>>>> = Arc::new(Mutex::new(HashMap::new()));
+        let str_files_map: Arc<Mutex<HashMap<String, Vec<PathBuf>>>> =  Arc::new(Mutex::new(HashMap::new()));
+        //let mut preset_browser_lite_db:  Arc<Mutex<HashMap<String, HashMap<String, PresetBrowserEntry>>> =  ;
 
         Self {
             params: Arc::new(ActuateParams::new(
@@ -245,11 +256,11 @@ impl Default for Actuate {
             file_open_buffer_timer: file_open_buffer_timer,
             browsing_presets: browsing_presets,
             safety_clip_output: safety_clip_output,
-            importing_banks: importing_banks,
+            //importing_banks: importing_banks,
             importing_presets: importing_presets,
-            exporting_banks: exporting_banks,
+            //exporting_banks: exporting_banks,
             exporting_presets: exporting_presets,
-            current_preset: current_preset,
+            //current_preset: current_preset,
             update_current_preset: update_current_preset,
 
             current_note_on_velocity: Arc::new(AtomicF32::new(0.0)),
@@ -270,14 +281,10 @@ impl Default for Actuate {
             lfo_3: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
 
             // Preset Library DEFAULT
-            preset_lib_name: Arc::new(Mutex::new(String::from("Default"))),
-            preset_name: Arc::new(Mutex::new(String::new())),
-            preset_info: Arc::new(Mutex::new(String::new())),
+            //preset_name: Arc::new(Mutex::new(String::new())),
+            //preset_info: Arc::new(Mutex::new(String::new())),
             //preset_category: Arc::new(Mutex::new(PresetType::Select)),
-            preset_lib: Arc::new(Mutex::new(vec![
-                DEFAULT_PRESET.clone();
-                PRESET_BANK_SIZE
-            ])),
+            current_loaded_params: Arc::new(Mutex::new(DEFAULT_PRESET.clone())),
 
             fm_state: OscState::Off,
             fm_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
@@ -363,6 +370,11 @@ impl Default for Actuate {
             filter_soft: Arc::new(AtomicBool::new(false)),
             filter_stab: Arc::new(AtomicBool::new(false)),
             filter_warm: Arc::new(AtomicBool::new(false)),
+
+            dir_files_map: dir_files_map,
+            str_files_map: str_files_map,
+            preset_browser_lite_db: Arc::new(RwLock::new(HashMap::new())),
+            //preset_browser_lite_db: HashMap::new(),
         }
     }
 }
@@ -1013,12 +1025,11 @@ pub struct ActuateParams {
     pub param_import_preset: BoolParam,
     #[id = "param_export_preset"]
     pub param_export_preset: BoolParam,
-    // I'm cursed to have these now that older actuates used them
-
     #[id = "param_next_preset"]
     pub param_next_preset: BoolParam,
     #[id = "param_prev_preset"]
     pub param_prev_preset: BoolParam,
+    // I'm cursed to have these now that older actuates used them
     #[id = "param_update_current_preset"]
     pub param_update_current_preset: BoolParam,
 
@@ -1066,6 +1077,11 @@ pub struct ActuateParams {
     // Not a param
     #[id = "loading"]
     pub loading: BoolParam,
+
+    #[persist = "preset_name_p"]
+    pub preset_name_p: Arc<Mutex<String>>,
+    #[persist = "preset_info_p"]
+    pub preset_info_p: Arc<Mutex<String>>,
 }
 
 // This is where parameters are established and defined as well as the callbacks to share gui/audio process info
@@ -1741,7 +1757,11 @@ impl ActuateParams {
                 FloatRange::Reversed(&FloatRange::Linear { min: 0.1, max: 1.0 }),
             )
             .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0)),
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             filter_res_type: EnumParam::new("Res Type", ResonanceType::Default).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -1907,7 +1927,11 @@ impl ActuateParams {
                 FloatRange::Reversed(&FloatRange::Linear { min: 0.1, max: 1.0 }),
             )
             .with_unit("%")
-            .with_value_to_string(formatters::v2s_f32_percentage(0)),
+            .with_value_to_string(formatters::v2s_f32_percentage(0))
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             filter_res_type_2: EnumParam::new("Res Type", ResonanceType::Default).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -3470,7 +3494,10 @@ impl ActuateParams {
             tag_stab: BoolParam::new("Stab", false).hide(),
             tag_warm: BoolParam::new("Warm", false).hide(),
 
-            // For some reason the callback doesn't work right here so I went by validating params for previous and next
+            preset_name_p: Arc::new(Mutex::new(String::from("Welcome to Actuate!"))),
+            preset_info_p: Arc::new(Mutex::new(String::from("by Ardura"))),
+
+            // These are now unused in 1.3.5+
             param_next_preset: BoolParam::new("->", false).hide(),
             param_prev_preset: BoolParam::new("<-", false).hide(),
 
@@ -5469,6 +5496,7 @@ impl Actuate {
         return (String::from("Error"), Option::None);
     }
 
+    /*
     // Load presets uses message packing with serde
     fn load_preset_bank(loading_bank: Option<PathBuf>) -> (String, Vec<ActuatePresetV131>) {
         let return_name;
@@ -5514,19 +5542,19 @@ impl Actuate {
         }
         return (String::from("Error"), Vec::new());
     }
+    */
 
     // This gets triggered to force a load/change and to recalculate sample dependent notes
     fn reload_entire_preset(
         setter: &ParamSetter,
         params: Arc<ActuateParams>,
-        current_preset_index: usize,
-        arc_preset: &Vec<ActuatePresetV131>,
+        arc_preset: ActuatePresetV131,
         AMod1: &mut AudioModule,
         AMod2: &mut AudioModule,
         AMod3: &mut AudioModule,
     ) {
         // Try to load preset into our params if possible
-        let loaded_preset = &arc_preset[current_preset_index as usize];
+        let loaded_preset = &arc_preset;
 
         setter.set_parameter(
             &params.audio_module_1_type,
@@ -5989,6 +6017,9 @@ impl Actuate {
         setter.set_parameter(&params.additive_amp_3_14, loaded_preset.additive_amp_3_14);
         setter.set_parameter(&params.additive_amp_3_15, loaded_preset.additive_amp_3_15);
 
+        setter.set_parameter(&params.preset_category, loaded_preset.preset_category);
+
+
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
         AMod1.restretch = loaded_preset.mod1_restretch;
@@ -6028,6 +6059,7 @@ impl Actuate {
         }
     }
 
+    /*
     fn save_preset_bank(preset_store: &mut Vec<ActuatePresetV131>, saving_bank: Option<PathBuf>) {
         if let Some(mut location) = saving_bank {
             if let Some(extension_check) = location.extension() {
@@ -6068,10 +6100,11 @@ impl Actuate {
             }
         }
     }
+    */
 
     // Update our current preset
     fn update_current_preset(&mut self) {
-        let arc_lib = Arc::clone(&self.preset_lib);
+        let arc_lib = Arc::clone(&self.current_loaded_params);
         let AM1c = self.audio_module_1.clone();
         let AM2c = self.audio_module_2.clone();
         let AM3c = self.audio_module_3.clone();
@@ -6079,10 +6112,10 @@ impl Actuate {
         let AM1 = AM1c.lock().unwrap();
         let AM2 = AM2c.lock().unwrap();
         let AM3 = AM3c.lock().unwrap();
-        arc_lib.lock().unwrap()[self.current_preset.load(Ordering::Acquire) as usize] =
+        *arc_lib.lock().unwrap() =
             ActuatePresetV131 {
-                preset_name: self.preset_name.lock().unwrap().clone(),
-                preset_info: self.preset_info.lock().unwrap().clone(),
+                preset_name: self.params.preset_name_p.lock().unwrap().clone(),
+                preset_info: self.params.preset_info_p.lock().unwrap().clone(),
                 preset_category: self.params.preset_category.value(),
                 tag_acid: self.params.tag_acid.value(),
                 tag_analog: self.params.tag_analog.value(),
@@ -6591,7 +6624,7 @@ lazy_static::lazy_static!(
         filter_env_dec_curve: SmoothStyle::Linear,
         filter_env_rel_curve: SmoothStyle::Linear,
         filter_alg_type: FilterAlgorithms::SVF,
-        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+        tilt_filter_type: TiltFilter::ResponseType::Lowpass,
 
         filter_wet_2: 1.0,
         filter_cutoff_2: 20000.0,
@@ -6609,7 +6642,7 @@ lazy_static::lazy_static!(
         filter_env_dec_curve_2: SmoothStyle::Linear,
         filter_env_rel_curve_2: SmoothStyle::Linear,
         filter_alg_type_2: FilterAlgorithms::SVF,
-        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+        tilt_filter_type_2: TiltFilter::ResponseType::Lowpass,
 
         filter_routing: FilterRouting::Parallel,
         filter_cutoff_link: false,
@@ -6886,7 +6919,7 @@ lazy_static::lazy_static!(
         filter_env_dec_curve: SmoothStyle::Linear,
         filter_env_rel_curve: SmoothStyle::Linear,
         filter_alg_type: FilterAlgorithms::SVF,
-        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+        tilt_filter_type: TiltFilter::ResponseType::Lowpass,
 
         filter_wet_2: 1.0,
         filter_cutoff_2: 20000.0,
@@ -6904,7 +6937,7 @@ lazy_static::lazy_static!(
         filter_env_dec_curve_2: SmoothStyle::Linear,
         filter_env_rel_curve_2: SmoothStyle::Linear,
         filter_alg_type_2: FilterAlgorithms::SVF,
-        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+        tilt_filter_type_2: TiltFilter::ResponseType::Lowpass,
 
         filter_routing: FilterRouting::Parallel,
         filter_cutoff_link: false,
@@ -7230,7 +7263,7 @@ lazy_static::lazy_static!(
         filter_env_dec_curve: SmoothStyle::Linear,
         filter_env_rel_curve: SmoothStyle::Linear,
         filter_alg_type: FilterAlgorithms::SVF,
-        tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+        tilt_filter_type: TiltFilter::ResponseType::Lowpass,
 
         filter_wet_2: 1.0,
         filter_cutoff_2: 20000.0,
@@ -7248,7 +7281,7 @@ lazy_static::lazy_static!(
         filter_env_dec_curve_2: SmoothStyle::Linear,
         filter_env_rel_curve_2: SmoothStyle::Linear,
         filter_alg_type_2: FilterAlgorithms::SVF,
-        tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+        tilt_filter_type_2: TiltFilter::ResponseType::Lowpass,
 
         filter_routing: FilterRouting::Parallel,
         filter_cutoff_link: false,
@@ -7450,3 +7483,4 @@ lazy_static::lazy_static!(
         additive_amp_3_15: 0.0,
     };
 );
+

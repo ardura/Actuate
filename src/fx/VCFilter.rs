@@ -51,8 +51,8 @@ impl VCFilter {
         sample_rate: f32,
     ) {
         let mut recalculate = false;
-        if self.center_freq != center_freq {
-            self.center_freq = center_freq;
+        if self.center_freq.clamp(20.0, 17000.0) != center_freq.clamp(20.0, 17000.0) {
+            self.center_freq = center_freq.clamp(20.0, 17000.0);
             recalculate = true;
         }
         if self.resonance != resonance {
@@ -70,7 +70,6 @@ impl VCFilter {
             self.f = 2.0 * self.center_freq / self.sample_rate;
             self.k = 3.6 * self.f - 1.6 * self.f * self.f - 1.0;
             self.p = (self.k + 1.0) * 0.5;
-            //let scale = (1.0 - self.p).exp() * 1.386249;
             let scale = (1.0 - self.p).exp() * 0.9;
             self.r = (1.01 - self.resonance) * scale;
         }

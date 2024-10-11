@@ -39,10 +39,8 @@ pub(crate) mod AdditiveModule;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
     actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, adv_scale_value, 
-    fx::{A4I_Filter::A4iFilter, ArduraFilter::{ArduraFilter, ResponseType}, 
-    StateVariableFilter::{ResonanceType, StateVariableFilter}, 
-    V4Filter::V4FilterStruct, 
-    VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
+    fx::{A4I_Filter::A4iFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, 
+    PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
@@ -153,8 +151,8 @@ pub struct SingleVoice {
     filter_l_1: StateVariableFilter,
     filter_r_1: StateVariableFilter,
     // TILT Filters
-    tilt_filter_l_1: ArduraFilter,
-    tilt_filter_r_1: ArduraFilter,
+    tilt_filter_l_1: TiltFilter::TiltFilterStruct,
+    tilt_filter_r_1: TiltFilter::TiltFilterStruct,
     // VCF Filters
     vcf_filter_l_1: VCFilter,
     vcf_filter_r_1: VCFilter,
@@ -167,8 +165,8 @@ pub struct SingleVoice {
     filter_l_2: StateVariableFilter,
     filter_r_2: StateVariableFilter,
     // TILT Filters
-    tilt_filter_l_2: ArduraFilter,
-    tilt_filter_r_2: ArduraFilter,
+    tilt_filter_l_2: TiltFilter::TiltFilterStruct,
+    tilt_filter_r_2: TiltFilter::TiltFilterStruct,
     // VCF Filters
     vcf_filter_l_2:VCFilter,
     vcf_filter_r_2:VCFilter,
@@ -2996,17 +2994,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             filter_l_1: StateVariableFilter::default().set_oversample(4),
                             filter_r_1: StateVariableFilter::default().set_oversample(4),
                             // TILT Filters
-                            tilt_filter_l_1: ArduraFilter::new(
+                            tilt_filter_l_1: TiltFilterStruct::new(
                                 self.sample_rate,
                                 self.filter_cutoff,
-                                1.0,
-                                ResponseType::Lowpass,
+                                TiltFilter::ResponseType::Lowpass
                             ),
-                            tilt_filter_r_1: ArduraFilter::new(
+                            tilt_filter_r_1: TiltFilterStruct::new(
                                 self.sample_rate,
                                 self.filter_cutoff,
-                                1.0,
-                                ResponseType::Lowpass,
+                                TiltFilter::ResponseType::Lowpass
                             ),
                             // VCF Filters
                             vcf_filter_l_1: VCFilter::new(),
@@ -3059,17 +3055,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             filter_l_2: StateVariableFilter::default().set_oversample(4),
                             filter_r_2: StateVariableFilter::default().set_oversample(4),
                             // TILT Filters
-                            tilt_filter_l_2: ArduraFilter::new(
+                            tilt_filter_l_2: TiltFilterStruct::new(
                                 self.sample_rate,
                                 self.filter_cutoff_2,
-                                1.0,
-                                ResponseType::Lowpass,
+                                TiltFilter::ResponseType::Lowpass
                             ),
-                            tilt_filter_r_2: ArduraFilter::new(
+                            tilt_filter_r_2: TiltFilterStruct::new(
                                 self.sample_rate,
                                 self.filter_cutoff_2,
-                                1.0,
-                                ResponseType::Lowpass,
+                                TiltFilter::ResponseType::Lowpass
                             ),
                             // VCF Filters
                             vcf_filter_l_2: VCFilter::new(),
@@ -3407,17 +3401,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     filter_l_1: StateVariableFilter::default().set_oversample(4),
                                     filter_r_1: StateVariableFilter::default().set_oversample(4),
                                     // TILT Filters
-                                    tilt_filter_l_1: ArduraFilter::new(
+                                    tilt_filter_l_1: TiltFilterStruct::new(
                                         44100.0,
                                         20000.0,
-                                        1.0,
-                                        ResponseType::Lowpass,
+                                        TiltFilter::ResponseType::Lowpass
                                     ),
-                                    tilt_filter_r_1: ArduraFilter::new(
+                                    tilt_filter_r_1: TiltFilterStruct::new(
                                         44100.0,
                                         20000.0,
-                                        1.0,
-                                        ResponseType::Lowpass,
+                                        TiltFilter::ResponseType::Lowpass
                                     ),
                                     // VCF Filters
                                     vcf_filter_l_1: VCFilter::new(),
@@ -3431,17 +3423,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     filter_l_2: StateVariableFilter::default().set_oversample(4),
                                     filter_r_2: StateVariableFilter::default().set_oversample(4),
                                     // TILT Filters
-                                    tilt_filter_l_2: ArduraFilter::new(
+                                    tilt_filter_l_2: TiltFilterStruct::new(
                                         44100.0,
                                         20000.0,
-                                        1.0,
-                                        ResponseType::Lowpass,
+                                        TiltFilter::ResponseType::Lowpass
                                     ),
-                                    tilt_filter_r_2: ArduraFilter::new(
+                                    tilt_filter_r_2: TiltFilterStruct::new(
                                         44100.0,
                                         20000.0,
-                                        1.0,
-                                        ResponseType::Lowpass,
+                                        TiltFilter::ResponseType::Lowpass
                                     ),
                                     // VCF Filters
                                     vcf_filter_l_2: VCFilter::new(),
@@ -3677,17 +3667,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 filter_l_1: StateVariableFilter::default().set_oversample(4),
                 filter_r_1: StateVariableFilter::default().set_oversample(4),
                 // TILT Filters
-                tilt_filter_l_1: ArduraFilter::new(
+                tilt_filter_l_1: TiltFilterStruct::new(
                     44100.0,
                     20000.0,
-                    1.0,
-                    ResponseType::Lowpass,
+                    TiltFilter::ResponseType::Lowpass
                 ),
-                tilt_filter_r_1: ArduraFilter::new(
+                tilt_filter_r_1: TiltFilterStruct::new(
                     44100.0,
                     20000.0,
-                    1.0,
-                    ResponseType::Lowpass,
+                    TiltFilter::ResponseType::Lowpass
                 ),
                 // VCF Filters
                 vcf_filter_l_1: VCFilter::new(),
@@ -3701,17 +3689,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 filter_l_2: StateVariableFilter::default().set_oversample(4),
                 filter_r_2: StateVariableFilter::default().set_oversample(4),
                 // TILT Filters
-                tilt_filter_l_2: ArduraFilter::new(
+                tilt_filter_l_2: TiltFilterStruct::new(
                     44100.0,
                     20000.0,
-                    1.0,
-                    ResponseType::Lowpass,
+                    TiltFilter::ResponseType::Lowpass
                 ),
-                tilt_filter_r_2: ArduraFilter::new(
+                tilt_filter_r_2: TiltFilterStruct::new(
                     44100.0,
                     20000.0,
-                    1.0,
-                    ResponseType::Lowpass,
+                    TiltFilter::ResponseType::Lowpass
                 ),
                 // VCF Filters
                 vcf_filter_l_2: VCFilter::new(),
@@ -4226,17 +4212,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         filter_l_1: StateVariableFilter::default().set_oversample(4),
                         filter_r_1: StateVariableFilter::default().set_oversample(4),
                         // TILT Filters
-                        tilt_filter_l_1: ArduraFilter::new(
+                        tilt_filter_l_1: TiltFilterStruct::new(
                             self.sample_rate,
                             self.filter_cutoff,
-                            1.0,
-                            ResponseType::Lowpass,
+                            TiltFilter::ResponseType::Lowpass
                         ),
-                        tilt_filter_r_1: ArduraFilter::new(
+                        tilt_filter_r_1: TiltFilterStruct::new(
                             self.sample_rate,
                             self.filter_cutoff,
-                            1.0,
-                            ResponseType::Lowpass,
+                            TiltFilter::ResponseType::Lowpass
                         ),
                         // VCF Filters
                         vcf_filter_l_1: VCFilter::new(),
@@ -4250,17 +4234,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         filter_l_2: StateVariableFilter::default().set_oversample(4),
                         filter_r_2: StateVariableFilter::default().set_oversample(4),
                         // TILT Filters
-                        tilt_filter_l_2: ArduraFilter::new(
+                        tilt_filter_l_2: TiltFilterStruct::new(
                             self.sample_rate,
                             self.filter_cutoff_2,
-                            1.0,
-                            ResponseType::Lowpass,
+                            TiltFilter::ResponseType::Lowpass
                         ),
-                        tilt_filter_r_2: ArduraFilter::new(
+                        tilt_filter_r_2: TiltFilterStruct::new(
                             self.sample_rate,
                             self.filter_cutoff_2,
-                            1.0,
-                            ResponseType::Lowpass,
+                            TiltFilter::ResponseType::Lowpass
                         ),
                         // VCF Filters
                         vcf_filter_l_2: VCFilter::new(),
@@ -5955,18 +5937,10 @@ fn filter_process_1(
             (left_output,right_output)
         }
         FilterAlgorithms::TILT => {
-            voice.tilt_filter_l_1.update(
-                sample_rate,
-                next_filter_step,
-                filter_resonance - filter_resonance_mod,
-                tilt_filter_type.clone(),
-            );
-            voice.tilt_filter_r_1.update(
-                sample_rate,
-                next_filter_step,
-                filter_resonance - filter_resonance_mod,
-                tilt_filter_type.clone(),
-            );
+            voice.tilt_filter_l_1.set_cutoff(next_filter_step);
+            voice.tilt_filter_r_1.set_cutoff(next_filter_step);
+            voice.tilt_filter_l_1.set_tilt(tilt_filter_type.clone());
+            voice.tilt_filter_r_1.set_tilt(tilt_filter_type.clone());
             let tilt_out_l = voice.tilt_filter_l_1.process(left_input_filter1 * db_to_gain(-12.0));
             let tilt_out_r = voice.tilt_filter_r_1.process(right_input_filter1 * db_to_gain(-12.0));
             let left_output = tilt_out_l * filter_wet
@@ -6088,18 +6062,10 @@ fn filter_process_2(
             (left_output,right_output)
         }
         FilterAlgorithms::TILT => {
-            voice.tilt_filter_l_2.update(
-                sample_rate,
-                next_filter_step,
-                filter_resonance - filter_resonance_mod,
-                tilt_filter_type.clone(),
-            );
-            voice.tilt_filter_r_2.update(
-                sample_rate,
-                next_filter_step,
-                filter_resonance - filter_resonance_mod,
-                tilt_filter_type.clone(),
-            );
+            voice.tilt_filter_l_2.set_cutoff(next_filter_step);
+            voice.tilt_filter_r_2.set_cutoff(next_filter_step);
+            voice.tilt_filter_l_2.set_tilt(tilt_filter_type.clone());
+            voice.tilt_filter_r_2.set_tilt(tilt_filter_type.clone());
             let tilt_out_l = voice.tilt_filter_l_2.process(left_input_filter2 * db_to_gain(-12.0));
             let tilt_out_r = voice.tilt_filter_r_2.process(right_input_filter2 * db_to_gain(-12.0));
             let left_output = tilt_out_l * filter_wet
