@@ -158,6 +158,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             }
         }
 
+        // Set default
+        *bank_current_value.write().unwrap() = "Default".to_string();
+
 
 
 
