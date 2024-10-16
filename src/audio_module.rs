@@ -39,10 +39,8 @@ pub(crate) mod AdditiveModule;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
     actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, adv_scale_value, 
-    fx::{A4I_Filter::A4iFilter, ArduraFilter::{ArduraFilter, ResponseType}, 
-    StateVariableFilter::{ResonanceType, StateVariableFilter}, 
-    V4Filter::V4FilterStruct, 
-    VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
+    fx::{A4I_Filter::A4iFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, 
+    PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
@@ -153,8 +151,8 @@ pub struct SingleVoice {
     filter_l_1: StateVariableFilter,
     filter_r_1: StateVariableFilter,
     // TILT Filters
-    tilt_filter_l_1: ArduraFilter,
-    tilt_filter_r_1: ArduraFilter,
+    tilt_filter_l_1: TiltFilter::TiltFilterStruct,
+    tilt_filter_r_1: TiltFilter::TiltFilterStruct,
     // VCF Filters
     vcf_filter_l_1: VCFilter,
     vcf_filter_r_1: VCFilter,
@@ -167,8 +165,8 @@ pub struct SingleVoice {
     filter_l_2: StateVariableFilter,
     filter_r_2: StateVariableFilter,
     // TILT Filters
-    tilt_filter_l_2: ArduraFilter,
-    tilt_filter_r_2: ArduraFilter,
+    tilt_filter_l_2: TiltFilter::TiltFilterStruct,
+    tilt_filter_r_2: TiltFilter::TiltFilterStruct,
     // VCF Filters
     vcf_filter_l_2:VCFilter,
     vcf_filter_r_2:VCFilter,
@@ -870,7 +868,7 @@ impl AudioModule {
 Free: constantly running phase based off previous note
 Retrigger: wave form restarts at every new note
 Random: Wave and all unisons use a new random phase every note
-UniRandom: Every voice uses its own unique random phase every note".to_string());
+MRandom: Every voice uses its own unique random phase every note".to_string());
                             ui.add(osc_1_retrigger_knob);
                         });
 
@@ -889,6 +887,23 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             .set_hover_text("Adjust the MIDI input by octave".to_string());
                             ui.add(osc_1_octave_knob);
 
+                            let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
+                                osc_unison,
+                                setter,
+                                KNOB_SIZE,
+                                KnobLayout::Horizonal,
+                            )
+                            .preset_style(ui_knob::KnobStyle::Preset1)
+                            .set_fill_color(DARK_GREY_UI_COLOR)
+                            .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                            .use_outline(true)
+                            .set_text_size(TEXT_SIZE)
+                            .set_hover_text("How many voices should play per key/note.
+You may also know this as mixture, course, or unison".to_string());
+                            ui.add(osc_1_unison_knob);
+                        });
+
+                        ui.vertical(|ui| {
                             let osc_1_semitones_knob = ui_knob::ArcKnob::for_param(
                                 osc_semitones,
                                 setter,
@@ -902,25 +917,9 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             .set_text_size(TEXT_SIZE)
                             .set_hover_text("Adjust the MIDI input by semitone".to_string());
                             ui.add(osc_1_semitones_knob);
-                        });
 
-                        ui.vertical(|ui| {
-                            let osc_1_stereo_knob = ui_knob::ArcKnob::for_param(
-                                osc_stereo,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .use_outline(true)
-                            .set_text_size(TEXT_SIZE)
-                            .set_hover_text("Oscillator voice stereo spread. 0 is Mono.".to_string());
-                            ui.add(osc_1_stereo_knob);
-
-                            let osc_1_unison_knob = ui_knob::ArcKnob::for_param(
-                                osc_unison,
+                            let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
+                                osc_unison_detune,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
@@ -930,8 +929,8 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE)
-                            .set_hover_text("How many voices should play in unison".to_string());
-                            ui.add(osc_1_unison_knob);
+                            .set_hover_text("Spread the pitches of the multiplied voices apart".to_string());
+                            ui.add(osc_1_unison_detune_knob);
                         });
 
                         ui.vertical(|ui| {
@@ -949,19 +948,19 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             .set_hover_text("Move the pitch to fine tune it".to_string());
                             ui.add(osc_1_detune_knob);
 
-                            let osc_1_unison_detune_knob = ui_knob::ArcKnob::for_param(
-                                osc_unison_detune,
+                            let osc_1_stereo_knob = ui_knob::ArcKnob::for_param(
+                                osc_stereo,
                                 setter,
                                 KNOB_SIZE,
                                 KnobLayout::Horizonal,
                             )
                             .preset_style(ui_knob::KnobStyle::Preset1)
                             .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD.gamma_multiply(2.0))
+                            .set_line_color(YELLOW_MUSTARD)
                             .use_outline(true)
                             .set_text_size(TEXT_SIZE)
-                            .set_hover_text("Spread the pitches of the unison voices apart".to_string());
-                            ui.add(osc_1_unison_detune_knob);
+                            .set_hover_text("Oscillator voice stereo spread. 0 is Mono.".to_string());
+                            ui.add(osc_1_stereo_knob);
                         });
 
                         // Trying to draw background box as rect
@@ -1796,7 +1795,7 @@ Random: Sample uses a new random position every note".to_string());
 Free: constantly running phase based off previous note
 Retrigger: wave form restarts at every new note
 Random: Wave and all unisons use a new random phase every note
-UniRandom: Every voice uses its own unique random phase every note".to_string());
+MRandom: Every voice uses its own unique random phase every note".to_string());
                             ui.add(osc_1_retrigger_knob);
                         });
 
@@ -2712,7 +2711,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                 // Start our phase back at 0
                                 new_phase = 0.0;
                             }
-                            RetriggerStyle::Random | RetriggerStyle::UniRandom => {
+                            RetriggerStyle::Random | RetriggerStyle::MRandom => {
                                 match self.audio_module_type {
                                     AudioModuleType::Sampler => {
                                         let mut rng = rand::thread_rng();
@@ -2869,7 +2868,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                         // Create our granulizer/sampler starting position from our knob scale
                                         scaled_sample_pos = if self.start_position > 0.0
                                             && self.osc_retrigger != RetriggerStyle::Random
-                                            && self.osc_retrigger != RetriggerStyle::UniRandom
+                                            && self.osc_retrigger != RetriggerStyle::MRandom
                                         {
                                             (self.sample_lib[note as usize][0].len() as f32
                                                 * self.start_position)
@@ -2878,7 +2877,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                         }
                                         // Retrigger and use 0
                                         else if self.osc_retrigger != RetriggerStyle::Random
-                                            && self.osc_retrigger != RetriggerStyle::UniRandom
+                                            && self.osc_retrigger != RetriggerStyle::MRandom
                                         {
                                             0_usize
                                         }
@@ -2995,17 +2994,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             filter_l_1: StateVariableFilter::default().set_oversample(4),
                             filter_r_1: StateVariableFilter::default().set_oversample(4),
                             // TILT Filters
-                            tilt_filter_l_1: ArduraFilter::new(
+                            tilt_filter_l_1: TiltFilterStruct::new(
                                 self.sample_rate,
                                 self.filter_cutoff,
-                                1.0,
-                                ResponseType::Lowpass,
+                                TiltFilter::ResponseType::Lowpass
                             ),
-                            tilt_filter_r_1: ArduraFilter::new(
+                            tilt_filter_r_1: TiltFilterStruct::new(
                                 self.sample_rate,
                                 self.filter_cutoff,
-                                1.0,
-                                ResponseType::Lowpass,
+                                TiltFilter::ResponseType::Lowpass
                             ),
                             // VCF Filters
                             vcf_filter_l_1: VCFilter::new(),
@@ -3058,17 +3055,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                             filter_l_2: StateVariableFilter::default().set_oversample(4),
                             filter_r_2: StateVariableFilter::default().set_oversample(4),
                             // TILT Filters
-                            tilt_filter_l_2: ArduraFilter::new(
+                            tilt_filter_l_2: TiltFilterStruct::new(
                                 self.sample_rate,
                                 self.filter_cutoff_2,
-                                1.0,
-                                ResponseType::Lowpass,
+                                TiltFilter::ResponseType::Lowpass
                             ),
-                            tilt_filter_r_2: ArduraFilter::new(
+                            tilt_filter_r_2: TiltFilterStruct::new(
                                 self.sample_rate,
                                 self.filter_cutoff_2,
-                                1.0,
-                                ResponseType::Lowpass,
+                                TiltFilter::ResponseType::Lowpass
                             ),
                             // VCF Filters
                             vcf_filter_l_2: VCFilter::new(),
@@ -3183,7 +3178,7 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
 
                             for unison_voice in 0..(self.osc_unison as usize - 1) {
                                 let uni_phase = match self.osc_retrigger {
-                                    RetriggerStyle::UniRandom => {
+                                    RetriggerStyle::MRandom => {
                                         match self.audio_module_type {
                                             AudioModuleType::Additive |
                                             AudioModuleType::Sine |
@@ -3406,17 +3401,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     filter_l_1: StateVariableFilter::default().set_oversample(4),
                                     filter_r_1: StateVariableFilter::default().set_oversample(4),
                                     // TILT Filters
-                                    tilt_filter_l_1: ArduraFilter::new(
+                                    tilt_filter_l_1: TiltFilterStruct::new(
                                         44100.0,
                                         20000.0,
-                                        1.0,
-                                        ResponseType::Lowpass,
+                                        TiltFilter::ResponseType::Lowpass
                                     ),
-                                    tilt_filter_r_1: ArduraFilter::new(
+                                    tilt_filter_r_1: TiltFilterStruct::new(
                                         44100.0,
                                         20000.0,
-                                        1.0,
-                                        ResponseType::Lowpass,
+                                        TiltFilter::ResponseType::Lowpass
                                     ),
                                     // VCF Filters
                                     vcf_filter_l_1: VCFilter::new(),
@@ -3430,17 +3423,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                                     filter_l_2: StateVariableFilter::default().set_oversample(4),
                                     filter_r_2: StateVariableFilter::default().set_oversample(4),
                                     // TILT Filters
-                                    tilt_filter_l_2: ArduraFilter::new(
+                                    tilt_filter_l_2: TiltFilterStruct::new(
                                         44100.0,
                                         20000.0,
-                                        1.0,
-                                        ResponseType::Lowpass,
+                                        TiltFilter::ResponseType::Lowpass
                                     ),
-                                    tilt_filter_r_2: ArduraFilter::new(
+                                    tilt_filter_r_2: TiltFilterStruct::new(
                                         44100.0,
                                         20000.0,
-                                        1.0,
-                                        ResponseType::Lowpass,
+                                        TiltFilter::ResponseType::Lowpass
                                     ),
                                     // VCF Filters
                                     vcf_filter_l_2: VCFilter::new(),
@@ -3676,17 +3667,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 filter_l_1: StateVariableFilter::default().set_oversample(4),
                 filter_r_1: StateVariableFilter::default().set_oversample(4),
                 // TILT Filters
-                tilt_filter_l_1: ArduraFilter::new(
+                tilt_filter_l_1: TiltFilterStruct::new(
                     44100.0,
                     20000.0,
-                    1.0,
-                    ResponseType::Lowpass,
+                    TiltFilter::ResponseType::Lowpass
                 ),
-                tilt_filter_r_1: ArduraFilter::new(
+                tilt_filter_r_1: TiltFilterStruct::new(
                     44100.0,
                     20000.0,
-                    1.0,
-                    ResponseType::Lowpass,
+                    TiltFilter::ResponseType::Lowpass
                 ),
                 // VCF Filters
                 vcf_filter_l_1: VCFilter::new(),
@@ -3700,17 +3689,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                 filter_l_2: StateVariableFilter::default().set_oversample(4),
                 filter_r_2: StateVariableFilter::default().set_oversample(4),
                 // TILT Filters
-                tilt_filter_l_2: ArduraFilter::new(
+                tilt_filter_l_2: TiltFilterStruct::new(
                     44100.0,
                     20000.0,
-                    1.0,
-                    ResponseType::Lowpass,
+                    TiltFilter::ResponseType::Lowpass
                 ),
-                tilt_filter_r_2: ArduraFilter::new(
+                tilt_filter_r_2: TiltFilterStruct::new(
                     44100.0,
                     20000.0,
-                    1.0,
-                    ResponseType::Lowpass,
+                    TiltFilter::ResponseType::Lowpass
                 ),
                 // VCF Filters
                 vcf_filter_l_2: VCFilter::new(),
@@ -4225,17 +4212,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         filter_l_1: StateVariableFilter::default().set_oversample(4),
                         filter_r_1: StateVariableFilter::default().set_oversample(4),
                         // TILT Filters
-                        tilt_filter_l_1: ArduraFilter::new(
+                        tilt_filter_l_1: TiltFilterStruct::new(
                             self.sample_rate,
                             self.filter_cutoff,
-                            1.0,
-                            ResponseType::Lowpass,
+                            TiltFilter::ResponseType::Lowpass
                         ),
-                        tilt_filter_r_1: ArduraFilter::new(
+                        tilt_filter_r_1: TiltFilterStruct::new(
                             self.sample_rate,
                             self.filter_cutoff,
-                            1.0,
-                            ResponseType::Lowpass,
+                            TiltFilter::ResponseType::Lowpass
                         ),
                         // VCF Filters
                         vcf_filter_l_1: VCFilter::new(),
@@ -4249,17 +4234,15 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         filter_l_2: StateVariableFilter::default().set_oversample(4),
                         filter_r_2: StateVariableFilter::default().set_oversample(4),
                         // TILT Filters
-                        tilt_filter_l_2: ArduraFilter::new(
+                        tilt_filter_l_2: TiltFilterStruct::new(
                             self.sample_rate,
                             self.filter_cutoff_2,
-                            1.0,
-                            ResponseType::Lowpass,
+                            TiltFilter::ResponseType::Lowpass
                         ),
-                        tilt_filter_r_2: ArduraFilter::new(
+                        tilt_filter_r_2: TiltFilterStruct::new(
                             self.sample_rate,
                             self.filter_cutoff_2,
-                            1.0,
-                            ResponseType::Lowpass,
+                            TiltFilter::ResponseType::Lowpass
                         ),
                         // VCF Filters
                         vcf_filter_l_2: VCFilter::new(),
@@ -5337,14 +5320,328 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         stereo_voices_l += left_amp;
                         stereo_voices_r += right_amp;
                     }
+                //}
+
+
+                    //////////////////////////////////////////////////////////////////////////
+                    // POLYFILTER UPDATE
+                    //////////////////////////////////////////////////////////////////////////
+                    
+                    // Filter 1 Processing
+                    ///////////////////////////////////////////////////////////////
+                    let mut next_filter_step: f32 = 0.0;
+                    let mut next_filter_step_2: f32 = 0.0;
+                    if self.filter_wet > 0.0 {
+                        // Filter state movement code
+                        //////////////////////////////////////////
+                        // If a note is ending and we should enter releasing
+                        if note_off {
+                            let old_filter_state = voice.filter_state_1;
+                            voice.filter_state_1 = OscState::Releasing;
+                            // Reset our filter release to be at sustain level to start
+                            voice.filter_rel_smoother_1.reset(
+                                match old_filter_state {
+                                    OscState::Attacking => voice.filter_atk_smoother_1.next(),
+                                    OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_1.next(),
+                                    OscState::Sustaining => voice.filter_dec_smoother_1.next(),
+                                    OscState::Off => self.filter_cutoff,
+                                },
+                            );
+                            // Move release to the cutoff to end
+                            voice.filter_rel_smoother_1.set_target(self.sample_rate, self.filter_cutoff);
+                        }
+
+                        // If our attack has finished
+                        if voice.filter_atk_smoother_1.steps_left() == 0 && voice.filter_state_1 == OscState::Attacking
+                        {
+                            voice.filter_state_1 = OscState::Decaying;
+                            // This makes our filter decay start at env peak point
+                            voice.filter_dec_smoother_1.reset(
+                                voice.filter_atk_smoother_1.next().clamp(20.0, 20000.0),
+                            );
+                            // Set up the smoother for our filter movement to go from our decay point to our sustain point
+                            voice.filter_dec_smoother_1.set_target(
+                                self.sample_rate,
+                                (
+                                    self.filter_cutoff
+                                    +   // This scales the peak env to be much gentler for the TILT filter
+                                    match self.filter_alg_type {
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak,
+                                        FilterAlgorithms::TILT => adv_scale_value(
+                                            self.filter_env_peak,
+                                            -19980.0,
+                                            19980.0,
+                                            -5000.0,
+                                            5000.0,
+                                        ),
+                                    }
+                                ).clamp(20.0, 20000.0)
+                                * (self.filter_env_sustain / 1999.9),
+                            );
+                        }
+
+                        // If our decay has finished move to sustain state
+                        if voice.filter_dec_smoother_1.steps_left() == 0
+                            && voice.filter_state_1 == OscState::Decaying
+                        {
+                            voice.filter_state_1 = OscState::Sustaining;
+                        }
+                        // use proper variable now that there are four filters and multiple states
+                        // This double addition of voice.cutoff_modulation + cutoff_mod will stack the mod at the time of the voice movement with the current
+                        next_filter_step = match voice.filter_state_1 {
+                            OscState::Attacking => {
+                                (voice.filter_atk_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                            }
+                            OscState::Decaying => {
+                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                            }
+                            OscState::Sustaining => {
+                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                            }
+                            OscState::Releasing => {
+                                if self.filter_env_release <= 0.0001 {
+                                    (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)    
+                                } else {
+                                    (voice.filter_rel_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                                }
+                            }
+                            // I don't expect this to be used
+                            _ => (self.filter_cutoff + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
+                        };
+                    }
+
+                    if self.filter_wet_2 > 0.0 {
+                        // Filter state movement code
+                        //////////////////////////////////////////
+                        // If a note is ending and we should enter releasing
+                        if note_off {
+                            let old_filter_state = voice.filter_state_2;
+                            voice.filter_state_2 = OscState::Releasing;
+                            // Reset our filter release to be at sustain level to start
+                            voice.filter_rel_smoother_2.reset(
+                                match old_filter_state {
+                                    OscState::Attacking => voice.filter_atk_smoother_2.next(),
+                                    OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_2.next(),
+                                    OscState::Sustaining => voice.filter_dec_smoother_2.next(),
+                                    OscState::Off => self.filter_cutoff_2,
+                                },
+                            );
+                            // Move release to the cutoff to end
+                            voice.filter_rel_smoother_2.set_target(self.sample_rate, self.filter_cutoff_2);
+                        }
+
+                        // If our attack has finished
+                        if voice.filter_atk_smoother_2.steps_left() == 0 && voice.filter_state_2 == OscState::Attacking
+                        {
+                            voice.filter_state_2 = OscState::Decaying;
+                            // This makes our filter decay start at env peak point
+                            voice.filter_dec_smoother_2.reset(
+                                voice.filter_atk_smoother_2.next().clamp(20.0, 20000.0),
+                            );
+                            // Set up the smoother for our filter movement to go from our decay point to our sustain point
+                            voice.filter_dec_smoother_2.set_target(
+                                self.sample_rate,
+                                (
+                                    self.filter_cutoff_2
+                                    +   // This scales the peak env to be much gentler for the TILT filter
+                                    match self.filter_alg_type_2 {
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak_2,
+                                        FilterAlgorithms::TILT => adv_scale_value(
+                                            self.filter_env_peak_2,
+                                            -19980.0,
+                                            19980.0,
+                                            -5000.0,
+                                            5000.0,
+                                        ),
+                                    }
+                                ).clamp(20.0, 20000.0)
+                                * (self.filter_env_sustain_2 / 1999.9),
+                            );
+                        }
+
+                        // If our decay has finished move to sustain state
+                        if voice.filter_dec_smoother_2.steps_left() == 0
+                            && voice.filter_state_2 == OscState::Decaying
+                        {
+                            voice.filter_state_2 = OscState::Sustaining;
+                        }
+                        // use proper variable now that there are four filters and multiple states
+                        next_filter_step_2 = match voice.filter_state_2 {
+                            OscState::Attacking => {
+                                (voice.filter_atk_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                            }
+                            OscState::Decaying => {
+                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                            }
+                            OscState::Sustaining => {
+                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                            }
+                            OscState::Releasing => {
+                                if self.filter_env_release_2 <= 0.0001 {
+                                    (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)    
+                                } else {
+                                    (voice.filter_rel_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                                }
+                            }
+                            // I don't expect this to be used
+                            _ => (self.filter_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
+                        };
+                    }
+
+                    //////////////////////////////////////////////////////////////////////////
+                    // POLYFILTER UPDATE
+                    //////////////////////////////////////////////////////////////////////////
+                    match self.audio_module_routing {
+                        AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
+                            left_output += center_voices + stereo_voices_l;
+                            right_output += center_voices + stereo_voices_r;
+                        },
+                        AMFilterRouting::Filter1 => {
+                            left_output_filter1 = center_voices + stereo_voices_l;
+                            right_output_filter1 = center_voices + stereo_voices_r;
+                        },
+                        AMFilterRouting::Filter2 => {
+                            left_output_filter2 = center_voices + stereo_voices_l;
+                            right_output_filter2 = center_voices + stereo_voices_r;
+                        },
+                        AMFilterRouting::Both => {
+                            left_output_filter1 = center_voices + stereo_voices_l;
+                            right_output_filter1 = center_voices + stereo_voices_r;
+                            left_output_filter2 = center_voices + stereo_voices_l;
+                            right_output_filter2 = center_voices + stereo_voices_r;
+                        },
+                    }
+
+                    if self.audio_module_routing != AMFilterRouting::Bypass {
+                        match self.filter_routing {
+                            FilterRouting::Parallel => {
+                                let (filter1_processed_l,filter1_processed_r) = filter_process_1(
+                                    self.filter_alg_type.clone(),
+                                    self.filter_resonance,
+                                    self.sample_rate,
+                                    self.filter_res_type.clone(),
+                                    self.lp_amount,
+                                    self.bp_amount,
+                                    self.hp_amount,
+                                    self.filter_wet,
+                                    self.tilt_filter_type.clone(),
+                                    self.vcf_filter_type.clone(),
+                                    voice,
+                                    next_filter_step,
+                                    resonance_mod,
+                                    left_output_filter1,
+                                    right_output_filter1,
+                                );
+                                let (filter2_processed_l,filter2_processed_r) = filter_process_2(
+                                    self.filter_alg_type_2.clone(),
+                                    self.filter_resonance_2,
+                                    self.sample_rate,
+                                    self.filter_res_type_2.clone(),
+                                    self.lp_amount_2,
+                                    self.bp_amount_2,
+                                    self.hp_amount_2,
+                                    self.filter_wet_2,
+                                    self.tilt_filter_type_2.clone(),
+                                    self.vcf_filter_type_2.clone(),
+                                    voice,
+                                    next_filter_step_2,
+                                    resonance_mod_2,
+                                    left_output_filter2,
+                                    right_output_filter2,
+                                );
+                                left_output += filter1_processed_l + filter2_processed_l;
+                                right_output += filter1_processed_r + filter2_processed_r;
+                            }
+                            FilterRouting::Series12 => {
+                                let (filter1_processed_l,filter1_processed_r) = filter_process_1(
+                                    self.filter_alg_type.clone(),
+                                    self.filter_resonance,
+                                    self.sample_rate,
+                                    self.filter_res_type.clone(),
+                                    self.lp_amount,
+                                    self.bp_amount,
+                                    self.hp_amount,
+                                    self.filter_wet,
+                                    self.tilt_filter_type.clone(),
+                                    self.vcf_filter_type.clone(),
+                                    voice,
+                                    next_filter_step,
+                                    resonance_mod,
+                                    left_output_filter1,
+                                    right_output_filter1,
+                                );
+                                let (filter2_processed_l,filter2_processed_r) = filter_process_2(
+                                    self.filter_alg_type_2.clone(),
+                                    self.filter_resonance_2,
+                                    self.sample_rate,
+                                    self.filter_res_type_2.clone(),
+                                    self.lp_amount_2,
+                                    self.bp_amount_2,
+                                    self.hp_amount_2,
+                                    self.filter_wet_2,
+                                    self.tilt_filter_type_2.clone(),
+                                    self.vcf_filter_type_2.clone(),
+                                    voice,
+                                    next_filter_step_2,
+                                    resonance_mod_2,
+                                    left_output_filter2 + filter1_processed_l,
+                                    right_output_filter2 + filter1_processed_r,
+                                );
+                                left_output += filter2_processed_l;
+                                right_output += filter2_processed_r;
+                            }
+                            FilterRouting::Series21 => {
+                                let (filter2_processed_l,filter2_processed_r) = filter_process_2(
+                                    self.filter_alg_type_2.clone(),
+                                    self.filter_resonance_2,
+                                    self.sample_rate,
+                                    self.filter_res_type_2.clone(),
+                                    self.lp_amount_2,
+                                    self.bp_amount_2,
+                                    self.hp_amount_2,
+                                    self.filter_wet_2,
+                                    self.tilt_filter_type_2.clone(),
+                                    self.vcf_filter_type_2.clone(),
+                                    voice,
+                                    next_filter_step_2,
+                                    resonance_mod_2,
+                                    left_output_filter2,
+                                    right_output_filter2,
+                                );
+                                let (filter1_processed_l,filter1_processed_r) = filter_process_1(
+                                    self.filter_alg_type.clone(),
+                                    self.filter_resonance,
+                                    self.sample_rate,
+                                    self.filter_res_type.clone(),
+                                    self.lp_amount,
+                                    self.bp_amount,
+                                    self.hp_amount,
+                                    self.filter_wet,
+                                    self.tilt_filter_type.clone(),
+                                    self.vcf_filter_type.clone(),
+                                    voice,
+                                    next_filter_step,
+                                    resonance_mod,
+                                    left_output_filter1 + filter2_processed_l,
+                                    right_output_filter1 + filter2_processed_r,
+                                );
+                                left_output += filter1_processed_l;
+                                right_output += filter1_processed_r;
+                            }
+                        }
+                    }
                 }
+
+
+
+
                 // Stereo applies to unison voices
                 // Sum our voices for output
-                summed_voices_l += center_voices;
-                summed_voices_r += center_voices;
+                summed_voices_l += left_output;
+                summed_voices_r += right_output;
                 // Scaling of output based on stereo voices and unison
-                summed_voices_l += stereo_voices_l / (self.osc_unison - 1).clamp(1, 9) as f32;
-                summed_voices_r += stereo_voices_r / (self.osc_unison - 1).clamp(1, 9) as f32;
+                //summed_voices_l += stereo_voices_l / (self.osc_unison - 1).clamp(1, 9) as f32;
+                //summed_voices_r += stereo_voices_r / (self.osc_unison - 1).clamp(1, 9) as f32;
 
                 // Blending
                 if self.osc_unison > 1 {
@@ -5508,12 +5805,331 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         stereo_voices_r += right_amp;
                 }
 
+
+                for voice in self.playing_voices.voices.iter_mut() {
+                    //////////////////////////////////////////////////////////////////////////
+                    // POLYFILTER UPDATE
+                    //////////////////////////////////////////////////////////////////////////
+                    
+                    // Filter 1 Processing
+                    ///////////////////////////////////////////////////////////////
+                    let mut next_filter_step: f32 = 0.0;
+                    let mut next_filter_step_2: f32 = 0.0;
+                    if self.filter_wet > 0.0 {
+                        // Filter state movement code
+                        //////////////////////////////////////////
+                        // If a note is ending and we should enter releasing
+                        if note_off {
+                            let old_filter_state = voice.filter_state_1;
+                            voice.filter_state_1 = OscState::Releasing;
+                            // Reset our filter release to be at sustain level to start
+                            voice.filter_rel_smoother_1.reset(
+                                match old_filter_state {
+                                    OscState::Attacking => voice.filter_atk_smoother_1.next(),
+                                    OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_1.next(),
+                                    OscState::Sustaining => voice.filter_dec_smoother_1.next(),
+                                    OscState::Off => self.filter_cutoff,
+                                },
+                            );
+                            // Move release to the cutoff to end
+                            voice.filter_rel_smoother_1.set_target(self.sample_rate, self.filter_cutoff);
+                        }
+
+                        // If our attack has finished
+                        if voice.filter_atk_smoother_1.steps_left() == 0 && voice.filter_state_1 == OscState::Attacking
+                        {
+                            voice.filter_state_1 = OscState::Decaying;
+                            // This makes our filter decay start at env peak point
+                            voice.filter_dec_smoother_1.reset(
+                                voice.filter_atk_smoother_1.next().clamp(20.0, 20000.0),
+                            );
+                            // Set up the smoother for our filter movement to go from our decay point to our sustain point
+                            voice.filter_dec_smoother_1.set_target(
+                                self.sample_rate,
+                                (
+                                    self.filter_cutoff
+                                    +   // This scales the peak env to be much gentler for the TILT filter
+                                    match self.filter_alg_type {
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak,
+                                        FilterAlgorithms::TILT => adv_scale_value(
+                                            self.filter_env_peak,
+                                            -19980.0,
+                                            19980.0,
+                                            -5000.0,
+                                            5000.0,
+                                        ),
+                                    }
+                                ).clamp(20.0, 20000.0)
+                                * (self.filter_env_sustain / 1999.9),
+                            );
+                        }
+
+                        // If our decay has finished move to sustain state
+                        if voice.filter_dec_smoother_1.steps_left() == 0
+                            && voice.filter_state_1 == OscState::Decaying
+                        {
+                            voice.filter_state_1 = OscState::Sustaining;
+                        }
+                        // use proper variable now that there are four filters and multiple states
+                        // This double addition of voice.cutoff_modulation + cutoff_mod will stack the mod at the time of the voice movement with the current
+                        next_filter_step = match voice.filter_state_1 {
+                            OscState::Attacking => {
+                                (voice.filter_atk_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                            }
+                            OscState::Decaying => {
+                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                            }
+                            OscState::Sustaining => {
+                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                            }
+                            OscState::Releasing => {
+                                if self.filter_env_release <= 0.0001 {
+                                    (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)    
+                                } else {
+                                    (voice.filter_rel_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                                }
+                            }
+                            // I don't expect this to be used
+                            _ => (self.filter_cutoff + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
+                        };
+                    }
+
+                    if self.filter_wet_2 > 0.0 {
+                        // Filter state movement code
+                        //////////////////////////////////////////
+                        // If a note is ending and we should enter releasing
+                        if note_off {
+                            let old_filter_state = voice.filter_state_2;
+                            voice.filter_state_2 = OscState::Releasing;
+                            // Reset our filter release to be at sustain level to start
+                            voice.filter_rel_smoother_2.reset(
+                                match old_filter_state {
+                                    OscState::Attacking => voice.filter_atk_smoother_2.next(),
+                                    OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_2.next(),
+                                    OscState::Sustaining => voice.filter_dec_smoother_2.next(),
+                                    OscState::Off => self.filter_cutoff_2,
+                                },
+                            );
+                            // Move release to the cutoff to end
+                            voice.filter_rel_smoother_2.set_target(self.sample_rate, self.filter_cutoff_2);
+                        }
+
+                        // If our attack has finished
+                        if voice.filter_atk_smoother_2.steps_left() == 0 && voice.filter_state_2 == OscState::Attacking
+                        {
+                            voice.filter_state_2 = OscState::Decaying;
+                            // This makes our filter decay start at env peak point
+                            voice.filter_dec_smoother_2.reset(
+                                voice.filter_atk_smoother_2.next().clamp(20.0, 20000.0),
+                            );
+                            // Set up the smoother for our filter movement to go from our decay point to our sustain point
+                            voice.filter_dec_smoother_2.set_target(
+                                self.sample_rate,
+                                (
+                                    self.filter_cutoff_2
+                                    +   // This scales the peak env to be much gentler for the TILT filter
+                                    match self.filter_alg_type_2 {
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak_2,
+                                        FilterAlgorithms::TILT => adv_scale_value(
+                                            self.filter_env_peak_2,
+                                            -19980.0,
+                                            19980.0,
+                                            -5000.0,
+                                            5000.0,
+                                        ),
+                                    }
+                                ).clamp(20.0, 20000.0)
+                                * (self.filter_env_sustain_2 / 1999.9),
+                            );
+                        }
+
+                        // If our decay has finished move to sustain state
+                        if voice.filter_dec_smoother_2.steps_left() == 0
+                            && voice.filter_state_2 == OscState::Decaying
+                        {
+                            voice.filter_state_2 = OscState::Sustaining;
+                        }
+                        // use proper variable now that there are four filters and multiple states
+                        next_filter_step_2 = match voice.filter_state_2 {
+                            OscState::Attacking => {
+                                (voice.filter_atk_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                            }
+                            OscState::Decaying => {
+                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                            }
+                            OscState::Sustaining => {
+                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                            }
+                            OscState::Releasing => {
+                                if self.filter_env_release_2 <= 0.0001 {
+                                    (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)    
+                                } else {
+                                    (voice.filter_rel_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                                }
+                            }
+                            // I don't expect this to be used
+                            _ => (self.filter_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
+                        };
+                    }
+
+                    //////////////////////////////////////////////////////////////////////////
+                    // POLYFILTER UPDATE
+                    //////////////////////////////////////////////////////////////////////////
+                    match self.audio_module_routing {
+                        AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
+                            left_output += center_voices_l + stereo_voices_l;
+                            right_output += center_voices_r + stereo_voices_r;
+                        },
+                        AMFilterRouting::Filter1 => {
+                            left_output_filter1 = center_voices_l + stereo_voices_l;
+                            right_output_filter1 = center_voices_r + stereo_voices_r;
+                        },
+                        AMFilterRouting::Filter2 => {
+                            left_output_filter2 = center_voices_l + stereo_voices_l;
+                            right_output_filter2 = center_voices_r + stereo_voices_r;
+                        },
+                        AMFilterRouting::Both => {
+                            left_output_filter1 = center_voices_l + stereo_voices_l;
+                            right_output_filter1 = center_voices_r + stereo_voices_r;
+                            left_output_filter2 = center_voices_l + stereo_voices_l;
+                            right_output_filter2 = center_voices_r + stereo_voices_r;
+                        },
+                    }
+
+                    if self.audio_module_routing != AMFilterRouting::Bypass {
+                        match self.filter_routing {
+                            FilterRouting::Parallel => {
+                                let (filter1_processed_l,filter1_processed_r) = filter_process_1(
+                                    self.filter_alg_type.clone(),
+                                    self.filter_resonance,
+                                    self.sample_rate,
+                                    self.filter_res_type.clone(),
+                                    self.lp_amount,
+                                    self.bp_amount,
+                                    self.hp_amount,
+                                    self.filter_wet,
+                                    self.tilt_filter_type.clone(),
+                                    self.vcf_filter_type.clone(),
+                                    voice,
+                                    next_filter_step,
+                                    resonance_mod,
+                                    left_output_filter1,
+                                    right_output_filter1,
+                                );
+                                let (filter2_processed_l,filter2_processed_r) = filter_process_2(
+                                    self.filter_alg_type_2.clone(),
+                                    self.filter_resonance_2,
+                                    self.sample_rate,
+                                    self.filter_res_type_2.clone(),
+                                    self.lp_amount_2,
+                                    self.bp_amount_2,
+                                    self.hp_amount_2,
+                                    self.filter_wet_2,
+                                    self.tilt_filter_type_2.clone(),
+                                    self.vcf_filter_type_2.clone(),
+                                    voice,
+                                    next_filter_step_2,
+                                    resonance_mod_2,
+                                    left_output_filter2,
+                                    right_output_filter2,
+                                );
+                                left_output += filter1_processed_l + filter2_processed_l;
+                                right_output += filter1_processed_r + filter2_processed_r;
+                            }
+                            FilterRouting::Series12 => {
+                                let (filter1_processed_l,filter1_processed_r) = filter_process_1(
+                                    self.filter_alg_type.clone(),
+                                    self.filter_resonance,
+                                    self.sample_rate,
+                                    self.filter_res_type.clone(),
+                                    self.lp_amount,
+                                    self.bp_amount,
+                                    self.hp_amount,
+                                    self.filter_wet,
+                                    self.tilt_filter_type.clone(),
+                                    self.vcf_filter_type.clone(),
+                                    voice,
+                                    next_filter_step,
+                                    resonance_mod,
+                                    left_output_filter1,
+                                    right_output_filter1,
+                                );
+                                let (filter2_processed_l,filter2_processed_r) = filter_process_2(
+                                    self.filter_alg_type_2.clone(),
+                                    self.filter_resonance_2,
+                                    self.sample_rate,
+                                    self.filter_res_type_2.clone(),
+                                    self.lp_amount_2,
+                                    self.bp_amount_2,
+                                    self.hp_amount_2,
+                                    self.filter_wet_2,
+                                    self.tilt_filter_type_2.clone(),
+                                    self.vcf_filter_type_2.clone(),
+                                    voice,
+                                    next_filter_step_2,
+                                    resonance_mod_2,
+                                    left_output_filter2 + filter1_processed_l,
+                                    right_output_filter2 + filter1_processed_r,
+                                );
+                                left_output += filter2_processed_l;
+                                right_output += filter2_processed_r;
+                            }
+                            FilterRouting::Series21 => {
+                                let (filter2_processed_l,filter2_processed_r) = filter_process_2(
+                                    self.filter_alg_type_2.clone(),
+                                    self.filter_resonance_2,
+                                    self.sample_rate,
+                                    self.filter_res_type_2.clone(),
+                                    self.lp_amount_2,
+                                    self.bp_amount_2,
+                                    self.hp_amount_2,
+                                    self.filter_wet_2,
+                                    self.tilt_filter_type_2.clone(),
+                                    self.vcf_filter_type_2.clone(),
+                                    voice,
+                                    next_filter_step_2,
+                                    resonance_mod_2,
+                                    left_output_filter2,
+                                    right_output_filter2,
+                                );
+                                let (filter1_processed_l,filter1_processed_r) = filter_process_1(
+                                    self.filter_alg_type.clone(),
+                                    self.filter_resonance,
+                                    self.sample_rate,
+                                    self.filter_res_type.clone(),
+                                    self.lp_amount,
+                                    self.bp_amount,
+                                    self.hp_amount,
+                                    self.filter_wet,
+                                    self.tilt_filter_type.clone(),
+                                    self.vcf_filter_type.clone(),
+                                    voice,
+                                    next_filter_step,
+                                    resonance_mod,
+                                    left_output_filter1 + filter2_processed_l,
+                                    right_output_filter1 + filter2_processed_r,
+                                );
+                                left_output += filter1_processed_l;
+                                right_output += filter1_processed_r;
+                            }
+                        }
+                    }
+                }
+
+
+
+
+
+
+
+
+
                 // Sum our voices for output
-                summed_voices_l += center_voices_l;
-                summed_voices_r += center_voices_r;
+                summed_voices_l += left_output;
+                summed_voices_r += right_output;
                 // Scaling of output based on stereo voices and unison
-                summed_voices_l += stereo_voices_l / (self.osc_unison - 1).clamp(1, 9) as f32;
-                summed_voices_r += stereo_voices_r / (self.osc_unison - 1).clamp(1, 9) as f32;
+                //summed_voices_l += stereo_voices_l / (self.osc_unison - 1).clamp(1, 9) as f32;
+                //summed_voices_r += stereo_voices_r / (self.osc_unison - 1).clamp(1, 9) as f32;
 
                 // Stereo Spreading code
                 let width_coeff = self.osc_stereo * 0.5;
@@ -5605,7 +6221,320 @@ UniRandom: Every voice uses its own unique random phase every note".to_string())
                         }
                     }
                 }
-                (summed_voices_l, summed_voices_r)
+
+
+                for voice in self.playing_voices.voices.iter_mut() {
+                    //////////////////////////////////////////////////////////////////////////
+                    // POLYFILTER UPDATE
+                    //////////////////////////////////////////////////////////////////////////
+                    
+                    // Filter 1 Processing
+                    ///////////////////////////////////////////////////////////////
+                    let mut next_filter_step: f32 = 0.0;
+                    let mut next_filter_step_2: f32 = 0.0;
+                    if self.filter_wet > 0.0 {
+                        // Filter state movement code
+                        //////////////////////////////////////////
+                        // If a note is ending and we should enter releasing
+                        if note_off {
+                            let old_filter_state = voice.filter_state_1;
+                            voice.filter_state_1 = OscState::Releasing;
+                            // Reset our filter release to be at sustain level to start
+                            voice.filter_rel_smoother_1.reset(
+                                match old_filter_state {
+                                    OscState::Attacking => voice.filter_atk_smoother_1.next(),
+                                    OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_1.next(),
+                                    OscState::Sustaining => voice.filter_dec_smoother_1.next(),
+                                    OscState::Off => self.filter_cutoff,
+                                },
+                            );
+                            // Move release to the cutoff to end
+                            voice.filter_rel_smoother_1.set_target(self.sample_rate, self.filter_cutoff);
+                        }
+
+                        // If our attack has finished
+                        if voice.filter_atk_smoother_1.steps_left() == 0 && voice.filter_state_1 == OscState::Attacking
+                        {
+                            voice.filter_state_1 = OscState::Decaying;
+                            // This makes our filter decay start at env peak point
+                            voice.filter_dec_smoother_1.reset(
+                                voice.filter_atk_smoother_1.next().clamp(20.0, 20000.0),
+                            );
+                            // Set up the smoother for our filter movement to go from our decay point to our sustain point
+                            voice.filter_dec_smoother_1.set_target(
+                                self.sample_rate,
+                                (
+                                    self.filter_cutoff
+                                    +   // This scales the peak env to be much gentler for the TILT filter
+                                    match self.filter_alg_type {
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak,
+                                        FilterAlgorithms::TILT => adv_scale_value(
+                                            self.filter_env_peak,
+                                            -19980.0,
+                                            19980.0,
+                                            -5000.0,
+                                            5000.0,
+                                        ),
+                                    }
+                                ).clamp(20.0, 20000.0)
+                                * (self.filter_env_sustain / 1999.9),
+                            );
+                        }
+
+                        // If our decay has finished move to sustain state
+                        if voice.filter_dec_smoother_1.steps_left() == 0
+                            && voice.filter_state_1 == OscState::Decaying
+                        {
+                            voice.filter_state_1 = OscState::Sustaining;
+                        }
+                        // use proper variable now that there are four filters and multiple states
+                        // This double addition of voice.cutoff_modulation + cutoff_mod will stack the mod at the time of the voice movement with the current
+                        next_filter_step = match voice.filter_state_1 {
+                            OscState::Attacking => {
+                                (voice.filter_atk_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                            }
+                            OscState::Decaying => {
+                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                            }
+                            OscState::Sustaining => {
+                                (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                            }
+                            OscState::Releasing => {
+                                if self.filter_env_release <= 0.0001 {
+                                    (voice.filter_dec_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)    
+                                } else {
+                                    (voice.filter_rel_smoother_1.next() + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0)
+                                }
+                            }
+                            // I don't expect this to be used
+                            _ => (self.filter_cutoff + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
+                        };
+                    }
+
+                    if self.filter_wet_2 > 0.0 {
+                        // Filter state movement code
+                        //////////////////////////////////////////
+                        // If a note is ending and we should enter releasing
+                        if note_off {
+                            let old_filter_state = voice.filter_state_2;
+                            voice.filter_state_2 = OscState::Releasing;
+                            // Reset our filter release to be at sustain level to start
+                            voice.filter_rel_smoother_2.reset(
+                                match old_filter_state {
+                                    OscState::Attacking => voice.filter_atk_smoother_2.next(),
+                                    OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_2.next(),
+                                    OscState::Sustaining => voice.filter_dec_smoother_2.next(),
+                                    OscState::Off => self.filter_cutoff_2,
+                                },
+                            );
+                            // Move release to the cutoff to end
+                            voice.filter_rel_smoother_2.set_target(self.sample_rate, self.filter_cutoff_2);
+                        }
+
+                        // If our attack has finished
+                        if voice.filter_atk_smoother_2.steps_left() == 0 && voice.filter_state_2 == OscState::Attacking
+                        {
+                            voice.filter_state_2 = OscState::Decaying;
+                            // This makes our filter decay start at env peak point
+                            voice.filter_dec_smoother_2.reset(
+                                voice.filter_atk_smoother_2.next().clamp(20.0, 20000.0),
+                            );
+                            // Set up the smoother for our filter movement to go from our decay point to our sustain point
+                            voice.filter_dec_smoother_2.set_target(
+                                self.sample_rate,
+                                (
+                                    self.filter_cutoff_2
+                                    +   // This scales the peak env to be much gentler for the TILT filter
+                                    match self.filter_alg_type_2 {
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak_2,
+                                        FilterAlgorithms::TILT => adv_scale_value(
+                                            self.filter_env_peak_2,
+                                            -19980.0,
+                                            19980.0,
+                                            -5000.0,
+                                            5000.0,
+                                        ),
+                                    }
+                                ).clamp(20.0, 20000.0)
+                                * (self.filter_env_sustain_2 / 1999.9),
+                            );
+                        }
+
+                        // If our decay has finished move to sustain state
+                        if voice.filter_dec_smoother_2.steps_left() == 0
+                            && voice.filter_state_2 == OscState::Decaying
+                        {
+                            voice.filter_state_2 = OscState::Sustaining;
+                        }
+                        // use proper variable now that there are four filters and multiple states
+                        next_filter_step_2 = match voice.filter_state_2 {
+                            OscState::Attacking => {
+                                (voice.filter_atk_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                            }
+                            OscState::Decaying => {
+                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                            }
+                            OscState::Sustaining => {
+                                (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                            }
+                            OscState::Releasing => {
+                                if self.filter_env_release_2 <= 0.0001 {
+                                    (voice.filter_dec_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)    
+                                } else {
+                                    (voice.filter_rel_smoother_2.next() + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0)
+                                }
+                            }
+                            // I don't expect this to be used
+                            _ => (self.filter_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
+                        };
+                    }
+
+                    //////////////////////////////////////////////////////////////////////////
+                    // POLYFILTER UPDATE
+                    //////////////////////////////////////////////////////////////////////////
+                    match self.audio_module_routing {
+                        AMFilterRouting::Bypass | AMFilterRouting::UNSETROUTING => {
+                            left_output += summed_voices_l;
+                            right_output += summed_voices_r;
+                        },
+                        AMFilterRouting::Filter1 => {
+                            left_output_filter1 = summed_voices_l;
+                            right_output_filter1 = summed_voices_r;
+                        },
+                        AMFilterRouting::Filter2 => {
+                            left_output_filter2 = summed_voices_l;
+                            right_output_filter2 = summed_voices_r;
+                        },
+                        AMFilterRouting::Both => {
+                            left_output_filter1 = summed_voices_l;
+                            right_output_filter1 = summed_voices_r;
+                            left_output_filter2 = summed_voices_l;
+                            right_output_filter2 = summed_voices_r;
+                        },
+                    }
+
+                    if self.audio_module_routing != AMFilterRouting::Bypass {
+                        match self.filter_routing {
+                            FilterRouting::Parallel => {
+                                let (filter1_processed_l,filter1_processed_r) = filter_process_1(
+                                    self.filter_alg_type.clone(),
+                                    self.filter_resonance,
+                                    self.sample_rate,
+                                    self.filter_res_type.clone(),
+                                    self.lp_amount,
+                                    self.bp_amount,
+                                    self.hp_amount,
+                                    self.filter_wet,
+                                    self.tilt_filter_type.clone(),
+                                    self.vcf_filter_type.clone(),
+                                    voice,
+                                    next_filter_step,
+                                    resonance_mod,
+                                    left_output_filter1,
+                                    right_output_filter1,
+                                );
+                                let (filter2_processed_l,filter2_processed_r) = filter_process_2(
+                                    self.filter_alg_type_2.clone(),
+                                    self.filter_resonance_2,
+                                    self.sample_rate,
+                                    self.filter_res_type_2.clone(),
+                                    self.lp_amount_2,
+                                    self.bp_amount_2,
+                                    self.hp_amount_2,
+                                    self.filter_wet_2,
+                                    self.tilt_filter_type_2.clone(),
+                                    self.vcf_filter_type_2.clone(),
+                                    voice,
+                                    next_filter_step_2,
+                                    resonance_mod_2,
+                                    left_output_filter2,
+                                    right_output_filter2,
+                                );
+                                left_output += filter1_processed_l + filter2_processed_l;
+                                right_output += filter1_processed_r + filter2_processed_r;
+                            }
+                            FilterRouting::Series12 => {
+                                let (filter1_processed_l,filter1_processed_r) = filter_process_1(
+                                    self.filter_alg_type.clone(),
+                                    self.filter_resonance,
+                                    self.sample_rate,
+                                    self.filter_res_type.clone(),
+                                    self.lp_amount,
+                                    self.bp_amount,
+                                    self.hp_amount,
+                                    self.filter_wet,
+                                    self.tilt_filter_type.clone(),
+                                    self.vcf_filter_type.clone(),
+                                    voice,
+                                    next_filter_step,
+                                    resonance_mod,
+                                    left_output_filter1,
+                                    right_output_filter1,
+                                );
+                                let (filter2_processed_l,filter2_processed_r) = filter_process_2(
+                                    self.filter_alg_type_2.clone(),
+                                    self.filter_resonance_2,
+                                    self.sample_rate,
+                                    self.filter_res_type_2.clone(),
+                                    self.lp_amount_2,
+                                    self.bp_amount_2,
+                                    self.hp_amount_2,
+                                    self.filter_wet_2,
+                                    self.tilt_filter_type_2.clone(),
+                                    self.vcf_filter_type_2.clone(),
+                                    voice,
+                                    next_filter_step_2,
+                                    resonance_mod_2,
+                                    left_output_filter2 + filter1_processed_l,
+                                    right_output_filter2 + filter1_processed_r,
+                                );
+                                left_output += filter2_processed_l;
+                                right_output += filter2_processed_r;
+                            }
+                            FilterRouting::Series21 => {
+                                let (filter2_processed_l,filter2_processed_r) = filter_process_2(
+                                    self.filter_alg_type_2.clone(),
+                                    self.filter_resonance_2,
+                                    self.sample_rate,
+                                    self.filter_res_type_2.clone(),
+                                    self.lp_amount_2,
+                                    self.bp_amount_2,
+                                    self.hp_amount_2,
+                                    self.filter_wet_2,
+                                    self.tilt_filter_type_2.clone(),
+                                    self.vcf_filter_type_2.clone(),
+                                    voice,
+                                    next_filter_step_2,
+                                    resonance_mod_2,
+                                    left_output_filter2,
+                                    right_output_filter2,
+                                );
+                                let (filter1_processed_l,filter1_processed_r) = filter_process_1(
+                                    self.filter_alg_type.clone(),
+                                    self.filter_resonance,
+                                    self.sample_rate,
+                                    self.filter_res_type.clone(),
+                                    self.lp_amount,
+                                    self.bp_amount,
+                                    self.hp_amount,
+                                    self.filter_wet,
+                                    self.tilt_filter_type.clone(),
+                                    self.vcf_filter_type.clone(),
+                                    voice,
+                                    next_filter_step,
+                                    resonance_mod,
+                                    left_output_filter1 + filter2_processed_l,
+                                    right_output_filter1 + filter2_processed_r,
+                                );
+                                left_output += filter1_processed_l;
+                                right_output += filter1_processed_r;
+                            }
+                        }
+                    }
+                }
+
+                //(summed_voices_l, summed_voices_r)
+                (left_output, right_output)
             },
         };
 
@@ -5954,18 +6883,10 @@ fn filter_process_1(
             (left_output,right_output)
         }
         FilterAlgorithms::TILT => {
-            voice.tilt_filter_l_1.update(
-                sample_rate,
-                next_filter_step,
-                filter_resonance - filter_resonance_mod,
-                tilt_filter_type.clone(),
-            );
-            voice.tilt_filter_r_1.update(
-                sample_rate,
-                next_filter_step,
-                filter_resonance - filter_resonance_mod,
-                tilt_filter_type.clone(),
-            );
+            voice.tilt_filter_l_1.set_cutoff(next_filter_step);
+            voice.tilt_filter_r_1.set_cutoff(next_filter_step);
+            voice.tilt_filter_l_1.set_tilt(tilt_filter_type.clone());
+            voice.tilt_filter_r_1.set_tilt(tilt_filter_type.clone());
             let tilt_out_l = voice.tilt_filter_l_1.process(left_input_filter1 * db_to_gain(-12.0));
             let tilt_out_r = voice.tilt_filter_r_1.process(right_input_filter1 * db_to_gain(-12.0));
             let left_output = tilt_out_l * filter_wet
@@ -6087,18 +7008,10 @@ fn filter_process_2(
             (left_output,right_output)
         }
         FilterAlgorithms::TILT => {
-            voice.tilt_filter_l_2.update(
-                sample_rate,
-                next_filter_step,
-                filter_resonance - filter_resonance_mod,
-                tilt_filter_type.clone(),
-            );
-            voice.tilt_filter_r_2.update(
-                sample_rate,
-                next_filter_step,
-                filter_resonance - filter_resonance_mod,
-                tilt_filter_type.clone(),
-            );
+            voice.tilt_filter_l_2.set_cutoff(next_filter_step);
+            voice.tilt_filter_r_2.set_cutoff(next_filter_step);
+            voice.tilt_filter_l_2.set_tilt(tilt_filter_type.clone());
+            voice.tilt_filter_r_2.set_tilt(tilt_filter_type.clone());
             let tilt_out_l = voice.tilt_filter_l_2.process(left_input_filter2 * db_to_gain(-12.0));
             let tilt_out_r = voice.tilt_filter_r_2.process(right_input_filter2 * db_to_gain(-12.0));
             let left_output = tilt_out_l * filter_wet

@@ -2,34 +2,34 @@
 // Builds the EGUI editor outside of the main file because it is huge
 // Ardura
 
-use std::{ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, AtomicU32, Ordering}, Arc, Mutex}};
+use std::{collections::HashMap, ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, RwLock}};
 use egui_file::{FileDialog, State};
-use nih_plug::{context::gui::AsyncExecutor, editor::Editor};
+use nih_plug::{context::gui::AsyncExecutor, editor::Editor, nih_log};
 use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2}, widgets::ParamSlider};
+use walkdir::WalkDir;
 
-use crate::CustomWidgets::ComboBoxParam;
+use crate::{actuate_enums::PresetBrowserEntry, CustomWidgets::ComboBoxParam};
 #[allow(unused_imports)]
 use crate::{
     actuate_enums::{
         AMFilterRouting, FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType}, Actuate, ActuateParams, CustomWidgets::{
-            slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, PRESET_BANK_SIZE, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
+            slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
 
 pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExecutor<Actuate>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = instance.params.clone();
-        let arc_preset_lib_name: Arc<Mutex<String>> = Arc::clone(&instance.preset_lib_name);
-        let arc_preset: Arc<Mutex<Vec<ActuatePresetV131>>> = Arc::clone(&instance.preset_lib);
-        let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&instance.preset_name);
-        let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&instance.preset_info);
+        let arc_preset: Arc<Mutex<ActuatePresetV131>> = Arc::clone(&instance.current_loaded_params);
+        //let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&instance.preset_name);
+        //let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&instance.preset_info);
         //let arc_preset_category: Arc<Mutex<PresetType>> = Arc::clone(&instance.preset_category);
         let clear_voices: Arc<AtomicBool> = Arc::clone(&instance.clear_voices);
         let reload_entire_preset: Arc<AtomicBool> = Arc::clone(&instance.reload_entire_preset);
         let browse_preset_active: Arc<AtomicBool> = Arc::clone(&instance.browsing_presets);
         let import_preset_active: Arc<AtomicBool> = Arc::clone(&instance.importing_presets);
         let export_preset_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_presets);
-        let import_bank_active: Arc<AtomicBool> = Arc::clone(&instance.importing_banks);
-        let export_bank_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_banks);
+        //let import_bank_active: Arc<AtomicBool> = Arc::clone(&instance.importing_banks);
+        //let export_bank_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_banks);
         let safety_clip_output: Arc<Mutex<bool>> = Arc::clone(&instance.safety_clip_output);
-        let current_preset: Arc<AtomicU32> = Arc::clone(&instance.current_preset);
+        //let current_preset: Arc<AtomicU32> = Arc::clone(&instance.current_preset);
         let AM1: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_1);
         let AM2: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_2);
         let AM3: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_3);
@@ -58,28 +58,141 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let filter_soft = instance.filter_soft.clone();
         let filter_stab = instance.filter_stab.clone();
         let filter_warm = instance.filter_warm.clone();
+        let dir_files_map = instance.dir_files_map.clone();
+        let str_files_map = instance.str_files_map.clone();
+        let lite_db = instance.preset_browser_lite_db.clone();
 
         let mut home_dir = PathBuf::new();
         let home_location = dirs::home_dir().expect("Unable to determine home directory");
         home_dir.push(home_location);
+
+        let default_dir_temp = dirs::document_dir();
+        let mut default_dir: PathBuf = home_dir.clone();
+        if default_dir_temp.is_some() {
+            default_dir = default_dir_temp.unwrap().as_path().join("ActuateDB").join("Default");
+        }
+
+
+        let bank_current_value: RwLock<String> = RwLock::new(String::new());
+        let base_dir: PathBuf;
+        let binding: Option<PathBuf> = dirs::document_dir();
+        if binding.is_some() && instance.dir_files_map.lock().unwrap().is_empty() {
+            // Attempt to create dir if it doesn't exist
+            base_dir = binding.unwrap().as_path().join("ActuateDB");
+            if !base_dir.exists() {
+                //default_dir = base_dir.as_path().join("Default");
+                let creation_attempt = std::fs::create_dir_all(default_dir.clone());
+                if creation_attempt.is_ok() {
+                    let stringpath = base_dir.as_path().to_str().unwrap();
+                    nih_log!("Created DB at {}", stringpath);
+                }
+            }
+            let root = base_dir;
+                
+            // Traverse directories and files up to two levels deep
+            for entry in WalkDir::new(root)
+                .min_depth(1) // Skip the root directory itself
+                .max_depth(2) // Limit traversal to two levels deep
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
+                let path = entry.path();
+            
+                // If it's a directory (at level 1), initialize its file vector
+                if path.is_dir() && entry.depth() == 1 {
+                    instance.dir_files_map.lock().unwrap().insert(path.to_path_buf(), Vec::new());
+                    instance.str_files_map.lock().unwrap().insert(path.file_name().unwrap().to_str().unwrap().to_string(), Vec::new());
+                } 
+                // If it's a file inside a level 1 directory, add it to the corresponding directory
+                else if path.is_file() {
+                    if let Some(parent_dir) = path.parent() {
+                        if let Some(files) = instance.dir_files_map.lock().unwrap().get_mut(parent_dir) {
+                            files.push(path.to_path_buf());
+                        }
+                        if let Some(files) = instance.str_files_map.lock().unwrap().get_mut(parent_dir.file_name().unwrap().to_str().unwrap()) {
+                            files.push(path.to_path_buf());
+                        }
+                        // Load info into our DB
+                        let unserialized: Option<ActuatePresetV131>;
+                        (_, unserialized) = Actuate::import_preset(Some(path.to_path_buf()));
+                        if unserialized.is_some() {
+                            let current_import = unserialized.unwrap();
+                            let mut lite_db_write = lite_db.write().unwrap();
+                            lite_db_write.entry(parent_dir.file_name().unwrap().to_str().unwrap().to_string()).or_insert_with(HashMap::new)
+                                .insert(
+                                    path.file_name().unwrap().to_str().unwrap().to_string().replace(".actuate", ""),
+                                    PresetBrowserEntry {
+                                        PresetCategory: current_import.preset_category,
+                                        tag_acid: current_import.tag_acid,
+                                        tag_analog: current_import.tag_analog,
+                                        tag_bright: current_import.tag_bright,
+                                        tag_chord: current_import.tag_chord,
+                                        tag_crisp: current_import.tag_crisp,
+                                        tag_deep: current_import.tag_deep,
+                                        tag_delicate: current_import.tag_delicate,
+                                        tag_hard: current_import.tag_hard,
+                                        tag_harsh: current_import.tag_harsh,
+                                        tag_lush: current_import.tag_lush,
+                                        tag_mellow: current_import.tag_mellow,
+                                        tag_resonant: current_import.tag_resonant,
+                                        tag_rich: current_import.tag_rich,
+                                        tag_sharp: current_import.tag_sharp,
+                                        tag_silky: current_import.tag_silky,
+                                        tag_smooth: current_import.tag_smooth,
+                                        tag_soft: current_import.tag_soft,
+                                        tag_stab: current_import.tag_stab,
+                                        tag_warm: current_import.tag_warm,
+                                        file: path.to_path_buf(),
+                                    });
+                        }
+                    }
+                }
+            }
+
+            // Print the directory-file structure
+            for (dir, files) in instance.dir_files_map.lock().unwrap().iter() {
+                nih_log!("Directory: {:?}", dir);
+                for file in files {
+                    nih_log!("  File: {:?}", file);
+                }
+            }
+        }
+
+        // Set default
+        *bank_current_value.write().unwrap() = "Default".to_string();
+
+
+
+
+
+
+
+
+
+
+
 
         // Show only files with our extensions
         let preset_filter = Box::new({
             let ext = Some(OsStr::new("actuate"));
             move |path: &Path| -> bool { path.extension() == ext }
         });
+        /*
         let bank_filter = Box::new({
             let ext = Some(OsStr::new("actuatebank"));
             move |path: &Path| -> bool { path.extension() == ext }
         });
+        */
         let save_preset_filter = Box::new({
             let ext = Some(OsStr::new("actuate"));
             move |path: &Path| -> bool { path.extension() == ext }
         });
+        /*
         let save_bank_filter = Box::new({
             let ext = Some(OsStr::new("actuatebank"));
             move |path: &Path| -> bool { path.extension() == ext }
         });
+        */
         let sample_filter = Box::new({
             let ext = Some(OsStr::new("wav"));
             move |path: &Path| -> bool { path.extension() == ext }
@@ -87,24 +200,43 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
 
         let dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
-                    FileDialog::open_file(Some(home_dir.clone()))
-                        .current_pos([(WIDTH/4) as f32, 10.0])
-                        .show_files_filter(preset_filter)
-                        .keep_on_top(true)
-                        .show_new_folder(false)
-                        .show_rename(false)
-                    )
-                );
+                    if default_dir.clone().exists() {
+                        FileDialog::open_file(Some(default_dir.clone()))
+                            //.current_pos([(WIDTH/4) as f32, 10.0])
+                            .show_files_filter(preset_filter)
+                            .keep_on_top(true)
+                            .show_new_folder(false)
+                            .show_rename(false)
+                    } else {
+                        FileDialog::open_file(Some(home_dir.clone()))
+                            //.current_pos([(WIDTH/4) as f32, 10.0])
+                            .show_files_filter(preset_filter)
+                            .keep_on_top(true)
+                            .show_new_folder(false)
+                            .show_rename(false)
+                    }
+                )
+            );
         let save_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
-                    FileDialog::save_file(Some(home_dir.clone()))
-                        .current_pos([(WIDTH/4) as f32, 10.0])
-                        .show_files_filter(save_preset_filter)
-                        .keep_on_top(true)
-                        .show_new_folder(false)
-                        .show_rename(false)
-                    )
-                );
+                    if default_dir.clone().exists() {
+                        FileDialog::save_file(Some(default_dir.clone()))
+                            //.current_pos([(WIDTH/4) as f32, 10.0])
+                            .show_files_filter(save_preset_filter)
+                            .keep_on_top(true)
+                            .show_new_folder(false)
+                            .show_rename(false)
+                    } else {
+                        FileDialog::save_file(Some(home_dir.clone()))
+                            //.current_pos([(WIDTH/4) as f32, 10.0])
+                            .show_files_filter(save_preset_filter)
+                            .keep_on_top(true)
+                            .show_new_folder(false)
+                            .show_rename(false)
+                    }
+                )
+            );
+        /* No more banks
         let bank_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                     FileDialog::open_file(Some(home_dir.clone()))
@@ -125,6 +257,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         .show_rename(false)
                     )
                 );
+        */
         
         let load_sample_dialog: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
@@ -145,10 +278,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
-                        let current_preset_index = current_preset.load(Ordering::SeqCst);
+                        //let current_preset_index = current_preset.load(Ordering::SeqCst);
                         let filter_select = filter_select_outside.clone();
                         let lfo_select = lfo_select_outside.clone();
-                        let preset_lib_name_tracker = arc_preset_lib_name.clone();
 
                         // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
                         // It runs if there is peristent sample data but not sample data in the audio module
@@ -193,6 +325,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         }
 
                         // Reset our buttons
+                        /*
                         if params.param_next_preset.value() {
                             if current_preset_index < (PRESET_BANK_SIZE - 1) as u32 {
                                 current_preset.store(current_preset_index + 1, Ordering::SeqCst);
@@ -204,16 +337,15 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 *lfo_select.lock().unwrap() = LFOSelect::INFO;
 
                                 // Update our displayed info
-                                let temp_current_preset = arc_preset.lock().unwrap()[current_preset_index as usize + 1].clone();
-                                *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
-                                *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
+                                let temp_current_preset = arc_preset.lock().unwrap().clone();
+                                *params.preset_name_p.lock().unwrap() = temp_current_preset.preset_name;
+                                *params.preset_info_p.lock().unwrap() = temp_current_preset.preset_info;
 
                                 // GUI thread misses this without this call here for some reason
                                 Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
-                                    (current_preset_index + 1) as usize,
-                                    &arc_preset.lock().unwrap(),
+                                    arc_preset.lock().unwrap().clone(),
                                     &mut AM1.lock().unwrap(),
                                     &mut AM2.lock().unwrap(),
                                     &mut AM3.lock().unwrap(),);
@@ -222,6 +354,8 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 reload_entire_preset.store(true, Ordering::SeqCst);
                             }
                         }
+                        */
+                        /*
                         if params.param_prev_preset.value() {
                             if current_preset_index > 0 {
                                 current_preset.store(current_preset_index - 1, Ordering::SeqCst);
@@ -233,16 +367,15 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 *lfo_select.lock().unwrap() = LFOSelect::INFO;
 
                                 // Update our displayed info
-                                let temp_current_preset = arc_preset.lock().unwrap()[current_preset_index as usize - 1].clone();
-                                *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
-                                *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
+                                let temp_current_preset = arc_preset.lock().unwrap().clone();
+                                *params.preset_name_p.lock().unwrap() = temp_current_preset.preset_name;
+                                *params.preset_info_p.lock().unwrap() = temp_current_preset.preset_info;
 
                                 // GUI thread misses this without this call here for some reason
                                 Actuate::reload_entire_preset(
                                     setter,
                                     params.clone(),
-                                    (current_preset_index - 1) as usize,
-                                    &arc_preset.lock().unwrap(),
+                                    arc_preset.lock().unwrap().clone(),
                                     &mut AM1.lock().unwrap(),
                                     &mut AM2.lock().unwrap(),
                                     &mut AM3.lock().unwrap(),);
@@ -251,6 +384,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                 reload_entire_preset.store(true, Ordering::SeqCst);
                             }
                         }
+                        */
 
                         if update_current_preset.load(Ordering::SeqCst) || params.param_update_current_preset.value() {
                             setter.set_parameter(&params.param_update_current_preset, false);
@@ -347,13 +481,18 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
-                                        .on_hover_text("v1.3.4 by Ardura!");
+                                        .on_hover_text("v1.3.5 by Ardura!");
                                     ui.add_space(2.0);
                                     ui.separator();
 
-                                    let prev_preset_button = BoolButton::BoolButton::for_param(&params.param_prev_preset, setter, 1.0, 0.8, SMALLER_FONT)
-                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                    ui.add(prev_preset_button);
+                                    /*
+                                    if ui.button(RichText::new("<-")
+                                        .font(FONT)
+                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .color(TEAL_GREEN)
+                                    ).clicked() {
+                                        setter.set_parameter(&params.param_prev_preset, true);
+                                    }
                                     ui.label(RichText::new("Preset")
                                         .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
@@ -362,16 +501,33 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         .background_color(A_BACKGROUND_COLOR_TOP)
                                         .color(FONT_COLOR)
                                         .size(12.0));
-                                    let next_preset_button = BoolButton::BoolButton::for_param(&params.param_next_preset, setter, 1.0, 0.8, SMALLER_FONT)
-                                        .with_background_color(DARK_GREY_UI_COLOR);
-                                    ui.add(next_preset_button);
+                                    if ui.button(RichText::new("->")
+                                        .font(FONT)
+                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .color(TEAL_GREEN)
+                                    ).clicked() {
+                                        setter.set_parameter(&params.param_next_preset, true);
+                                    }
+                                    */
+                                    let master_knob = ui_knob::ArcKnob::for_param(
+                                        &params.master_level,
+                                        setter,
+                                        11.0,
+                                        KnobLayout::HorizontalInline)
+                                        .preset_style(ui_knob::KnobStyle::Preset1)
+                                        .set_fill_color(DARK_GREY_UI_COLOR)
+                                        .set_line_color(YELLOW_MUSTARD)
+                                        .set_text_size(TEXT_SIZE)
+                                        .set_hover_text("Master volume level for Actuate".to_string());
+                                    ui.add(master_knob);
 
                                     ui.separator();
                                     let browse = ui.button(RichText::new("Browse Presets")
-                                        .font(SMALLER_FONT)
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                        .color(FONT_COLOR)
+                                        .font(FONT)
+                                        .background_color(YELLOW_MUSTARD.linear_multiply(1.1))
+                                        .color(DARKEST_BOTTOM_UI_COLOR)
                                     );
+                                    ui.separator();
                                     ui.selectable_value(&mut *lfo_select.lock().unwrap(), LFOSelect::INFO, RichText::new("Preset Info").background_color(DARKEST_BOTTOM_UI_COLOR).font(SMALLER_FONT));
                                     if browse.clicked() {
                                         browse_preset_active.store(true, Ordering::SeqCst);
@@ -393,7 +549,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             .enabled(true);
                                         window.show(egui_ctx, |ui| {
                                             ui.visuals_mut().extreme_bg_color = Color32::DARK_GRAY;
-                                            let max_rows = PRESET_BANK_SIZE;
+                                            //let max_rows = PRESET_BANK_SIZE;
 
                                             ui.vertical_centered(|ui| {
                                                 let close_button = ui.button(RichText::new("Close Browser")
@@ -455,288 +611,352 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
 
                                             ui.separator();
 
-                                            egui::Grid::new("preset_table")
-                                                .striped(true)
-                                                .num_columns(5)
-                                                .min_col_width(2.0)
-                                                .max_col_width(200.0)
-                                                .show(ui, |ui| {
-                                                    ui.label(RichText::new("Load")
-                                                        .font(FONT)
-                                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                                        .color(FONT_COLOR));
-                                                    ui.label(RichText::new("Preset Name")
-                                                        .font(FONT)
-                                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                                        .color(FONT_COLOR));
-                                                    ui.label(RichText::new("Category")
-                                                        .font(FONT)
-                                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                                        .color(FONT_COLOR));
-                                                    ui.label(RichText::new("Tags")
-                                                        .font(FONT)
-                                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                                        .color(FONT_COLOR));
-                                                    ui.end_row();
-                                                    // No filters are checked
-                                                    if  !filter_acid.load(Ordering::SeqCst) &&
-                                                        !filter_analog.load(Ordering::SeqCst) &&
-                                                        !filter_bright.load(Ordering::SeqCst) &&
-                                                        !filter_chord.load(Ordering::SeqCst) &&
-                                                        !filter_crisp.load(Ordering::SeqCst) &&
-                                                        !filter_deep.load(Ordering::SeqCst) &&
-                                                        !filter_delicate.load(Ordering::SeqCst) &&
-                                                        !filter_hard.load(Ordering::SeqCst) &&
-                                                        !filter_harsh.load(Ordering::SeqCst) &&
-                                                        !filter_lush.load(Ordering::SeqCst) &&
-                                                        !filter_mellow.load(Ordering::SeqCst) &&
-                                                        !filter_resonant.load(Ordering::SeqCst) &&
-                                                        !filter_rich.load(Ordering::SeqCst) &&
-                                                        !filter_sharp.load(Ordering::SeqCst) &&
-                                                        !filter_silky.load(Ordering::SeqCst) &&
-                                                        !filter_smooth.load(Ordering::SeqCst) &&
-                                                        !filter_soft.load(Ordering::SeqCst) &&
-                                                        !filter_stab.load(Ordering::SeqCst) &&
-                                                        !filter_warm.load(Ordering::SeqCst)
-                                                        {
-                                                            for row in 0..=(max_rows-1) {
-                                                                if ui.button(format!("Load Preset {row}")).clicked() {
-                                                                    current_preset.store(row as u32, Ordering::SeqCst);
-                                                                    clear_voices.store(true, Ordering::SeqCst);
-        
-                                                                    // Move to info tab on preset change
-                                                                    *lfo_select.lock().unwrap() = LFOSelect::INFO;
-        
-                                                                    // GUI thread misses this without this call here for some reason
-                                                                    Actuate::reload_entire_preset(
-                                                                        setter,
-                                                                        params.clone(),
-                                                                        row,
-                                                                        &arc_preset.lock().unwrap(),
-                                                                        &mut AM1.lock().unwrap(),
-                                                                        &mut AM2.lock().unwrap(),
-                                                                        &mut AM3.lock().unwrap(),);
-        
-                                                                    // This is the gui value only - the preset type itinstance is loaded in the preset already
-                                                                    // Update our displayed info
-                                                                    let temp_current_preset = arc_preset.lock().unwrap()[row].clone();
-                                                                    *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
-                                                                    *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
-        
-                                                                    // This is set for the process thread
-                                                                    reload_entire_preset.store(true, Ordering::SeqCst);
-                                                                }
-                                                                ui.label(arc_preset.lock().unwrap()[row].preset_name.clone().trim());
-                                                                ui.label(format!("{:?}",arc_preset.lock().unwrap()[row].preset_category.clone()).trim());
-                                                                // Tags
-                                                                ui.horizontal(|ui|{
-                                                                    if arc_preset.lock().unwrap()[row].tag_acid {
-                                                                        ui.label("Acid");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_analog {
-                                                                        ui.label("Analog");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_bright {
-                                                                        ui.label("Bright");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_chord {
-                                                                        ui.label("Chord");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_crisp {
-                                                                        ui.label("Crisp");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_deep {
-                                                                        ui.label("Deep");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_delicate {
-                                                                        ui.label("Delicate");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_hard {
-                                                                        ui.label("Hard");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_harsh {
-                                                                        ui.label("Harsh");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_lush {
-                                                                        ui.label("Lush");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_mellow {
-                                                                        ui.label("Mellow");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_resonant {
-                                                                        ui.label("Resonant");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_rich {
-                                                                        ui.label("Rich");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_sharp {
-                                                                        ui.label("Sharp");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_silky {
-                                                                        ui.label("Silky");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_smooth {
-                                                                        ui.label("Smooth");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_soft {
-                                                                        ui.label("Soft");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_stab {
-                                                                        ui.label("Stab");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[row].tag_warm {
-                                                                        ui.label("Warm");
-                                                                    }
-                                                                });
-                                                                ui.end_row();
-                                                            }
-                                                        } else {
-                                                            // Filter results
-                                                            let results: Vec<ActuatePresetV131>  = arc_preset.lock().unwrap().clone();
-                                                            let mut filtered_results: Vec<usize> = Vec::new();
-                                                            for (index, preset) in results.iter().enumerate() {
-                                                                if (filter_acid.load(Ordering::SeqCst) && preset.tag_acid == true) ||
-                                                                   (filter_analog.load(Ordering::SeqCst) && preset.tag_analog == true) ||
-                                                                   (filter_bright.load(Ordering::SeqCst) && preset.tag_bright == true) ||
-                                                                   (filter_chord.load(Ordering::SeqCst) && preset.tag_chord == true) ||
-                                                                   (filter_crisp.load(Ordering::SeqCst) && preset.tag_crisp == true) ||
-                                                                   (filter_deep.load(Ordering::SeqCst) && preset.tag_deep == true) ||
-                                                                   (filter_delicate.load(Ordering::SeqCst) && preset.tag_delicate == true) ||
-                                                                   (filter_hard.load(Ordering::SeqCst) && preset.tag_hard == true) ||
-                                                                   (filter_harsh.load(Ordering::SeqCst) && preset.tag_harsh == true) ||
-                                                                   (filter_lush.load(Ordering::SeqCst) && preset.tag_lush == true) ||
-                                                                   (filter_mellow.load(Ordering::SeqCst) && preset.tag_mellow == true) ||
-                                                                   (filter_resonant.load(Ordering::SeqCst) && preset.tag_resonant == true) ||
-                                                                   (filter_rich.load(Ordering::SeqCst) && preset.tag_rich == true) ||
-                                                                   (filter_sharp.load(Ordering::SeqCst) && preset.tag_sharp == true) ||
-                                                                   (filter_silky.load(Ordering::SeqCst) && preset.tag_silky == true) ||
-                                                                   (filter_smooth.load(Ordering::SeqCst) && preset.tag_smooth == true) ||
-                                                                   (filter_soft.load(Ordering::SeqCst) && preset.tag_soft == true) ||
-                                                                   (filter_stab.load(Ordering::SeqCst) && preset.tag_stab == true) ||
-                                                                   (filter_warm.load(Ordering::SeqCst) && preset.tag_warm == true) {
-                                                                     filtered_results.push(index);
-                                                                }
-                                                            }
-                                                            for r_index in filtered_results.iter() {
-                                                                if ui.button(format!("Load Preset {r_index}")).clicked() {
-                                                                    current_preset.store(*r_index as u32, Ordering::SeqCst);
-                                                                    clear_voices.store(true, Ordering::SeqCst);
-        
-                                                                    // Move to info tab on preset change
-                                                                    *lfo_select.lock().unwrap() = LFOSelect::INFO;
-        
-                                                                    // GUI thread misses this without this call here for some reason
-                                                                    Actuate::reload_entire_preset(
-                                                                        setter,
-                                                                        params.clone(),
-                                                                        *r_index,
-                                                                        &arc_preset.lock().unwrap(),
-                                                                        &mut AM1.lock().unwrap(),
-                                                                        &mut AM2.lock().unwrap(),
-                                                                        &mut AM3.lock().unwrap(),);
-        
-                                                                    // This is the gui value only - the preset type itinstance is loaded in the preset already
-                                                                    // Update our displayed info
-                                                                    let temp_current_preset = arc_preset.lock().unwrap()[*r_index].clone();
-                                                                    *arc_preset_name.lock().unwrap() = temp_current_preset.preset_name;
-                                                                    *arc_preset_info.lock().unwrap() = temp_current_preset.preset_info;
-        
-                                                                    // This is set for the process thread
-                                                                    reload_entire_preset.store(true, Ordering::SeqCst);
-                                                                }
-                                                                ui.label(arc_preset.lock().unwrap()[*r_index].preset_name.clone().trim());
-                                                                ui.label(format!("{:?}",arc_preset.lock().unwrap()[*r_index].preset_category.clone()).trim());
-                                                                // Tags
-                                                                ui.horizontal(|ui|{
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_acid {
-                                                                        ui.label("Acid");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_analog {
-                                                                        ui.label("Analog");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_bright {
-                                                                        ui.label("Bright");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_chord {
-                                                                        ui.label("Chord");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_crisp {
-                                                                        ui.label("Crisp");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_deep {
-                                                                        ui.label("Deep");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_delicate {
-                                                                        ui.label("Delicate");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_hard {
-                                                                        ui.label("Hard");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_harsh {
-                                                                        ui.label("Harsh");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_lush {
-                                                                        ui.label("Lush");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_mellow {
-                                                                        ui.label("Mellow");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_resonant {
-                                                                        ui.label("Resonant");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_rich {
-                                                                        ui.label("Rich");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_sharp {
-                                                                        ui.label("Sharp");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_silky {
-                                                                        ui.label("Silky");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_smooth {
-                                                                        ui.label("Smooth");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_soft {
-                                                                        ui.label("Soft");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_stab {
-                                                                        ui.label("Stab");
-                                                                    }
-                                                                    if arc_preset.lock().unwrap()[*r_index].tag_warm {
-                                                                        ui.label("Warm");
-                                                                    }
-                                                                });
-                                                                ui.end_row();
-                                                            }
-                                                        }
+                                            ui.horizontal(|ui|{
+                                                ui.vertical(|ui|{
+                                                    ui.colored_label(YELLOW_MUSTARD, "Preset Banks");
+                                                    for (directory, _) in dir_files_map.lock().unwrap().iter() {
+                                                        let name = directory.file_name().unwrap().to_str().unwrap().to_string();
+                                                        ui.selectable_value(&mut *bank_current_value.write().unwrap(), name.clone(), 
+                                                            RichText::new(name)
+                                                                .font(FONT)
+                                                                .background_color(A_BACKGROUND_COLOR_TOP)
+                                                                .color(TEAL_GREEN));
+                                                    }
                                                 });
+                                                ui.separator();
+                                                ui.vertical(|ui|{
+                                                    egui::Grid::new("preset_table")
+                                                        .striped(true)
+                                                        .num_columns(5)
+                                                        .min_col_width(2.0)
+                                                        .max_col_width(200.0)
+                                                        .show(ui, |ui| {
+                                                            ui.label(RichText::new("Load")
+                                                                .font(FONT)
+                                                                .background_color(A_BACKGROUND_COLOR_TOP)
+                                                                .color(FONT_COLOR));
+                                                            ui.label(RichText::new("Preset Name")
+                                                                .font(FONT)
+                                                                .background_color(A_BACKGROUND_COLOR_TOP)
+                                                                .color(FONT_COLOR));
+                                                            ui.label(RichText::new("Category")
+                                                                .font(FONT)
+                                                                .background_color(A_BACKGROUND_COLOR_TOP)
+                                                                .color(FONT_COLOR));
+                                                            ui.label(RichText::new("Tags")
+                                                                .font(FONT)
+                                                                .background_color(A_BACKGROUND_COLOR_TOP)
+                                                                .color(FONT_COLOR));
+                                                            ui.end_row();
+                                                            // No filters are checked
+                                                            if  !filter_acid.load(Ordering::SeqCst) &&
+                                                                !filter_analog.load(Ordering::SeqCst) &&
+                                                                !filter_bright.load(Ordering::SeqCst) &&
+                                                                !filter_chord.load(Ordering::SeqCst) &&
+                                                                !filter_crisp.load(Ordering::SeqCst) &&
+                                                                !filter_deep.load(Ordering::SeqCst) &&
+                                                                !filter_delicate.load(Ordering::SeqCst) &&
+                                                                !filter_hard.load(Ordering::SeqCst) &&
+                                                                !filter_harsh.load(Ordering::SeqCst) &&
+                                                                !filter_lush.load(Ordering::SeqCst) &&
+                                                                !filter_mellow.load(Ordering::SeqCst) &&
+                                                                !filter_resonant.load(Ordering::SeqCst) &&
+                                                                !filter_rich.load(Ordering::SeqCst) &&
+                                                                !filter_sharp.load(Ordering::SeqCst) &&
+                                                                !filter_silky.load(Ordering::SeqCst) &&
+                                                                !filter_smooth.load(Ordering::SeqCst) &&
+                                                                !filter_soft.load(Ordering::SeqCst) &&
+                                                                !filter_stab.load(Ordering::SeqCst) &&
+                                                                !filter_warm.load(Ordering::SeqCst)
+                                                                {
+                                                                    let tmp_val = bank_current_value.read().unwrap();
+                                                                    if let Some(row) = str_files_map.lock().unwrap().get(&*tmp_val) {
+                                                                        //ui.vertical(|ui|{
+                                                                            for (pno, presetfile) in row.iter().enumerate() {
+                                                                                //ui.horizontal(|ui|{
+                                                                                    let unserialized: Option<ActuatePresetV131>;
+                                                                                    let preset_name = presetfile.file_name().unwrap_or(OsStr::new("ERROR")).to_str().unwrap().replace(".actuate", "");
+                                                                                    if ui.button(format!("Load Preset {pno}")).clicked() {
 
-                                            ui.vertical_centered(|ui| {
-                                                let close_button = ui.button(RichText::new("Close Browser")
-                                                    .font(FONT)
-                                                    .background_color(A_BACKGROUND_COLOR_TOP)
-                                                    .color(FONT_COLOR)
-                                                ).on_hover_text("Close this window without doing anything");
-                                                if close_button.clicked() {
-                                                    browse_preset_active.store(false, Ordering::SeqCst);
-                                                }
+                                                                                        (_, unserialized) = Actuate::import_preset(Some(presetfile.to_path_buf()));
+                                                                                        
+                                                                                        // Stop our current voices
+                                                                                        clear_voices.store(true, Ordering::SeqCst);
+                                                                                    
+                                                                                        // Move to info tab on preset change
+                                                                                        *lfo_select.lock().unwrap() = LFOSelect::INFO;
+
+                                                                                        if unserialized.is_some() {
+                                                                                            let mut locked_lib = arc_preset.lock().unwrap();
+                                                                                            *locked_lib = unserialized.unwrap();
+                                                                                            //let temp_preset = &locked_lib;
+                                                                                            *params.preset_name_p.lock().unwrap() =  locked_lib.preset_name.clone();
+                                                                                            *params.preset_info_p.lock().unwrap() = locked_lib.preset_info.clone();
+                                                                                            setter.set_parameter(&params.preset_category, locked_lib.preset_category);
+                                                                                        
+                                                                                            import_preset_active.store(false, Ordering::SeqCst);
+                                                                                        
+                                                                                            drop(locked_lib);
+                                                                                        
+                                                                                            // GUI thread misses this without this call here for some reason
+                                                                                            Actuate::reload_entire_preset(
+                                                                                                setter,
+                                                                                                params.clone(),
+                                                                                                arc_preset.lock().unwrap().clone(),
+                                                                                                &mut AM1.lock().unwrap(),
+                                                                                                &mut AM2.lock().unwrap(),
+                                                                                                &mut AM3.lock().unwrap(),);
+                                                                                            // This is set for the process thread
+                                                                                            reload_entire_preset.store(true, Ordering::SeqCst);
+                                                                                        }
+                                                                                    }
+                                                                                    // Tags
+                                                                                    if !preset_name.contains("ERROR") {
+                                                                                        let bank_current = bank_current_value.read().unwrap(); // clone the value
+                                                                                        let preset_db_read = lite_db.read().unwrap();
+                                                                                        if let Some(inner_map) = preset_db_read.get(&*bank_current) {
+                                                                                            if let Some(tag_unwrap) = inner_map.get(&preset_name) {
+                                                                                                ui.label(preset_name.trim());
+                                                                                                ui.label(format!("{:?}",tag_unwrap.PresetCategory.clone()).trim());
+                                                                                                ui.horizontal(|ui|{
+                                                                                                    if tag_unwrap.tag_acid {
+                                                                                                        ui.label("Acid");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_analog {
+                                                                                                        ui.label("Analog");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_bright {
+                                                                                                        ui.label("Bright");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_chord {
+                                                                                                        ui.label("Chord");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_crisp {
+                                                                                                        ui.label("Crisp");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_deep {
+                                                                                                        ui.label("Deep");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_delicate {
+                                                                                                        ui.label("Delicate");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_hard {
+                                                                                                        ui.label("Hard");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_harsh {
+                                                                                                        ui.label("Harsh");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_lush {
+                                                                                                        ui.label("Lush");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_mellow {
+                                                                                                        ui.label("Mellow");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_resonant {
+                                                                                                        ui.label("Resonant");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_rich {
+                                                                                                        ui.label("Rich");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_sharp {
+                                                                                                        ui.label("Sharp");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_silky {
+                                                                                                        ui.label("Silky");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_smooth {
+                                                                                                        ui.label("Smooth");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_soft {
+                                                                                                        ui.label("Soft");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_stab {
+                                                                                                        ui.label("Stab");
+                                                                                                    }
+                                                                                                    if tag_unwrap.tag_warm {
+                                                                                                        ui.label("Warm");
+                                                                                                    }
+                                                                                                });
+                                                                                            } else {
+                                                                                                ui.label(preset_name.trim());
+                                                                                                ui.label("Error Loading");
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                ui.end_row();
+                                                                            }
+                                                                    }
+                                                                } else {
+                                                                    // Filter results
+                                                                    let tmp_val = bank_current_value.read().unwrap();
+                                                                    if let Some(row) = str_files_map.lock().unwrap().get(&*tmp_val) {
+                                                                        //ui.vertical(|ui|{
+                                                                            for (pno, presetfile) in row.iter().enumerate() {
+                                                                                //ui.horizontal(|ui|{
+                                                                                    let unserialized: Option<ActuatePresetV131>;
+                                                                                    let preset_name = presetfile.file_name().unwrap_or(OsStr::new("ERROR")).to_str().unwrap().replace(".actuate", "");
+
+                                                                                    if !preset_name.contains("ERROR") {
+                                                                                        let bank_current = bank_current_value.read().unwrap(); // clone the value
+                                                                                        let preset_db_read = lite_db.read().unwrap();
+                                                                                        if let Some(inner_map) = preset_db_read.get(&*bank_current) {
+                                                                                            if let Some(preset) = inner_map.get(&preset_name) {
+                                                                                                if (filter_acid.load(Ordering::SeqCst) && preset.tag_acid == true) ||
+                                                                                                    (filter_analog.load(Ordering::SeqCst) && preset.tag_analog == true) ||
+                                                                                                    (filter_bright.load(Ordering::SeqCst) && preset.tag_bright == true) ||
+                                                                                                    (filter_chord.load(Ordering::SeqCst) && preset.tag_chord == true) ||
+                                                                                                    (filter_crisp.load(Ordering::SeqCst) && preset.tag_crisp == true) ||
+                                                                                                    (filter_deep.load(Ordering::SeqCst) && preset.tag_deep == true) ||
+                                                                                                    (filter_delicate.load(Ordering::SeqCst) && preset.tag_delicate == true) ||
+                                                                                                    (filter_hard.load(Ordering::SeqCst) && preset.tag_hard == true) ||
+                                                                                                    (filter_harsh.load(Ordering::SeqCst) && preset.tag_harsh == true) ||
+                                                                                                    (filter_lush.load(Ordering::SeqCst) && preset.tag_lush == true) ||
+                                                                                                    (filter_mellow.load(Ordering::SeqCst) && preset.tag_mellow == true) ||
+                                                                                                    (filter_resonant.load(Ordering::SeqCst) && preset.tag_resonant == true) ||
+                                                                                                    (filter_rich.load(Ordering::SeqCst) && preset.tag_rich == true) ||
+                                                                                                    (filter_sharp.load(Ordering::SeqCst) && preset.tag_sharp == true) ||
+                                                                                                    (filter_silky.load(Ordering::SeqCst) && preset.tag_silky == true) ||
+                                                                                                    (filter_smooth.load(Ordering::SeqCst) && preset.tag_smooth == true) ||
+                                                                                                    (filter_soft.load(Ordering::SeqCst) && preset.tag_soft == true) ||
+                                                                                                    (filter_stab.load(Ordering::SeqCst) && preset.tag_stab == true) ||
+                                                                                                    (filter_warm.load(Ordering::SeqCst) && preset.tag_warm == true) {
+                                                                                                    
+                                                                                                        if ui.button(format!("Load Preset {pno}")).clicked() {
+
+                                                                                                            (_, unserialized) = Actuate::import_preset(Some(presetfile.to_path_buf()));
+                                                                                                            
+                                                                                                            // Stop our current voices
+                                                                                                            clear_voices.store(true, Ordering::SeqCst);
+                                                                                                        
+                                                                                                            // Move to info tab on preset change
+                                                                                                            *lfo_select.lock().unwrap() = LFOSelect::INFO;
+                    
+                                                                                                            if unserialized.is_some() {
+                                                                                                                let mut locked_lib = arc_preset.lock().unwrap();
+                                                                                                                *locked_lib = unserialized.unwrap();
+                                                                                                                //let temp_preset = &locked_lib;
+                                                                                                                *params.preset_name_p.lock().unwrap() = locked_lib.preset_name.clone();
+                                                                                                                *params.preset_info_p.lock().unwrap() = locked_lib.preset_info.clone();
+                                                                                                                setter.set_parameter(&params.preset_category, locked_lib.preset_category);
+                                                                                                            
+                                                                                                                import_preset_active.store(false, Ordering::SeqCst);
+                                                                                                            
+                                                                                                                drop(locked_lib);
+                                                                                                            
+                                                                                                                // GUI thread misses this without this call here for some reason
+                                                                                                                Actuate::reload_entire_preset(
+                                                                                                                    setter,
+                                                                                                                    params.clone(),
+                                                                                                                    arc_preset.lock().unwrap().clone(),
+                                                                                                                    &mut AM1.lock().unwrap(),
+                                                                                                                    &mut AM2.lock().unwrap(),
+                                                                                                                    &mut AM3.lock().unwrap(),);
+                                                                                                                // This is set for the process thread
+                                                                                                                reload_entire_preset.store(true, Ordering::SeqCst);
+                                                                                                            }
+                                                                                                        }
+                                                                                                        // Tags
+                                                                                                        if !preset_name.contains("ERROR") {
+                                                                                                            let bank_current = bank_current_value.read().unwrap(); // clone the value
+                                                                                                            let preset_db_read = lite_db.read().unwrap();
+                                                                                                            if let Some(inner_map) = preset_db_read.get(&*bank_current) {
+                                                                                                                if let Some(tag_unwrap) = inner_map.get(&preset_name) {
+                                                                                                                    ui.label(preset_name.trim());
+                                                                                                                    ui.label(format!("{:?}",tag_unwrap.PresetCategory.clone()).trim());
+                                                                                                                    ui.horizontal(|ui|{
+                                                                                                                        if tag_unwrap.tag_acid {
+                                                                                                                            ui.label("Acid");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_analog {
+                                                                                                                            ui.label("Analog");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_bright {
+                                                                                                                            ui.label("Bright");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_chord {
+                                                                                                                            ui.label("Chord");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_crisp {
+                                                                                                                            ui.label("Crisp");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_deep {
+                                                                                                                            ui.label("Deep");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_delicate {
+                                                                                                                            ui.label("Delicate");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_hard {
+                                                                                                                            ui.label("Hard");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_harsh {
+                                                                                                                            ui.label("Harsh");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_lush {
+                                                                                                                            ui.label("Lush");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_mellow {
+                                                                                                                            ui.label("Mellow");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_resonant {
+                                                                                                                            ui.label("Resonant");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_rich {
+                                                                                                                            ui.label("Rich");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_sharp {
+                                                                                                                            ui.label("Sharp");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_silky {
+                                                                                                                            ui.label("Silky");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_smooth {
+                                                                                                                            ui.label("Smooth");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_soft {
+                                                                                                                            ui.label("Soft");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_stab {
+                                                                                                                            ui.label("Stab");
+                                                                                                                        }
+                                                                                                                        if tag_unwrap.tag_warm {
+                                                                                                                            ui.label("Warm");
+                                                                                                                        }
+                                                                                                                    });
+                                                                                                                } else {
+                                                                                                                    ui.label(preset_name.trim());
+                                                                                                                    ui.label("Error Loading");
+                                                                                                                }
+                                                                                                            }
+                                                                                                        }
+                                                                                                    ui.end_row();
+                                                                                                }
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                    //ui.end_row();
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                });
+                                                    
+                                                    ui.vertical_centered(|ui| {
+                                                        let close_button = ui.button(RichText::new("Close Browser")
+                                                            .font(FONT)
+                                                            .background_color(A_BACKGROUND_COLOR_TOP)
+                                                            .color(FONT_COLOR)
+                                                        ).on_hover_text("Close this window without doing anything");
+                                                        if close_button.clicked() {
+                                                            browse_preset_active.store(false, Ordering::SeqCst);
+                                                        }
+                                                    });
+                                                });
                                             });
                                         });
                                     }
-                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.5, 1.0, SMALLER_FONT);
-                                    ui.add(use_fx_toggle).on_hover_text("Enable or disable FX processing");
+
                                     ui.separator();
-                                    let master_knob = ui_knob::ArcKnob::for_param(
-                                        &params.master_level,
-                                        setter,
-                                        11.0,
-                                        KnobLayout::HorizontalInline)
-                                        .preset_style(ui_knob::KnobStyle::Preset1)
-                                        .set_fill_color(DARK_GREY_UI_COLOR)
-                                        .set_line_color(YELLOW_MUSTARD)
-                                        .set_text_size(TEXT_SIZE)
-                                        .set_hover_text("Master volume level for Actuate".to_string());
-                                    ui.add(master_knob);
+
+                                    /*
                                     // Studio One changes (compatible for all DAWs)
                                     let import_bank_button = ui.button(RichText::new("Load Bank")
                                         .font(SMALLER_FONT)
@@ -790,7 +1010,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     let temp_preset = &locked_lib[current_preset_index as usize];
                                                     *arc_preset_name.lock().unwrap() =  temp_preset.preset_name.clone();
                                                     *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
-                                                    //*arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
+                                                    // *arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
                                                 
                                                     drop(locked_lib);
                                                 
@@ -803,7 +1023,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                         &mut AM2L,
                                                         &mut AM3L,);
                                                     import_bank_active.store(false, Ordering::SeqCst);
-                                                    *preset_lib_name_tracker.lock().unwrap() = filename.to_string_lossy().to_string();
+                                                    *current_loaded_params_name_tracker.lock().unwrap() = filename.to_string_lossy().to_string();
                                                 }
                                               }
                                             }
@@ -851,6 +1071,10 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             }
                                         }
                                     }
+                                    */
+                                    let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.5, 1.0, SMALLER_FONT);
+                                    ui.add(use_fx_toggle).on_hover_text("Enable or disable FX processing");
+
                                     // Studio One changes (compatible for all DAWs)
                                     let import_preset_button = ui.button(RichText::new("Import Preset")
                                         .font(SMALLER_FONT)
@@ -875,13 +1099,11 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
 
                                                 if unserialized.is_some() {
                                                     let mut locked_lib = arc_preset.lock().unwrap();
-                                                    locked_lib[current_preset_index as usize] =
-                                                        unserialized.unwrap();
-                                                    let temp_preset =
-                                                        &locked_lib[current_preset_index as usize];
-                                                    *arc_preset_name.lock().unwrap() =  temp_preset.preset_name.clone();
-                                                    *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
-                                                    //*arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
+                                                    *locked_lib = unserialized.unwrap();
+                                                    let temp_preset = &locked_lib;
+                                                    *params.preset_name_p.lock().unwrap() =  temp_preset.preset_name.clone();
+                                                    *params.preset_info_p.lock().unwrap() = temp_preset.preset_info.clone();
+                                                    setter.set_parameter(&params.preset_category, temp_preset.preset_category);
 
                                                     import_preset_active.store(false, Ordering::SeqCst);
 
@@ -891,11 +1113,12 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     Actuate::reload_entire_preset(
                                                         setter,
                                                         params.clone(),
-                                                        (current_preset_index) as usize,
-                                                        &arc_preset.lock().unwrap(),
+                                                        arc_preset.lock().unwrap().clone(),
                                                         &mut AM1.lock().unwrap(),
                                                         &mut AM2.lock().unwrap(),
                                                         &mut AM3.lock().unwrap(),);
+                                                    // This is set for the process thread
+                                                    reload_entire_preset.store(true, Ordering::SeqCst);
                                                 }
                                               }
                                             }
@@ -927,7 +1150,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                               if let Some(file) = s_dialog.path() {
                                                 let saved_file = Some(file.to_path_buf());
                                                 let locked_lib = arc_preset.lock().unwrap();
-                                                Actuate::export_preset(saved_file, locked_lib[current_preset_index as usize].clone());
+                                                Actuate::export_preset(saved_file, locked_lib.clone());
                                                 drop(locked_lib);
                                                 export_preset_active.store(false, Ordering::SeqCst);
                                               }
@@ -2945,7 +3168,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                             LFOSelect::INFO => {
                                                 ui.horizontal(|ui| {
                                                     ui.add(
-                                                        nih_plug_egui::egui::TextEdit::singleline(&mut *arc_preset_name.lock().unwrap())
+                                                        nih_plug_egui::egui::TextEdit::singleline(&mut *params.preset_name_p.lock().unwrap())
                                                             .interactive(true)
                                                             .hint_text("Preset Name")
                                                             .desired_width(150.0));
@@ -2972,7 +3195,7 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
 
                                                 ui.horizontal(|ui|{
                                                     ui.add(
-                                                        egui::TextEdit::multiline(&mut *arc_preset_info.lock().unwrap())
+                                                        egui::TextEdit::multiline(&mut *params.preset_info_p.lock().unwrap())
                                                             .interactive(true)
                                                             .hint_text("Preset Info")
                                                             .desired_width(150.0)
@@ -3369,12 +3592,14 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                             });
 
                         // Sanity resetting inbetween channel processing
+                        /*
                         if params.param_next_preset.value() {
                             setter.set_parameter(&params.param_next_preset, false);
                         }
                         if params.param_prev_preset.value() {
                             setter.set_parameter(&params.param_prev_preset, false);
                         }
+                        */
                     });
             },
             // This is the end of create_egui_editor()

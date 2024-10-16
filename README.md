@@ -1,4 +1,4 @@
-# Actuate (Latest is v1.3.4)
+# Actuate (Latest is v1.3.5)
 A Subtractive and Additive Synthesizer, Sampler, and Granulizer built in Rust + Nih-Plug
 Written by Ardura
 

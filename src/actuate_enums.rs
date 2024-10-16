@@ -1,9 +1,34 @@
 //actuate_enums.rs
 
-use std::fmt;
+use std::{fmt, path::PathBuf};
 
 use nih_plug::params::enums::Enum;
 use serde::{Deserialize, Serialize};
+
+// For internal preset browser to sort through without manually reading each file
+pub struct PresetBrowserEntry {
+    pub PresetCategory: PresetType,
+    pub tag_acid: bool,
+    pub tag_analog: bool,
+    pub tag_bright: bool,
+    pub tag_chord: bool,
+    pub tag_crisp: bool,
+    pub tag_deep: bool,
+    pub tag_delicate: bool,
+    pub tag_hard: bool,
+    pub tag_harsh: bool,
+    pub tag_lush: bool,
+    pub tag_mellow: bool,
+    pub tag_resonant: bool,
+    pub tag_rich: bool,
+    pub tag_sharp: bool,
+    pub tag_silky: bool,
+    pub tag_smooth: bool,
+    pub tag_soft: bool,
+    pub tag_stab: bool,
+    pub tag_warm: bool,
+    pub file: PathBuf,
+}
 
 // Gui for which filter to display on bottom
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

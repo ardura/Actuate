@@ -515,7 +515,7 @@ pub enum RetriggerStyle {
     Free,
     Retrigger,
     Random,
-    UniRandom,
+    MRandom,
 }
 
 // Super useful function to scale an input 0-1 into other ranges

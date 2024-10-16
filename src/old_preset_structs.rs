@@ -3,10 +3,7 @@ use crate::{
         AudioModuleType,
         Oscillator::{self, RetriggerStyle, SmoothStyle},
     }, fx::{
-        delay::{DelaySnapValues, DelayType},
-        saturation::SaturationType,
-        ArduraFilter,
-        StateVariableFilter::ResonanceType,
+        delay::{DelaySnapValues, DelayType}, saturation::SaturationType, StateVariableFilter::ResonanceType, TiltFilter::{self}
     }, AMFilterRouting, ActuatePresetV131, FilterAlgorithms, FilterRouting, LFOController, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel
 };
 use serde::{Deserialize, Serialize};
@@ -161,7 +158,7 @@ pub struct ActuatePresetV130 {
     pub filter_env_dec_curve: Oscillator::SmoothStyle,
     pub filter_env_rel_curve: Oscillator::SmoothStyle,
     pub filter_alg_type: FilterAlgorithms,
-    pub tilt_filter_type: ArduraFilter::ResponseType,
+    pub tilt_filter_type: TiltFilter::ResponseType,
 
     pub filter_wet_2: f32,
     pub filter_cutoff_2: f32,
@@ -179,7 +176,7 @@ pub struct ActuatePresetV130 {
     pub filter_env_dec_curve_2: Oscillator::SmoothStyle,
     pub filter_env_rel_curve_2: Oscillator::SmoothStyle,
     pub filter_alg_type_2: FilterAlgorithms,
-    pub tilt_filter_type_2: ArduraFilter::ResponseType,
+    pub tilt_filter_type_2: TiltFilter::ResponseType,
 
     pub filter_routing: FilterRouting,
     pub filter_cutoff_link: bool,
@@ -482,7 +479,7 @@ pub fn _load_unserialized_v130(file_data: Vec<u8>) -> ActuatePresetV131 {
             filter_env_dec_curve: SmoothStyle::Linear,
             filter_env_rel_curve: SmoothStyle::Linear,
             filter_alg_type: FilterAlgorithms::SVF,
-            tilt_filter_type: ArduraFilter::ResponseType::Lowpass,
+            tilt_filter_type: TiltFilter::ResponseType::Lowpass,
 
             filter_wet_2: 1.0,
             filter_cutoff_2: 20000.0,
@@ -500,7 +497,7 @@ pub fn _load_unserialized_v130(file_data: Vec<u8>) -> ActuatePresetV131 {
             filter_env_dec_curve_2: SmoothStyle::Linear,
             filter_env_rel_curve_2: SmoothStyle::Linear,
             filter_alg_type_2: FilterAlgorithms::SVF,
-            tilt_filter_type_2: ArduraFilter::ResponseType::Lowpass,
+            tilt_filter_type_2: TiltFilter::ResponseType::Lowpass,
 
             filter_routing: FilterRouting::Parallel,
             filter_cutoff_link: false,
