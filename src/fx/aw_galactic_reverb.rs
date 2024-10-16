@@ -387,8 +387,9 @@ impl GalacticReverb {
         self.iir_b_r = (self.iir_b_r * (1.0 - self.lowpass)) + (output_r * self.lowpass);
         output_r = self.iir_b_r;
         
-        output_l = input_l * (1.0 - self.wet) + output_l * self.wet;
-        output_r = input_r * (1.0 - self.wet) + output_r * self.wet;
+        // Changed this wet summing to match my other reverb
+        output_l = input_l + output_l * self.wet;
+        output_r = input_r + output_r * self.wet;
         (output_l, output_r)
     }
 }
