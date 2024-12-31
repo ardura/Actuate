@@ -27,7 +27,7 @@ pub struct PresetBrowserEntry {
     pub tag_soft: bool,
     pub tag_stab: bool,
     pub tag_warm: bool,
-    pub file: PathBuf,
+    pub _file: PathBuf,
 }
 
 // Gui for which filter to display on bottom
@@ -105,6 +105,7 @@ pub enum FilterAlgorithms {
     VCF,
     V4,
     A4I,
+    A4II,
 }
 
 // Preset categories in dropdown

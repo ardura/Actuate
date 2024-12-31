@@ -386,7 +386,8 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     Sense::click(),
                 );
                 if response.clicked() {
-                    self.begin_keyboard_entry(ui);
+                    // Causing crashes and not working right!
+                    //self.begin_keyboard_entry(ui);
                 }
                 if ui.is_rect_visible(response.rect) {
                     if should_draw_frame {
@@ -426,7 +427,8 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 Sense::click(),
             );
             if response.clicked() {
-                self.begin_keyboard_entry(ui);
+                // Causing crashes and not working right!
+                //self.begin_keyboard_entry(ui);
             }
             if ui.is_rect_visible(response.rect) {
                 if should_draw_frame {

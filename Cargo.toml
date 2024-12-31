@@ -1,6 +1,6 @@
 [package]
 name = "Actuate"
-version = "1.3.5"
+version = "1.3.6"
 edition = "2021"
 authors = ["Ardura <azviscarra@gmail.com>"]
 license = "GPL-3.0-or-later"
@@ -39,9 +39,8 @@ walkdir = "2.5.0"
 
 [profile.release]
 opt-level = 3
+split-debuginfo = 'packed'
 debug = false
-split-debuginfo = '...'  # Platform-specific.
-strip = "none"
 debug-assertions = false
 overflow-checks = false
 lto = false
@@ -49,10 +48,6 @@ panic = 'unwind'
 incremental = false
 codegen-units = 16
 rpath = false
-#opt-level = 3
-#debug = false
-#lto = "fat"
-#strip = "symbols"
 
 [profile.profiling]
 inherits = "release"

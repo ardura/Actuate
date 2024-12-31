@@ -39,7 +39,7 @@ pub(crate) mod AdditiveModule;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
     actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, adv_scale_value, 
-    fx::{A4I_Filter::A4iFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, 
+    fx::{A4I_Filter::A4iFilter, A4II_Filter::A4iiFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, 
     PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
@@ -185,6 +185,11 @@ pub struct SingleVoice {
     A4I_l_2: A4iFilter,
     A4I_r_1: A4iFilter,
     A4I_r_2: A4iFilter,
+    // A4II Filter
+    A4II_l_1: A4iiFilter,
+    A4II_l_2: A4iiFilter,
+    A4II_r_1: A4iiFilter,
+    A4II_r_2: A4iiFilter,
 
     cutoff_modulation: f32,
     resonance_modulation: f32,
@@ -317,7 +322,6 @@ pub struct AudioModule {
     pub osc_decay: f32,
     pub osc_sustain: f32,
     pub osc_release: f32,
-    pub osc_mod_amount: f32,
     pub osc_retrigger: RetriggerStyle,
     pub osc_atk_curve: SmoothStyle,
     pub osc_dec_curve: SmoothStyle,
@@ -484,7 +488,6 @@ impl Default for AudioModule {
             osc_decay: 0.0001,
             osc_sustain: 1999.9,
             osc_release: 0.07,
-            osc_mod_amount: 0.0,
             osc_retrigger: RetriggerStyle::Free,
             osc_atk_curve: SmoothStyle::Linear,
             osc_rel_curve: SmoothStyle::Linear,
@@ -3122,6 +3125,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             A4I_l_2: A4iFilter::new(self.filter_cutoff_2, self.filter_cutoff_2, self.filter_resonance_2),
                             A4I_r_1: A4iFilter::new(self.filter_cutoff, self.filter_cutoff, self.filter_resonance),
                             A4I_r_2: A4iFilter::new(self.filter_cutoff_2, self.filter_cutoff_2, self.filter_resonance_2),
+                            // A4II Filter
+                            A4II_l_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, self.filter_resonance),
+                            A4II_l_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
+                            A4II_r_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, self.filter_resonance),
+                            A4II_r_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
 
                             cutoff_modulation: cutoff_mod,
                             cutoff_modulation_2: cutoff_mod_2,
@@ -3141,7 +3149,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 + (
                                     // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak,
                                             -19980.0,
@@ -3451,6 +3459,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     A4I_l_2: A4iFilter::new(44100.0, 20000.0, 0.0),
                                     A4I_r_1: A4iFilter::new(44100.0, 20000.0, 0.0),
                                     A4I_r_2: A4iFilter::new(44100.0, 20000.0, 0.0),
+                                    // A4II Filter
+                                    A4II_l_1: A4iiFilter::new(20000.0, 44100.0, 0.0),
+                                    A4II_l_2: A4iiFilter::new(20000.0, 44100.0, 0.0),
+                                    A4II_r_1: A4iiFilter::new(20000.0, 44100.0, 0.0),
+                                    A4II_r_2: A4iiFilter::new(20000.0, 44100.0, 0.0),
                                     cutoff_modulation: cutoff_mod,
                                     cutoff_modulation_2: cutoff_mod_2,
                                     resonance_modulation: 0.0,
@@ -3717,6 +3730,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 A4I_l_2: A4iFilter::new(44100.0, 20000.0, 0.0),
                 A4I_r_1: A4iFilter::new(44100.0, 20000.0, 0.0),
                 A4I_r_2: A4iFilter::new(44100.0, 20000.0, 0.0),
+                // A4II Filter
+                A4II_l_1: A4iiFilter::new(20000.0, 44100.0, 0.0),
+                A4II_l_2: A4iiFilter::new(20000.0, 44100.0, 0.0),
+                A4II_r_1: A4iiFilter::new(20000.0, 44100.0, 0.0),
+                A4II_r_2: A4iiFilter::new(20000.0, 44100.0, 0.0),
                 cutoff_modulation: cutoff_mod,
                 cutoff_modulation_2: cutoff_mod_2,
                 resonance_modulation: 0.0,
@@ -4262,6 +4280,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         A4I_l_2: A4iFilter::new(self.sample_rate, self.filter_cutoff_2, 0.0),
                         A4I_r_1: A4iFilter::new(self.sample_rate, self.filter_cutoff, 0.0),
                         A4I_r_2: A4iFilter::new(self.sample_rate, self.filter_cutoff_2, 0.0),
+                        // A4II Filter
+                        A4II_l_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, 0.0),
+                        A4II_l_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
+                        A4II_r_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, 0.0),
+                        A4II_r_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
                         cutoff_modulation: cutoff_mod,
                         cutoff_modulation_2: cutoff_mod_2,
                         resonance_modulation: 0.0,
@@ -4731,6 +4754,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         if internal_unison_voice.vel_mod_amount == 0.0 {
                             let base_note = internal_unison_voice.note as f32
                                 + internal_unison_voice._detune
+                                + internal_unison_voice._unison_detune_value
                                 + detune_mod
                                 + internal_unison_voice.pitch_current
                                 + internal_unison_voice.pitch_current_2;
@@ -4739,6 +4763,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         } else {
                             let base_note = internal_unison_voice.note as f32
                                 + internal_unison_voice._detune
+                                + internal_unison_voice._unison_detune_value
                                 + detune_mod
                                 + (internal_unison_voice.vel_mod_amount * internal_unison_voice._velocity)
                                 + internal_unison_voice.pitch_current
@@ -4849,7 +4874,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     self.filter_cutoff
                                     +   // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak,
                                             -19980.0,
@@ -4928,7 +4953,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     self.filter_cutoff_2
                                     +   // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak_2,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak_2,
                                             -19980.0,
@@ -5366,7 +5391,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     self.filter_cutoff
                                     +   // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak,
                                             -19980.0,
@@ -5445,7 +5470,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     self.filter_cutoff_2
                                     +   // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak_2,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak_2,
                                             -19980.0,
@@ -5850,7 +5875,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     self.filter_cutoff
                                     +   // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak,
                                             -19980.0,
@@ -5929,7 +5954,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     self.filter_cutoff_2
                                     +   // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak_2,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak_2,
                                             -19980.0,
@@ -6267,7 +6292,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     self.filter_cutoff
                                     +   // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak,
                                             -19980.0,
@@ -6346,7 +6371,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     self.filter_cutoff_2
                                     +   // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak_2,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak_2,
                                             -19980.0,
@@ -6952,6 +6977,23 @@ fn filter_process_1(
                 right_input_filter1 * (1.0 - filter_wet);
             (left_output,right_output)
         }
+        FilterAlgorithms::A4II => {
+            voice.A4II_l_1.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            voice.A4II_r_1.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            let a4ii_out_l = voice.A4II_l_1.process(left_input_filter1);
+            let a4ii_out_r = voice.A4II_r_1.process(right_input_filter1);
+            let left_output = a4ii_out_l * filter_wet + 
+                left_input_filter1 * (1.0 - filter_wet);
+            let right_output = a4ii_out_r * filter_wet + 
+                right_input_filter1 * (1.0 - filter_wet);
+            (left_output,right_output)
+        }
     }
 }
 
@@ -7074,6 +7116,23 @@ fn filter_process_2(
             let left_output = a4i_out_l * filter_wet + 
                 left_input_filter2 * (1.0 - filter_wet);
             let right_output = a4i_out_r * filter_wet + 
+                right_input_filter2 * (1.0 - filter_wet);
+            (left_output,right_output)
+        }
+        FilterAlgorithms::A4II => {
+            voice.A4II_l_2.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            voice.A4II_r_2.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            let a4ii_out_l = voice.A4II_l_1.process(left_input_filter2);
+            let a4ii_out_r = voice.A4II_r_1.process(right_input_filter2);
+            let left_output = a4ii_out_l * filter_wet + 
+                left_input_filter2 * (1.0 - filter_wet);
+            let right_output = a4ii_out_r * filter_wet + 
                 right_input_filter2 * (1.0 - filter_wet);
             (left_output,right_output)
         }

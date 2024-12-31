@@ -142,7 +142,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         tag_soft: current_import.tag_soft,
                                         tag_stab: current_import.tag_stab,
                                         tag_warm: current_import.tag_warm,
-                                        file: path.to_path_buf(),
+                                        _file: path.to_path_buf(),
                                     });
                         }
                     }
@@ -1734,7 +1734,8 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_lp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_lp_amount,
@@ -1848,7 +1849,8 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -1929,7 +1931,8 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -2009,7 +2012,8 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -2079,7 +2083,79 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
+                                                                ui.add(filter_wet_knob);
+                                                                let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_resonance,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
+                                                                ui.add(filter_resonance_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_cutoff,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
+                                                                ui.add(filter_cutoff_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_env_peak,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_readable_box(false)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
+                                                                ui.add(filter_env_peak);
+                                                            });
+                                                        },
+                                                        FilterAlgorithms::A4II => {
+                                                            ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN.gamma_multiply(2.0))
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model
+V4: Analog Inspired Filter Idea
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -2153,7 +2229,8 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_lp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_lp_amount_2,
@@ -2263,7 +2340,8 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
@@ -2343,7 +2421,8 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
@@ -2424,7 +2503,8 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
@@ -2505,7 +2585,79 @@ SVF: State Variable Filter model
 Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
-A4I: Averaged 4 Pole Integrator".to_string());
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
+                                                                ui.add(filter_alg_knob);
+                                                                let filter_wet_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_wet_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("How much signal to process in the filter".to_string());
+                                                                ui.add(filter_wet_knob);
+                                                                let filter_resonance_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_resonance_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter resonance/emphasis".to_string());
+                                                                ui.add(filter_resonance_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_cutoff_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_cutoff_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("Filter cutoff/center frequency".to_string());
+                                                                ui.add(filter_cutoff_knob);
+                                                            });
+                                                            ui.vertical(|ui|{
+                                                                let filter_env_peak = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_env_peak_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(YELLOW_MUSTARD)
+                                                                    .set_readable_box(false)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text("The relative cutoff level to reach in the ADSR envelope".to_string());
+                                                                ui.add(filter_env_peak);
+                                                            });
+                                                        },
+                                                        FilterAlgorithms::A4II => {
+                                                            ui.vertical(|ui|{
+                                                                let filter_alg_knob = ui_knob::ArcKnob::for_param(
+                                                                    &params.filter_alg_type_2,
+                                                                    setter,
+                                                                    BKNOB_SIZE,
+                                                                    KnobLayout::Horizonal)
+                                                                    .preset_style(ui_knob::KnobStyle::Preset1)
+                                                                    .set_fill_color(DARK_GREY_UI_COLOR)
+                                                                    .set_line_color(TEAL_GREEN)
+                                                                    .set_text_size(BTEXT_SIZE)
+                                                                    .set_hover_text(
+"The filter algorithm to use.
+SVF: State Variable Filter model
+Tilt: A linear filter that cuts one side and boosts another
+VCF: Voltage Controlled Filter model
+V4: Analog Inspired Filter Idea
+A4I: Averaged 4 Pole Integrator
+A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
