@@ -28,6 +28,7 @@ use nih_plug::{
 use nih_plug_egui::egui::{self, Pos2, Rect, RichText, Rounding, ScrollArea, Ui};
 use pitch_shift::PitchShifter;
 use rand::Rng;
+use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use AdditiveModule::{AdditiveHarmonic, AdditiveOscillator};
 use std::{collections::VecDeque, f32::consts::SQRT_2, path::{Path, PathBuf}, sync::Arc};
@@ -1994,22 +1995,26 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 self.audio_module_type = params.audio_module_1_type.value();
                 if self.osc_octave != params.osc_1_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_1_octave.value();
-                    for voice in self.playing_voices.voices.iter_mut() {
+                    //for voice in self.playing_voices.voices.iter_mut() {
+                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= (oct_shift * 12) as u8;
-                    }
-                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                    });
+                    //for uni_voice in self.unison_voices.voices.iter_mut() {
+                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= (oct_shift * 12) as u8;
-                    }
+                    });
                 }
                 self.osc_octave = params.osc_1_octave.value();
                 if self.osc_semitones != params.osc_1_semitones.value() {
                     let semi_shift = self.osc_semitones - params.osc_1_semitones.value();
-                    for voice in self.playing_voices.voices.iter_mut() {
+                    //for voice in self.playing_voices.voices.iter_mut() {
+                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= semi_shift as u8;
-                    }
-                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                    });
+                    //for uni_voice in self.unison_voices.voices.iter_mut() {
+                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= semi_shift as u8;
-                    }
+                    });
                 }
                 match params.pitch_routing.value() {
                     PitchRouting::Osc1
@@ -2150,22 +2155,22 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 self.audio_module_type = params.audio_module_2_type.value();
                 if self.osc_octave != params.osc_2_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_2_octave.value();
-                    for voice in self.playing_voices.voices.iter_mut() {
+                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= (oct_shift * 12) as u8;
-                    }
-                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                    });
+                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= (oct_shift * 12) as u8;
-                    }
+                    });
                 }
                 self.osc_octave = params.osc_2_octave.value();
                 if self.osc_semitones != params.osc_2_semitones.value() {
                     let semi_shift = self.osc_semitones - params.osc_2_semitones.value();
-                    for voice in self.playing_voices.voices.iter_mut() {
+                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= semi_shift as u8;
-                    }
-                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                    });
+                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= semi_shift as u8;
-                    }
+                    });
                 }
                 match params.pitch_routing.value() {
                     PitchRouting::Osc2
@@ -2302,22 +2307,22 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 self.audio_module_type = params.audio_module_3_type.value();
                 if self.osc_octave != params.osc_3_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_3_octave.value();
-                    for voice in self.playing_voices.voices.iter_mut() {
+                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= (oct_shift * 12) as u8;
-                    }
-                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                    });
+                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= (oct_shift * 12) as u8;
-                    }
+                    });
                 }
                 self.osc_octave = params.osc_3_octave.value();
                 if self.osc_semitones != params.osc_3_semitones.value() {
                     let semi_shift = self.osc_semitones - params.osc_3_semitones.value();
-                    for voice in self.playing_voices.voices.iter_mut() {
+                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= semi_shift as u8;
-                    }
-                    for uni_voice in self.unison_voices.voices.iter_mut() {
+                    });
+                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= semi_shift as u8;
-                    }
+                    });
                 }
                 match params.pitch_routing.value() {
                     PitchRouting::Osc3
@@ -2770,6 +2775,22 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         if self.osc_unison > 1 {
                             // Calculate the detune step amount per amount of voices
                             let detune_step = self.osc_unison_detune / self.osc_unison as f32;
+                            let base_pitch_mod = pitch_mod_current + pitch_mod_current_2;
+                            let nvelocity_mod = uni_velocity_mod.clamp(0.0, 1.0) * velocity;
+                            let nunison_notes: Vec<f32> = (0..self.osc_unison as usize)
+                                .into_par_iter()
+                                .map(|unison_voice| {
+                                    let detune_offset = detune_step * (unison_voice as f32 + 1.0);
+                                    let sign = if unison_voice % 2 == 1 { 1.0 } else { -1.0 };
+                                    util::f32_midi_note_to_freq(
+                                        base_note
+                                            + sign * (uni_detune_mod + nvelocity_mod + detune_offset + base_pitch_mod),
+                                    )
+                                })
+                                .collect();
+                            unison_notes = nunison_notes;
+
+                            /*
                             for unison_voice in 0..(self.osc_unison as usize - 1) {
                                 // Create the detuned notes around the base note
                                 if unison_voice % 2 == 1 {
@@ -2792,6 +2813,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     );
                                 }
                             }
+                            */
                         }
 
                         let attack_smoother: Smoother<f32> = match self.osc_atk_curve {
@@ -3133,8 +3155,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
                             cutoff_modulation: cutoff_mod,
                             cutoff_modulation_2: cutoff_mod_2,
-                            resonance_modulation: 0.0,
-                            resonance_modulation_2: 0.0,
+                            resonance_modulation: resonance_mod,
+                            resonance_modulation_2: resonance_mod_2,
 
                             internal_unison_voices: Vec::new(),
                         };
@@ -3162,6 +3184,28 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             .clamp(20.0, 20000.0),
                         );
 
+                        // Reset our attack to start from the filter cutoff 2
+                        new_voice.filter_atk_smoother_2.reset(self.filter_cutoff_2);
+                        // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
+                        new_voice.filter_atk_smoother_2.set_target(
+                            self.sample_rate,
+                            (self.filter_cutoff_2
+                                + (
+                                    // This scales the peak env to be much gentler for the TILT filter
+                                    match self.filter_alg_type_2 {
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
+                                        FilterAlgorithms::TILT => adv_scale_value(
+                                            self.filter_env_peak_2,
+                                            -19980.0,
+                                            19980.0,
+                                            -5000.0,
+                                            5000.0,
+                                        ),
+                                    }
+                                ))
+                            .clamp(20.0, 20000.0),
+                        );
+
                         // Add unison voices to our voice tracking deque
                         if self.osc_unison > 1 && ( 
                             self.audio_module_type != AudioModuleType::Granulizer &&
@@ -3173,16 +3217,17 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 self.osc_unison - 1
                             };
                             
+                            /*
                             let mut unison_angles = vec![0.0; unison_even_voices as usize];
                             
                             for i in 1..(unison_even_voices + 1) {
                                 let voice_angle = self.calculate_panning(i - 1, self.osc_unison, stereo_algorithm);
-                                // Fix our weird voice switching that "Actuate" just has
-                                //if i%2 == 0 {
-                                //    voice_angle *= -1.0;
-                                //}
                                 unison_angles[(i - 1) as usize] = voice_angle;
                             }
+                            */
+                            let unison_angles: Vec<f32> = (0..unison_even_voices as usize)
+                                .map(|i| self.calculate_panning(i, self.osc_unison, stereo_algorithm))
+                                .collect();
 
                             for unison_voice in 0..(self.osc_unison as usize - 1) {
                                 let uni_phase = match self.osc_retrigger {
@@ -3321,8 +3366,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     },
                                     cutoff_modulation: cutoff_mod,
                                     cutoff_modulation_2: cutoff_mod_2,
-                                    resonance_modulation: 0.0,
-                                    resonance_modulation_2: 0.0,
+                                    resonance_modulation: resonance_mod,
+                                    resonance_modulation_2: resonance_mod_2,
                                 };
 
                                 new_voice.internal_unison_voices.push(new_unison_voice);
@@ -3466,8 +3511,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     A4II_r_2: A4iiFilter::new(20000.0, 44100.0, 0.0),
                                     cutoff_modulation: cutoff_mod,
                                     cutoff_modulation_2: cutoff_mod_2,
-                                    resonance_modulation: 0.0,
-                                    resonance_modulation_2: 0.0,
+                                    resonance_modulation: resonance_mod,
+                                    resonance_modulation_2: resonance_mod_2,
 
                                     internal_unison_voices: Vec::new(),
                                 },
@@ -3554,8 +3599,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         */
 
                         // Iterate through our voice vecdeque to find the one to update
-                        for voice in self.playing_voices.voices.iter_mut() {
-                            // Update current voices to releasing state if they're valid
+                        //for voice in self.playing_voices.voices.iter_mut() {
+                        self.playing_voices.voices.par_iter_mut()
+                            .for_each(|voice|
+                        
+                                // Update current voices to releasing state if they're valid
                             if voice.note == shifted_note && voice.state != OscState::Releasing {
                                 // Start our release level from our current gain on the voice
                                 voice.osc_release.reset(voice.amp_current);
@@ -3575,7 +3623,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
                                 // Update our base voice state to releasing
                                 voice.state = OscState::Releasing;
-                                for internal_unison_voice in voice.internal_unison_voices.iter_mut() {
+                                //for internal_unison_voice in voice.internal_unison_voices.iter_mut() {
+                                voice.internal_unison_voices.par_iter_mut().for_each(|internal_unison_voice|{
                                     internal_unison_voice.osc_release.reset(internal_unison_voice.amp_current);
                                     match internal_unison_voice.osc_release.style {
                                         SmoothingStyle::Logarithmic(_)
@@ -3588,9 +3637,12 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     }
                                     internal_unison_voice.amp_current = internal_unison_voice.osc_release.next();
                                     internal_unison_voice.state = OscState::Releasing;
-                                }
+                                });
                             }
-                        }
+                        
+                        
+                        );  
+                        //}
                     }
                     // Stop event - doesn't seem to work from FL Studio but left in here
                     NoteEvent::Choke { .. } => {
@@ -3850,9 +3902,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 }
         }
          
-        for voice in self.playing_voices.voices.iter_mut() {
-
-            if self.audio_module_type != AudioModuleType::Granulizer
+        for voice in self.playing_voices.voices.iter_mut() {    
+                if self.audio_module_type != AudioModuleType::Granulizer
                 && self.audio_module_type != AudioModuleType::Off
                 && self.audio_module_type != AudioModuleType::UnsetAm
             {
@@ -4871,20 +4922,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_1.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff
-                                    +   // This scales the peak env to be much gentler for the TILT filter
-                                    match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
-                                        FilterAlgorithms::TILT => adv_scale_value(
-                                            self.filter_env_peak,
-                                            -19980.0,
-                                            19980.0,
-                                            -5000.0,
-                                            5000.0,
-                                        ),
-                                    }
-                                ).clamp(20.0, 20000.0)
-                                * (self.filter_env_sustain / 1999.9),
+                                    self.filter_cutoff * (self.filter_env_sustain / 1999.9)
+                                ).clamp(20.0, 20000.0),
                             );
                         }
 
@@ -4950,20 +4989,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_2.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff_2
-                                    +   // This scales the peak env to be much gentler for the TILT filter
-                                    match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
-                                        FilterAlgorithms::TILT => adv_scale_value(
-                                            self.filter_env_peak_2,
-                                            -19980.0,
-                                            19980.0,
-                                            -5000.0,
-                                            5000.0,
-                                        ),
-                                    }
-                                ).clamp(20.0, 20000.0)
-                                * (self.filter_env_sustain_2 / 1999.9),
+                                    self.filter_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
+                                ).clamp(20.0, 20000.0),
                             );
                         }
 
@@ -5141,12 +5168,14 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 }
 
                 // Blending when multi-voiced
+                /*
                 if self.osc_unison > 1 {
                     let l = left_output;
                     let r = right_output;
                     left_output = (l + r * 0.8)/2.0;
                     right_output = (r + l * 0.8)/2.0;
                 }
+                */
 
                 // Stereo Spreading code
                 let width_coeff = match stereo_algorithm {
@@ -5388,20 +5417,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_1.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff
-                                    +   // This scales the peak env to be much gentler for the TILT filter
-                                    match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
-                                        FilterAlgorithms::TILT => adv_scale_value(
-                                            self.filter_env_peak,
-                                            -19980.0,
-                                            19980.0,
-                                            -5000.0,
-                                            5000.0,
-                                        ),
-                                    }
-                                ).clamp(20.0, 20000.0)
-                                * (self.filter_env_sustain / 1999.9),
+                                    self.filter_cutoff * (self.filter_env_sustain / 1999.9)
+                                ).clamp(20.0, 20000.0),
                             );
                         }
 
@@ -5467,20 +5484,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_2.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff_2
-                                    +   // This scales the peak env to be much gentler for the TILT filter
-                                    match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
-                                        FilterAlgorithms::TILT => adv_scale_value(
-                                            self.filter_env_peak_2,
-                                            -19980.0,
-                                            19980.0,
-                                            -5000.0,
-                                            5000.0,
-                                        ),
-                                    }
-                                ).clamp(20.0, 20000.0)
-                                * (self.filter_env_sustain_2 / 1999.9),
+                                    self.filter_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
+                                ).clamp(20.0, 20000.0),
                             );
                         }
 
@@ -5872,20 +5877,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_1.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff
-                                    +   // This scales the peak env to be much gentler for the TILT filter
-                                    match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
-                                        FilterAlgorithms::TILT => adv_scale_value(
-                                            self.filter_env_peak,
-                                            -19980.0,
-                                            19980.0,
-                                            -5000.0,
-                                            5000.0,
-                                        ),
-                                    }
-                                ).clamp(20.0, 20000.0)
-                                * (self.filter_env_sustain / 1999.9),
+                                    self.filter_cutoff * (self.filter_env_sustain / 1999.9)
+                                ).clamp(20.0, 20000.0),
                             );
                         }
 
@@ -5951,20 +5944,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_2.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff_2
-                                    +   // This scales the peak env to be much gentler for the TILT filter
-                                    match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
-                                        FilterAlgorithms::TILT => adv_scale_value(
-                                            self.filter_env_peak_2,
-                                            -19980.0,
-                                            19980.0,
-                                            -5000.0,
-                                            5000.0,
-                                        ),
-                                    }
-                                ).clamp(20.0, 20000.0)
-                                * (self.filter_env_sustain_2 / 1999.9),
+                                    self.filter_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
+                                ).clamp(20.0, 20000.0),
                             );
                         }
 
@@ -6289,20 +6270,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_1.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff
-                                    +   // This scales the peak env to be much gentler for the TILT filter
-                                    match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
-                                        FilterAlgorithms::TILT => adv_scale_value(
-                                            self.filter_env_peak,
-                                            -19980.0,
-                                            19980.0,
-                                            -5000.0,
-                                            5000.0,
-                                        ),
-                                    }
-                                ).clamp(20.0, 20000.0)
-                                * (self.filter_env_sustain / 1999.9),
+                                    self.filter_cutoff * (self.filter_env_sustain / 1999.9)
+                                ).clamp(20.0, 20000.0),
                             );
                         }
 
@@ -6368,20 +6337,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_2.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff_2
-                                    +   // This scales the peak env to be much gentler for the TILT filter
-                                    match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
-                                        FilterAlgorithms::TILT => adv_scale_value(
-                                            self.filter_env_peak_2,
-                                            -19980.0,
-                                            19980.0,
-                                            -5000.0,
-                                            5000.0,
-                                        ),
-                                    }
-                                ).clamp(20.0, 20000.0)
-                                * (self.filter_env_sustain_2 / 1999.9),
+                                    self.filter_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
+                                ).clamp(20.0, 20000.0),
                             );
                         }
 
@@ -6761,24 +6718,25 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
         }
     }
 
-    fn calculate_panning(&mut self, voice_index: i32, num_voices: i32, stereo_algorithm: StereoAlgorithm) -> f32 {
+    fn calculate_panning(&mut self, voice_index: usize, num_voices: i32, stereo_algorithm: StereoAlgorithm) -> f32 {
         // Ensure the voice index is within bounds.
-        let voice_index = voice_index.min(num_voices - 1);
+        let voice_index = voice_index.min(num_voices as usize - 1);
 
         let sign = if self.two_voice_stereo_flipper {
             1.0
         } else {
             -1.0
         };
+        let pi_sign = std::f32::consts::PI * sign;
 
         // Handle the special case for 2 voices.
         if num_voices == 2 {
             // multiplied by sign of stereo flipper to avoid pan
             return if voice_index == 0 {
                 self.two_voice_stereo_flipper = !self.two_voice_stereo_flipper;
-                -0.25 * std::f32::consts::PI * sign // First voice panned left
+                -0.25 * pi_sign // First voice panned left
             } else {
-                0.25 * std::f32::consts::PI * sign // Second voice panned right
+                0.25 * pi_sign // Second voice panned right
             };
         }
 
@@ -6787,38 +6745,43 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
             return match voice_index {
                 0 => {
                     self.two_voice_stereo_flipper = !self.two_voice_stereo_flipper;
-                    -0.25 * std::f32::consts::PI * sign
+                    -0.25 * pi_sign
                 } // First voice panned left
                 1 => 0.0,                                // Second voice panned center
-                2 => 0.25 * std::f32::consts::PI * sign, // Third voice panned right
+                2 => 0.25 * pi_sign, // Third voice panned right
                 _ => 0.0,                                // Handle other cases gracefully
             };
         }
 
+        let new_index = interleave_index(voice_index, num_voices.try_into().unwrap());
+        // Dynamically scale the pan angle
+        let scaling_factor = 1.0 / ((num_voices as f32).log2() + 1.0);
+
+
         // Calculate the pan angle for voices with index 0 and 1.
-        let base_angle = ((voice_index / 2) as f32) / ((num_voices / 2) as f32 - 1.0) - 0.5;
+        let base_angle = match num_voices {
+            0|1|2|3 => (new_index as f32) / (num_voices as f32 - 1.0) - 0.5,
+            _ => ((new_index as f32) / ((num_voices as f32 - 1.0) - 0.5)) * scaling_factor,
+        };
 
         let angle: f32;
         match stereo_algorithm {
             StereoAlgorithm::CubeSpread => {
-                let poly_base_angle = base_angle.powf(3.0)/0.3;
-                // Determine the final angle based on even or odd index.
                 angle = if voice_index % 2 == 0 {
-                    -poly_base_angle
+                    -base_angle.powi(3) * (new_index - 4).max(1) as f32
                 } else {
-                    poly_base_angle
+                    base_angle.powi(3) * (new_index - 4).max(1) as f32
                 };
             },
             StereoAlgorithm::ExpSpread => {
-                let exp_base_angle = base_angle.exp() - 1.0;  // Exponential transformation
-                let max_exp_angle = (1.0f32).exp() - 1.0;
-                let normalized_exp_angle = exp_base_angle / max_exp_angle;
+                let exp_base_angle = (base_angle.exp() - 1.0) / (std::f32::consts::E - 1.0);
+                let scaling_factor = (num_voices as f32).log2();
 
                 // Determine the final angle based on even or odd index.
-                angle = if voice_index % 2 == 0 {
-                    -normalized_exp_angle
+                angle = if new_index % 2 == 0 {
+                    -exp_base_angle * scaling_factor
                 } else {
-                    normalized_exp_angle
+                    exp_base_angle * scaling_factor
                 };
             },
             StereoAlgorithm::Original => {
@@ -6834,7 +6797,18 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
         if voice_index == 0 {
             self.two_voice_stereo_flipper = !self.two_voice_stereo_flipper;
         }
-        angle * std::f32::consts::PI * sign
+        angle * pi_sign
+    }
+}
+
+// Thanks AI
+fn interleave_index(index: usize, num_voices: usize) -> usize {
+    if index % 2 == 0 {
+        // Even index: map to far ends inward (0, 2, 4, ...)
+        index / 2
+    } else {
+        // Odd index: map to far ends inward from the opposite side (1, 3, 5, ...)
+        num_voices - 1 - index / 2
     }
 }
 
