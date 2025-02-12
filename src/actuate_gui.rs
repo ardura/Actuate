@@ -481,7 +481,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
-                                        .on_hover_text("v1.3.5 by Ardura!");
+                                        .on_hover_text("v1.3.8 by Ardura!");
                                     ui.add_space(2.0);
                                     ui.separator();
 

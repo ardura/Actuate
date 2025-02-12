@@ -28,10 +28,10 @@ use nih_plug::{
 use nih_plug_egui::egui::{self, Pos2, Rect, RichText, Rounding, ScrollArea, Ui};
 use pitch_shift::PitchShifter;
 use rand::Rng;
-use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use AdditiveModule::{AdditiveHarmonic, AdditiveOscillator};
-use std::{collections::VecDeque, f32::consts::SQRT_2, path::{Path, PathBuf}, sync::Arc};
+use std::{f32::consts::SQRT_2, path::{Path, PathBuf}, sync::Arc};
 
 // Audio module files
 pub(crate) mod Oscillator;
@@ -66,12 +66,6 @@ pub enum AudioModuleType {
     Pulse,
     Noise,
     UnsetAm,
-}
-
-#[derive(Clone)]
-struct VoiceVec {
-    /// The identifier for this voice
-    voices: VecDeque<SingleVoice>,
 }
 
 // This is the information used to track voices and midi inputs
@@ -332,8 +326,8 @@ pub struct AudioModule {
     pub osc_stereo: f32,
 
     // Voice storage
-    playing_voices: VoiceVec,
-    unison_voices: VoiceVec,
+    playing_voices: Vec<SingleVoice>,
+    //unison_voices: Vec<SingleUnisonVoice>,
 
     // Tracking stopping voices too
     is_playing: bool,
@@ -498,12 +492,8 @@ impl Default for AudioModule {
             osc_stereo: 1.0,
 
             // Voice storage
-            playing_voices: VoiceVec {
-                voices: VecDeque::new(),
-            },
-            unison_voices: VoiceVec {
-                voices: VecDeque::new(),
-            },
+            playing_voices: Vec::new(),
+            //unison_voices: Vec::new(),
 
             // Tracking stopping voices
             is_playing: false,
@@ -1995,26 +1985,30 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 self.audio_module_type = params.audio_module_1_type.value();
                 if self.osc_octave != params.osc_1_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_1_octave.value();
-                    //for voice in self.playing_voices.voices.iter_mut() {
-                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
+                    for voice in self.playing_voices.iter_mut() {
+                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= (oct_shift * 12) as u8;
-                    });
-                    //for uni_voice in self.unison_voices.voices.iter_mut() {
-                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
+                    }
+                    /*
+                    for uni_voice in self.unison_voices.iter_mut() {
+                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= (oct_shift * 12) as u8;
-                    });
+                    }
+                    */
                 }
                 self.osc_octave = params.osc_1_octave.value();
                 if self.osc_semitones != params.osc_1_semitones.value() {
                     let semi_shift = self.osc_semitones - params.osc_1_semitones.value();
-                    //for voice in self.playing_voices.voices.iter_mut() {
-                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
+                    for voice in self.playing_voices.iter_mut() {
+                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= semi_shift as u8;
-                    });
-                    //for uni_voice in self.unison_voices.voices.iter_mut() {
-                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
+                    }
+                    /*
+                    for uni_voice in self.unison_voices.iter_mut() {
+                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= semi_shift as u8;
-                    });
+                    }
+                    */
                 }
                 match params.pitch_routing.value() {
                     PitchRouting::Osc1
@@ -2155,22 +2149,30 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 self.audio_module_type = params.audio_module_2_type.value();
                 if self.osc_octave != params.osc_2_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_2_octave.value();
-                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
+                    for voice in self.playing_voices.iter_mut() {
+                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= (oct_shift * 12) as u8;
-                    });
-                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
+                    }
+                    /*
+                    for uni_voice in self.unison_voices.iter_mut() {
+                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= (oct_shift * 12) as u8;
-                    });
+                    }
+                    */
                 }
                 self.osc_octave = params.osc_2_octave.value();
                 if self.osc_semitones != params.osc_2_semitones.value() {
                     let semi_shift = self.osc_semitones - params.osc_2_semitones.value();
-                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
+                    for voice in self.playing_voices.iter_mut() {
+                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= semi_shift as u8;
-                    });
-                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
+                    }
+                    /*
+                    for uni_voice in self.unison_voices.iter_mut() {
+                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= semi_shift as u8;
-                    });
+                    }
+                    */
                 }
                 match params.pitch_routing.value() {
                     PitchRouting::Osc2
@@ -2307,22 +2309,30 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 self.audio_module_type = params.audio_module_3_type.value();
                 if self.osc_octave != params.osc_3_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_3_octave.value();
-                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
+                    for voice in self.playing_voices.iter_mut() {
+                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= (oct_shift * 12) as u8;
-                    });
-                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
+                    }
+                    /*
+                    for uni_voice in self.unison_voices.iter_mut() {
+                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= (oct_shift * 12) as u8;
-                    });
+                    }
+                    */
                 }
                 self.osc_octave = params.osc_3_octave.value();
                 if self.osc_semitones != params.osc_3_semitones.value() {
                     let semi_shift = self.osc_semitones - params.osc_3_semitones.value();
-                    self.playing_voices.voices.par_iter_mut().for_each(|voice|{
+                    for voice in self.playing_voices.iter_mut() {
+                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= semi_shift as u8;
-                    });
-                    self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
+                    }
+                    /*
+                    for uni_voice in self.unison_voices.iter_mut() {
+                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
                         uni_voice.note -= semi_shift as u8;
-                    });
+                    }
+                    */
                 }
                 match params.pitch_routing.value() {
                     PitchRouting::Osc3
@@ -2778,7 +2788,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             let base_pitch_mod = pitch_mod_current + pitch_mod_current_2;
                             let nvelocity_mod = uni_velocity_mod.clamp(0.0, 1.0) * velocity;
                             let nunison_notes: Vec<f32> = (0..self.osc_unison as usize)
-                                .into_par_iter()
+                                .into_iter()
                                 .map(|unison_voice| {
                                     let detune_offset = detune_step * (unison_voice as f32 + 1.0);
                                     let sign = if unison_voice % 2 == 1 { 1.0 } else { -1.0 };
@@ -3374,155 +3384,19 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             }
                         }
 
-                        // Add our voice struct to our voice tracking deque
-                        self.playing_voices.voices.push_back(new_voice);
-
-                        // Remove the last voice when > voice_max
-                        if self.playing_voices.voices.len() > voice_max {
-                            self.playing_voices.voices.resize(
-                                voice_max,
-                                // Insert a dummy "Off" entry when resizing UP
-                                SingleVoice {
-                                    note: 0,
-                                    _velocity: 0.0,
-                                    vel_mod_amount: 0.0,
-                                    phase: 0.0,
-                                    phase_delta: 0.0,
-                                    state: OscState::Off,
-                                    amp_current: 0.0,
-                                    osc_attack: Smoother::new(SmoothingStyle::None),
-                                    osc_decay: Smoother::new(SmoothingStyle::None),
-                                    osc_release: Smoother::new(SmoothingStyle::None),
-                                    pitch_enabled: self.pitch_enable,
-                                    pitch_env_peak: self.pitch_env_peak,
-                                    pitch_current: 0.0,
-                                    pitch_state: OscState::Attacking,
-                                    pitch_attack: Smoother::new(SmoothingStyle::None),
-                                    pitch_decay: Smoother::new(SmoothingStyle::None),
-                                    pitch_release: Smoother::new(SmoothingStyle::None),
-                                    pitch_enabled_2: self.pitch_enable_2,
-                                    pitch_env_peak_2: self.pitch_env_peak_2,
-                                    pitch_current_2: 0.0,
-                                    pitch_state_2: OscState::Attacking,
-                                    pitch_attack_2: Smoother::new(SmoothingStyle::None),
-                                    pitch_decay_2: Smoother::new(SmoothingStyle::None),
-                                    pitch_release_2: Smoother::new(SmoothingStyle::None),
-                                    _detune: 0.0,
-                                    _unison_detune_value: 0.0,
-                                    frequency: 0.0,
-                                    _attack_time: self.osc_attack,
-                                    _decay_time: self.osc_decay,
-                                    _release_time: self.osc_release,
-                                    _retrigger: self.osc_retrigger,
-                                    _voice_type: self.audio_module_type,
-                                    _angle: 0.0,
-                                    sample_pos: 0,
-                                    loop_it: self.loop_wavetable,
-                                    grain_start_pos: 0,
-                                    _granular_gap: 200,
-                                    _granular_hold: 200,
-                                    granular_hold_end: 200,
-                                    next_grain_pos: 400,
-                                    _end_position: scaled_end_pos,
-                                    _granular_crossfade: 50,
-                                    grain_attack: Smoother::new(SmoothingStyle::Linear(5.0)),
-                                    grain_release: Smoother::new(SmoothingStyle::Linear(5.0)),
-                                    grain_state: GrainState::Attacking,
-                                    // Additive
-                                    harmonic_phases: {
-                                        let mut vector: Vec<f32> = Vec::with_capacity(16);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector.push(0.0);
-                                        vector
-                                    },
-                                    //// Polyfilter update!!
-                                    ///////////////////////////////////////////////////////
-                                    filter_l_1: StateVariableFilter::default().set_oversample(4),
-                                    filter_r_1: StateVariableFilter::default().set_oversample(4),
-                                    // TILT Filters
-                                    tilt_filter_l_1: TiltFilterStruct::new(
-                                        44100.0,
-                                        20000.0,
-                                        TiltFilter::ResponseType::Lowpass
-                                    ),
-                                    tilt_filter_r_1: TiltFilterStruct::new(
-                                        44100.0,
-                                        20000.0,
-                                        TiltFilter::ResponseType::Lowpass
-                                    ),
-                                    // VCF Filters
-                                    vcf_filter_l_1: VCFilter::new(),
-                                    vcf_filter_r_1: VCFilter::new(),
-                                    // Filter state variables
-                                    filter_state_1: OscState::Attacking,
-                                    filter_atk_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
-                                    filter_dec_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
-                                    filter_rel_smoother_1: Smoother::new(SmoothingStyle::Linear(300.0)),
-                                    // SVF Filters
-                                    filter_l_2: StateVariableFilter::default().set_oversample(4),
-                                    filter_r_2: StateVariableFilter::default().set_oversample(4),
-                                    // TILT Filters
-                                    tilt_filter_l_2: TiltFilterStruct::new(
-                                        44100.0,
-                                        20000.0,
-                                        TiltFilter::ResponseType::Lowpass
-                                    ),
-                                    tilt_filter_r_2: TiltFilterStruct::new(
-                                        44100.0,
-                                        20000.0,
-                                        TiltFilter::ResponseType::Lowpass
-                                    ),
-                                    // VCF Filters
-                                    vcf_filter_l_2: VCFilter::new(),
-                                    vcf_filter_r_2: VCFilter::new(),
-                                    // Filter state variables
-                                    filter_state_2: OscState::Attacking,
-                                    filter_atk_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
-                                    filter_dec_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
-                                    filter_rel_smoother_2: Smoother::new(SmoothingStyle::Linear(300.0)),
-                                    // V4 Filter
-                                    V4F_l_1: V4FilterStruct::default(),
-                                    V4F_l_2: V4FilterStruct::default(),
-                                    V4F_r_1: V4FilterStruct::default(),
-                                    V4F_r_2: V4FilterStruct::default(),
-                                    // A4I Filter
-                                    A4I_l_1: A4iFilter::new(44100.0, 20000.0, 0.0),
-                                    A4I_l_2: A4iFilter::new(44100.0, 20000.0, 0.0),
-                                    A4I_r_1: A4iFilter::new(44100.0, 20000.0, 0.0),
-                                    A4I_r_2: A4iFilter::new(44100.0, 20000.0, 0.0),
-                                    // A4II Filter
-                                    A4II_l_1: A4iiFilter::new(20000.0, 44100.0, 0.0),
-                                    A4II_l_2: A4iiFilter::new(20000.0, 44100.0, 0.0),
-                                    A4II_r_1: A4iiFilter::new(20000.0, 44100.0, 0.0),
-                                    A4II_r_2: A4iiFilter::new(20000.0, 44100.0, 0.0),
-                                    cutoff_modulation: cutoff_mod,
-                                    cutoff_modulation_2: cutoff_mod_2,
-                                    resonance_modulation: resonance_mod,
-                                    resonance_modulation_2: resonance_mod_2,
-
-                                    internal_unison_voices: Vec::new(),
-                                },
-                            );
-                        }
                         // Remove any off notes
-                        self.playing_voices.voices.retain(|voice| {
+                        self.playing_voices.retain(|voice| {
                             voice.state != OscState::Off &&
                             !(voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0)
                         });
+
+                        // Remove the last voice when > voice_max
+                        if self.playing_voices.len() >= voice_max {
+                            self.playing_voices.truncate(voice_max - 1);
+                        } else {
+                            // Add our voice struct to our voice tracking deque
+                            self.playing_voices.push(new_voice);
+                        }
                     }
                     ////////////////////////////////////////////////////////////
                     // MIDI EVENT NOTE OFF
@@ -3600,7 +3474,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
                         // Iterate through our voice vecdeque to find the one to update
                         //for voice in self.playing_voices.voices.iter_mut() {
-                        self.playing_voices.voices.par_iter_mut()
+                        self.playing_voices.par_iter_mut()
                             .for_each(|voice|
                         
                                 // Update current voices to releasing state if they're valid
@@ -3646,8 +3520,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                     }
                     // Stop event - doesn't seem to work from FL Studio but left in here
                     NoteEvent::Choke { .. } => {
-                        self.playing_voices.voices.clear();
-                        self.unison_voices.voices.clear();
+                        self.playing_voices.clear();
                     }
                     _ => (),
                 }
@@ -3799,9 +3672,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
         // Second check for off notes before output to cut down on iterating
         // Remove any off notes
-        self.playing_voices.voices.retain(|voice| {
-            voice.state != OscState::Off &&
-            !(voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0)
+        self.playing_voices.retain(|voice| {
+            voice.state != OscState::Off && !(voice.grain_state == GrainState::Releasing && voice.grain_release.steps_left() == 0)
         });
 
         ////////////////////////////////////////////////////////////
@@ -3902,7 +3774,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 }
         }
          
-        for voice in self.playing_voices.voices.iter_mut() {    
+        for voice in self.playing_voices.iter_mut() {    
                 if self.audio_module_type != AudioModuleType::Granulizer
                 && self.audio_module_type != AudioModuleType::Off
                 && self.audio_module_type != AudioModuleType::UnsetAm
@@ -4601,7 +4473,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
         // Add our new grain to our voices
         if new_grain {
-            self.playing_voices.voices.push_back(next_grain);
+            self.playing_voices.push(next_grain);
         }
 
         // Define the outputs for filter routing or non-filter routing
@@ -4636,7 +4508,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 // POLYFILTER UPDATE
                 //////////////////////////////////////////////////////////////////////////
 
-                for voice in self.playing_voices.voices.iter_mut() {
+                for voice in self.playing_voices.iter_mut() {
                     // Move the pitch envelope stuff independently of the MIDI info
                     if voice.pitch_enabled {
                         voice.pitch_current = 
@@ -5205,7 +5077,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 let mut stereo_voices_l: f32 = 0.0;
                 let mut stereo_voices_r: f32 = 0.0;
                 let mut center_voices: f32 = 0.0;
-                for voice in self.playing_voices.voices.iter_mut() {
+                for voice in self.playing_voices.iter_mut() {
                     // Move the pitch envelope stuff independently of the MIDI info
                     if voice.pitch_enabled {
                         voice.pitch_current = 
@@ -5706,7 +5578,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 let mut center_voices_r: f32 = 0.0;
                 let mut stereo_voices_l: f32 = 0.0;
                 let mut stereo_voices_r: f32 = 0.0;
-                for voice in self.playing_voices.voices.iter_mut() {
+                for voice in self.playing_voices.iter_mut() {
                     // Get our current gain amount for use in match below
                     let temp_osc_gain_multiplier: f32 = match voice.state {
                         OscState::Attacking => voice.osc_attack.next(),
@@ -5762,81 +5634,83 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 let mut temp_unison_voice_l = 0.0;
                 let mut temp_unison_voice_r = 0.0;
                 // Stereo applies to unison voices
-                for unison_voice in self.unison_voices.voices.iter_mut() {
-                    // Get our current gain amount for use in match below
-                    let temp_osc_gain_multiplier: f32 = match unison_voice.state {
-                        OscState::Attacking => unison_voice.osc_attack.next(),
-                        OscState::Decaying => unison_voice.osc_decay.next(),
-                        OscState::Sustaining => self.osc_sustain / 1999.9,
-                        OscState::Releasing => unison_voice.osc_release.next(),
-                        OscState::Off => 0.0,
-                    };
-                    unison_voice.amp_current = temp_osc_gain_multiplier;
+                for voice in self.playing_voices.iter_mut() {
+                    for unison_voice in voice.internal_unison_voices.iter_mut() {
+                        // Get our current gain amount for use in match below
+                        let temp_osc_gain_multiplier: f32 = match unison_voice.state {
+                            OscState::Attacking => unison_voice.osc_attack.next(),
+                            OscState::Decaying => unison_voice.osc_decay.next(),
+                            OscState::Sustaining => self.osc_sustain / 1999.9,
+                            OscState::Releasing => unison_voice.osc_release.next(),
+                            OscState::Off => 0.0,
+                        };
+                        unison_voice.amp_current = temp_osc_gain_multiplier;
 
-                    let usize_note = unison_voice.note as usize;
+                        let usize_note = unison_voice.note as usize;
 
-                    // If we even have valid samples loaded
-                    if self.sample_lib[0][0].len() > 1
-                        && self.loaded_sample[0].len() > 1
-                        && self.sample_lib.len() > 1
-                    {
-                        // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
-                        // If our note is valid 0-127
-                        if usize_note < self.sample_lib.len() {
-                            // If our sample position is valid for our note
-                            if unison_voice.sample_pos < self.sample_lib[usize_note][0].len() {
-                                // Get our channels of sample vectors
-                                let NoteVector = &self.sample_lib[usize_note];
-                                // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
-                                temp_unison_voice_l +=
-                                    NoteVector[0][unison_voice.sample_pos] * temp_osc_gain_multiplier;
-                                temp_unison_voice_r +=
-                                    NoteVector[1][unison_voice.sample_pos] * temp_osc_gain_multiplier;
+                        // If we even have valid samples loaded
+                        if self.sample_lib[0][0].len() > 1
+                            && self.loaded_sample[0].len() > 1
+                            && self.sample_lib.len() > 1
+                        {
+                            // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
+                            // If our note is valid 0-127
+                            if usize_note < self.sample_lib.len() {
+                                // If our sample position is valid for our note
+                                if unison_voice.sample_pos < self.sample_lib[usize_note][0].len() {
+                                    // Get our channels of sample vectors
+                                    let NoteVector = &self.sample_lib[usize_note];
+                                    // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
+                                    temp_unison_voice_l +=
+                                        NoteVector[0][unison_voice.sample_pos] * temp_osc_gain_multiplier;
+                                    temp_unison_voice_r +=
+                                        NoteVector[1][unison_voice.sample_pos] * temp_osc_gain_multiplier;
+                                }
+                            }
+
+                            let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32
+                                * self.start_position)
+                                .floor() as usize;
+                            let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32
+                                * self._end_position)
+                                .floor() as usize;
+                            // Sampler moves position
+                            unison_voice.sample_pos += 1;
+                            if unison_voice.loop_it
+                                && (unison_voice.sample_pos > self.sample_lib[usize_note][0].len()
+                                    || unison_voice.sample_pos > scaled_end_position)
+                            {
+                                unison_voice.sample_pos = scaled_start_position;
+                            } else if unison_voice.sample_pos > scaled_end_position {
+                                unison_voice.sample_pos = self.sample_lib[usize_note][0].len();
+                                unison_voice.state = OscState::Off;
                             }
                         }
+                            // Create our stereo pan for unison
 
-                        let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32
-                            * self.start_position)
-                            .floor() as usize;
-                        let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32
-                            * self._end_position)
-                            .floor() as usize;
-                        // Sampler moves position
-                        unison_voice.sample_pos += 1;
-                        if unison_voice.loop_it
-                            && (unison_voice.sample_pos > self.sample_lib[usize_note][0].len()
-                                || unison_voice.sample_pos > scaled_end_position)
-                        {
-                            unison_voice.sample_pos = scaled_start_position;
-                        } else if unison_voice.sample_pos > scaled_end_position {
-                            unison_voice.sample_pos = self.sample_lib[usize_note][0].len();
-                            unison_voice.state = OscState::Off;
-                        }
+                            // Our angle comes back as radians
+                            let pan = unison_voice._angle;
+
+                            // Precompute sine and cosine of the angle
+                            let cos_pan = pan.cos();
+                            let sin_pan = pan.sin();
+
+                            // Calculate the amplitudes for the panned voice using vector operations
+                            let scale = SQRT_2 / 2.0;
+                            let temp_unison_voice_scaled_l = scale * temp_unison_voice_l;
+                            let temp_unison_voice_scaled_r = scale * temp_unison_voice_r;
+
+                            let left_amp = temp_unison_voice_scaled_l * (cos_pan + sin_pan);
+                            let right_amp = temp_unison_voice_scaled_r * (cos_pan - sin_pan);
+
+                            // Add the voice to the sum of stereo voices
+                            stereo_voices_l += left_amp;
+                            stereo_voices_r += right_amp;
                     }
-                        // Create our stereo pan for unison
-
-                        // Our angle comes back as radians
-                        let pan = unison_voice._angle;
-                                            
-                        // Precompute sine and cosine of the angle
-                        let cos_pan = pan.cos();
-                        let sin_pan = pan.sin();
-                                            
-                        // Calculate the amplitudes for the panned voice using vector operations
-                        let scale = SQRT_2 / 2.0;
-                        let temp_unison_voice_scaled_l = scale * temp_unison_voice_l;
-                        let temp_unison_voice_scaled_r = scale * temp_unison_voice_r;
-                                            
-                        let left_amp = temp_unison_voice_scaled_l * (cos_pan + sin_pan);
-                        let right_amp = temp_unison_voice_scaled_r * (cos_pan - sin_pan);
-
-                        // Add the voice to the sum of stereo voices
-                        stereo_voices_l += left_amp;
-                        stereo_voices_r += right_amp;
                 }
 
 
-                for voice in self.playing_voices.voices.iter_mut() {
+                for voice in self.playing_voices.iter_mut() {
                     //////////////////////////////////////////////////////////////////////////
                     // POLYFILTER UPDATE
                     //////////////////////////////////////////////////////////////////////////
@@ -6153,7 +6027,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
             AudioModuleType::Granulizer => {
                 let mut summed_voices_l: f32 = 0.0;
                 let mut summed_voices_r: f32 = 0.0;
-                for voice in self.playing_voices.voices.iter_mut() {
+                for voice in self.playing_voices.iter_mut() {
                     // Get our current gain amount for use in match below
                     let temp_osc_gain_multiplier: f32 = match voice.state {
                         OscState::Attacking => voice.osc_attack.next(),
@@ -6229,7 +6103,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 }
 
 
-                for voice in self.playing_voices.voices.iter_mut() {
+                for voice in self.playing_voices.iter_mut() {
                     //////////////////////////////////////////////////////////////////////////
                     // POLYFILTER UPDATE
                     //////////////////////////////////////////////////////////////////////////
@@ -6533,8 +6407,8 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
     }
 
     pub fn clear_voices(&mut self) {
-        self.playing_voices.voices.clear();
-        self.unison_voices.voices.clear();
+        self.playing_voices.clear();
+        //self.unison_voices.clear();
     }
 
     pub fn load_new_sample(&mut self, path: PathBuf) {
