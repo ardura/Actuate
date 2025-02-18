@@ -6408,7 +6408,6 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
     pub fn clear_voices(&mut self) {
         self.playing_voices.clear();
-        //self.unison_voices.clear();
     }
 
     pub fn load_new_sample(&mut self, path: PathBuf) {
