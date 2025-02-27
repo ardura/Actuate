@@ -288,7 +288,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         // This would cause a deadlock and break Actuate :|
                         // Maybe in future this will become nicer
                         if params.am1_sample.lock().unwrap()[0].len() > 1 && 
-                           AM1.lock().unwrap().loaded_sample[0].len() <= 1 &&
+                           AM1.lock().unwrap().loaded_sample[0].len() <= 2 &&
                            AM1.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
                             AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
@@ -300,7 +300,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                             AM1_Lock.regenerate_samples();
                         }
                         if params.am2_sample.lock().unwrap()[0].len() > 1 && 
-                           AM2.lock().unwrap().loaded_sample[0].len() <= 1 &&
+                           AM2.lock().unwrap().loaded_sample[0].len() <= 2 &&
                            AM2.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
                            (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
                             AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
@@ -312,7 +312,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                             AM2_Lock.regenerate_samples();
                         }
                         if params.am3_sample.lock().unwrap()[0].len() > 1 && 
-                           AM3.lock().unwrap().loaded_sample[0].len() <= 1 &&
+                           AM3.lock().unwrap().loaded_sample[0].len() <= 2 &&
                            AM3.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
                            (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
                             AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
