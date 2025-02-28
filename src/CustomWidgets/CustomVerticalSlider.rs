@@ -3,7 +3,6 @@
 // Ardura
 use nih_plug::{
     prelude::{Param, ParamSetter},
-    wrapper::clap::lazy_static,
 };
 use nih_plug_egui::egui::{self, vec2, Color32, Galley, Response, RichText, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
 use nih_plug_egui::{
@@ -11,17 +10,15 @@ use nih_plug_egui::{
     widgets::util as nUtil,
 };
 use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
 /// noramlized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.0015;
 
-lazy_static! {
-    static ref DRAG_NORMALIZED_START_VALUE_MEMORY_ID: egui::Id = egui::Id::new((file!(), 0));
-    static ref DRAG_AMOUNT_MEMORY_ID: egui::Id = egui::Id::new((file!(), 1));
-    static ref VALUE_ENTRY_MEMORY_ID: egui::Id = egui::Id::new((file!(), 2));
-}
+static DRAG_NORMALIZED_START_VALUE_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 0)));
+static DRAG_AMOUNT_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 1)));
+static VALUE_ENTRY_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 2)));
 
 /// A slider widget similar to [`egui::widgets::Slider`] that knows about NIH-plug parameters ranges
 /// and can get values for it. The slider supports double click and control click to reset,

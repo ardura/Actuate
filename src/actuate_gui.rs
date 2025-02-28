@@ -18,18 +18,12 @@ use crate::{
 pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExecutor<Actuate>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = instance.params.clone();
         let arc_preset: Arc<Mutex<ActuatePresetV131>> = Arc::clone(&instance.current_loaded_params);
-        //let arc_preset_name: Arc<Mutex<String>> = Arc::clone(&instance.preset_name);
-        //let arc_preset_info: Arc<Mutex<String>> = Arc::clone(&instance.preset_info);
-        //let arc_preset_category: Arc<Mutex<PresetType>> = Arc::clone(&instance.preset_category);
         let clear_voices: Arc<AtomicBool> = Arc::clone(&instance.clear_voices);
         let reload_entire_preset: Arc<AtomicBool> = Arc::clone(&instance.reload_entire_preset);
         let browse_preset_active: Arc<AtomicBool> = Arc::clone(&instance.browsing_presets);
         let import_preset_active: Arc<AtomicBool> = Arc::clone(&instance.importing_presets);
         let export_preset_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_presets);
-        //let import_bank_active: Arc<AtomicBool> = Arc::clone(&instance.importing_banks);
-        //let export_bank_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_banks);
         let safety_clip_output: Arc<Mutex<bool>> = Arc::clone(&instance.safety_clip_output);
-        //let current_preset: Arc<AtomicU32> = Arc::clone(&instance.current_preset);
         let AM1: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_1);
         let AM2: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_2);
         let AM3: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_3);
@@ -177,22 +171,10 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             let ext = Some(OsStr::new("actuate"));
             move |path: &Path| -> bool { path.extension() == ext }
         });
-        /*
-        let bank_filter = Box::new({
-            let ext = Some(OsStr::new("actuatebank"));
-            move |path: &Path| -> bool { path.extension() == ext }
-        });
-        */
         let save_preset_filter = Box::new({
             let ext = Some(OsStr::new("actuate"));
             move |path: &Path| -> bool { path.extension() == ext }
         });
-        /*
-        let save_bank_filter = Box::new({
-            let ext = Some(OsStr::new("actuatebank"));
-            move |path: &Path| -> bool { path.extension() == ext }
-        });
-        */
         let sample_filter = Box::new({
             let ext = Some(OsStr::new("wav"));
             move |path: &Path| -> bool { path.extension() == ext }
@@ -236,29 +218,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                     }
                 )
             );
-        /* No more banks
-        let bank_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
-            Mutex::new(
-                    FileDialog::open_file(Some(home_dir.clone()))
-                        .current_pos([(WIDTH/4) as f32, 10.0])
-                        .show_files_filter(bank_filter)
-                        .keep_on_top(true)
-                        .show_new_folder(false)
-                        .show_rename(false)
-                    )
-                );
-        let bank_save_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
-            Mutex::new(
-                    FileDialog::save_file(Some(home_dir.clone()))
-                        .current_pos([(WIDTH/4) as f32, 10.0])
-                        .show_files_filter(save_bank_filter)
-                        .keep_on_top(true)
-                        .show_new_folder(false)
-                        .show_rename(false)
-                    )
-                );
-        */
-        
+
         let load_sample_dialog: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
                 FileDialog::open_file(Some(home_dir.clone()))
@@ -282,109 +242,98 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         let filter_select = filter_select_outside.clone();
                         let lfo_select = lfo_select_outside.clone();
 
-                        // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
-                        // It runs if there is peristent sample data but not sample data in the audio module
-                        // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
-                        // This would cause a deadlock and break Actuate :|
-                        // Maybe in future this will become nicer
-                        if params.am1_sample.lock().unwrap()[0].len() > 1 && 
-                           AM1.lock().unwrap().loaded_sample[0].len() <= 1 &&
-                           AM1.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
-                           (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                            AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
-                           {
+                        // This happens on some plugin loads and crashes your DAW :(
+                        // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
+                        if AM1.lock().unwrap().sample_lib.len() == 0 && 
+                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler || 
+                             AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer) {
                             let mut AM1_Lock = AM1.lock().unwrap();
 
                             AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
 
                             AM1_Lock.regenerate_samples();
+                        // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
+                        // It runs if there is peristent sample data but not sample data in the audio module
+                        // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
+                        // This would cause a deadlock and break Actuate :|
+                        // Maybe in future this will become nicer
+                        } else if params.am1_sample.lock().unwrap()[0].len() > 1 && 
+                            AM1.lock().unwrap().loaded_sample[0].len() <= 2 &&
+                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                             AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                        {
+                            // This if is separate since previously when it was included in th eabove it could
+                            // panic on length issues handled by [AM1.lock().unwrap().loaded_sample[0].len() <= 2]
+                            if AM1.lock().unwrap().sample_lib[0][0][0] == 0.0 {
+                                let mut AM1_Lock = AM1.lock().unwrap();
+
+                                AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
+
+                                AM1_Lock.regenerate_samples();
+                            }
                         }
-                        if params.am2_sample.lock().unwrap()[0].len() > 1 && 
-                           AM2.lock().unwrap().loaded_sample[0].len() <= 1 &&
-                           AM2.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
-                           (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                            AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
-                           {
+
+                        // This happens on some plugin loads and crashes your DAW :(
+                        // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
+                        if AM2.lock().unwrap().sample_lib.len() == 0 && 
+                            (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler || 
+                             AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer) {
                             let mut AM2_Lock = AM2.lock().unwrap();
 
                             AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
 
                             AM2_Lock.regenerate_samples();
+                        // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
+                        // It runs if there is peristent sample data but not sample data in the audio module
+                        // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
+                        // This would cause a deadlock and break Actuate :|
+                        // Maybe in future this will become nicer
+                        } else if params.am2_sample.lock().unwrap()[0].len() > 1 && 
+                            AM2.lock().unwrap().loaded_sample[0].len() <= 2 &&
+                            (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                             AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                        {
+                            // This if is separate since previously when it was included in th eabove it could
+                            // panic on length issues handled by [AM1.lock().unwrap().loaded_sample[0].len() <= 2]
+                            if AM2.lock().unwrap().sample_lib[0][0][0] == 0.0 {
+                                let mut AM2_Lock = AM2.lock().unwrap();
+
+                                AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
+
+                                AM2_Lock.regenerate_samples();
+                            }
                         }
-                        if params.am3_sample.lock().unwrap()[0].len() > 1 && 
-                           AM3.lock().unwrap().loaded_sample[0].len() <= 1 &&
-                           AM3.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
-                           (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                            AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
-                           {
+
+                        // This happens on some plugin loads and crashes your DAW :(
+                        // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
+                        if AM3.lock().unwrap().sample_lib.len() == 0 && 
+                            (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler || 
+                             AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer) {
                             let mut AM3_Lock = AM3.lock().unwrap();
 
                             AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
 
                             AM3_Lock.regenerate_samples();
-                        }
+                        // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
+                        // It runs if there is peristent sample data but not sample data in the audio module
+                        // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
+                        // This would cause a deadlock and break Actuate :|
+                        // Maybe in future this will become nicer
+                        } else if params.am3_sample.lock().unwrap()[0].len() > 1 && 
+                            AM3.lock().unwrap().loaded_sample[0].len() <= 2 &&
+                            (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                             AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                        {
+                            // This if is separate since previously when it was included in th eabove it could
+                            // panic on length issues handled by [AM1.lock().unwrap().loaded_sample[0].len() <= 2]
+                            if AM3.lock().unwrap().sample_lib[0][0][0] == 0.0 {
+                                let mut AM3_Lock = AM3.lock().unwrap();
 
-                        // Reset our buttons
-                        /*
-                        if params.param_next_preset.value() {
-                            if current_preset_index < (PRESET_BANK_SIZE - 1) as u32 {
-                                current_preset.store(current_preset_index + 1, Ordering::SeqCst);
+                                AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
 
-                                setter.set_parameter(&params.param_next_preset, false);
-                                clear_voices.store(true, Ordering::SeqCst);
-
-                                // Move to info tab on preset change
-                                *lfo_select.lock().unwrap() = LFOSelect::INFO;
-
-                                // Update our displayed info
-                                let temp_current_preset = arc_preset.lock().unwrap().clone();
-                                *params.preset_name_p.lock().unwrap() = temp_current_preset.preset_name;
-                                *params.preset_info_p.lock().unwrap() = temp_current_preset.preset_info;
-
-                                // GUI thread misses this without this call here for some reason
-                                Actuate::reload_entire_preset(
-                                    setter,
-                                    params.clone(),
-                                    arc_preset.lock().unwrap().clone(),
-                                    &mut AM1.lock().unwrap(),
-                                    &mut AM2.lock().unwrap(),
-                                    &mut AM3.lock().unwrap(),);
-
-                                // This is set for the process thread
-                                reload_entire_preset.store(true, Ordering::SeqCst);
+                                AM3_Lock.regenerate_samples();
                             }
                         }
-                        */
-                        /*
-                        if params.param_prev_preset.value() {
-                            if current_preset_index > 0 {
-                                current_preset.store(current_preset_index - 1, Ordering::SeqCst);
-
-                                setter.set_parameter(&params.param_prev_preset, false);
-                                clear_voices.store(true, Ordering::SeqCst);
-
-                                // Move to info tab on preset change
-                                *lfo_select.lock().unwrap() = LFOSelect::INFO;
-
-                                // Update our displayed info
-                                let temp_current_preset = arc_preset.lock().unwrap().clone();
-                                *params.preset_name_p.lock().unwrap() = temp_current_preset.preset_name;
-                                *params.preset_info_p.lock().unwrap() = temp_current_preset.preset_info;
-
-                                // GUI thread misses this without this call here for some reason
-                                Actuate::reload_entire_preset(
-                                    setter,
-                                    params.clone(),
-                                    arc_preset.lock().unwrap().clone(),
-                                    &mut AM1.lock().unwrap(),
-                                    &mut AM2.lock().unwrap(),
-                                    &mut AM3.lock().unwrap(),);
-
-                                // This is set for the process thread
-                                reload_entire_preset.store(true, Ordering::SeqCst);
-                            }
-                        }
-                        */
 
                         if update_current_preset.load(Ordering::SeqCst) || params.param_update_current_preset.value() {
                             setter.set_parameter(&params.param_update_current_preset, false);
@@ -481,34 +430,10 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
-                                        .on_hover_text("v1.3.5 by Ardura!");
+                                        .on_hover_text("v1.3.8 by Ardura!");
                                     ui.add_space(2.0);
                                     ui.separator();
 
-                                    /*
-                                    if ui.button(RichText::new("<-")
-                                        .font(FONT)
-                                        .background_color(DARK_GREY_UI_COLOR)
-                                        .color(TEAL_GREEN)
-                                    ).clicked() {
-                                        setter.set_parameter(&params.param_prev_preset, true);
-                                    }
-                                    ui.label(RichText::new("Preset")
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                        .color(FONT_COLOR)
-                                        .size(12.0));
-                                    ui.label(RichText::new(current_preset_index.to_string())
-                                        .background_color(A_BACKGROUND_COLOR_TOP)
-                                        .color(FONT_COLOR)
-                                        .size(12.0));
-                                    if ui.button(RichText::new("->")
-                                        .font(FONT)
-                                        .background_color(DARK_GREY_UI_COLOR)
-                                        .color(TEAL_GREEN)
-                                    ).clicked() {
-                                        setter.set_parameter(&params.param_next_preset, true);
-                                    }
-                                    */
                                     let master_knob = ui_knob::ArcKnob::for_param(
                                         &params.master_level,
                                         setter,
@@ -956,122 +881,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
 
                                     ui.separator();
 
-                                    /*
-                                    // Studio One changes (compatible for all DAWs)
-                                    let import_bank_button = ui.button(RichText::new("Load Bank")
-                                        .font(SMALLER_FONT)
-                                        .background_color(DARK_GREY_UI_COLOR)
-                                        .color(TEAL_GREEN)
-                                    );
-                                    if import_bank_button.clicked() {
-                                        import_bank_active.store(true, Ordering::SeqCst);
-                                    }
-                                    if import_bank_active.load(Ordering::SeqCst) {
-                                        // Move to info tab on preset change
-                                        *lfo_select.lock().unwrap() = LFOSelect::INFO;
-                                    
-                                        // hehe
-                                        let bank_dialock = bank_dialog_main.clone();
-                                        let mut dialog = bank_dialock.lock().unwrap();
-                                        dialog.open();
-                                        let mut dvar = Some(dialog);
-
-                                        if let Some(dialog) = &mut dvar {
-                                            if dialog.show(egui_ctx).selected() {
-                                              if let Some(file) = dialog.path() {
-                                                let default_name: String;                                                                
-                                                let opened_file = Some(file.to_path_buf());
-                                                let unserialized: Vec<ActuatePresetV131>;
-                                                (default_name, unserialized) = Actuate::load_preset_bank(opened_file);
-                                                let temppath = default_name.clone();
-                                                let path = Path::new(&temppath);
-                                                if let Some(filename) = path.file_name() {
-                                                    let mut locked_lib = arc_preset.lock().unwrap();
-                                                
-                                                    // Load our items into our library from the unserialized save file
-                                                    for (item_index, item) in unserialized.iter().enumerate() {
-                                                        // If our item exists then update it
-                                                        if let Some(existing_item) = locked_lib.get_mut(item_index) {
-                                                            *existing_item = item.clone();
-                                                        } else {
-                                                            // item_index is out of bounds in locked_lib
-                                                            // These get dropped as the preset size should be the same all around
-                                                        }
-                                                    }
-                                                
-                                                    // Create missing samples on current preset
-                                                    let mut AM1L = AM1.lock().unwrap();
-                                                    let mut AM2L = AM2.lock().unwrap();
-                                                    let mut AM3L = AM3.lock().unwrap();
-                                                    AM1L.regenerate_samples();
-                                                    AM2L.regenerate_samples();
-                                                    AM3L.regenerate_samples();
-                                                
-                                                    let temp_preset = &locked_lib[current_preset_index as usize];
-                                                    *arc_preset_name.lock().unwrap() =  temp_preset.preset_name.clone();
-                                                    *arc_preset_info.lock().unwrap() = temp_preset.preset_info.clone();
-                                                    // *arc_preset_category.lock().unwrap() = temp_preset.preset_category.clone();
-                                                
-                                                    drop(locked_lib);
-                                                
-                                                    Actuate::reload_entire_preset(
-                                                        setter,
-                                                        params.clone(),
-                                                        current_preset_index as usize,
-                                                        &arc_preset.lock().unwrap(),
-                                                        &mut AM1L,
-                                                        &mut AM2L,
-                                                        &mut AM3L,);
-                                                    import_bank_active.store(false, Ordering::SeqCst);
-                                                    *current_loaded_params_name_tracker.lock().unwrap() = filename.to_string_lossy().to_string();
-                                                }
-                                              }
-                                            }
-                                        
-                                            match dialog.state() {
-                                                State::Cancelled | State::Closed => {
-                                                    import_bank_active.store(false, Ordering::SeqCst);
-                                                },
-                                                _ => {}
-                                            }
-                                        }
-                                    }
-                                    // Studio One changes (compatible for all DAWs)
-                                    let export_bank_button = ui.button(RichText::new("Save Bank")
-                                        .font(SMALLER_FONT)
-                                        .background_color(DARK_GREY_UI_COLOR)
-                                        .color(TEAL_GREEN)
-                                    );
-                                    if export_bank_button.clicked() {
-                                        export_bank_active.store(true, Ordering::SeqCst);
-                                    }
-                                    if export_bank_active.load(Ordering::SeqCst) {
-                                        // Name the preset bank
-                                        let bank_save_dialock = bank_save_dialog_main.clone();
-                                        let mut save_dialog = bank_save_dialock.lock().unwrap();
-                                        save_dialog.open();
-                                        let mut dvar = Some(save_dialog);
-
-                                        if let Some(s_dialog) = &mut dvar {
-                                            if s_dialog.show(egui_ctx).selected() {
-                                              if let Some(file) = s_dialog.path() {
-                                                let saved_file = Some(file.to_path_buf());
-                                                let mut locked_lib = arc_preset.lock().unwrap();
-                                                Actuate::save_preset_bank(&mut locked_lib, saved_file);
-                                                drop(locked_lib);
-                                                export_bank_active.store(false, Ordering::SeqCst);
-                                              }
-                                            }
-                                        
-                                            match s_dialog.state() {
-                                                State::Cancelled | State::Closed => {
-                                                    export_bank_active.store(false, Ordering::SeqCst);
-                                                },
-                                                _ => {}
-                                            }
-                                        }
-                                    }
-                                    */
                                     let use_fx_toggle = BoolButton::BoolButton::for_param(&params.use_fx, setter, 2.5, 1.0, SMALLER_FONT);
                                     ui.add(use_fx_toggle).on_hover_text("Enable or disable FX processing");
 
@@ -3742,16 +3551,6 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                                     });
                                 });
                             });
-
-                        // Sanity resetting inbetween channel processing
-                        /*
-                        if params.param_next_preset.value() {
-                            setter.set_parameter(&params.param_next_preset, false);
-                        }
-                        if params.param_prev_preset.value() {
-                            setter.set_parameter(&params.param_prev_preset, false);
-                        }
-                        */
                     });
             },
             // This is the end of create_egui_editor()
