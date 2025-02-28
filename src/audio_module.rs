@@ -5591,42 +5591,45 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
                     let usize_note = voice.note as usize;
 
-                    // If we even have valid samples loaded
-                    if self.sample_lib[0][0].len() > 1
-                        && self.loaded_sample[0].len() > 1
-                        && self.sample_lib.len() > 1
-                    {
-                        // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
-                        // If our note is valid 0-127
-                        if usize_note < self.sample_lib.len() {
-                            // If our sample position is valid for our note
-                            if voice.sample_pos < self.sample_lib[usize_note][0].len() {
-                                // Get our channels of sample vectors
-                                let NoteVector = &self.sample_lib[usize_note];
-                                // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
-                                center_voices_l +=
-                                    NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier;
-                                center_voices_r +=
-                                    NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier;
-                            }
-                        }
-
-                        let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32
-                            * self.start_position)
-                            .floor() as usize;
-                        let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32
-                            * self._end_position)
-                            .floor() as usize;
-                        // Sampler moves position
-                        voice.sample_pos += 1;
-                        if voice.loop_it
-                            && (voice.sample_pos > self.sample_lib[usize_note][0].len()
-                                || voice.sample_pos > scaled_end_position)
+                    // If ANYTHING is loaded
+                    if self.sample_lib.len() > 0 {
+                        // If we even have valid samples loaded
+                        if self.sample_lib[0][0].len() > 1
+                            && self.loaded_sample[0].len() > 1
+                            && self.sample_lib.len() > 1
                         {
-                            voice.sample_pos = scaled_start_position;
-                        } else if voice.sample_pos > scaled_end_position {
-                            voice.sample_pos = self.sample_lib[usize_note][0].len();
-                            voice.state = OscState::Off;
+                            // Use our Vec<midi note value<VectorOfChannels<VectorOfSamples>>>
+                            // If our note is valid 0-127
+                            if usize_note < self.sample_lib.len() {
+                                // If our sample position is valid for our note
+                                if voice.sample_pos < self.sample_lib[usize_note][0].len() {
+                                    // Get our channels of sample vectors
+                                    let NoteVector = &self.sample_lib[usize_note];
+                                    // We don't need to worry about mono/stereo here because it's been setup in load_new_sample()
+                                    center_voices_l +=
+                                        NoteVector[0][voice.sample_pos] * temp_osc_gain_multiplier;
+                                    center_voices_r +=
+                                        NoteVector[1][voice.sample_pos] * temp_osc_gain_multiplier;
+                                }
+                            }
+
+                            let scaled_start_position = (self.sample_lib[usize_note][0].len() as f32
+                                * self.start_position)
+                                .floor() as usize;
+                            let scaled_end_position = (self.sample_lib[usize_note][0].len() as f32
+                                * self._end_position)
+                                .floor() as usize;
+                            // Sampler moves position
+                            voice.sample_pos += 1;
+                            if voice.loop_it
+                                && (voice.sample_pos > self.sample_lib[usize_note][0].len()
+                                    || voice.sample_pos > scaled_end_position)
+                            {
+                                voice.sample_pos = scaled_start_position;
+                            } else if voice.sample_pos > scaled_end_position {
+                                voice.sample_pos = self.sample_lib[usize_note][0].len();
+                                voice.state = OscState::Off;
+                            }
                         }
                     }
                 }
