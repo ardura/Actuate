@@ -484,7 +484,7 @@ dependencies = [
 [[package]]
 name = "egui_file"
 version = "0.22.0"
-source = "git+https://github.com/Ardura/egui_file.git?rev=b71296936cf05349feab6d70fa59454b74c86e95#b71296936cf05349feab6d70fa59454b74c86e95"
+source = "git+https://github.com/Ardura/egui_file.git?rev=6c3aff8fecc9ae5c4310ab6c09c0b4bf8c4c7359#6c3aff8fecc9ae5c4310ab6c09c0b4bf8c4c7359"
 dependencies = [
  "dyn-clone",
  "nih_plug",

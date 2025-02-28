@@ -100,11 +100,7 @@ pub struct Actuate {
     browsing_presets: Arc<AtomicBool>,
     importing_presets: Arc<AtomicBool>,
     exporting_presets: Arc<AtomicBool>,
-    //importing_banks: Arc<AtomicBool>,
-    //exporting_banks: Arc<AtomicBool>,
-    //current_preset: Arc<AtomicU32>,
     update_current_preset: Arc<AtomicBool>,
-
     safety_clip_output: Arc<Mutex<bool>>,
 
     current_note_on_velocity: Arc<AtomicF32>,
@@ -118,7 +114,6 @@ pub struct Actuate {
     audio_module_1: Arc<Mutex<AudioModule>>,
     audio_module_2: Arc<Mutex<AudioModule>>,
     audio_module_3: Arc<Mutex<AudioModule>>,
-
 
     // LFOs!
     lfo_1: LFOController::LFOController,
@@ -225,8 +220,6 @@ impl Default for Actuate {
         // Studio One fix for internal windows
         let importing_presets = Arc::new(AtomicBool::new(false));
         let exporting_presets = Arc::new(AtomicBool::new(false));
-        //let importing_banks = Arc::new(AtomicBool::new(false));
-        //let exporting_banks = Arc::new(AtomicBool::new(false));
         // End Studio One fix for internal windows
 
         // Safety Clipper
@@ -238,7 +231,6 @@ impl Default for Actuate {
         // HashMap to store directories and their files (two levels deep)
         let dir_files_map: Arc<Mutex<HashMap<PathBuf, Vec<PathBuf>>>> = Arc::new(Mutex::new(HashMap::new()));
         let str_files_map: Arc<Mutex<HashMap<String, Vec<PathBuf>>>> =  Arc::new(Mutex::new(HashMap::new()));
-        //let mut preset_browser_lite_db:  Arc<Mutex<HashMap<String, HashMap<String, PresetBrowserEntry>>> =  ;
 
         Self {
             params: Arc::new(ActuateParams::new(
@@ -256,11 +248,8 @@ impl Default for Actuate {
             file_open_buffer_timer: file_open_buffer_timer,
             browsing_presets: browsing_presets,
             safety_clip_output: safety_clip_output,
-            //importing_banks: importing_banks,
             importing_presets: importing_presets,
-            //exporting_banks: exporting_banks,
             exporting_presets: exporting_presets,
-            //current_preset: current_preset,
             update_current_preset: update_current_preset,
 
             current_note_on_velocity: Arc::new(AtomicF32::new(0.0)),
@@ -281,9 +270,6 @@ impl Default for Actuate {
             lfo_3: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
 
             // Preset Library DEFAULT
-            //preset_name: Arc::new(Mutex::new(String::new())),
-            //preset_info: Arc::new(Mutex::new(String::new())),
-            //preset_category: Arc::new(Mutex::new(PresetType::Select)),
             current_loaded_params: Arc::new(Mutex::new(DEFAULT_PRESET.clone())),
 
             fm_state: OscState::Off,
@@ -3802,11 +3788,6 @@ impl Actuate {
             if !context.transport().playing
                 && (am1_lock.get_playing() || am2_lock.get_playing() || am3_lock.get_playing())
             {
-                // Create clones here
-                //let AM1 = self.audio_module_1.clone();
-                //let AM2 = self.audio_module_2.clone();
-                //let AM3 = self.audio_module_3.clone();
-
                 // For some reason this format works vs doing lock and storing it earlier
                 am1_lock.set_playing(false);
                 am2_lock.set_playing(false);
@@ -5496,54 +5477,6 @@ impl Actuate {
         return (String::from("Error"), Option::None);
     }
 
-    /*
-    // Load presets uses message packing with serde
-    fn load_preset_bank(loading_bank: Option<PathBuf>) -> (String, Vec<ActuatePresetV131>) {
-        let return_name;
-
-        if let Some(loading_bank) = loading_bank {
-            return_name = loading_bank.to_str().unwrap_or("Invalid Path").to_string();
-
-            // Read the compressed data from the file
-            let mut file_data = String::new();
-            if let Err(err) = std::fs::File::open(&return_name)
-                .and_then(|mut file| file.read_to_string(&mut file_data))
-            {
-                eprintln!("Error reading compressed data from file: {}", err);
-                return (err.to_string(), Vec::new());
-            }
-
-            // Deserialize into preset struct - return default empty lib if error
-            let unserialized: Vec<ActuatePresetV131> = serde_json::from_slice(&file_data.as_bytes())
-                .unwrap_or(vec![
-                    ERROR_PRESET.clone();
-                    PRESET_BANK_SIZE
-                ]);
-
-            // Attempt loading 1.3.0 bank if error
-            if unserialized[0].preset_name.contains("Error") {
-                /*
-
-                // Deserialize into preset struct - return default empty lib if error
-                let unserialized: Vec<ActuatePresetV130> = rmp_serde::from_slice(&file_string_data)
-                .unwrap_or(vec![
-                    ERROR_PRESETV130.clone();
-                    PRESET_BANK_SIZE
-                ]);
-                // Convert each v1.3.0 entry into latest
-                let mut converted: Vec<ActuatePresetV131> = Vec::new();
-                for v130_preset in unserialized.iter() {
-                    converted.push(old_preset_structs::convert_preset_v130(v130_preset.clone()));
-                }
-                return (return_name, converted);
-                */
-            }
-            return (return_name, unserialized);
-        }
-        return (String::from("Error"), Vec::new());
-    }
-    */
-
     // This gets triggered to force a load/change and to recalculate sample dependent notes
     fn reload_entire_preset(
         setter: &ParamSetter,
@@ -6058,49 +5991,6 @@ impl Actuate {
             _ => {},
         }
     }
-
-    /*
-    fn save_preset_bank(preset_store: &mut Vec<ActuatePresetV131>, saving_bank: Option<PathBuf>) {
-        if let Some(mut location) = saving_bank {
-            if let Some(extension_check) = location.extension() {
-                let extension = extension_check.to_string_lossy().to_string();
-                // Add our extension if it's not there
-                if !extension.ends_with(".actuatebank") {
-                    location.set_extension("actuatebank");
-                }
-            } else {
-                location.set_extension("actuatebank");
-            }
-            // Create our new save file
-            let file = File::create(location.clone());
-
-            if let Ok(_file) = file {
-                // Clear out our generated notes and only keep the samples themselves
-                for preset in preset_store.iter_mut() {
-                    preset.mod1_sample_lib.clear();
-                    preset.mod2_sample_lib.clear();
-                    preset.mod3_sample_lib.clear();
-                }
-
-                // Serialize to MessagePack bytes
-                let serialized_data = serde_json::to_string(&preset_store);
-
-                if let Err(err) = serialized_data {
-                    eprintln!("Error serializing data: {}", err);
-                    return;
-                }
-
-                // Now you can write the compressed data to the file
-                if let Err(err) = std::fs::write(&location, &serialized_data.unwrap()) {
-                    eprintln!("Error writing compressed data to file: {}", err);
-                    return;
-                }
-            } else {
-                eprintln!("Error creating file at location: {:?}", location);
-            }
-        }
-    }
-    */
 
     // Update our current preset
     fn update_current_preset(&mut self) {

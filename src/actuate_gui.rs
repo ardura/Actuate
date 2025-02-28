@@ -242,46 +242,97 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         let filter_select = filter_select_outside.clone();
                         let lfo_select = lfo_select_outside.clone();
 
-                        // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
-                        // It runs if there is peristent sample data but not sample data in the audio module
-                        // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
-                        // This would cause a deadlock and break Actuate :|
-                        // Maybe in future this will become nicer
-                        if params.am1_sample.lock().unwrap()[0].len() > 1 && 
-                           AM1.lock().unwrap().loaded_sample[0].len() <= 2 &&
-                           AM1.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
-                           (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                            AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
-                           {
+                        // This happens on some plugin loads and crashes your DAW :(
+                        // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
+                        if AM1.lock().unwrap().sample_lib.len() == 0 && 
+                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler || 
+                             AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer) {
                             let mut AM1_Lock = AM1.lock().unwrap();
 
                             AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
 
                             AM1_Lock.regenerate_samples();
+                        // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
+                        // It runs if there is peristent sample data but not sample data in the audio module
+                        // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
+                        // This would cause a deadlock and break Actuate :|
+                        // Maybe in future this will become nicer
+                        } else if params.am1_sample.lock().unwrap()[0].len() > 1 && 
+                            AM1.lock().unwrap().loaded_sample[0].len() <= 2 &&
+                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                             AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                        {
+                            // This if is separate since previously when it was included in th eabove it could
+                            // panic on length issues handled by [AM1.lock().unwrap().loaded_sample[0].len() <= 2]
+                            if AM1.lock().unwrap().sample_lib[0][0][0] == 0.0 {
+                                let mut AM1_Lock = AM1.lock().unwrap();
+
+                                AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
+
+                                AM1_Lock.regenerate_samples();
+                            }
                         }
-                        if params.am2_sample.lock().unwrap()[0].len() > 1 && 
-                           AM2.lock().unwrap().loaded_sample[0].len() <= 2 &&
-                           AM2.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
-                           (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                            AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
-                           {
+
+                        // This happens on some plugin loads and crashes your DAW :(
+                        // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
+                        if AM2.lock().unwrap().sample_lib.len() == 0 && 
+                            (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler || 
+                             AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer) {
                             let mut AM2_Lock = AM2.lock().unwrap();
 
                             AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
 
                             AM2_Lock.regenerate_samples();
+                        // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
+                        // It runs if there is peristent sample data but not sample data in the audio module
+                        // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
+                        // This would cause a deadlock and break Actuate :|
+                        // Maybe in future this will become nicer
+                        } else if params.am2_sample.lock().unwrap()[0].len() > 1 && 
+                            AM2.lock().unwrap().loaded_sample[0].len() <= 2 &&
+                            (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                             AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                        {
+                            // This if is separate since previously when it was included in th eabove it could
+                            // panic on length issues handled by [AM1.lock().unwrap().loaded_sample[0].len() <= 2]
+                            if AM2.lock().unwrap().sample_lib[0][0][0] == 0.0 {
+                                let mut AM2_Lock = AM2.lock().unwrap();
+
+                                AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
+
+                                AM2_Lock.regenerate_samples();
+                            }
                         }
-                        if params.am3_sample.lock().unwrap()[0].len() > 1 && 
-                           AM3.lock().unwrap().loaded_sample[0].len() <= 2 &&
-                           AM3.lock().unwrap().sample_lib[0][0][0] == 0.0 &&
-                           (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                            AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
-                           {
+
+                        // This happens on some plugin loads and crashes your DAW :(
+                        // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
+                        if AM3.lock().unwrap().sample_lib.len() == 0 && 
+                            (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler || 
+                             AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer) {
                             let mut AM3_Lock = AM3.lock().unwrap();
 
                             AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
 
                             AM3_Lock.regenerate_samples();
+                        // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
+                        // It runs if there is peristent sample data but not sample data in the audio module
+                        // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
+                        // This would cause a deadlock and break Actuate :|
+                        // Maybe in future this will become nicer
+                        } else if params.am3_sample.lock().unwrap()[0].len() > 1 && 
+                            AM3.lock().unwrap().loaded_sample[0].len() <= 2 &&
+                            (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
+                             AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                        {
+                            // This if is separate since previously when it was included in th eabove it could
+                            // panic on length issues handled by [AM1.lock().unwrap().loaded_sample[0].len() <= 2]
+                            if AM3.lock().unwrap().sample_lib[0][0][0] == 0.0 {
+                                let mut AM3_Lock = AM3.lock().unwrap();
+
+                                AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
+
+                                AM3_Lock.regenerate_samples();
+                            }
                         }
 
                         if update_current_preset.load(Ordering::SeqCst) || params.param_update_current_preset.value() {
