@@ -2,18 +2,99 @@
 // Builds the EGUI editor outside of the main file because it is huge
 // Ardura
 
-use std::{collections::HashMap, ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, RwLock}};
+use std::{collections::HashMap, ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, Ordering}, mpsc, Arc, Mutex, RwLock}, thread};
 use egui_file::{FileDialog, State};
 use nih_plug::{context::gui::AsyncExecutor, editor::Editor, nih_log};
 use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2}, widgets::ParamSlider};
 use walkdir::WalkDir;
 
-use crate::{actuate_enums::PresetBrowserEntry, CustomWidgets::ComboBoxParam};
+use crate::{actuate_enums::PresetBrowserEntry, release_downloader::ReleaseDownloader, CustomWidgets::ComboBoxParam};
 #[allow(unused_imports)]
 use crate::{
     actuate_enums::{
         AMFilterRouting, FilterAlgorithms, LFOSelect, ModulationDestination, ModulationSource, PresetType, UIBottomSelection}, actuate_structs::ActuatePresetV131, audio_module::{AudioModule, AudioModuleType}, Actuate, ActuateParams, CustomWidgets::{
             slim_checkbox, toggle_switch, ui_knob::{self, KnobLayout}, BeizerButton::{self, ButtonLayout}, BoolButton, CustomParamSlider, CustomVerticalSlider::ParamSlider as VerticalParamSlider}, A_BACKGROUND_COLOR_TOP, DARKER_GREY_UI_COLOR, DARKEST_BOTTOM_UI_COLOR, DARK_GREY_UI_COLOR, FONT, FONT_COLOR, HEIGHT, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD};
+
+fn recalculate_banks(dir_files_map: &Arc<Mutex<HashMap<PathBuf, Vec<PathBuf>>>>, 
+        str_files_map: &Arc<Mutex<HashMap<String, Vec<PathBuf>>>>,
+        lite_db: &Arc<RwLock<HashMap<String, HashMap<String, PresetBrowserEntry>>>>, 
+        default_dir_passed: &Path) {
+    let base_dir: PathBuf;
+    let binding: Option<PathBuf> = dirs::document_dir();
+    if binding.is_some() && dir_files_map.lock().unwrap().is_empty() {
+        // Attempt to create dir if it doesn't exist
+        base_dir = binding.unwrap().as_path().join("ActuateDB");
+        if !base_dir.exists() {
+            //default_dir = base_dir.as_path().join("Default");
+            let creation_attempt = std::fs::create_dir_all(default_dir_passed);
+            if creation_attempt.is_ok() {
+                let stringpath = base_dir.as_path().to_str().unwrap();
+                nih_log!("Created DB at {}", stringpath);
+            }
+        }
+        let root = base_dir;
+            
+        // Traverse directories and files up to two levels deep
+        for entry in WalkDir::new(root)
+            .min_depth(1) // Skip the root directory itself
+            .max_depth(2) // Limit traversal to two levels deep
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let path = entry.path();
+        
+            // If it's a directory (at level 1), initialize its file vector
+            if path.is_dir() && entry.depth() == 1 {
+                dir_files_map.lock().unwrap().insert(path.to_path_buf(), Vec::new());
+                str_files_map.lock().unwrap().insert(path.file_name().unwrap().to_str().unwrap().to_string(), Vec::new());
+            } 
+            // If it's a file inside a level 1 directory, add it to the corresponding directory
+            else if path.is_file() {
+                if let Some(parent_dir) = path.parent() {
+                    if let Some(files) = dir_files_map.lock().unwrap().get_mut(parent_dir) {
+                        files.push(path.to_path_buf());
+                    }
+                    if let Some(files) = str_files_map.lock().unwrap().get_mut(parent_dir.file_name().unwrap().to_str().unwrap()) {
+                        files.push(path.to_path_buf());
+                    }
+                    // Load info into our DB
+                    let unserialized: Option<ActuatePresetV131>;
+                    (_, unserialized) = Actuate::import_preset(Some(path.to_path_buf()));
+                    if unserialized.is_some() {
+                        let current_import = unserialized.unwrap();
+                        let mut lite_db_write = lite_db.write().unwrap();
+                        lite_db_write.entry(parent_dir.file_name().unwrap().to_str().unwrap().to_string()).or_insert_with(HashMap::new)
+                            .insert(
+                                path.file_name().unwrap().to_str().unwrap().to_string().replace(".actuate", ""),
+                                PresetBrowserEntry {
+                                    PresetCategory: current_import.preset_category,
+                                    tag_acid: current_import.tag_acid,
+                                    tag_analog: current_import.tag_analog,
+                                    tag_bright: current_import.tag_bright,
+                                    tag_chord: current_import.tag_chord,
+                                    tag_crisp: current_import.tag_crisp,
+                                    tag_deep: current_import.tag_deep,
+                                    tag_delicate: current_import.tag_delicate,
+                                    tag_hard: current_import.tag_hard,
+                                    tag_harsh: current_import.tag_harsh,
+                                    tag_lush: current_import.tag_lush,
+                                    tag_mellow: current_import.tag_mellow,
+                                    tag_resonant: current_import.tag_resonant,
+                                    tag_rich: current_import.tag_rich,
+                                    tag_sharp: current_import.tag_sharp,
+                                    tag_silky: current_import.tag_silky,
+                                    tag_smooth: current_import.tag_smooth,
+                                    tag_soft: current_import.tag_soft,
+                                    tag_stab: current_import.tag_stab,
+                                    tag_warm: current_import.tag_warm,
+                                    _file: path.to_path_buf(),
+                                });
+                    }
+                }
+            }
+        }
+    }
+}
 
 pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExecutor<Actuate>) -> Option<Box<dyn Editor>> {
         let params: Arc<ActuateParams> = instance.params.clone();
@@ -54,94 +135,24 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let filter_warm = instance.filter_warm.clone();
         let dir_files_map = instance.dir_files_map.clone();
         let str_files_map = instance.str_files_map.clone();
-        let lite_db = instance.preset_browser_lite_db.clone();
+        let lite_db: Arc<RwLock<HashMap<String, HashMap<String, PresetBrowserEntry>>>> = instance.preset_browser_lite_db.clone();
+        let download_in_progress = instance.download_in_progress.clone();
+        let download_status = instance.download_status.clone();
+        
 
         let mut home_dir = PathBuf::new();
         let home_location = dirs::home_dir().expect("Unable to determine home directory");
         home_dir.push(home_location);
 
         let default_dir_temp = dirs::document_dir();
-        let mut default_dir: PathBuf = home_dir.clone();
+        let default_dir: Arc<Mutex<String>> = Arc::new(Mutex::new(home_dir.clone().as_os_str().to_str().unwrap().to_string()));
+
         if default_dir_temp.is_some() {
-            default_dir = default_dir_temp.unwrap().as_path().join("ActuateDB").join("Default");
+            *default_dir.lock().unwrap() = default_dir_temp.unwrap().as_path().join("ActuateDB").to_str().unwrap().to_string();
         }
 
-
         let bank_current_value: RwLock<String> = RwLock::new(String::new());
-        let base_dir: PathBuf;
-        let binding: Option<PathBuf> = dirs::document_dir();
-        if binding.is_some() && instance.dir_files_map.lock().unwrap().is_empty() {
-            // Attempt to create dir if it doesn't exist
-            base_dir = binding.unwrap().as_path().join("ActuateDB");
-            if !base_dir.exists() {
-                //default_dir = base_dir.as_path().join("Default");
-                let creation_attempt = std::fs::create_dir_all(default_dir.clone());
-                if creation_attempt.is_ok() {
-                    let stringpath = base_dir.as_path().to_str().unwrap();
-                    nih_log!("Created DB at {}", stringpath);
-                }
-            }
-            let root = base_dir;
-                
-            // Traverse directories and files up to two levels deep
-            for entry in WalkDir::new(root)
-                .min_depth(1) // Skip the root directory itself
-                .max_depth(2) // Limit traversal to two levels deep
-                .into_iter()
-                .filter_map(|e| e.ok())
-            {
-                let path = entry.path();
-            
-                // If it's a directory (at level 1), initialize its file vector
-                if path.is_dir() && entry.depth() == 1 {
-                    instance.dir_files_map.lock().unwrap().insert(path.to_path_buf(), Vec::new());
-                    instance.str_files_map.lock().unwrap().insert(path.file_name().unwrap().to_str().unwrap().to_string(), Vec::new());
-                } 
-                // If it's a file inside a level 1 directory, add it to the corresponding directory
-                else if path.is_file() {
-                    if let Some(parent_dir) = path.parent() {
-                        if let Some(files) = instance.dir_files_map.lock().unwrap().get_mut(parent_dir) {
-                            files.push(path.to_path_buf());
-                        }
-                        if let Some(files) = instance.str_files_map.lock().unwrap().get_mut(parent_dir.file_name().unwrap().to_str().unwrap()) {
-                            files.push(path.to_path_buf());
-                        }
-                        // Load info into our DB
-                        let unserialized: Option<ActuatePresetV131>;
-                        (_, unserialized) = Actuate::import_preset(Some(path.to_path_buf()));
-                        if unserialized.is_some() {
-                            let current_import = unserialized.unwrap();
-                            let mut lite_db_write = lite_db.write().unwrap();
-                            lite_db_write.entry(parent_dir.file_name().unwrap().to_str().unwrap().to_string()).or_insert_with(HashMap::new)
-                                .insert(
-                                    path.file_name().unwrap().to_str().unwrap().to_string().replace(".actuate", ""),
-                                    PresetBrowserEntry {
-                                        PresetCategory: current_import.preset_category,
-                                        tag_acid: current_import.tag_acid,
-                                        tag_analog: current_import.tag_analog,
-                                        tag_bright: current_import.tag_bright,
-                                        tag_chord: current_import.tag_chord,
-                                        tag_crisp: current_import.tag_crisp,
-                                        tag_deep: current_import.tag_deep,
-                                        tag_delicate: current_import.tag_delicate,
-                                        tag_hard: current_import.tag_hard,
-                                        tag_harsh: current_import.tag_harsh,
-                                        tag_lush: current_import.tag_lush,
-                                        tag_mellow: current_import.tag_mellow,
-                                        tag_resonant: current_import.tag_resonant,
-                                        tag_rich: current_import.tag_rich,
-                                        tag_sharp: current_import.tag_sharp,
-                                        tag_silky: current_import.tag_silky,
-                                        tag_smooth: current_import.tag_smooth,
-                                        tag_soft: current_import.tag_soft,
-                                        tag_stab: current_import.tag_stab,
-                                        tag_warm: current_import.tag_warm,
-                                        _file: path.to_path_buf(),
-                                    });
-                        }
-                    }
-                }
-            }
+        recalculate_banks(&dir_files_map, &str_files_map, &lite_db, Path::new(&*default_dir.lock().unwrap()));
 
             // Print the directory-file structure
             for (dir, files) in instance.dir_files_map.lock().unwrap().iter() {
@@ -150,21 +161,10 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                     nih_log!("  File: {:?}", file);
                 }
             }
-        }
+        //}
 
         // Set default
         *bank_current_value.write().unwrap() = "Default".to_string();
-
-
-
-
-
-
-
-
-
-
-
 
         // Show only files with our extensions
         let preset_filter = Box::new({
@@ -182,8 +182,8 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
 
         let dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
-                    if default_dir.clone().exists() {
-                        FileDialog::open_file(Some(default_dir.clone()))
+                    if PathBuf::from((*default_dir.lock().unwrap().clone()).to_string()).exists() {
+                        FileDialog::open_file(Some(PathBuf::from((*default_dir.lock().unwrap().clone()).to_string())))
                             //.current_pos([(WIDTH/4) as f32, 10.0])
                             .show_files_filter(preset_filter)
                             .keep_on_top(true)
@@ -201,8 +201,8 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             );
         let save_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
             Mutex::new(
-                    if default_dir.clone().exists() {
-                        FileDialog::save_file(Some(default_dir.clone()))
+                if PathBuf::from((*default_dir.lock().unwrap().clone()).to_string()).exists() {
+                        FileDialog::save_file(Some(PathBuf::from((*default_dir.lock().unwrap().clone()).to_string())))
                             //.current_pos([(WIDTH/4) as f32, 10.0])
                             .show_files_filter(save_preset_filter)
                             .keep_on_top(true)
@@ -238,9 +238,16 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             move |egui_ctx, setter, _state| {
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
+                        if download_in_progress.load(Ordering::Relaxed) {
+                            recalculate_banks(&dir_files_map, &str_files_map, &lite_db, Path::new(&*default_dir.lock().unwrap()));
+                            download_in_progress.store(false, Ordering::Relaxed);
+                        }
+
+
                         //let current_preset_index = current_preset.load(Ordering::SeqCst);
                         let filter_select = filter_select_outside.clone();
                         let lfo_select = lfo_select_outside.clone();
+                        let clone_dir = default_dir.clone();
 
                         // This happens on some plugin loads and crashes your DAW :(
                         // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
@@ -430,7 +437,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
-                                        .on_hover_text("v1.3.8 by Ardura!");
+                                        .on_hover_text("v1.3.9 by Ardura!");
                                     ui.add_space(2.0);
                                     ui.separator();
 
@@ -538,6 +545,41 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
 
                                             ui.horizontal(|ui|{
                                                 ui.vertical(|ui|{
+                                                    // Downloader
+                                                    let download_button = ui.button(format!("Download Latest Presets"));
+                                                    if download_button.clicked() && !download_in_progress.load(Ordering::Relaxed) {
+                                                        let mut download_status_lock = download_status.lock().unwrap();
+                                                        let owner = String::from("ardura");
+                                                        let repo = String::from("actuate_presets");
+                                                        let (tx, rx) = mpsc::channel();
+                                                        download_in_progress.store(true, Ordering::Relaxed);
+                                                        *download_status_lock = String::from("Downloading...");
+
+                                                        thread::spawn(move || {
+                                                            // Temporary app for download
+                                                            let temp_app = ReleaseDownloader::new(
+                                                                owner,
+                                                                repo,
+                                                                (*clone_dir.lock().unwrap().clone()).to_string());
+                                                            // Attempt download and send result
+                                                                let result = temp_app.download_latest_release();
+                                                                tx.send(result).unwrap();
+                                                        });
+
+                                                        let download_result = rx.recv();
+
+                                                        match download_result {
+                                                            Ok(Ok(_)) => {
+                                                                *download_status_lock = "Download completed successfully!".to_string();
+                                                            },
+                                                            Ok(Err(e)) => {
+                                                                *download_status_lock = format!("Download failed: {}", e);
+                                                            },
+                                                            Err(_) => {
+                                                                *download_status_lock = "Download thread failed".to_string();
+                                                            }
+                                                        }
+                                                    }
                                                     ui.colored_label(YELLOW_MUSTARD, "Preset Banks");
                                                     for (directory, _) in dir_files_map.lock().unwrap().iter() {
                                                         let name = directory.file_name().unwrap().to_str().unwrap().to_string();
@@ -3553,6 +3595,6 @@ For constant FM, turn Sustain to 100% and A,D,R to 0%".to_string());
                             });
                     });
             },
-            // This is the end of create_egui_editor()
         )
+        // This is the end of create_egui_editor()
 }
