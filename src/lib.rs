@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.3.8
+Version 1.3.9
 
 #####################################
 
@@ -27,7 +27,7 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 #![allow(non_snake_case)]
 use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetBrowserEntry, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV131, ModulationStruct};
-use nih_plug::{prelude::*};
+use nih_plug::prelude::*;
 use nih_plug_egui::{
     egui::{Color32, FontId}, EguiState
 };
@@ -62,6 +62,7 @@ mod LFOController;
 mod audio_module;
 mod fx;
 mod old_preset_structs;
+mod release_downloader;
 
 // Plugin sizing
 const WIDTH: u32 = 920;
@@ -206,6 +207,10 @@ pub struct Actuate {
             >
         >
     >,
+
+    // Download controller
+    download_in_progress: Arc<AtomicBool>,
+    download_status: Arc<Mutex<String>>,
 }
 
 impl Default for Actuate {
@@ -360,7 +365,8 @@ impl Default for Actuate {
             dir_files_map: dir_files_map,
             str_files_map: str_files_map,
             preset_browser_lite_db: Arc::new(RwLock::new(HashMap::new())),
-            //preset_browser_lite_db: HashMap::new(),
+            download_in_progress: Arc::new(AtomicBool::new(false)),
+            download_status: Arc::new(Mutex::new(String::new())),
         }
     }
 }
