@@ -332,12 +332,14 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     response.rect,
                     4.0,
                     Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
+                    egui::StrokeKind::Middle
                 );
             } else {
                 ui.painter().rect_stroke(
                     response.rect,
                     4.0,
                     Stroke::new(1.0, self.background_set_color),
+                    egui::StrokeKind::Middle
                 );
             }
         }
@@ -380,9 +382,10 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                 let stroke = visuals.bg_stroke;
                 ui.painter().rect(
                     response.rect.expand(visuals.expansion),
-                    visuals.rounding,
+                    visuals.corner_radius,
                     fill,
                     stroke,
+                    egui::StrokeKind::Middle
                 );
             }
 

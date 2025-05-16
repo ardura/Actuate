@@ -5,7 +5,7 @@
 use std::{collections::HashMap, ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, Ordering}, mpsc, Arc, Mutex, RwLock}, thread};
 use egui_file::{FileDialog, State};
 use nih_plug::{context::gui::AsyncExecutor, editor::Editor, nih_log};
-use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, Rounding, ScrollArea, Vec2}, widgets::ParamSlider};
+use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, CornerRadius, ScrollArea, Vec2}, widgets::ParamSlider};
 use walkdir::WalkDir;
 
 use crate::{actuate_enums::PresetBrowserEntry, release_downloader::ReleaseDownloader, CustomWidgets::ComboBoxParam};
@@ -372,7 +372,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32),
                                 RangeInclusive::new(0.0, (HEIGHT as f32)*0.65)),
-                            Rounding::ZERO,
+                            CornerRadius::ZERO,
                             DARK_GREY_UI_COLOR);
 
                         // Draw top bar background
@@ -380,7 +380,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(0.0, WIDTH as f32),
                                 RangeInclusive::new(0.0, HEIGHT as f32 * 0.05)),
-                            Rounding::ZERO,
+                            CornerRadius::ZERO,
                             DARKER_GREY_UI_COLOR
                         );
 
@@ -389,21 +389,21 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.20),
                                 RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.25)),
-                            Rounding::from(4.0),
+                            CornerRadius::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.20),
                                 RangeInclusive::new(HEIGHT as f32 * 0.26, HEIGHT as f32 * 0.45)),
-                            Rounding::from(4.0),
+                            CornerRadius::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.005, WIDTH as f32 * 0.20),
                                 RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.65)),
-                            Rounding::from(4.0),
+                            CornerRadius::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
 
@@ -412,21 +412,21 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.21, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.05, HEIGHT as f32 * 0.25)),
-                            Rounding::from(4.0),
+                            CornerRadius::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.21, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.26, HEIGHT as f32 * 0.45)),
-                            Rounding::from(4.0),
+                            CornerRadius::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
                         ui.painter().rect_filled(
                             Rect::from_x_y_ranges(
                                 RangeInclusive::new(WIDTH as f32 * 0.21, WIDTH as f32 * 0.99),
                                 RangeInclusive::new(HEIGHT as f32 * 0.46, HEIGHT as f32 * 0.65)),
-                            Rounding::from(4.0),
+                            CornerRadius::from(4.0),
                             LIGHTER_GREY_UI_COLOR
                         );
 

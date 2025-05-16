@@ -5,7 +5,7 @@ use std::sync::{Arc, LazyLock};
 use nih_plug::{
     prelude::{Param, ParamSetter},
 };
-use nih_plug_egui::egui::{self, vec2, Color32, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget, WidgetText};
+use nih_plug_egui::egui::{self, emath, vec2, Color32, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget, WidgetText};
 use nih_plug_egui::widgets::util as nUtil;
 use parking_lot::Mutex;
 
@@ -318,12 +318,14 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     response.rect,
                     0.0,
                     Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
+                    egui::StrokeKind::Middle
                 );
             } else {
                 ui.painter().rect_stroke(
                     response.rect,
                     0.0,
                     Stroke::new(1.0, self.background_set_color),
+                    egui::StrokeKind::Middle
                 );
             }
         }
@@ -393,9 +395,10 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                         let stroke = visuals.bg_stroke;
                         ui.painter().rect(
                             response.rect.expand(visuals.expansion),
-                            visuals.rounding,
+                            visuals.corner_radius,
                             fill,
                             stroke,
+                            egui::StrokeKind::Middle
                         );
                     }
                     let text_pos = ui
@@ -434,9 +437,10 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     let stroke = visuals.bg_stroke;
                     ui.painter().rect(
                         response.rect.expand(visuals.expansion),
-                        visuals.rounding,
+                        visuals.corner_radius,
                         fill,
                         stroke,
+                        egui::StrokeKind::Middle
                     );
                 }
                 let text_pos = ui
@@ -476,7 +480,8 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
             let height = ui
                 .text_style_height(&TextStyle::Body)
                 .max(ui.spacing().interact_size.y * slimmer_scale);
-            let slider_height = ui.painter().round_to_pixel(height * 0.8);
+            
+            let slider_height = emath::GuiRounding::round_to_pixels(height * 0.8, ui.painter().pixels_per_point());
             let mut response = ui
                 .vertical(|ui| {
                     ui.allocate_space(vec2(slider_width, (height - slider_height) / 2.0));
