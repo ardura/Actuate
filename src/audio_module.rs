@@ -25,7 +25,7 @@ use egui_file::{FileDialog, State};
 use nih_plug::{
     prelude::{Enum, NoteEvent, ParamSetter, Smoother, SmoothingStyle}, util::{self, db_to_gain}
 };
-use nih_plug_egui::egui::{self, Pos2, Rect, RichText, Rounding, ScrollArea, Ui};
+use nih_plug_egui::egui::{self, Pos2, Rect, RichText, CornerRadius, ScrollArea, Ui};
 use pitch_shift::PitchShifter;
 use rand::Rng;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -969,7 +969,7 @@ You may also know this as mixture, course, or unison".to_string());
                                     y: ui.cursor().left_top().y + VERT_BAR_HEIGHT + 12.0 + 8.0,
                                 },
                             ),
-                            Rounding::from(4.0),
+                            CornerRadius::from(4.0),
                             DARKER_GREY_UI_COLOR,
                         );
                         ui.add_space(2.0);
@@ -1236,7 +1236,7 @@ Random: Sample uses a new random position every note".to_string());
                                 y: ui.cursor().left_top().y + VERT_BAR_HEIGHT + 12.0 + 8.0,
                             },
                         ),
-                        Rounding::from(4.0),
+                        CornerRadius::from(4.0),
                         DARKER_GREY_UI_COLOR,
                     );
                     ui.add_space(2.0);
@@ -1537,7 +1537,7 @@ Random: Sample uses a new random position every note".to_string());
                                     y: ui.cursor().left_top().y + VERT_BAR_HEIGHT + 12.0 + 8.0,
                                 },
                             ),
-                            Rounding::from(4.0),
+                            CornerRadius::from(4.0),
                             DARKER_GREY_UI_COLOR,
                         );
                         ui.add_space(2.0);
@@ -1895,7 +1895,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     y: ui.cursor().left_top().y + VERT_BAR_HEIGHT + 12.0 + 8.0,
                                 },
                             ),
-                            Rounding::from(4.0),
+                            CornerRadius::from(4.0),
                             DARKER_GREY_UI_COLOR,
                         );
                         ui.add_space(2.0);

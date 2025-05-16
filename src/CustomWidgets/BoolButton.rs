@@ -75,6 +75,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                 self.background_color
             },
             visuals.bg_stroke,
+            egui::StrokeKind::Middle
         );
         // Paint the circle, animating it from left to right with `how_on`:
         ui.painter().rect_stroke(
@@ -87,6 +88,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                     .color
                     .linear_multiply((how_on + 0.2).clamp(0.2, 1.2)),
             ),
+            egui::StrokeKind::Middle
         );
         let center = egui::pos2(rect.center().x, rect.center().y);
         ui.painter().text(

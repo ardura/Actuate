@@ -3,9 +3,9 @@
 
 // ----------------------------------------------------------------------------
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
 use nih_plug_egui::egui::{
-    epaint, pos2, vec2, NumExt, Rect, Response, Sense, Shape, TextStyle, TextureId, Ui, Vec2, Widget, WidgetInfo, WidgetText, WidgetType
+    self, epaint::{self, Brush}, pos2, vec2, NumExt, Response, Sense, Shape, TextStyle, TextureId, Ui, Vec2, Widget, WidgetInfo, WidgetText, WidgetType
 };
 
 // TODO(emilk): allow checkbox without a text label
@@ -92,12 +92,16 @@ impl<'a> Widget for AtomicSlimCheckbox<'a> {
             let (small_icon_rect, big_icon_rect) = ui.spacing().icon_rectangles(rect);
             ui.painter().add(epaint::RectShape {
                 rect: big_icon_rect.expand(visuals.expansion),
-                rounding: visuals.rounding,
+                corner_radius: visuals.corner_radius,
                 fill: visuals.bg_fill,
                 stroke: visuals.bg_stroke,
-                fill_texture_id: TextureId::default(),
-                uv: big_icon_rect.expand(visuals.expansion),
+                round_to_pixels: Option::None,
                 blur_width: 0.0,
+                brush: Option::Some(Arc::new(Brush {
+                    fill_texture_id: TextureId::default(),
+                    uv: big_icon_rect.expand(visuals.expansion),
+                })),
+                stroke_kind: egui::StrokeKind::Middle,
             });
 
             if checked.load(Ordering::SeqCst) {
@@ -185,12 +189,16 @@ impl<'a> Widget for SlimCheckbox<'a> {
             let (small_icon_rect, big_icon_rect) = ui.spacing().icon_rectangles(rect);
             ui.painter().add(epaint::RectShape {
                 rect: big_icon_rect.expand(visuals.expansion),
-                rounding: visuals.rounding,
+                corner_radius: visuals.corner_radius,
                 fill: visuals.weak_bg_fill,
                 stroke: visuals.fg_stroke,
-                fill_texture_id: TextureId::default(),
-                uv: Rect::ZERO,
+                round_to_pixels: Option::None,
                 blur_width: 0.0,
+                brush: Option::Some(Arc::new(Brush {
+                    fill_texture_id: TextureId::default(),
+                    uv: big_icon_rect.expand(visuals.expansion),
+                })),
+                stroke_kind: egui::StrokeKind::Middle
             });
 
             if *checked {

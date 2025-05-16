@@ -40,7 +40,7 @@ impl<'a, P: Param> Widget for ParamComboBox<'a, P> {
         let mut current_value = self.get_current_value();
         let mut changed = false; // Flag to detect change
 
-        let response = ComboBox::from_id_source(self.param.name().to_owned() + &self.id_name)
+        let response = ComboBox::from_id_salt(self.param.name().to_owned() + &self.id_name)
             .selected_text(current_value.clone())
             .show_ui(ui, |ui| {
                 for option in &self.options {

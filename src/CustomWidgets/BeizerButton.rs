@@ -3,10 +3,7 @@
 
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
-    self,
-    epaint::{CircleShape, CubicBezierShape},
-    style::WidgetVisuals,
-    Align2, Color32, FontId, Pos2, Rect, Response, Rounding, Shape, Stroke, Ui, Vec2, Widget,
+    self, epaint::{CircleShape, CubicBezierShape}, style::WidgetVisuals, Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, Shape, Stroke, Ui, Vec2, Widget
 };
 
 // This allow is here since Actuate ended up only using HorizontalInline
@@ -338,23 +335,25 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                     }
                 }
             },
-            Rounding::from(4.0),
+            CornerRadius::from(4.0),
             if self.background_color == Color32::PLACEHOLDER {
                 visuals.bg_fill.linear_multiply(0.8)
             } else {
                 self.background_color
             },
             visuals.bg_stroke,
+            egui::StrokeKind::Middle,
         );
         ui.painter().rect(
             rect,
-            Rounding::from(4.0),
+            CornerRadius::from(4.0),
             if self.background_color == Color32::PLACEHOLDER {
                 visuals.bg_fill.linear_multiply(0.8)
             } else {
                 self.background_color.linear_multiply(0.8)
             },
             visuals.bg_stroke,
+            egui::StrokeKind::Middle
         );
         let start_ball = Shape::Circle(CircleShape {
             center: control_points[0],
