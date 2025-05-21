@@ -917,33 +917,6 @@ fn get_pointer_points(start: f32, end: f32, center: Pos2, radius: f32, value: f3
     vec![pos2(short_x, short_y), pos2(x, y)]
 }
 
-/*
-fn get_arc_points(
-    start: f32,
-    end: f32,
-    center: Pos2,
-    radius: f32,
-    value: f32,
-    max_arc_distance: f32,
-) -> Vec<Pos2> {
-    let start_turns: f32 = start;
-    let arc_length = lerp(0.0, end, value);
-    let end_turns = start_turns + arc_length;
-
-    let points = (arc_length.abs() / max_arc_distance).ceil() as usize;
-    let points = points.max(1);
-    (0..=points)
-        .map(|i| {
-            let t = i as f32 / (points - 1) as f32;
-            let angle = lerp(start_turns * TAU, end_turns * TAU, t);
-            let x = radius * angle.cos();
-            let y = -radius * angle.sin();
-            pos2(x, y) + center.to_vec2()
-        })
-        .collect()
-}
-*/
-
 fn get_arc_points(
     start: f32,
     end: f32,

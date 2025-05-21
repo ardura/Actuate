@@ -65,7 +65,12 @@ pub enum AudioModuleType {
     RSquare,
     Pulse,
     Noise,
-    UnsetAm,
+    UnsetAm,    // Holder we should not remain on
+    SkewSaw,
+    BentSaw,
+    StepSaw,
+    ScSaw,
+    AsymSaw,
 }
 
 // This is the information used to track voices and midi inputs
@@ -825,6 +830,11 @@ impl AudioModule {
             AudioModuleType::Square |
             AudioModuleType::RSquare |
             AudioModuleType::Pulse |
+            AudioModuleType::BentSaw |
+            AudioModuleType::ScSaw |
+            AudioModuleType::AsymSaw |
+            AudioModuleType::SkewSaw |
+            AudioModuleType::StepSaw |
             AudioModuleType::Noise => {
                 const KNOB_SIZE: f32 = 22.0;
                 const TEXT_SIZE: f32 = 10.0;
@@ -3255,6 +3265,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                             AudioModuleType::Square |
                                             AudioModuleType::RSquare |
                                             AudioModuleType::Pulse |
+                                            AudioModuleType::BentSaw |
+                                            AudioModuleType::ScSaw |
+                                            AudioModuleType::AsymSaw |
+                                            AudioModuleType::SkewSaw |
+                                            AudioModuleType::StepSaw |
                                             AudioModuleType::Noise => {
                                                 let mut rng = rand::thread_rng();
                                                 rng.gen_range(0.0..1.0)
@@ -3332,6 +3347,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                         AudioModuleType::Square |
                                         AudioModuleType::RSquare |
                                         AudioModuleType::Pulse |
+                                        AudioModuleType::BentSaw |
+                                        AudioModuleType::ScSaw |
+                                        AudioModuleType::AsymSaw |
+                                        AudioModuleType::SkewSaw |
+                                        AudioModuleType::StepSaw |
                                         AudioModuleType::Noise => {
                                             0
                                         },
@@ -4501,6 +4521,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
             AudioModuleType::Square |
             AudioModuleType::RSquare |
             AudioModuleType::Pulse |
+            AudioModuleType::BentSaw |
+            AudioModuleType::ScSaw |
+            AudioModuleType::AsymSaw |
+            AudioModuleType::SkewSaw |
+            AudioModuleType::StepSaw |
             AudioModuleType::Noise => {
                 let mut stereo_voices_l: f32 = 0.0;
                 let mut stereo_voices_r: f32 = 0.0;
@@ -4618,6 +4643,21 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         AudioModuleType::Noise => {
                             self.noise_obj.generate_sample() * temp_osc_gain_multiplier
                         },
+                        AudioModuleType::BentSaw => {
+                            Oscillator::get_bent_Saw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::ScSaw => {
+                            Oscillator::get_s_cubic_saw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::AsymSaw => {
+                            Oscillator::get_asym_saw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::SkewSaw => {
+                            Oscillator::get_skew_saw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::StepSaw => {
+                            Oscillator::get_step_saw(voice.phase) * temp_osc_gain_multiplier
+                        },
                         AudioModuleType::Additive | AudioModuleType::Granulizer | AudioModuleType::Off | AudioModuleType::UnsetAm | AudioModuleType::Sampler => 0.0,
                     };
                     for internal_unison_voice in voice.internal_unison_voices.iter_mut() {
@@ -4731,6 +4771,21 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             },
                             AudioModuleType::Noise => {
                                 self.noise_obj.generate_sample() * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::BentSaw => {
+                                Oscillator::get_bent_Saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::ScSaw => {
+                                Oscillator::get_s_cubic_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::AsymSaw => {
+                                Oscillator::get_asym_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::SkewSaw => {
+                                Oscillator::get_skew_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::StepSaw => {
+                                Oscillator::get_step_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::Additive | AudioModuleType::Granulizer | AudioModuleType::Off | AudioModuleType::UnsetAm | AudioModuleType::Sampler => 0.0,
                         };
