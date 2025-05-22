@@ -493,7 +493,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             painter.add(shape);
 
             // Arc Balls
-            let ball_width = self.line_width / 5.0;
+            let ball_width = self.line_width / 5.5;
             let ball_line_stroke = Stroke::new(ball_width, self.line_color);
             let start_ball = Shape::Circle(CircleShape {
                 center: get_start_point(self.arc_start, center, arc_radius + ball_width),
