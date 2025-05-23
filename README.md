@@ -23,13 +23,18 @@ Hover over any knob (or some labels) for an explanation!
 ![image](https://github.com/ardura/Actuate/assets/31751444/accd4727-975a-4266-a82a-180c55db628d)
 
 
-- 12 Subtractive Oscillator shapes:
+- 17 Subtractive Oscillator shapes:
   - The standard: Sine, Triangle, Saw, Ramp, Square, Pulse, Noise
   - WSaw - Saw with noise variance to create crispyness
   - SSaw - Saw with small variance to create shimmer
   - RSaw - Rounded saw wave
   - RASaw - Rounded saw wave with random variances
   - RSquare - Rounded square wave
+  - SkewSaw - A Saw with the rise skewed in one direction
+  - Bent Saw - A Saw wave with an incomplete bend starting another saw in the middle
+  - Step Saw - Looks like a staircase
+  - ScSaw - An 'S' shaped Saw with a Cubic for the curve
+  - AsymSaw - An asymmetrical saw shape
 - Additive Oscillators with up to 16 harmonics
 - FM Supported between Oscillators/samples/granulizer
 - 5 Main Filter Algorithms
@@ -43,9 +48,10 @@ Hover over any knob (or some labels) for an explanation!
     - Powf - I made this up - Curves based on Powf math function as it scales
   - Tilt Filter
   - VCF Filter
-  - Analog inspired filter idea (Ardura's V4)
-  - Analog inspired filter idea (Ardura's A4I)
-  - Analog inspired filter idea (Ardura's A4I Take II)
+  - V4 - Analog inspired filter idea (Ardura's V4 - Use this one for adding tone rather than filtering)
+  - A4I - Analog inspired filter idea (Ardura's A4I)
+  - A4II - Analog inspired filter idea (Ardura's A4I Take II)
+  - A4III - Analog inspired filter idea (Ardura's A4II with some tweaks)
 - 11 Different FX for post processing
 
 ![image](https://github.com/ardura/Actuate/assets/31751444/c13b62bb-a29e-420c-9f3a-764950cbd4a2)
@@ -68,7 +74,9 @@ Hover over any knob (or some labels) for an explanation!
 ## Signal Path
 ![actuate_flow](https://github.com/ardura/Actuate/assets/31751444/45ce1d56-d6c1-47b2-8bae-09633ecbbd2e)
 
-## Plugin Installation!!
+## Plugin Preset Installation!!
+*NOTE: This preset section is outdated now that Actuate has a "Download latest presets" Button in the browser!*
+
 Actuate will look for presets and banks here, where USER is your username on your system:
 
 - Linux: `/home/USER/Documents/ActuateDB/`

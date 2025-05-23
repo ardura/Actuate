@@ -1098,7 +1098,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     String::from("BentSaw"),
                                                     String::from("StepSaw"),
                                                     String::from("ScSaw"),
-                                                    String::from("StSaw"),
+                                                    String::from("AsymSaw"),
                                                     String::from("Ramp"),
                                                     String::from("Square"),
                                                     String::from("RSquare"),
