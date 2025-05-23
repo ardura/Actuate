@@ -40,7 +40,7 @@ pub(crate) mod AdditiveModule;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
     actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, adv_scale_value, 
-    fx::{A4I_Filter::A4iFilter, A4II_Filter::A4iiFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, 
+    fx::{A4I_Filter::A4iFilter, A4II_Filter::A4iiFilter, A4III_Filter::A4iiiFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, 
     PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
@@ -65,7 +65,12 @@ pub enum AudioModuleType {
     RSquare,
     Pulse,
     Noise,
-    UnsetAm,
+    UnsetAm,    // Holder we should not remain on
+    SkewSaw,
+    BentSaw,
+    StepSaw,
+    ScSaw,
+    AsymSaw,
 }
 
 // This is the information used to track voices and midi inputs
@@ -185,6 +190,11 @@ pub struct SingleVoice {
     A4II_l_2: A4iiFilter,
     A4II_r_1: A4iiFilter,
     A4II_r_2: A4iiFilter,
+    // A4III Filter
+    A4III_l_1: A4iiiFilter,
+    A4III_l_2: A4iiiFilter,
+    A4III_r_1: A4iiiFilter,
+    A4III_r_2: A4iiiFilter,
 
     cutoff_modulation: f32,
     resonance_modulation: f32,
@@ -825,6 +835,11 @@ impl AudioModule {
             AudioModuleType::Square |
             AudioModuleType::RSquare |
             AudioModuleType::Pulse |
+            AudioModuleType::BentSaw |
+            AudioModuleType::ScSaw |
+            AudioModuleType::AsymSaw |
+            AudioModuleType::SkewSaw |
+            AudioModuleType::StepSaw |
             AudioModuleType::Noise => {
                 const KNOB_SIZE: f32 = 22.0;
                 const TEXT_SIZE: f32 = 10.0;
@@ -3162,6 +3177,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             A4II_l_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
                             A4II_r_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, self.filter_resonance),
                             A4II_r_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
+                            // A4III Filter
+                            A4III_l_1: A4iiiFilter::new(self.filter_cutoff, self.sample_rate, self.filter_resonance),
+                            A4III_l_2: A4iiiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
+                            A4III_r_1: A4iiiFilter::new(self.filter_cutoff, self.sample_rate, self.filter_resonance),
+                            A4III_r_2: A4iiiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
 
                             cutoff_modulation: cutoff_mod,
                             cutoff_modulation_2: cutoff_mod_2,
@@ -3181,7 +3201,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 + (
                                     // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II | FilterAlgorithms::A4III => self.filter_env_peak,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak,
                                             -19980.0,
@@ -3203,7 +3223,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 + (
                                     // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II => self.filter_env_peak_2,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II | FilterAlgorithms::A4III => self.filter_env_peak_2,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak_2,
                                             -19980.0,
@@ -3255,6 +3275,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                             AudioModuleType::Square |
                                             AudioModuleType::RSquare |
                                             AudioModuleType::Pulse |
+                                            AudioModuleType::BentSaw |
+                                            AudioModuleType::ScSaw |
+                                            AudioModuleType::AsymSaw |
+                                            AudioModuleType::SkewSaw |
+                                            AudioModuleType::StepSaw |
                                             AudioModuleType::Noise => {
                                                 let mut rng = rand::thread_rng();
                                                 rng.gen_range(0.0..1.0)
@@ -3332,6 +3357,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                         AudioModuleType::Square |
                                         AudioModuleType::RSquare |
                                         AudioModuleType::Pulse |
+                                        AudioModuleType::BentSaw |
+                                        AudioModuleType::ScSaw |
+                                        AudioModuleType::AsymSaw |
+                                        AudioModuleType::SkewSaw |
+                                        AudioModuleType::StepSaw |
                                         AudioModuleType::Noise => {
                                             0
                                         },
@@ -3660,6 +3690,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 A4II_l_2: A4iiFilter::new(20000.0, 44100.0, 0.0),
                 A4II_r_1: A4iiFilter::new(20000.0, 44100.0, 0.0),
                 A4II_r_2: A4iiFilter::new(20000.0, 44100.0, 0.0),
+                // A4III Filter
+                A4III_l_1: A4iiiFilter::new(20000.0, 44100.0, 0.0),
+                A4III_l_2: A4iiiFilter::new(20000.0, 44100.0, 0.0),
+                A4III_r_1: A4iiiFilter::new(20000.0, 44100.0, 0.0),
+                A4III_r_2: A4iiiFilter::new(20000.0, 44100.0, 0.0),
                 cutoff_modulation: cutoff_mod,
                 cutoff_modulation_2: cutoff_mod_2,
                 resonance_modulation: 0.0,
@@ -4208,6 +4243,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         A4II_l_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
                         A4II_r_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, 0.0),
                         A4II_r_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
+                        // A4III Filter
+                        A4III_l_1: A4iiiFilter::new(self.filter_cutoff, self.sample_rate, 0.0),
+                        A4III_l_2: A4iiiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
+                        A4III_r_1: A4iiiFilter::new(self.filter_cutoff, self.sample_rate, 0.0),
+                        A4III_r_2: A4iiiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
                         cutoff_modulation: cutoff_mod,
                         cutoff_modulation_2: cutoff_mod_2,
                         resonance_modulation: 0.0,
@@ -4226,250 +4266,6 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 }
             }
         }
-
-        /*
-        match self.audio_module_type {
-            AudioModuleType::Sine |
-            AudioModuleType::Tri |
-            AudioModuleType::Saw |
-            AudioModuleType::RSaw |
-            AudioModuleType::WSaw |
-            AudioModuleType::SSaw |
-            AudioModuleType::RASaw |
-            AudioModuleType::Ramp |
-            AudioModuleType::Square |
-            AudioModuleType::RSquare |
-            AudioModuleType::Pulse |
-            AudioModuleType::Noise |
-            AudioModuleType::Additive => {
-                // Update our matching unison voices
-                for unison_voice in self.unison_voices.voices.iter_mut() {
-                    // Move our phase outside of the midi events
-                    // I couldn't find much on how to model this so I based it off previous note phase
-                    unison_voice.phase += unison_voice.phase_delta;
-                    if unison_voice.phase > 1.0 {
-                        unison_voice.phase -= 1.0;
-                    }
-                    // This happens on extreme pitch envelope values only and catches wild increments
-                    // or pitches above nyquist that would alias into other pitches
-                    if unison_voice.phase > 1.0 {
-                        unison_voice.phase = unison_voice.phase % 1.0;
-                    }
-
-                    // Move our pitch envelopes if this is an Osc
-                    if unison_voice.pitch_enabled
-                    {
-                        // Attack is over so use decay amount to reach sustain level - reusing current smoother
-                        if unison_voice.pitch_attack.steps_left() == 0
-                            && unison_voice.pitch_state == OscState::Attacking
-                        {
-                            unison_voice.pitch_state = OscState::Decaying;
-                            unison_voice.pitch_current = unison_voice.pitch_attack.next();
-                            // Now we will use decay smoother from here
-                            unison_voice.pitch_decay.reset(unison_voice.pitch_current);
-                            let sustain_scaled = self.pitch_env_sustain / 1999.9;
-                            unison_voice
-                                .pitch_decay
-                                .set_target(self.sample_rate, sustain_scaled.clamp(0.0001, 1999.9));
-                        }
-
-                        // Move from Decaying to Sustain hold
-                        if unison_voice.pitch_decay.steps_left() == 0
-                            && unison_voice.pitch_state == OscState::Decaying
-                        {
-                            let sustain_scaled = self.pitch_env_sustain / 1999.9;
-                            unison_voice.pitch_current = sustain_scaled;
-                            unison_voice
-                                .pitch_decay
-                                .set_target(self.sample_rate, sustain_scaled.clamp(0.0001, 1999.9));
-                            unison_voice.pitch_state = OscState::Sustaining;
-                        }
-
-                        // End of release
-                        if unison_voice.pitch_state == OscState::Releasing
-                            && unison_voice.pitch_release.steps_left() == 0
-                        {
-                            unison_voice.pitch_state = OscState::Off;
-                        }
-                    } else {
-                        // Reassign here for safety
-                        unison_voice.pitch_current = 0.0;
-                        unison_voice.pitch_state = OscState::Off;
-                    }
-                    if unison_voice.pitch_enabled_2
-                    {
-                        // Attack is over so use decay amount to reach sustain level - reusing current smoother
-                        if unison_voice.pitch_attack_2.steps_left() == 0
-                            && unison_voice.pitch_state_2 == OscState::Attacking
-                        {
-                            unison_voice.pitch_state_2 = OscState::Decaying;
-                            unison_voice.pitch_current_2 = unison_voice.pitch_attack_2.next();
-                            // Now we will use decay smoother from here
-                            unison_voice
-                                .pitch_decay_2
-                                .reset(unison_voice.pitch_current_2);
-                            let sustain_scaled_2 = self.pitch_env_sustain_2 / 1999.9;
-                            unison_voice.pitch_decay_2.set_target(
-                                self.sample_rate,
-                                sustain_scaled_2.clamp(0.0001, 1999.9),
-                            );
-                        }
-
-                        // Move from Decaying to Sustain hold
-                        if unison_voice.pitch_decay_2.steps_left() == 0
-                            && unison_voice.pitch_state_2 == OscState::Decaying
-                        {
-                            let sustain_scaled_2 = self.pitch_env_sustain_2 / 1999.9;
-                            unison_voice.pitch_current_2 = sustain_scaled_2;
-                            unison_voice.pitch_decay_2.set_target(
-                                self.sample_rate,
-                                sustain_scaled_2.clamp(0.0001, 1999.9),
-                            );
-                            unison_voice.pitch_state_2 = OscState::Sustaining;
-                        }
-
-                        // End of release
-                        if unison_voice.pitch_state_2 == OscState::Releasing
-                            && unison_voice.pitch_release_2.steps_left() == 0
-                        {
-                            unison_voice.pitch_state_2 = OscState::Off;
-                        }
-                    } else {
-                        // Reassign here for safety
-                        unison_voice.pitch_current_2 = 0.0;
-                        unison_voice.pitch_state_2 = OscState::Off;
-                    }
-
-                    // Move from attack to decay if needed
-                    // Attack is over so use decay amount to reach sustain level - reusing current smoother
-                    if unison_voice.osc_attack.steps_left() == 0
-                        && unison_voice.state == OscState::Attacking
-                    {
-                        unison_voice.state = OscState::Decaying;
-                        unison_voice.amp_current = unison_voice.osc_attack.next();
-                        // Now we will use decay smoother from here
-                        unison_voice.osc_decay.reset(unison_voice.amp_current);
-                        let sustain_scaled = self.osc_sustain / 1999.9;
-                        unison_voice
-                            .osc_decay
-                            .set_target(self.sample_rate, sustain_scaled);
-                    }
-                    // Move from Decaying to Sustain hold
-                    if unison_voice.osc_decay.steps_left() == 0
-                        && unison_voice.state == OscState::Decaying
-                    {
-                        unison_voice.state = OscState::Sustaining;
-                        let sustain_scaled = self.osc_sustain / 1999.9;
-                        unison_voice.amp_current = sustain_scaled;
-                        unison_voice
-                            .osc_decay
-                            .set_target(self.sample_rate, sustain_scaled);
-                    }
-                    // End of release
-                    if unison_voice.state == OscState::Releasing
-                        && unison_voice.osc_release.steps_left() == 0
-                    {
-                        unison_voice.state = OscState::Off;
-                    }
-
-                    //////////////////////////////////////////////////////////////////////////
-                    // POLYFILTER UPDATE
-                    //////////////////////////////////////////////////////////////////////////
-                    
-                    // Filter 1 Processing
-                    ///////////////////////////////////////////////////////////////
-                    if self.filter_wet > 0.0 {
-                        // Filter state movement code
-                        //////////////////////////////////////////
-                        // If a note is ending and we should enter releasing
-                        if note_off {
-                            let old_filter_state = unison_voice.filter_state_1;
-                            unison_voice.filter_state_1 = OscState::Releasing;
-                            unison_voice.filter_rel_smoother_1 = match self.filter_env_rel_curve {
-                                SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                                    self.filter_env_release,
-                                )),
-                                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                                    self.filter_env_release.clamp(0.0001, 1999.9),
-                                )),
-                                SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                                    self.filter_env_release,
-                                )),
-                                SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                                    self.filter_env_release.clamp(0.0001, 1999.9),
-                                )),
-                            };
-                            // Reset our filter release to be at sustain level to start
-                            unison_voice.filter_rel_smoother_1.reset(
-                                match old_filter_state {
-                                    OscState::Attacking => self.filter_atk_smoother_1.next(),
-                                    OscState::Decaying | OscState::Releasing => self.filter_dec_smoother_1.next(),
-                                    OscState::Sustaining => self.filter_dec_smoother_1.next(),
-                                    OscState::Off => self.filter_cutoff,
-                                },
-                            );
-                            // Move release to the cutoff to end
-                            unison_voice.filter_rel_smoother_1
-                                .set_target(self.sample_rate, self.filter_cutoff);
-                        }
-
-                        // If our attack has finished
-                        if unison_voice.filter_atk_smoother_1.steps_left() == 0
-                            && unison_voice.filter_state_1 == OscState::Attacking
-                        {
-                            unison_voice.filter_state_1 = OscState::Decaying;
-                            unison_voice.filter_dec_smoother_1 = match self.filter_env_dec_curve {
-                                SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                                    self.filter_env_decay
-                                )),
-                                SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                                    self.filter_env_decay,
-                                )),
-                                SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                                    self.filter_env_decay,
-                                )),
-                                SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                                    self.filter_env_decay,
-                                )),
-                            };
-                            // This makes our filter decay start at env peak point
-                            unison_voice.filter_dec_smoother_1.reset(
-                                unison_voice.filter_atk_smoother_1.next()
-                                .clamp(20.0, 20000.0),
-                            );
-                            // Set up the smoother for our filter movement to go from our decay point to our sustain point
-                            unison_voice.filter_dec_smoother_1.set_target(
-                                self.sample_rate,
-                                (
-                                    self.filter_cutoff
-                                    +   // This scales the peak env to be much gentler for the TILT filter
-                                    match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I => self.filter_env_peak,
-                                        FilterAlgorithms::TILT => adv_scale_value(
-                                            self.filter_env_peak,
-                                            -19980.0,
-                                            19980.0,
-                                            -5000.0,
-                                            5000.0,
-                                        ),
-                                    }
-                                ).clamp(20.0, 20000.0)
-                                * (self.filter_env_sustain / 1999.9),
-                            );
-                        }
-
-                        // If our decay has finished move to sustain state
-                        if unison_voice.filter_dec_smoother_1.steps_left() == 0
-                            && unison_voice.filter_state_1 == OscState::Decaying
-                        {
-                            unison_voice.filter_state_1 = OscState::Sustaining;
-                        }
-                    }
-                }
-            }
-            _ => {}
-        }
-        */
 
         // Add our new grain to our voices
         if new_grain {
@@ -4501,6 +4297,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
             AudioModuleType::Square |
             AudioModuleType::RSquare |
             AudioModuleType::Pulse |
+            AudioModuleType::BentSaw |
+            AudioModuleType::ScSaw |
+            AudioModuleType::AsymSaw |
+            AudioModuleType::SkewSaw |
+            AudioModuleType::StepSaw |
             AudioModuleType::Noise => {
                 let mut stereo_voices_l: f32 = 0.0;
                 let mut stereo_voices_r: f32 = 0.0;
@@ -4618,6 +4419,21 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         AudioModuleType::Noise => {
                             self.noise_obj.generate_sample() * temp_osc_gain_multiplier
                         },
+                        AudioModuleType::BentSaw => {
+                            Oscillator::get_bent_Saw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::ScSaw => {
+                            Oscillator::get_s_cubic_saw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::AsymSaw => {
+                            Oscillator::get_asym_saw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::SkewSaw => {
+                            Oscillator::get_skew_saw(voice.phase) * temp_osc_gain_multiplier
+                        },
+                        AudioModuleType::StepSaw => {
+                            Oscillator::get_step_saw(voice.phase) * temp_osc_gain_multiplier
+                        },
                         AudioModuleType::Additive | AudioModuleType::Granulizer | AudioModuleType::Off | AudioModuleType::UnsetAm | AudioModuleType::Sampler => 0.0,
                     };
                     for internal_unison_voice in voice.internal_unison_voices.iter_mut() {
@@ -4731,6 +4547,21 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             },
                             AudioModuleType::Noise => {
                                 self.noise_obj.generate_sample() * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::BentSaw => {
+                                Oscillator::get_bent_Saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::ScSaw => {
+                                Oscillator::get_s_cubic_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::AsymSaw => {
+                                Oscillator::get_asym_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::SkewSaw => {
+                                Oscillator::get_skew_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                            },
+                            AudioModuleType::StepSaw => {
+                                Oscillator::get_step_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::Additive | AudioModuleType::Granulizer | AudioModuleType::Off | AudioModuleType::UnsetAm | AudioModuleType::Sampler => 0.0,
                         };
@@ -6844,6 +6675,23 @@ fn filter_process_1(
                 right_input_filter1 * (1.0 - filter_wet);
             (left_output,right_output)
         }
+        FilterAlgorithms::A4III => {
+            voice.A4III_l_1.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            voice.A4III_r_1.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            let a4iii_out_l = voice.A4III_l_1.process(left_input_filter1);
+            let a4iii_out_r = voice.A4III_r_1.process(right_input_filter1);
+            let left_output = a4iii_out_l * filter_wet + 
+                left_input_filter1 * (1.0 - filter_wet);
+            let right_output = a4iii_out_r * filter_wet + 
+                right_input_filter1 * (1.0 - filter_wet);
+            (left_output,right_output)
+        }
     }
 }
 
@@ -6983,6 +6831,23 @@ fn filter_process_2(
             let left_output = a4ii_out_l * filter_wet + 
                 left_input_filter2 * (1.0 - filter_wet);
             let right_output = a4ii_out_r * filter_wet + 
+                right_input_filter2 * (1.0 - filter_wet);
+            (left_output,right_output)
+        }
+        FilterAlgorithms::A4III => {
+            voice.A4III_l_2.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            voice.A4III_r_2.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            let a4iii_out_l = voice.A4III_l_1.process(left_input_filter2);
+            let a4iii_out_r = voice.A4III_r_1.process(right_input_filter2);
+            let left_output = a4iii_out_l * filter_wet + 
+                left_input_filter2 * (1.0 - filter_wet);
+            let right_output = a4iii_out_r * filter_wet + 
                 right_input_filter2 * (1.0 - filter_wet);
             (left_output,right_output)
         }

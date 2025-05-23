@@ -106,6 +106,7 @@ pub enum FilterAlgorithms {
     V4,
     A4I,
     A4II,
+    A4III,
 }
 
 // Preset categories in dropdown

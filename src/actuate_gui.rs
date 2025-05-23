@@ -1038,6 +1038,11 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     String::from("WSaw"),
                                                     String::from("SSaw"),
                                                     String::from("RASaw"),
+                                                    String::from("SkewSaw"),
+                                                    String::from("BentSaw"),
+                                                    String::from("StepSaw"),
+                                                    String::from("ScSaw"),
+                                                    String::from("AsymSaw"),
                                                     String::from("Ramp"),
                                                     String::from("Square"),
                                                     String::from("RSquare"),
@@ -1089,6 +1094,11 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     String::from("WSaw"),
                                                     String::from("SSaw"),
                                                     String::from("RASaw"),
+                                                    String::from("SkewSaw"),
+                                                    String::from("BentSaw"),
+                                                    String::from("StepSaw"),
+                                                    String::from("ScSaw"),
+                                                    String::from("AsymSaw"),
                                                     String::from("Ramp"),
                                                     String::from("Square"),
                                                     String::from("RSquare"),
@@ -1139,6 +1149,11 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     String::from("WSaw"),
                                                     String::from("SSaw"),
                                                     String::from("RASaw"),
+                                                    String::from("SkewSaw"),
+                                                    String::from("BentSaw"),
+                                                    String::from("StepSaw"),
+                                                    String::from("ScSaw"),
+                                                    String::from("AsymSaw"),
                                                     String::from("Ramp"),
                                                     String::from("Square"),
                                                     String::from("RSquare"),
@@ -1586,7 +1601,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_lp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_lp_amount,
@@ -1701,7 +1717,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -1783,7 +1800,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -1864,7 +1882,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -1935,7 +1954,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -1988,7 +2008,7 @@ A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
                                                         },
-                                                        FilterAlgorithms::A4II => {
+                                                        FilterAlgorithms::A4II | FilterAlgorithms::A4III => {
                                                             ui.vertical(|ui|{
                                                                 let filter_alg_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_alg_type,
@@ -2006,7 +2026,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet,
@@ -2081,7 +2102,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_lp_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_lp_amount_2,
@@ -2192,7 +2214,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
@@ -2273,7 +2296,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
@@ -2355,7 +2379,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
@@ -2437,7 +2462,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
@@ -2490,7 +2516,7 @@ A4II: Averaged 4 Pole Integrator II".to_string());
                                                                 ui.add(filter_env_peak);
                                                             });
                                                         },
-                                                        FilterAlgorithms::A4II => {
+                                                        FilterAlgorithms::A4II | FilterAlgorithms::A4III => {
                                                             ui.vertical(|ui|{
                                                                 let filter_alg_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_alg_type_2,
@@ -2508,7 +2534,8 @@ Tilt: A linear filter that cuts one side and boosts another
 VCF: Voltage Controlled Filter model
 V4: Analog Inspired Filter Idea
 A4I: Averaged 4 Pole Integrator
-A4II: Averaged 4 Pole Integrator II".to_string());
+A4II: Averaged 4 Pole Integrator II
+A4III: A4II with saturation changes".to_string());
                                                                 ui.add(filter_alg_knob);
                                                                 let filter_wet_knob = ui_knob::ArcKnob::for_param(
                                                                     &params.filter_wet_2,
