@@ -63,6 +63,7 @@ mod audio_module;
 mod fx;
 mod old_preset_structs;
 mod release_downloader;
+mod recorder;
 
 // Plugin sizing
 const WIDTH: u32 = 920;
@@ -101,8 +102,10 @@ pub struct Actuate {
     browsing_presets: Arc<AtomicBool>,
     importing_presets: Arc<AtomicBool>,
     exporting_presets: Arc<AtomicBool>,
+    export_last_sound: Arc<AtomicBool>,
     update_current_preset: Arc<AtomicBool>,
     safety_clip_output: Arc<Mutex<bool>>,
+    hq_mode: Arc<AtomicBool>,
 
     current_note_on_velocity: Arc<AtomicF32>,
 
@@ -211,6 +214,9 @@ pub struct Actuate {
     // Download controller
     download_in_progress: Arc<AtomicBool>,
     download_status: Arc<Mutex<String>>,
+
+    // Recorder
+    recorder: Arc<Mutex<recorder::Recorder>>,
 }
 
 impl Default for Actuate {
@@ -225,6 +231,7 @@ impl Default for Actuate {
         // Studio One fix for internal windows
         let importing_presets = Arc::new(AtomicBool::new(false));
         let exporting_presets = Arc::new(AtomicBool::new(false));
+        let export_last_sound = Arc::new(AtomicBool::new(false));
         // End Studio One fix for internal windows
 
         // Safety Clipper
@@ -255,7 +262,9 @@ impl Default for Actuate {
             safety_clip_output: safety_clip_output,
             importing_presets: importing_presets,
             exporting_presets: exporting_presets,
+            export_last_sound: export_last_sound,
             update_current_preset: update_current_preset,
+            hq_mode: Arc::new(AtomicBool::new(false)),
 
             current_note_on_velocity: Arc::new(AtomicF32::new(0.0)),
 
@@ -367,6 +376,7 @@ impl Default for Actuate {
             preset_browser_lite_db: Arc::new(RwLock::new(HashMap::new())),
             download_in_progress: Arc::new(AtomicBool::new(false)),
             download_status: Arc::new(Mutex::new(String::new())),
+            recorder: Arc::new(Mutex::new(recorder::Recorder::new(44100.0, 10))),
         }
     }
 }
@@ -3552,6 +3562,10 @@ impl Plugin for Actuate {
         _aux: &mut AuxiliaryBuffers,
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
+        if context.transport().sample_rate != self.sample_rate {
+            self.sample_rate = context.transport().sample_rate;
+        }
+
         // Clear any voices on change of module type (especially during play)
         // This fixes panics and other broken things attempting to play during preset change/load
         if self.clear_voices.clone().load(Ordering::SeqCst) {
@@ -4765,6 +4779,11 @@ impl Actuate {
 
             let mut fm_wave_1: f32 = 0.0;
             let mut fm_wave_2: f32 = 0.0;
+
+            let mut voices_1: usize = 0;
+            let mut voices_2: usize = 0;
+            let mut voices_3: usize = 0;
+
             // Since File Dialog can be set by any of these we need to check each time
             if !self.file_dialog.load(Ordering::SeqCst)
                 //&& self.params.audio_module_1_type.value() != AudioModuleType::Off
@@ -4776,6 +4795,7 @@ impl Actuate {
                     wave1_r,
                     reset_filter_controller1,
                     note_off_filter_controller1,
+                    voices_1
                 ) = am1_lock.process(
                     sample_id,
                     midi_event.clone(),
@@ -4809,6 +4829,9 @@ impl Actuate {
                         + modulations_2.temp_mod_cutoff_2
                         + modulations_3.temp_mod_cutoff_2
                         + modulations_4.temp_mod_cutoff_2,
+                    self.hq_mode.load(Ordering::Relaxed),
+                    self.params.filter_cutoff.value(),
+                    self.params.filter_cutoff_2.value()
                 );
                 // Sum to MONO
                 fm_wave_1 = (wave1_l + wave1_r)/2.0;
@@ -4829,6 +4852,7 @@ impl Actuate {
                     wave2_r,
                     reset_filter_controller2,
                     note_off_filter_controller2,
+                    voices_2,
                 ) = am2_lock.process(
                     sample_id,
                     midi_event.clone(),
@@ -4862,6 +4886,9 @@ impl Actuate {
                         + modulations_2.temp_mod_cutoff_2
                         + modulations_3.temp_mod_cutoff_2
                         + modulations_4.temp_mod_cutoff_2,
+                    self.hq_mode.load(Ordering::Relaxed),
+                    self.params.filter_cutoff.value(),
+                    self.params.filter_cutoff_2.value()
                 );
                 // Sum to MONO
                 fm_wave_2 = (wave2_l + wave2_r)/2.0;
@@ -4882,6 +4909,7 @@ impl Actuate {
                     wave3_r,
                     reset_filter_controller3,
                     note_off_filter_controller3,
+                    voices_3
                 ) = am3_lock.process(
                     sample_id,
                     midi_event.clone(),
@@ -4915,6 +4943,9 @@ impl Actuate {
                         + modulations_2.temp_mod_cutoff_2
                         + modulations_3.temp_mod_cutoff_2
                         + modulations_4.temp_mod_cutoff_2,
+                    self.hq_mode.load(Ordering::Relaxed),
+                    self.params.filter_cutoff.value(),
+                    self.params.filter_cutoff_2.value()
                 );
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
                 let levelAmp3 = self.params.audio_module_3_level.value();
@@ -4969,6 +5000,8 @@ impl Actuate {
             }
             // Try to trigger our filter mods on note on! This is sequential/single because we just need a trigger at a point in time
             if reset_filter_controller1 || reset_filter_controller2 || reset_filter_controller3 {
+                self.recorder.lock().unwrap().reset();
+
                 // Set our filter in attack state
                 self.fm_state = OscState::Attacking;
                 // Consume our params for smoothing
@@ -5176,6 +5209,10 @@ impl Actuate {
 
             left_output = (wave1_l + wave2_l + wave3_l)*0.33;
             right_output = (wave1_r + wave2_r + wave3_r)*0.33;
+
+            if (voices_1 + voices_2 + voices_3) > 0 {
+                self.recorder.lock().unwrap().push(left_output, right_output);
+            }
 
             // FX
             ////////////////////////////////////////////////////////////////////////////////////////

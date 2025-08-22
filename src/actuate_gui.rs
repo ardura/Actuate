@@ -104,10 +104,13 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let browse_preset_active: Arc<AtomicBool> = Arc::clone(&instance.browsing_presets);
         let import_preset_active: Arc<AtomicBool> = Arc::clone(&instance.importing_presets);
         let export_preset_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_presets);
+        let export_last_sound: Arc<AtomicBool> = Arc::clone(&instance.export_last_sound);
         let safety_clip_output: Arc<Mutex<bool>> = Arc::clone(&instance.safety_clip_output);
+        let hq_mode: Arc<AtomicBool> = Arc::clone(&instance.hq_mode);
         let AM1: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_1);
         let AM2: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_2);
         let AM3: Arc<Mutex<AudioModule>> = Arc::clone(&instance.audio_module_3);
+        let recorder: Arc<Mutex<crate::recorder::Recorder>> = Arc::clone(&instance.recorder);
 
         let update_current_preset: Arc<AtomicBool> = Arc::clone(&instance.update_current_preset);
         let filter_select_outside: Arc<Mutex<UIBottomSelection>> =
@@ -175,6 +178,10 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
             let ext = Some(OsStr::new("actuate"));
             move |path: &Path| -> bool { path.extension() == ext }
         });
+        let export_filter = Box::new({
+            let ext = Some(OsStr::new("wav"));
+            move |path: &Path| -> bool { path.extension() == ext }
+        });
         let sample_filter = Box::new({
             let ext = Some(OsStr::new("wav"));
             move |path: &Path| -> bool { path.extension() == ext }
@@ -212,6 +219,25 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         FileDialog::save_file(Some(home_dir.clone()))
                             //.current_pos([(WIDTH/4) as f32, 10.0])
                             .show_files_filter(save_preset_filter)
+                            .keep_on_top(true)
+                            .show_new_folder(false)
+                            .show_rename(false)
+                    }
+                )
+            );
+        let export_wav_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
+            Mutex::new(
+                if PathBuf::from((*default_dir.lock().unwrap().clone()).to_string()).exists() {
+                        FileDialog::save_file(Some(PathBuf::from((*default_dir.lock().unwrap().clone()).to_string())))
+                            //.current_pos([(WIDTH/4) as f32, 10.0])
+                            .show_files_filter(export_filter)
+                            .keep_on_top(true)
+                            .show_new_folder(false)
+                            .show_rename(false)
+                    } else {
+                        FileDialog::save_file(Some(home_dir.clone()))
+                            //.current_pos([(WIDTH/4) as f32, 10.0])
+                            .show_files_filter(export_filter)
                             .keep_on_top(true)
                             .show_new_folder(false)
                             .show_rename(false)
@@ -348,6 +374,8 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                         }
                         if params.filter_cutoff_link.value() {
                             setter.set_parameter(&params.filter_cutoff_2, params.filter_cutoff.value());
+                            // This is set again here so it doesn't mess up FL Automation when linked after modifying
+                            setter.set_parameter(&params.filter_cutoff, params.filter_cutoff.value());
                         }
 
                         // Assign default colors
@@ -437,7 +465,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
-                                        .on_hover_text("v1.3.9 by Ardura!");
+                                        .on_hover_text("v1.4.0 by Ardura!");
                                     ui.add_space(2.0);
                                     ui.separator();
 
@@ -992,8 +1020,8 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         export_preset_active.store(true, Ordering::SeqCst);
                                     }
                                     if export_preset_active.load(Ordering::SeqCst) {
-                                        let save_dialock = save_dialog_main.clone();
-                                        let mut save_dialog = save_dialock.lock().unwrap();
+                                        let export_dialock = export_wav_dialog_main.clone();
+                                        let mut save_dialog = export_dialock.lock().unwrap();
                                         save_dialog.open();
                                         let mut dvar = Some(save_dialog);
                                         if let Some(s_dialog) = &mut dvar {
@@ -1016,6 +1044,42 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         }
                                     }
                                     ui.checkbox(&mut safety_clip_output.lock().unwrap(), "Safety Clip").on_hover_text("Clip the output at 0dB to save your ears/speakers");
+                                    let hq_check = slim_checkbox::AtomicSlimCheckbox::new(&hq_mode, "HQ Rendering");
+                                    ui.add(hq_check);
+                                    let export_last_note_button = ui.button(RichText::new("Export Last Note")
+                                        .font(SMALLER_FONT)
+                                        .background_color(DARK_GREY_UI_COLOR)
+                                        .color(TEAL_GREEN)
+                                    );
+                                    if export_last_note_button.clicked() {
+                                        export_last_sound.store(true, Ordering::SeqCst);
+                                    }
+                                    if export_last_sound.load(Ordering::SeqCst) {
+                                        let save_dialock = save_dialog_main.clone();
+                                        let mut save_dialog = save_dialock.lock().unwrap();
+                                        save_dialog.open();
+                                        let mut dvar = Some(save_dialog);
+                                        if let Some(s_dialog) = &mut dvar {
+                                            if s_dialog.show(egui_ctx).selected() {
+                                              if let Some(file) = s_dialog.path() {
+                                                let saved_file = Some(file.to_path_buf());
+                                                let mut str_path = saved_file.unwrap_or_default().as_path().to_str().unwrap().to_string();
+                                                if !str_path.contains(".wav") {
+                                                    str_path = str_path + ".wav"
+                                                }
+                                                let _ = recorder.lock().unwrap().export(&str_path);
+                                                export_last_sound.store(false, Ordering::SeqCst);
+                                              }
+                                            }
+
+                                            match s_dialog.state() {
+                                                State::Cancelled | State::Closed => {
+                                                    export_last_sound.store(false, Ordering::SeqCst);
+                                                },
+                                                _ => {}
+                                            }
+                                        }
+                                    }
                                 });
                                 const KNOB_SIZE: f32 = 28.0;
                                 const TEXT_SIZE: f32 = 11.0;
