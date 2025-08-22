@@ -25,7 +25,7 @@ use egui_file::{FileDialog, State};
 use nih_plug::{
     prelude::{Enum, NoteEvent, ParamSetter, Smoother, SmoothingStyle}, util::{self, db_to_gain}
 };
-use nih_plug_egui::egui::{self, Pos2, Rect, RichText, CornerRadius, ScrollArea, Ui};
+use nih_plug_egui::egui::{self, scroll_area::ScrollSource, CornerRadius, Pos2, Rect, RichText, ScrollArea, Ui};
 use pitch_shift::PitchShifter;
 use rand::Rng;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -1635,8 +1635,7 @@ Random: Sample uses a new random position every note".to_string());
                     ui.add_space(1.0);
                     ui.horizontal(|ui| {
                     ScrollArea::horizontal()
-                        .drag_to_scroll(true)
-                        .enable_scrolling(true)
+                        .scroll_source(ScrollSource::ALL)
                         .hscroll(true)
                         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                         .max_width(WIDTH as f32 - 238.0)
@@ -2505,7 +2504,10 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
         cutoff_mod: f32,
         resonance_mod_2: f32,
         cutoff_mod_2: f32,
-    ) -> (f32, f32, bool, bool) {
+        hq_mode: bool,
+        raw_cutoff_1: f32,
+        raw_cutoff_2: f32,
+    ) -> (f32, f32, bool, bool, usize) {
         // If the process is in here the file dialog is not open per lib.rs
 
         // Midi events are processed here
@@ -2948,11 +2950,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                         };
                                     } else {
                                         // Nothing is in our sample library, skip attempting audio output
-                                        return (0.0, 0.0, false, false);
+                                        return (0.0, 0.0, false, false, 0);
                                     }
                                 } else {
                                     // Nothing is in our sample library, skip attempting audio output
-                                    return (0.0, 0.0, false, false);
+                                    return (0.0, 0.0, false, false, 0);
                                 }
                             }
                             _ => {
@@ -3046,12 +3048,12 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             // TILT Filters
                             tilt_filter_l_1: TiltFilterStruct::new(
                                 self.sample_rate,
-                                self.filter_cutoff,
+                                raw_cutoff_1,
                                 TiltFilter::ResponseType::Lowpass
                             ),
                             tilt_filter_r_1: TiltFilterStruct::new(
                                 self.sample_rate,
-                                self.filter_cutoff,
+                                raw_cutoff_1,
                                 TiltFilter::ResponseType::Lowpass
                             ),
                             // VCF Filters
@@ -3107,12 +3109,12 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             // TILT Filters
                             tilt_filter_l_2: TiltFilterStruct::new(
                                 self.sample_rate,
-                                self.filter_cutoff_2,
+                                raw_cutoff_2,
                                 TiltFilter::ResponseType::Lowpass
                             ),
                             tilt_filter_r_2: TiltFilterStruct::new(
                                 self.sample_rate,
-                                self.filter_cutoff_2,
+                                raw_cutoff_2,
                                 TiltFilter::ResponseType::Lowpass
                             ),
                             // VCF Filters
@@ -3168,20 +3170,20 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             V4F_r_1: V4FilterStruct::default(),
                             V4F_r_2: V4FilterStruct::default(),
                             // A4I Filter
-                            A4I_l_1: A4iFilter::new(self.filter_cutoff, self.filter_cutoff, self.filter_resonance),
-                            A4I_l_2: A4iFilter::new(self.filter_cutoff_2, self.filter_cutoff_2, self.filter_resonance_2),
-                            A4I_r_1: A4iFilter::new(self.filter_cutoff, self.filter_cutoff, self.filter_resonance),
-                            A4I_r_2: A4iFilter::new(self.filter_cutoff_2, self.filter_cutoff_2, self.filter_resonance_2),
+                            A4I_l_1: A4iFilter::new(raw_cutoff_1, raw_cutoff_1, self.filter_resonance),
+                            A4I_l_2: A4iFilter::new(raw_cutoff_2, raw_cutoff_2, self.filter_resonance_2),
+                            A4I_r_1: A4iFilter::new(raw_cutoff_1, raw_cutoff_1, self.filter_resonance),
+                            A4I_r_2: A4iFilter::new(raw_cutoff_2, raw_cutoff_2, self.filter_resonance_2),
                             // A4II Filter
-                            A4II_l_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, self.filter_resonance),
-                            A4II_l_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
-                            A4II_r_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, self.filter_resonance),
-                            A4II_r_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
+                            A4II_l_1: A4iiFilter::new(raw_cutoff_1, self.sample_rate, self.filter_resonance),
+                            A4II_l_2: A4iiFilter::new(raw_cutoff_2, self.sample_rate, self.filter_resonance_2),
+                            A4II_r_1: A4iiFilter::new(raw_cutoff_1, self.sample_rate, self.filter_resonance),
+                            A4II_r_2: A4iiFilter::new(raw_cutoff_2, self.sample_rate, self.filter_resonance_2),
                             // A4III Filter
-                            A4III_l_1: A4iiiFilter::new(self.filter_cutoff, self.sample_rate, self.filter_resonance),
-                            A4III_l_2: A4iiiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
-                            A4III_r_1: A4iiiFilter::new(self.filter_cutoff, self.sample_rate, self.filter_resonance),
-                            A4III_r_2: A4iiiFilter::new(self.filter_cutoff_2, self.sample_rate, self.filter_resonance_2),
+                            A4III_l_1: A4iiiFilter::new(raw_cutoff_1, self.sample_rate, self.filter_resonance),
+                            A4III_l_2: A4iiiFilter::new(raw_cutoff_2, self.sample_rate, self.filter_resonance_2),
+                            A4III_r_1: A4iiiFilter::new(raw_cutoff_1, self.sample_rate, self.filter_resonance),
+                            A4III_r_2: A4iiiFilter::new(raw_cutoff_2, self.sample_rate, self.filter_resonance_2),
 
                             cutoff_modulation: cutoff_mod,
                             cutoff_modulation_2: cutoff_mod_2,
@@ -3193,11 +3195,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
                         // POLYFILTER FILTER ATTACK UPDATES
                         // Reset our attack to start from the filter cutoff
-                        new_voice.filter_atk_smoother_1.reset(self.filter_cutoff);
+                        new_voice.filter_atk_smoother_1.reset(raw_cutoff_1);
                         // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
                         new_voice.filter_atk_smoother_1.set_target(
                             self.sample_rate,
-                            (self.filter_cutoff
+                            (raw_cutoff_1
                                 + (
                                     // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type {
@@ -3215,11 +3217,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         );
 
                         // Reset our attack to start from the filter cutoff 2
-                        new_voice.filter_atk_smoother_2.reset(self.filter_cutoff_2);
+                        new_voice.filter_atk_smoother_2.reset(raw_cutoff_2);
                         // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
                         new_voice.filter_atk_smoother_2.set_target(
                             self.sample_rate,
-                            (self.filter_cutoff_2
+                            (raw_cutoff_2
                                 + (
                                     // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type_2 {
@@ -4190,12 +4192,12 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         // TILT Filters
                         tilt_filter_l_1: TiltFilterStruct::new(
                             self.sample_rate,
-                            self.filter_cutoff,
+                            raw_cutoff_1,
                             TiltFilter::ResponseType::Lowpass
                         ),
                         tilt_filter_r_1: TiltFilterStruct::new(
                             self.sample_rate,
-                            self.filter_cutoff,
+                            raw_cutoff_1,
                             TiltFilter::ResponseType::Lowpass
                         ),
                         // VCF Filters
@@ -4212,12 +4214,12 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         // TILT Filters
                         tilt_filter_l_2: TiltFilterStruct::new(
                             self.sample_rate,
-                            self.filter_cutoff_2,
+                            raw_cutoff_2,
                             TiltFilter::ResponseType::Lowpass
                         ),
                         tilt_filter_r_2: TiltFilterStruct::new(
                             self.sample_rate,
-                            self.filter_cutoff_2,
+                            raw_cutoff_2,
                             TiltFilter::ResponseType::Lowpass
                         ),
                         // VCF Filters
@@ -4234,20 +4236,20 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         V4F_r_1: V4FilterStruct::default(),
                         V4F_r_2: V4FilterStruct::default(),
                         // A4I Filter
-                        A4I_l_1: A4iFilter::new(self.sample_rate, self.filter_cutoff, 0.0),
-                        A4I_l_2: A4iFilter::new(self.sample_rate, self.filter_cutoff_2, 0.0),
-                        A4I_r_1: A4iFilter::new(self.sample_rate, self.filter_cutoff, 0.0),
-                        A4I_r_2: A4iFilter::new(self.sample_rate, self.filter_cutoff_2, 0.0),
+                        A4I_l_1: A4iFilter::new(self.sample_rate, raw_cutoff_1, 0.0),
+                        A4I_l_2: A4iFilter::new(self.sample_rate, raw_cutoff_2, 0.0),
+                        A4I_r_1: A4iFilter::new(self.sample_rate, raw_cutoff_1, 0.0),
+                        A4I_r_2: A4iFilter::new(self.sample_rate, raw_cutoff_2, 0.0),
                         // A4II Filter
-                        A4II_l_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, 0.0),
-                        A4II_l_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
-                        A4II_r_1: A4iiFilter::new(self.filter_cutoff, self.sample_rate, 0.0),
-                        A4II_r_2: A4iiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
+                        A4II_l_1: A4iiFilter::new(raw_cutoff_1, self.sample_rate, 0.0),
+                        A4II_l_2: A4iiFilter::new(raw_cutoff_2, self.sample_rate, 0.0),
+                        A4II_r_1: A4iiFilter::new(raw_cutoff_1, self.sample_rate, 0.0),
+                        A4II_r_2: A4iiFilter::new(raw_cutoff_2, self.sample_rate, 0.0),
                         // A4III Filter
-                        A4III_l_1: A4iiiFilter::new(self.filter_cutoff, self.sample_rate, 0.0),
-                        A4III_l_2: A4iiiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
-                        A4III_r_1: A4iiiFilter::new(self.filter_cutoff, self.sample_rate, 0.0),
-                        A4III_r_2: A4iiiFilter::new(self.filter_cutoff_2, self.sample_rate, 0.0),
+                        A4III_l_1: A4iiiFilter::new(raw_cutoff_1, self.sample_rate, 0.0),
+                        A4III_l_2: A4iiiFilter::new(raw_cutoff_2, self.sample_rate, 0.0),
+                        A4III_r_1: A4iiiFilter::new(raw_cutoff_1, self.sample_rate, 0.0),
+                        A4III_r_2: A4iiiFilter::new(raw_cutoff_2, self.sample_rate, 0.0),
                         cutoff_modulation: cutoff_mod,
                         cutoff_modulation_2: cutoff_mod_2,
                         resonance_modulation: 0.0,
@@ -4384,55 +4386,55 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
                     let temp_center_voices = match self.audio_module_type {
                         AudioModuleType::Sine => {
-                            Oscillator::get_sine(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_sine(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::Tri => {
-                            Oscillator::get_tri(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_tri(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::Saw => {
-                            Oscillator::get_saw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_saw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::RSaw => {
-                            Oscillator::get_rsaw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_rsaw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::WSaw => {
-                            Oscillator::get_wsaw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_wsaw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::RASaw => {
-                            Oscillator::get_rasaw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_rasaw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::SSaw => {
-                            Oscillator::get_ssaw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_ssaw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::Ramp => {
-                            Oscillator::get_ramp(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_ramp(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::Square => {
-                            Oscillator::get_square(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_square(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::RSquare => {
-                            Oscillator::get_rsquare(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_rsquare(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::Pulse => {
-                            Oscillator::get_pulse(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_pulse(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::Noise => {
                             self.noise_obj.generate_sample() * temp_osc_gain_multiplier
                         },
                         AudioModuleType::BentSaw => {
-                            Oscillator::get_bent_Saw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_bent_Saw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::ScSaw => {
-                            Oscillator::get_s_cubic_saw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_s_cubic_saw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::AsymSaw => {
-                            Oscillator::get_asym_saw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_asym_saw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::SkewSaw => {
-                            Oscillator::get_skew_saw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_skew_saw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::StepSaw => {
-                            Oscillator::get_step_saw(voice.phase) * temp_osc_gain_multiplier
+                            Oscillator::get_step_saw(voice.phase, hq_mode) * temp_osc_gain_multiplier
                         },
                         AudioModuleType::Additive | AudioModuleType::Granulizer | AudioModuleType::Off | AudioModuleType::UnsetAm | AudioModuleType::Sampler => 0.0,
                     };
@@ -4513,55 +4515,55 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
                         let temp_unison_voice_out = match self.audio_module_type {
                             AudioModuleType::Sine => {
-                                Oscillator::get_sine(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_sine(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::Tri => {
-                                Oscillator::get_tri(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_tri(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::Saw => {
-                                Oscillator::get_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_saw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::RSaw => {
-                                Oscillator::get_rsaw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_rsaw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::WSaw => {
-                                Oscillator::get_wsaw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_wsaw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::RASaw => {
-                                Oscillator::get_rasaw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_rasaw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::SSaw => {
-                                Oscillator::get_ssaw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_ssaw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::Ramp => {
-                                Oscillator::get_ramp(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_ramp(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::Square => {
-                                Oscillator::get_square(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_square(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::RSquare => {
-                                Oscillator::get_rsquare(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_rsquare(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::Pulse => {
-                                Oscillator::get_pulse(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_pulse(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::Noise => {
                                 self.noise_obj.generate_sample() * temp_osc_gain_multiplier
                             },
                             AudioModuleType::BentSaw => {
-                                Oscillator::get_bent_Saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_bent_Saw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::ScSaw => {
-                                Oscillator::get_s_cubic_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_s_cubic_saw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::AsymSaw => {
-                                Oscillator::get_asym_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_asym_saw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::SkewSaw => {
-                                Oscillator::get_skew_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_skew_saw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::StepSaw => {
-                                Oscillator::get_step_saw(internal_unison_voice.phase) * temp_osc_gain_multiplier
+                                Oscillator::get_step_saw(internal_unison_voice.phase, hq_mode) * temp_osc_gain_multiplier
                             },
                             AudioModuleType::Additive | AudioModuleType::Granulizer | AudioModuleType::Off | AudioModuleType::UnsetAm | AudioModuleType::Sampler => 0.0,
                         };
@@ -4606,11 +4608,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     OscState::Attacking => voice.filter_atk_smoother_1.next(),
                                     OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_1.next(),
                                     OscState::Sustaining => voice.filter_dec_smoother_1.next(),
-                                    OscState::Off => self.filter_cutoff,
+                                    OscState::Off => raw_cutoff_1,
                                 },
                             );
                             // Move release to the cutoff to end
-                            voice.filter_rel_smoother_1.set_target(self.sample_rate, self.filter_cutoff);
+                            voice.filter_rel_smoother_1.set_target(self.sample_rate, raw_cutoff_1);
                         }
 
                         // If our attack has finished
@@ -4625,7 +4627,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_1.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff * (self.filter_env_sustain / 1999.9)
+                                    raw_cutoff_1 * (self.filter_env_sustain / 1999.9)
                                 ).clamp(20.0, 20000.0),
                             );
                         }
@@ -4656,7 +4658,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
+                            _ => (raw_cutoff_1 + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -4673,11 +4675,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     OscState::Attacking => voice.filter_atk_smoother_2.next(),
                                     OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_2.next(),
                                     OscState::Sustaining => voice.filter_dec_smoother_2.next(),
-                                    OscState::Off => self.filter_cutoff_2,
+                                    OscState::Off => raw_cutoff_2,
                                 },
                             );
                             // Move release to the cutoff to end
-                            voice.filter_rel_smoother_2.set_target(self.sample_rate, self.filter_cutoff_2);
+                            voice.filter_rel_smoother_2.set_target(self.sample_rate, raw_cutoff_2);
                         }
 
                         // If our attack has finished
@@ -4692,7 +4694,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_2.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
+                                    raw_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
                                 ).clamp(20.0, 20000.0),
                             );
                         }
@@ -4722,7 +4724,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
+                            _ => (raw_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -5101,11 +5103,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     OscState::Attacking => voice.filter_atk_smoother_1.next(),
                                     OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_1.next(),
                                     OscState::Sustaining => voice.filter_dec_smoother_1.next(),
-                                    OscState::Off => self.filter_cutoff,
+                                    OscState::Off => raw_cutoff_1,
                                 },
                             );
                             // Move release to the cutoff to end
-                            voice.filter_rel_smoother_1.set_target(self.sample_rate, self.filter_cutoff);
+                            voice.filter_rel_smoother_1.set_target(self.sample_rate, raw_cutoff_1);
                         }
 
                         // If our attack has finished
@@ -5120,7 +5122,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_1.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff * (self.filter_env_sustain / 1999.9)
+                                    raw_cutoff_1 * (self.filter_env_sustain / 1999.9)
                                 ).clamp(20.0, 20000.0),
                             );
                         }
@@ -5151,7 +5153,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
+                            _ => (raw_cutoff_1 + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -5168,11 +5170,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     OscState::Attacking => voice.filter_atk_smoother_2.next(),
                                     OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_2.next(),
                                     OscState::Sustaining => voice.filter_dec_smoother_2.next(),
-                                    OscState::Off => self.filter_cutoff_2,
+                                    OscState::Off => raw_cutoff_2,
                                 },
                             );
                             // Move release to the cutoff to end
-                            voice.filter_rel_smoother_2.set_target(self.sample_rate, self.filter_cutoff_2);
+                            voice.filter_rel_smoother_2.set_target(self.sample_rate, raw_cutoff_2);
                         }
 
                         // If our attack has finished
@@ -5187,7 +5189,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_2.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
+                                    raw_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
                                 ).clamp(20.0, 20000.0),
                             );
                         }
@@ -5217,7 +5219,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
+                            _ => (raw_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -5566,11 +5568,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     OscState::Attacking => voice.filter_atk_smoother_1.next(),
                                     OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_1.next(),
                                     OscState::Sustaining => voice.filter_dec_smoother_1.next(),
-                                    OscState::Off => self.filter_cutoff,
+                                    OscState::Off => raw_cutoff_1,
                                 },
                             );
                             // Move release to the cutoff to end
-                            voice.filter_rel_smoother_1.set_target(self.sample_rate, self.filter_cutoff);
+                            voice.filter_rel_smoother_1.set_target(self.sample_rate, raw_cutoff_1);
                         }
 
                         // If our attack has finished
@@ -5585,7 +5587,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_1.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff * (self.filter_env_sustain / 1999.9)
+                                    raw_cutoff_1 * (self.filter_env_sustain / 1999.9)
                                 ).clamp(20.0, 20000.0),
                             );
                         }
@@ -5616,7 +5618,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
+                            _ => (raw_cutoff_1 + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -5633,11 +5635,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     OscState::Attacking => voice.filter_atk_smoother_2.next(),
                                     OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_2.next(),
                                     OscState::Sustaining => voice.filter_dec_smoother_2.next(),
-                                    OscState::Off => self.filter_cutoff_2,
+                                    OscState::Off => raw_cutoff_2,
                                 },
                             );
                             // Move release to the cutoff to end
-                            voice.filter_rel_smoother_2.set_target(self.sample_rate, self.filter_cutoff_2);
+                            voice.filter_rel_smoother_2.set_target(self.sample_rate, raw_cutoff_2);
                         }
 
                         // If our attack has finished
@@ -5652,7 +5654,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_2.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
+                                    raw_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
                                 ).clamp(20.0, 20000.0),
                             );
                         }
@@ -5682,7 +5684,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
+                            _ => (raw_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -5959,11 +5961,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     OscState::Attacking => voice.filter_atk_smoother_1.next(),
                                     OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_1.next(),
                                     OscState::Sustaining => voice.filter_dec_smoother_1.next(),
-                                    OscState::Off => self.filter_cutoff,
+                                    OscState::Off => raw_cutoff_1,
                                 },
                             );
                             // Move release to the cutoff to end
-                            voice.filter_rel_smoother_1.set_target(self.sample_rate, self.filter_cutoff);
+                            voice.filter_rel_smoother_1.set_target(self.sample_rate, raw_cutoff_1);
                         }
 
                         // If our attack has finished
@@ -5978,7 +5980,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_1.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff * (self.filter_env_sustain / 1999.9)
+                                    raw_cutoff_1 * (self.filter_env_sustain / 1999.9)
                                 ).clamp(20.0, 20000.0),
                             );
                         }
@@ -6009,7 +6011,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
+                            _ => (raw_cutoff_1 + voice.cutoff_modulation + cutoff_mod).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -6026,11 +6028,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                     OscState::Attacking => voice.filter_atk_smoother_2.next(),
                                     OscState::Decaying | OscState::Releasing => voice.filter_dec_smoother_2.next(),
                                     OscState::Sustaining => voice.filter_dec_smoother_2.next(),
-                                    OscState::Off => self.filter_cutoff_2,
+                                    OscState::Off => raw_cutoff_2,
                                 },
                             );
                             // Move release to the cutoff to end
-                            voice.filter_rel_smoother_2.set_target(self.sample_rate, self.filter_cutoff_2);
+                            voice.filter_rel_smoother_2.set_target(self.sample_rate, raw_cutoff_2);
                         }
 
                         // If our attack has finished
@@ -6045,7 +6047,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             voice.filter_dec_smoother_2.set_target(
                                 self.sample_rate,
                                 (
-                                    self.filter_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
+                                    raw_cutoff_2 * (self.filter_env_sustain_2 / 1999.9)
                                 ).clamp(20.0, 20000.0),
                             );
                         }
@@ -6075,7 +6077,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 }
                             }
                             // I don't expect this to be used
-                            _ => (self.filter_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
+                            _ => (raw_cutoff_2 + voice.cutoff_modulation_2 + cutoff_mod_2).clamp(20.0, 20000.0),
                         };
                     }
 
@@ -6229,7 +6231,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
         };
 
         // Send it back
-        (output_signal_l, output_signal_r, note_on, note_off)
+        (output_signal_l, output_signal_r, note_on, note_off, self.playing_voices.len())
     }
 
     pub fn set_playing(&mut self, new_bool: bool) {

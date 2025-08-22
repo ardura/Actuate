@@ -1,3 +1,5 @@
+use std::f32::consts::{self, FRAC_2_PI, PI};
+
 use nih_plug::params::enums::Enum;
 //use rand::{rngs::StdRng, Rng, SeedableRng};
 use rand::Rng;
@@ -382,130 +384,237 @@ pub enum RetriggerStyle {
 }
 
 // Sine wave oscillator with lerp smoothing
-pub fn get_sine(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    let frac = phase * (TABLE_SIZE - 1) as f32 - index as f32;
-    let next_index = index + 1;
-
-    let sine = if next_index < TABLE_SIZE - 1 {
-        SIN_TABLE[index] * (1.0 - frac) + SIN_TABLE[next_index] * frac
+pub fn get_sine(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        let phase_angle = phase * 2.0 * PI;
+        phase_angle.sin()
     } else {
-        SIN_TABLE[index] // If next_index is out of bounds, use the current index
-    };
-    sine
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        let frac = phase * (TABLE_SIZE - 1) as f32 - index as f32;
+        let next_index = index + 1;
+
+        let sine = if next_index < TABLE_SIZE - 1 {
+            SIN_TABLE[index] * (1.0 - frac) + SIN_TABLE[next_index] * frac
+        } else {
+            SIN_TABLE[index] // If next_index is out of bounds, use the current index
+        };
+        sine
+    }
 }
 
 // Rounded Saw Wave with rounding amount
-pub fn get_rsaw(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return RSAW_TABLE[index];
+pub fn get_rsaw(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        let scaled_phase = -1.0 + 2.0 * phase;
+        // Calculate the rounded sawtooth waveform directly
+        scaled_phase * (1.0 - scaled_phase.powi(30))
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return RSAW_TABLE[index];
+    }
 }
 
 // Rounded Saw Wave with analog-ey modification
-pub fn get_rasaw(phase: f32) -> f32 {
+pub fn get_rasaw(phase: f32, hq_mode: bool) -> f32 {
     let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
     let mut rng = rand::thread_rng();
-    let random_int: u32 = rng.gen_range(0..=2);
-    // Based on our int, use the three seed-noise tables
-    match random_int {
-        0 => {
-            return ASAW_TABLE_1[index];
-        }
-        1 => {
-            return ASAW_TABLE_2[index];
-        }
-        2 => {
-            return ASAW_TABLE_3[index];
-        }
-        _ => {
-            return 0.0;
+    if hq_mode {
+        let randomness = rng.gen_range(-0.009..0.009);  // Adjust the range of randomness
+
+        let scaled_phase = -1.0 + 2.0 * (phase + randomness);
+
+        // Calculate the rounded sawtooth waveform directly
+        scaled_phase * (1.0 - scaled_phase.powi(60))
+    } else {
+        let random_int: u32 = rng.gen_range(0..=2);
+        // Based on our int, use the three seed-noise tables
+        match random_int {
+            0 => {
+                return ASAW_TABLE_1[index];
+            }
+            1 => {
+                return ASAW_TABLE_2[index];
+            }
+            2 => {
+                return ASAW_TABLE_3[index];
+            }
+            _ => {
+                return 0.0;
+            }
         }
     }
 }
 
 // Saw Wave
-pub fn get_saw(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return SAW_TABLE[index];
+pub fn get_saw(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        -1.0 + 2.0 * phase
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return SAW_TABLE[index];
+    }
 }
 
 // "Analog" inspired "whiter" Saw wave
-pub fn get_wsaw(phase: f32) -> f32 {
+pub fn get_wsaw(phase: f32, hq_mode: bool) -> f32 {
     let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
     let mut rng = rand::thread_rng();
-    let random_bool: bool = rng.gen();
-    // Based on our random bool, obtain the Saw waveforms with seed-introduced randomness waveform tables
-    if random_bool {
-        return WSAW_TABLE_1[index];
+    if hq_mode {
+        let randomness = rng.gen_range(-0.1..0.1);
+        -1.0 + 2.0 * (phase + randomness)
     } else {
-        return WSAW_TABLE_2[index];
+        let random_bool: bool = rng.gen();
+        // Based on our random bool, obtain the Saw waveforms with seed-introduced randomness waveform tables
+        if random_bool {
+            return WSAW_TABLE_1[index];
+        } else {
+            return WSAW_TABLE_2[index];
+        }
     }
 }
 
 // "Analog" inspired "subtle warm" Saw wave
-pub fn get_ssaw(phase: f32) -> f32 {
+pub fn get_ssaw(phase: f32, hq_mode: bool) -> f32 {
     let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
     let mut rng = rand::thread_rng();
-    let random_bool: bool = rng.gen();
-    // Based on our random bool, obtain the Saw waveforms with seed-introduced randomness waveform tables
-    if random_bool {
-        return SSAW_TABLE_1[index];
+    if hq_mode {
+        let randomness = rng.gen_range(-0.01..0.01);  // Adjust the range of randomness
+        -1.0 + 2.0 * (phase + randomness)
     } else {
-        return SSAW_TABLE_2[index];
+        let random_bool: bool = rng.gen();
+        // Based on our random bool, obtain the Saw waveforms with seed-introduced randomness waveform tables
+        if random_bool {
+            return SSAW_TABLE_1[index];
+        } else {
+            return SSAW_TABLE_2[index];
+        }
     }
 }
 
 // Ramp Wave
-pub fn get_ramp(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return RAMP_TABLE[index];
+pub fn get_ramp(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        let scaled_phase = -1.0 + 2.0 * phase;
+        // Calculate the ramp wave directly
+        -scaled_phase % consts::TAU
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return RAMP_TABLE[index];   
+    }
 }
 
 // Square Wave
-pub fn get_square(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return SQUARE_TABLE[index];
+pub fn get_square(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        // Calculate the square wave directly
+        if phase < 0.5 {
+            1.0  // Positive phase half
+        } else {
+            -1.0  // Negative phase half
+        }
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return SQUARE_TABLE[index];
+    }
 }
 
 // 1/4 Pulse Wave
-pub fn get_pulse(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return PULSE_TABLE[index];
+pub fn get_pulse(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        // Calculate the pulse wave directly
+        if phase < 0.25 {
+            1.0  // Positive phase quarter
+        } else {
+            -1.0  // Negative phase three-quarters
+        }
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return PULSE_TABLE[index];
+    }
 }
 
-pub fn get_rsquare(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return RSQUARE_TABLE[index];
+pub fn get_rsquare(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        let mod_scaled: i32 = scale_range(0.15, 2.0, 8.0).floor() as i32 * 2;
+
+        let scaled_phase = -1.0 + 2.0 * phase;
+
+        // Calculate the rounded square wave directly
+        if scaled_phase < 0.0 {
+            (2.0 * scaled_phase + 1.0).powi(mod_scaled) - 1.0
+        } else {
+            -(2.0 * scaled_phase - 1.0).powi(mod_scaled) + 1.0
+        }
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return RSQUARE_TABLE[index];
+    }
 }
 
-pub fn get_tri(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return TRI_TABLE[index];
+pub fn get_tri(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        return (FRAC_2_PI) * (((2.0 * PI) * phase).sin()).asin();
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return TRI_TABLE[index];   
+    }
 }
 
-pub fn get_skew_saw(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return SKEW_SAW_TABLE[index];
+pub fn get_skew_saw(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        // Use an exponential function to skew the phase
+        2.0 * phase.powf(0.3) - 1.0
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return SKEW_SAW_TABLE[index];
+    }
 }
 
-pub fn get_bent_Saw(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return BENT_SAW_TABLE[index];
+pub fn get_bent_Saw(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        if phase < 0.4 {
+            -1.0 + (2.5) * phase / 0.4
+        } else {
+            let out = -1.0 + (1.5) * (phase - 0.4) / (0.6) + (2.5);
+            out - 2.0 // Normalize to -1 to 1
+        }
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return BENT_SAW_TABLE[index];
+    }
 }
 
-pub fn get_step_saw(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return STEP_SAW_TABLE[index];
+pub fn get_step_saw(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        let step_size = TABLE_SIZE / 9_usize;
+        let step_index = phase / step_size as f32;
+        2.0 * (step_index / 8.0) - 1.0
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return STEP_SAW_TABLE[index];
+    }
 }
 
-pub fn get_s_cubic_saw(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return S_CUBIC_SAW_TABLE[index];
+pub fn get_s_cubic_saw(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        -4.0 * phase.powi(3) + 6.0 * phase.powi(2) - 1.0
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return S_CUBIC_SAW_TABLE[index];
+    }
 }
 
-pub fn get_asym_saw(phase: f32) -> f32 {
-    let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
-    return ASYM_SAW_TABLE[index];
+pub fn get_asym_saw(phase: f32, hq_mode: bool) -> f32 {
+    if hq_mode {
+        if phase < 0.5 {
+            -1.0 + 2.0 * phase.powf(1.5)
+        } else {
+            1.0 - 2.0 * (1.0 - phase).powf(1.5)
+        }
+    } else {
+        let index = (phase * (TABLE_SIZE - 1) as f32) as usize;
+        return ASYM_SAW_TABLE[index];
+    }
 }
 
 // Bard helped me out on this one
@@ -535,4 +644,8 @@ impl DeterministicWhiteNoiseGenerator {
         self.seed = x;
         x
     }
+}
+
+pub fn scale_range(value: f32, out_min: f32, out_max: f32) -> f32 {
+    out_min + value * (out_max - out_min)
 }
