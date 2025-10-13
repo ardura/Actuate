@@ -1,4 +1,5 @@
 # Actuate (Latest is v1.4.1)
+
 A Subtractive and Additive Synthesizer, Sampler, and Granulizer built in Rust + Nih-Plug
 Written by Ardura
 
@@ -75,22 +76,13 @@ Hover over any knob (or some labels) for an explanation!
 ![actuate_flow](https://github.com/ardura/Actuate/assets/31751444/45ce1d56-d6c1-47b2-8bae-09633ecbbd2e)
 
 ## Plugin Preset Installation!!
-*NOTE: This preset section is outdated now that Actuate has a "Download latest presets" Button in the browser!*
+*NOTE: Actuate has a "Download latest presets" Button in the browser!*
 
-Actuate will look for presets and banks here, where USER is your username on your system:
+Actuate will install presets and banks here, where USER is your username on your system:
 
 - Linux: `/home/USER/Documents/ActuateDB/`
 - macOS: `/Users/USER/Documents/ActuateDB/`
 - Windows: `C:\Users\USER\Documents\ActuateDB\`
-
-This means the default bank is at:
-
-- Linux: `/home/USER/Documents/ActuateDB/Default/`
-- macOS: `/Users/USER/Documents/ActuateDB/Default/`
-- Windows: `C:\Users\USER\Documents\ActuateDB\Default\`
-
-You can create/add more banks under the ActuateDB directory for them to be read.
-Lets say I want to add "Techno Bank" and I receive "Techno Bank.zip", I would extract the contents to `C:\Users\USER\Documents\ActuateDB\Techno Bank` on Windows.
 
 ## Troubleshooting
 Since Actuate 1.2.8 the new file browser and UI use native text editing. This created some issues in some DAWs outlined here:
