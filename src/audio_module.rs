@@ -21,7 +21,6 @@ This is intended to be a generic implementation that can be extended for other a
 #####################################
 */
 
-use egui_file::{FileDialog, State};
 use nih_plug::{
     prelude::{Enum, NoteEvent, ParamSetter, Smoother, SmoothingStyle}, util::{self, db_to_gain}
 };
@@ -39,9 +38,7 @@ pub(crate) mod frequency_modulation;
 pub(crate) mod AdditiveModule;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
-    actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, adv_scale_value, 
-    fx::{A4I_Filter::A4iFilter, A4II_Filter::A4iiFilter, A4III_Filter::A4iiiFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, 
-    PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
+    actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, actuate_load_save_dialog::FileDialog, adv_scale_value, fx::{A4III_Filter::A4iiiFilter, A4II_Filter::A4iiFilter, A4I_Filter::A4iFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
@@ -633,7 +630,7 @@ impl AudioModule {
         egui_ctx: &nih_plug_egui::egui::Context,
         setter: &ParamSetter<'_>,
         params: Arc<ActuateParams>,
-        dialog: &mut FileDialog,
+        dialog_open: &mut FileDialog,
         index: u8,
         module1: &Arc<std::sync::Mutex<AudioModule>>,
         module2: &Arc<std::sync::Mutex<AudioModule>>,
@@ -848,20 +845,6 @@ impl AudioModule {
                     ui.add_space(1.0);
                     ui.horizontal(|ui| {
                         ui.vertical(|ui| {
-                            /*let osc_1_type_knob = ui_knob::ArcKnob::for_param(
-                                _osc_voice,
-                                setter,
-                                KNOB_SIZE,
-                                KnobLayout::Horizonal,
-                            )
-                            .preset_style(ui_knob::KnobStyle::Preset1)
-                            .set_fill_color(DARK_GREY_UI_COLOR)
-                            .set_line_color(YELLOW_MUSTARD)
-                            .set_text_size(TEXT_SIZE)
-                            .set_hover_text("Oscillator wave form type".to_string());
-                            ui.add(osc_1_type_knob);
-                            */
-
                             let osc_1_retrigger_knob = ui_knob::ArcKnob::for_param(
                                 osc_retrigger,
                                 setter,
@@ -1073,79 +1056,50 @@ You may also know this as mixture, course, or unison".to_string());
                     ui.vertical(|ui| {
                         let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 1.0, SMALLER_FONT);
                         if ui.add(load_sample_boolButton).clicked() || params.load_sample_1.value() || params.load_sample_2.value() || params.load_sample_3.value() {
-                            dialog.open();
-                            let mut dvar = Some(dialog);
-                            
-                            if let Some(dialog) = &mut dvar {
-                                if dialog.show(egui_ctx).selected() {
-                                  if let Some(file) = dialog.path() {
-                                    let opened_file = Some(file.to_path_buf());
-                                    if Option::is_some(&opened_file) {
-                                        match index {
-                                            1 => {
-                                                if params.load_sample_1.value() {
-                                                    module1
-                                                    .lock()
-                                                    .unwrap()
-                                                    .load_new_sample(opened_file.unwrap());
-                                                    *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
-                                                    setter.set_parameter(&params.load_sample_1, false);
-                                                    dialog.set_path(dialog.directory().to_path_buf());
-                                                    //dialog.deselect();
-                                                }
-                                            },
-                                            2 => {
-                                                if params.load_sample_2.value() {
-                                                    module2
-                                                        .lock()
-                                                        .unwrap()
-                                                        .load_new_sample(opened_file.unwrap());
-                                                    *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
-                                                    setter.set_parameter(&params.load_sample_2, false);
-                                                    dialog.set_path(dialog.directory().to_path_buf());
-                                                    //dialog.deselect();
-                                                }
-                                            },
-                                            3 => {
-                                                if params.load_sample_3.value() {
-                                                    module3
-                                                        .lock()
-                                                        .unwrap()
-                                                        .load_new_sample(opened_file.unwrap());
-                                                    *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
-                                                    setter.set_parameter(&params.load_sample_3, false);
-                                                    dialog.set_path(dialog.directory().to_path_buf());
-                                                    //dialog.deselect();
-                                                }
-                                            },
-                                            _ => {}
-                                        }
+                            dialog_open.open = true;
+                        }
+                        let mut opened_file: PathBuf = PathBuf::new();
+                        if dialog_open.open {
+                            let mut selected_sample = PathBuf::new();
+                            if let Some(path) = dialog_open.show(egui_ctx) {
+                                selected_sample = path;
+                                dialog_open.open = false;
+                            }
+                            if !dialog_open.open {
+                                opened_file = selected_sample;
+                            }
+                            match index {
+                                1 => {
+                                    if params.load_sample_1.value() {
+                                        module1
+                                        .lock()
+                                        .unwrap()
+                                        .load_new_sample(opened_file);
+                                        *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
+                                        setter.set_parameter(&params.load_sample_1, false);
                                     }
-                                  }
-                                }
-                                match dialog.state() {
-                                    State::Cancelled | State::Closed => {
-                                        match index {
-                                            1 => {
-                                                setter.set_parameter(&params.load_sample_1, false);
-                                                dialog.set_path(dialog.directory().to_path_buf());
-                                                //dialog.deselect();
-                                            },
-                                            2 => {
-                                                setter.set_parameter(&params.load_sample_2, false);
-                                                dialog.set_path(dialog.directory().to_path_buf());
-                                                //dialog.deselect();
-                                            },
-                                            3 => {
-                                                setter.set_parameter(&params.load_sample_3, false);
-                                                dialog.set_path(dialog.directory().to_path_buf());
-                                                //dialog.deselect();
-                                            },
-                                            _ => {}
-                                        }
-                                    },
-                                    _ => {}
-                                }
+                                },
+                                2 => {
+                                    if params.load_sample_2.value() {
+                                        module2
+                                            .lock()
+                                            .unwrap()
+                                            .load_new_sample(opened_file);
+                                        *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
+                                        setter.set_parameter(&params.load_sample_2, false);
+                                    }
+                                },
+                                3 => {
+                                    if params.load_sample_3.value() {
+                                        module3
+                                            .lock()
+                                            .unwrap()
+                                            .load_new_sample(opened_file);
+                                        *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
+                                        setter.set_parameter(&params.load_sample_3, false);
+                                    }
+                                },
+                                _ => {}
                             }
                         }
                         let restretch_button = BoolButton::BoolButton::for_param(restretch, setter, 3.5, 1.0, SMALLER_FONT);
@@ -1337,80 +1291,53 @@ Random: Sample uses a new random position every note".to_string());
                     ui.horizontal(|ui| {
                         let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 0.8, SMALLER_FONT);
                         if ui.add(load_sample_boolButton).clicked() || params.load_sample_1.value() || params.load_sample_2.value() || params.load_sample_3.value() {
-                            dialog.open();
-                            let mut dvar = Some(dialog);
-                            
-                            if let Some(dialog) = &mut dvar {
-                                if dialog.show(egui_ctx).selected() {
-                                  if let Some(file) = dialog.path() {
-                                    let opened_file = Some(file.to_path_buf());
-                                    if Option::is_some(&opened_file) && Path::is_file(file) {
-                                        match index {
-                                            1 => {
-                                                if params.load_sample_1.value() {
-                                                    module1
-                                                        .lock()
-                                                        .unwrap()
-                                                        .load_new_sample(opened_file.unwrap());
-                                                    *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
-                                                    setter.set_parameter(&params.load_sample_1, false);
-                                                    dialog.set_path(dialog.directory().to_path_buf());
-                                                    //dialog.deselect();
-                                                }
-                                            },
-                                            2 => {
-                                                if params.load_sample_2.value() {
-                                                    module2
-                                                        .lock()
-                                                        .unwrap()
-                                                        .load_new_sample(opened_file.unwrap());
-                                                    *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
-                                                    setter.set_parameter(&params.load_sample_2, false);
-                                                    dialog.set_path(dialog.directory().to_path_buf());
-                                                    //dialog.deselect();
-                                                }
-                                            },
-                                            3 => {
-                                                if params.load_sample_3.value() {
-                                                    module3
-                                                        .lock()
-                                                        .unwrap()
-                                                        .load_new_sample(opened_file.unwrap());
-                                                    *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
-                                                    setter.set_parameter(&params.load_sample_3, false);
-                                                    dialog.set_path(dialog.directory().to_path_buf());
-                                                    //dialog.deselect();
-                                                }
-                                            },
-                                            _ => {}
-                                        }
-                                    }
-                                  }
-                                }
-                                match dialog.state() {
-                                    State::Cancelled | State::Closed => {
-                                        match index {
-                                            1 => {
-                                                setter.set_parameter(&params.load_sample_1, false);
-                                                dialog.set_path(dialog.directory().to_path_buf());
-                                                //dialog.deselect();
-                                            },
-                                            2 => {
-                                                setter.set_parameter(&params.load_sample_2, false);
-                                                dialog.set_path(dialog.directory().to_path_buf());
-                                                //dialog.deselect();
-                                            },
-                                            3 => {
-                                                setter.set_parameter(&params.load_sample_3, false);
-                                                dialog.set_path(dialog.directory().to_path_buf());
-                                                //dialog.deselect();
-                                            },
-                                            _ => {}
-                                        }
-                                    },
-                                    _ => {}
-                                }
+                            dialog_open.open = true;
+                        }
+                        let mut opened_file: PathBuf = PathBuf::new();
+                        if dialog_open.open {
+                            let mut selected_sample = PathBuf::new();
+                            if let Some(path) = dialog_open.show(egui_ctx) {
+                                selected_sample = path;
+                                dialog_open.open = false;
                             }
+                            if !dialog_open.open {
+                                opened_file = selected_sample;
+                            }
+                            if Path::is_file(&opened_file) {
+                            match index {
+                                1 => {
+                                    if params.load_sample_1.value() {
+                                        module1
+                                            .lock()
+                                            .unwrap()
+                                            .load_new_sample(opened_file);
+                                        *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
+                                        setter.set_parameter(&params.load_sample_1, false);
+                                    }
+                                },
+                                2 => {
+                                    if params.load_sample_2.value() {
+                                        module2
+                                            .lock()
+                                            .unwrap()
+                                            .load_new_sample(opened_file);
+                                        *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
+                                        setter.set_parameter(&params.load_sample_2, false);
+                                    }
+                                },
+                                3 => {
+                                    if params.load_sample_3.value() {
+                                        module3
+                                            .lock()
+                                            .unwrap()
+                                            .load_new_sample(opened_file);
+                                        *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
+                                        setter.set_parameter(&params.load_sample_3, false);
+                                    }
+                                },
+                                _ => {}
+                            }
+                        }
                         }
                         let loop_toggle = BoolButton::BoolButton::for_param(loop_sample, setter, 3.5, 0.8, SMALLER_FONT);
                         ui.add(loop_toggle);

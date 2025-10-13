@@ -3,10 +3,10 @@
 // Ardura
 
 use std::{collections::HashMap, ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, Ordering}, mpsc, Arc, Mutex, RwLock}, thread};
-use egui_file::{FileDialog, State};
 use nih_plug::{context::gui::AsyncExecutor, editor::Editor, nih_log};
 use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, CornerRadius, ScrollArea, Vec2}, widgets::ParamSlider};
 use walkdir::WalkDir;
+use crate::actuate_load_save_dialog::FileDialog;
 
 use crate::{actuate_enums::PresetBrowserEntry, release_downloader::ReleaseDownloader, CustomWidgets::ComboBoxParam};
 #[allow(unused_imports)]
@@ -148,14 +148,14 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         home_dir.push(home_location);
 
         let default_dir_temp = dirs::document_dir();
-        let default_dir: Arc<Mutex<String>> = Arc::new(Mutex::new(home_dir.clone().as_os_str().to_str().unwrap().to_string()));
+        let mut default_dir: PathBuf = home_dir.clone();
 
         if default_dir_temp.is_some() {
-            *default_dir.lock().unwrap() = default_dir_temp.unwrap().as_path().join("ActuateDB").to_str().unwrap().to_string();
+            default_dir = default_dir_temp.unwrap().join("ActuateDB");
         }
 
         let bank_current_value: RwLock<String> = RwLock::new(String::new());
-        recalculate_banks(&dir_files_map, &str_files_map, &lite_db, Path::new(&*default_dir.lock().unwrap()));
+        recalculate_banks(&dir_files_map, &str_files_map, &lite_db, Path::new(&default_dir));
 
             // Print the directory-file structure
             for (dir, files) in instance.dir_files_map.lock().unwrap().iter() {
@@ -169,92 +169,33 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         // Set default
         *bank_current_value.write().unwrap() = "Default".to_string();
 
-        // Show only files with our extensions
-        let preset_filter = Box::new({
-            let ext = Some(OsStr::new("actuate"));
-            move |path: &Path| -> bool { path.extension() == ext }
-        });
-        let save_preset_filter = Box::new({
-            let ext = Some(OsStr::new("actuate"));
-            move |path: &Path| -> bool { path.extension() == ext }
-        });
-        let export_filter = Box::new({
-            let ext = Some(OsStr::new("wav"));
-            move |path: &Path| -> bool { path.extension() == ext }
-        });
-        let sample_filter = Box::new({
-            let ext = Some(OsStr::new("wav"));
-            move |path: &Path| -> bool { path.extension() == ext }
-        });
+        // Open
+        let dialog_main_open: Arc<Mutex<FileDialog>> = Arc::new(Mutex::new(if (default_dir).exists() {
+                FileDialog::new(default_dir.clone(), false)
+            } else {
+                FileDialog::new(home_dir.clone(), false)
+            }));
 
-        let dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
-            Mutex::new(
-                    if PathBuf::from((*default_dir.lock().unwrap().clone()).to_string()).exists() {
-                        FileDialog::open_file(Some(PathBuf::from((*default_dir.lock().unwrap().clone()).to_string())))
-                            //.current_pos([(WIDTH/4) as f32, 10.0])
-                            .show_files_filter(preset_filter)
-                            .keep_on_top(true)
-                            .show_new_folder(false)
-                            .show_rename(false)
-                    } else {
-                        FileDialog::open_file(Some(home_dir.clone()))
-                            //.current_pos([(WIDTH/4) as f32, 10.0])
-                            .show_files_filter(preset_filter)
-                            .keep_on_top(true)
-                            .show_new_folder(false)
-                            .show_rename(false)
-                    }
-                )
-            );
-        let save_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
-            Mutex::new(
-                if PathBuf::from((*default_dir.lock().unwrap().clone()).to_string()).exists() {
-                        FileDialog::save_file(Some(PathBuf::from((*default_dir.lock().unwrap().clone()).to_string())))
-                            //.current_pos([(WIDTH/4) as f32, 10.0])
-                            .show_files_filter(save_preset_filter)
-                            .keep_on_top(true)
-                            .show_new_folder(false)
-                            .show_rename(false)
-                    } else {
-                        FileDialog::save_file(Some(home_dir.clone()))
-                            //.current_pos([(WIDTH/4) as f32, 10.0])
-                            .show_files_filter(save_preset_filter)
-                            .keep_on_top(true)
-                            .show_new_folder(false)
-                            .show_rename(false)
-                    }
-                )
-            );
-        let export_wav_dialog_main: Arc<Mutex<FileDialog>> = Arc::new(
-            Mutex::new(
-                if PathBuf::from((*default_dir.lock().unwrap().clone()).to_string()).exists() {
-                        FileDialog::save_file(Some(PathBuf::from((*default_dir.lock().unwrap().clone()).to_string())))
-                            //.current_pos([(WIDTH/4) as f32, 10.0])
-                            .show_files_filter(export_filter)
-                            .keep_on_top(true)
-                            .show_new_folder(false)
-                            .show_rename(false)
-                    } else {
-                        FileDialog::save_file(Some(home_dir.clone()))
-                            //.current_pos([(WIDTH/4) as f32, 10.0])
-                            .show_files_filter(export_filter)
-                            .keep_on_top(true)
-                            .show_new_folder(false)
-                            .show_rename(false)
-                    }
-                )
-            );
+        // Save
+        let dialog_main_save: Arc<Mutex<FileDialog>> = Arc::new(Mutex::new(if (default_dir).exists() {
+                FileDialog::new(default_dir.clone(), true)
+            } else {
+                FileDialog::new(home_dir.clone(), true)
+            }));
 
-        let load_sample_dialog: Arc<Mutex<FileDialog>> = Arc::new(
-            Mutex::new(
-                FileDialog::open_file(Some(home_dir.clone()))
-                    .current_pos([(WIDTH/4) as f32, 10.0])
-                    .show_files_filter(sample_filter)
-                    .keep_on_top(true)
-                    .show_new_folder(false)
-                    .show_rename(false)
-                )
-        );
+        // Export Last Sound
+        let dialog_export_last_sound: Arc<Mutex<FileDialog>> = Arc::new(Mutex::new(if (default_dir).exists() {
+                FileDialog::new(default_dir.clone(), true)
+            } else {
+                FileDialog::new(home_dir.clone(), true)
+            }));
+
+        // Open Samples
+        let dialog_main_open_samples: Arc<Mutex<FileDialog>> = Arc::new(Mutex::new(if (default_dir).exists() {
+                FileDialog::new(default_dir.clone(), false)
+            } else {
+                FileDialog::new(home_dir.clone(), false)
+            }));
 
         // Do our GUI stuff. Store this to later get parent window handle from it
         create_egui_editor(
@@ -265,7 +206,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
                         if download_in_progress.load(Ordering::Relaxed) {
-                            recalculate_banks(&dir_files_map, &str_files_map, &lite_db, Path::new(&*default_dir.lock().unwrap()));
+                            recalculate_banks(&dir_files_map, &str_files_map, &lite_db, Path::new(&default_dir));
                             download_in_progress.store(false, Ordering::Relaxed);
                         }
 
@@ -465,7 +406,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
-                                        .on_hover_text("v1.4.0 by Ardura!");
+                                        .on_hover_text("v1.4.1 by Ardura!");
                                     ui.add_space(2.0);
                                     ui.separator();
 
@@ -509,7 +450,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             .enabled(true);
                                         window.show(egui_ctx, |ui| {
                                             ui.visuals_mut().extreme_bg_color = Color32::DARK_GRAY;
-                                            //let max_rows = PRESET_BANK_SIZE;
 
                                             ui.vertical_centered(|ui| {
                                                 let close_button = ui.button(RichText::new("Close Browser")
@@ -588,7 +528,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                             let temp_app = ReleaseDownloader::new(
                                                                 owner,
                                                                 repo,
-                                                                (*clone_dir.lock().unwrap().clone()).to_string());
+                                                                clone_dir);
                                                             // Attempt download and send result
                                                                 let result = temp_app.download_latest_release();
                                                                 tx.send(result).unwrap();
@@ -688,9 +628,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                                             *params.preset_name_p.lock().unwrap() =  locked_lib.preset_name.clone();
                                                                                             *params.preset_info_p.lock().unwrap() = locked_lib.preset_info.clone();
                                                                                             setter.set_parameter(&params.preset_category, locked_lib.preset_category);
-                                                                                        
-                                                                                            import_preset_active.store(false, Ordering::SeqCst);
-                                                                                        
+                                                                                                                                                                                
                                                                                             drop(locked_lib);
                                                                                         
                                                                                             // GUI thread misses this without this call here for some reason
@@ -833,9 +771,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                                                                 *params.preset_name_p.lock().unwrap() = locked_lib.preset_name.clone();
                                                                                                                 *params.preset_info_p.lock().unwrap() = locked_lib.preset_info.clone();
                                                                                                                 setter.set_parameter(&params.preset_category, locked_lib.preset_category);
-                                                                                                            
-                                                                                                                import_preset_active.store(false, Ordering::SeqCst);
-                                                                                                            
+                                                                                                                                                                                                                        
                                                                                                                 drop(locked_lib);
                                                                                                             
                                                                                                                 // GUI thread misses this without this call here for some reason
@@ -961,54 +897,50 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         .color(TEAL_GREEN)
                                     );
                                     if import_preset_button.clicked() {
-                                        import_preset_active.store(true, Ordering::SeqCst);
+                                        import_preset_active.store(true, Ordering::Relaxed);
                                     }
-                                    if import_preset_active.load(Ordering::SeqCst) {
-                                        let dialock = dialog_main.clone();
-                                        let mut dialog = dialock.lock().unwrap();
-                                        dialog.open();
-                                        let mut dvar = Some(dialog);
-
-                                        if let Some(dialog) = &mut dvar {
-                                            if dialog.show(egui_ctx).selected() {
-                                              if let Some(file) = dialog.path() {
-                                                let opened_file = Some(file.to_path_buf());
-                                                let unserialized: Option<ActuatePresetV131>;
-                                                (_, unserialized) = Actuate::import_preset(opened_file);
-
-                                                if unserialized.is_some() {
-                                                    let mut locked_lib = arc_preset.lock().unwrap();
-                                                    *locked_lib = unserialized.unwrap();
-                                                    let temp_preset = &locked_lib;
-                                                    *params.preset_name_p.lock().unwrap() =  temp_preset.preset_name.clone();
-                                                    *params.preset_info_p.lock().unwrap() = temp_preset.preset_info.clone();
-                                                    setter.set_parameter(&params.preset_category, temp_preset.preset_category);
-
-                                                    import_preset_active.store(false, Ordering::SeqCst);
-
-                                                    drop(locked_lib);
-                                                
-                                                    // GUI thread misses this without this call here for some reason
-                                                    Actuate::reload_entire_preset(
-                                                        setter,
-                                                        params.clone(),
-                                                        arc_preset.lock().unwrap().clone(),
-                                                        &mut AM1.lock().unwrap(),
-                                                        &mut AM2.lock().unwrap(),
-                                                        &mut AM3.lock().unwrap(),);
-                                                    // This is set for the process thread
-                                                    reload_entire_preset.store(true, Ordering::SeqCst);
-                                                }
-                                              }
+                                    if import_preset_active.load(Ordering::Relaxed) {
+                                        let mut dialog = dialog_main_open.lock().unwrap();
+                                        let mut selected_preset = PathBuf::new();
+                                        dialog.open = true;
+                                        if let Some(path) = dialog.show(egui_ctx) {
+                                            if path.as_os_str().is_empty() {
+                                                import_preset_active.store(false, Ordering::Relaxed);
                                             }
-                                            match dialog.state() {
-                                                State::Cancelled | State::Closed => {
-                                                    import_preset_active.store(false, Ordering::SeqCst);
-                                                },
-                                                _ => {}
-                                            }
+                                            selected_preset = path;
+                                            dialog.open = false;
+                                            nih_log!("Selected a path! {}", selected_preset.display());
                                         }
+                                        if !dialog.open && import_preset_active.load(Ordering::Relaxed) {
+                                            let opened_file = selected_preset;
+                                            nih_log!("opened_file var is {}", opened_file.display());
+                                            let unserialized: Option<ActuatePresetV131>;
+                                            (_, unserialized) = Actuate::import_preset(Some(opened_file));
+                                            nih_log!("Imported!");
 
+                                            if unserialized.is_some() {
+                                                let mut locked_lib = arc_preset.lock().unwrap();
+                                                *locked_lib = unserialized.unwrap();
+                                                let temp_preset = &locked_lib;
+                                                *params.preset_name_p.lock().unwrap() =  temp_preset.preset_name.clone();
+                                                *params.preset_info_p.lock().unwrap() = temp_preset.preset_info.clone();
+                                                setter.set_parameter(&params.preset_category, temp_preset.preset_category);
+
+                                                drop(locked_lib);
+                                            
+                                                // GUI thread misses this without this call here for some reason
+                                                Actuate::reload_entire_preset(
+                                                    setter,
+                                                    params.clone(),
+                                                    arc_preset.lock().unwrap().clone(),
+                                                    &mut AM1.lock().unwrap(),
+                                                    &mut AM2.lock().unwrap(),
+                                                    &mut AM3.lock().unwrap(),);
+                                                // This is set for the process thread
+                                                reload_entire_preset.store(true, Ordering::SeqCst);
+                                            }
+                                            import_preset_active.store(false, Ordering::Relaxed);
+                                        }
                                     }
                                     // Studio One changes (compatible for all DAWs)
                                     let export_preset_button = ui.button(RichText::new("Export Preset")
@@ -1017,30 +949,26 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         .color(TEAL_GREEN)
                                     );
                                     if export_preset_button.clicked() {
-                                        export_preset_active.store(true, Ordering::SeqCst);
+                                        export_preset_active.store(true, Ordering::Relaxed);
                                     }
-                                    if export_preset_active.load(Ordering::SeqCst) {
-                                        let export_dialock = export_wav_dialog_main.clone();
-                                        let mut save_dialog = export_dialock.lock().unwrap();
-                                        save_dialog.open();
-                                        let mut dvar = Some(save_dialog);
-                                        if let Some(s_dialog) = &mut dvar {
-                                            if s_dialog.show(egui_ctx).selected() {
-                                              if let Some(file) = s_dialog.path() {
-                                                let saved_file = Some(file.to_path_buf());
-                                                let locked_lib = arc_preset.lock().unwrap();
-                                                Actuate::export_preset(saved_file, locked_lib.clone());
-                                                drop(locked_lib);
-                                                export_preset_active.store(false, Ordering::SeqCst);
-                                              }
+                                    if export_preset_active.load(Ordering::Relaxed) {
+                                        let mut dialog_export = dialog_main_save.lock().unwrap();
+                                        let mut selected_file = PathBuf::new();
+                                        dialog_export.open = true;
+                                        if let Some(path) = dialog_export.show(egui_ctx) {
+                                            if path.as_os_str().is_empty() {
+                                                export_preset_active.store(false, Ordering::Relaxed);
                                             }
-
-                                            match s_dialog.state() {
-                                                State::Cancelled | State::Closed => {
-                                                    export_preset_active.store(false, Ordering::SeqCst);
-                                                },
-                                                _ => {}
-                                            }
+                                            selected_file = path;
+                                            dialog_export.open = false;
+                                            nih_log!("Selected a path! {}", selected_file.display());
+                                        }
+                                        if !dialog_export.open && export_preset_active.load(Ordering::Relaxed) {
+                                            let saved_file = Some(selected_file);
+                                            let locked_lib = arc_preset.lock().unwrap();
+                                            Actuate::export_preset(saved_file, locked_lib.clone());
+                                            drop(locked_lib);
+                                            export_preset_active.store(false, Ordering::Relaxed);
                                         }
                                     }
                                     ui.checkbox(&mut safety_clip_output.lock().unwrap(), "Safety Clip").on_hover_text("Clip the output at 0dB to save your ears/speakers");
@@ -1052,32 +980,27 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                         .color(TEAL_GREEN)
                                     );
                                     if export_last_note_button.clicked() {
-                                        export_last_sound.store(true, Ordering::SeqCst);
+                                        export_last_sound.store(true, Ordering::Relaxed);
                                     }
-                                    if export_last_sound.load(Ordering::SeqCst) {
-                                        let save_dialock = save_dialog_main.clone();
-                                        let mut save_dialog = save_dialock.lock().unwrap();
-                                        save_dialog.open();
-                                        let mut dvar = Some(save_dialog);
-                                        if let Some(s_dialog) = &mut dvar {
-                                            if s_dialog.show(egui_ctx).selected() {
-                                              if let Some(file) = s_dialog.path() {
-                                                let saved_file = Some(file.to_path_buf());
-                                                let mut str_path = saved_file.unwrap_or_default().as_path().to_str().unwrap().to_string();
-                                                if !str_path.contains(".wav") {
-                                                    str_path = str_path + ".wav"
-                                                }
-                                                let _ = recorder.lock().unwrap().export(&str_path);
-                                                export_last_sound.store(false, Ordering::SeqCst);
-                                              }
+                                    if export_last_sound.load(Ordering::Relaxed) {
+                                        let mut dialog_export_ls = dialog_export_last_sound.lock().unwrap();
+                                        let mut selected_file = PathBuf::new();
+                                        dialog_export_ls.open = true;
+                                        if let Some(path) = dialog_export_ls.show(egui_ctx) {
+                                            if path.as_os_str().is_empty() {
+                                                export_last_sound.store(false, Ordering::Relaxed);
                                             }
-
-                                            match s_dialog.state() {
-                                                State::Cancelled | State::Closed => {
-                                                    export_last_sound.store(false, Ordering::SeqCst);
-                                                },
-                                                _ => {}
+                                            selected_file = path;
+                                            dialog_export_ls.open = false;
+                                            nih_log!("Selected a path! {}", selected_file.display());
+                                        }
+                                        if !dialog_export_ls.open && export_last_sound.load(Ordering::Relaxed) {
+                                            if selected_file.extension().map_or(true, |ext| ext != "wav") {
+                                                selected_file.set_extension("wav");
                                             }
+                                            let saved_file = Some(selected_file);
+                                            let _ = recorder.lock().unwrap().export(saved_file.unwrap());
+                                            export_last_sound.store(false, Ordering::Relaxed);
                                         }
                                     }
                                 });
@@ -1256,7 +1179,8 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
 
                                     ui.add_space(20.0);
                                     ui.vertical(|ui|{
-                                        let mut sample_dialog_lock = load_sample_dialog.lock().unwrap();
+                                        
+                                        let mut sample_dialog_lock = dialog_main_open_samples.lock().unwrap();
                                         ui.add_space(12.0);
                                         AudioModule::draw_module(ui, egui_ctx, setter, params.clone(), &mut sample_dialog_lock, 1, &AM1, &AM2, &AM3);
                                         ui.add_space(10.0);

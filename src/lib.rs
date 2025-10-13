@@ -64,6 +64,7 @@ mod fx;
 mod old_preset_structs;
 mod release_downloader;
 mod recorder;
+mod actuate_load_save_dialog;
 
 // Plugin sizing
 const WIDTH: u32 = 920;
@@ -5498,9 +5499,11 @@ impl Actuate {
                 .unwrap_or("Invalid Path")
                 .to_string();
 
+            nih_log!("import_preset() {}", return_name);
+
             // Read the compressed data from the file
             let mut file_data = String::new();
-            if let Err(err) = std::fs::File::open(&return_name)
+            if let Err(err) = std::fs::File::open(&imported_preset)
                 .and_then(|mut file| file.read_to_string(&mut file_data))
             {
                 eprintln!("Error reading compressed data from file: {}", err);
