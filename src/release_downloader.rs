@@ -12,11 +12,11 @@ pub struct ReleaseDownloader {
 }
 
 impl ReleaseDownloader {
-    pub fn new(owner: String, repo: String, path: String) -> Self {
+    pub fn new(owner: String, repo: String, path: PathBuf) -> Self {
         Self {
             owner,
             repo,
-            download_path: PathBuf::from(path),
+            download_path: path,
         }
     }
 

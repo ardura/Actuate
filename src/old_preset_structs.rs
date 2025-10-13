@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 // This will probably get messier in future but since it is outside the main lib.rs it should keep some of the changes simpler overall
 
 /// This is the structure that represents a storable preset value
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ActuatePresetV130 {
     // Information

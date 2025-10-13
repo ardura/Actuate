@@ -17,6 +17,7 @@ pub enum SaturationType {
 // Define a type for saturation processing function
 type SaturationFn = fn(f32, f32, f32) -> (f32, f32);
 
+#[allow(unpredictable_function_pointer_comparisons)]
 #[derive(Clone, PartialEq)]
 pub(crate) struct Saturation {
     sat_type: SaturationType,

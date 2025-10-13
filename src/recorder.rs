@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use hound;
 
 pub struct Recorder {
@@ -29,7 +31,7 @@ impl Recorder {
     }
 
     // Export WAV file
-    pub fn export(&self, path: &str) -> hound::Result<()> {
+    pub fn export(&self, path: PathBuf) -> hound::Result<()> {
         let spec = hound::WavSpec {
             channels: 2,
             sample_rate: self.sample_rate,
@@ -37,8 +39,11 @@ impl Recorder {
             sample_format: hound::SampleFormat::Float,
         };
 
-        let mut writer = hound::WavWriter::create(path, spec)?;
+        let mut writer = hound::WavWriter::create(path.as_path(), spec)?;
         let mut silence_tracker: Vec<f32> = Vec::new();
+        if self.buffer.len() <= 1 {
+            return Ok(())
+        }
         for &sample in &self.buffer {
             if sample == 0.0 {
                 silence_tracker.push(0.0);

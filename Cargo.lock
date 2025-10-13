@@ -4,11 +4,10 @@ version = 4
 
 [[package]]
 name = "Actuate"
-version = "1.4.0"
+version = "1.4.1"
 dependencies = [
  "anyhow",
  "dirs",
- "egui_file",
  "hound",
  "lazy_static",
  "nih_plug",
@@ -764,12 +763,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
-name = "dyn-clone"
-version = "1.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c7a8fb8a9fbf66c1f703fe16184d10ca0ee9d23be5b4436400408ba54a95005"
-
-[[package]]
 name = "ecolor"
 version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -809,15 +802,6 @@ dependencies = [
  "open",
  "raw-window-handle 0.5.2",
  "thiserror 2.0.12",
-]
-
-[[package]]
-name = "egui_file"
-version = "0.23.0"
-source = "git+https://github.com/Barugon/egui_file.git?rev=28a242a7e921144e9ac442cc00fad6eca01b59e6#28a242a7e921144e9ac442cc00fad6eca01b59e6"
-dependencies = [
- "dyn-clone",
- "egui",
 ]
 
 [[package]]
