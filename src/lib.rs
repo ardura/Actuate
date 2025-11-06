@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.3.9
+Version 1.4.2
 
 #####################################
 
@@ -1179,12 +1179,12 @@ impl ActuateParams {
                 "Fine",
                 0.0,
                 FloatRange::Linear {
-                    min: -0.999,
-                    max: 0.999,
+                    min: -0.9999,
+                    max: 0.9999,
                 },
             )
-            .with_step_size(0.0001)
-            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_step_size(0.00001)
+            //.with_value_to_string(formatters::v2s_f32_rounded(5))
             .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -1281,8 +1281,8 @@ impl ActuateParams {
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
-            .with_step_size(0.0001)
-            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_step_size(0.00001)
+            //.with_value_to_string(formatters::v2s_f32_rounded(5))
             .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -1308,12 +1308,12 @@ impl ActuateParams {
                 "Fine",
                 0.0,
                 FloatRange::Linear {
-                    min: -0.999,
-                    max: 0.999,
+                    min: -0.9999,
+                    max: 0.9999,
                 },
             )
-            .with_step_size(0.0001)
-            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_step_size(0.00001)
+            //.with_value_to_string(formatters::v2s_f32_rounded(5))
             .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -1410,8 +1410,8 @@ impl ActuateParams {
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
-            .with_step_size(0.0001)
-            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_step_size(0.00001)
+            //.with_value_to_string(formatters::v2s_f32_rounded(5))
             .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -1437,12 +1437,12 @@ impl ActuateParams {
                 "Fine",
                 0.0,
                 FloatRange::Linear {
-                    min: -0.999,
-                    max: 0.999,
+                    min: -0.9999,
+                    max: 0.9999,
                 },
             )
-            .with_step_size(0.0001)
-            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_step_size(0.00001)
+            //.with_value_to_string(formatters::v2s_f32_rounded(5))
             .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -1539,8 +1539,8 @@ impl ActuateParams {
                 0.0,
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
-            .with_step_size(0.0001)
-            .with_value_to_string(formatters::v2s_f32_rounded(4))
+            .with_step_size(0.00001)
+            //.with_value_to_string(formatters::v2s_f32_rounded(5))
             .with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
@@ -3007,7 +3007,7 @@ impl ActuateParams {
                 FloatRange::Skewed {
                     min: 1.0,
                     max: 9600.0,
-                    factor: 0.3,
+                    factor: 0.2,
                 }, // Based on max bpm of 300 w/ 32nd notes
             )
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(2))
@@ -3021,7 +3021,7 @@ impl ActuateParams {
                 FloatRange::Skewed {
                     min: 1.0,
                     max: 9600.0,
-                    factor: 0.3,
+                    factor: 0.2,
                 }, // Based on max bpm of 300 w/ 32nd notes
             )
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(2))
@@ -3035,7 +3035,7 @@ impl ActuateParams {
                 FloatRange::Skewed {
                     min: 1.0,
                     max: 9600.0,
-                    factor: 0.3,
+                    factor: 0.2,
                 }, // Based on max bpm of 300 w/ 32nd notes
             )
             .with_value_to_string(formatters::v2s_f32_hz_then_khz(2))
@@ -3078,6 +3078,7 @@ impl ActuateParams {
                     max: 1.0,
                 },
             )
+            .with_step_size(0.00001)
             .with_value_to_string(format_nothing()),
             mod_amount_knob_2: FloatParam::new(
                 "Mod Amt 2",
@@ -3087,6 +3088,7 @@ impl ActuateParams {
                     max: 1.0,
                 },
             )
+            .with_step_size(0.00001)
             .with_value_to_string(format_nothing()),
             mod_amount_knob_3: FloatParam::new(
                 "Mod Amt 3",
@@ -3096,6 +3098,7 @@ impl ActuateParams {
                     max: 1.0,
                 },
             )
+            .with_step_size(0.00001)
             .with_value_to_string(format_nothing()),
             mod_amount_knob_4: FloatParam::new(
                 "Mod Amt 4",
@@ -3105,6 +3108,7 @@ impl ActuateParams {
                     max: 1.0,
                 },
             )
+            .with_step_size(0.00001)
             .with_value_to_string(format_nothing()),
             mod_source_1: EnumParam::new("Source 1", ModulationSource::None),
             mod_source_2: EnumParam::new("Source 2", ModulationSource::None),

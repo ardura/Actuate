@@ -17,7 +17,8 @@ use nih_plug_egui::egui::{
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
 /// noramlized parameter.
-const GRANULAR_DRAG_MULTIPLIER: f32 = 0.001;
+const GRANULAR_DRAG_MULTIPLIER: f32 = 0.00001;
+const SEMI_GRANULAR_DRAG_MULTIPLIER: f32 = 0.0001;
 const NORMAL_DRAG_MULTIPLIER: f32 = 0.005;
 
 static DRAG_NORMALIZED_START_VALUE_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 0)));
@@ -100,6 +101,24 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         );
     }
 
+    fn semi_granular_drag(&self, ui: &Ui, drag_delta: Vec2) {
+        // Remember the intial position when we started with the granular drag. This value gets
+        // reset whenever we have a normal itneraction with the slider.
+        let start_value = if Self::get_drag_amount_memory(ui) == 0.0 {
+            Self::set_drag_normalized_start_value_memory(ui, self.normalized_value());
+            self.normalized_value()
+        } else {
+            Self::get_drag_normalized_start_value_memory(ui)
+        };
+
+        let total_drag_distance = -drag_delta.y + Self::get_drag_amount_memory(ui);
+        Self::set_drag_amount_memory(ui, total_drag_distance);
+
+        self.set_normalized_value(
+            (start_value + (total_drag_distance * SEMI_GRANULAR_DRAG_MULTIPLIER)).clamp(0.0, 1.0),
+        );
+    }
+
     // Copied this to modify the normal drag behavior to not match a slider
     fn normal_drag(&self, ui: &Ui, drag_delta: Vec2) {
         let start_value = if Self::get_drag_amount_memory(ui) == 0.0 {
@@ -131,11 +150,11 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         }
         if let Some(_clicked_pos) = response.interact_pointer_pos() {
             if ui.input(|mem| mem.modifiers.command) {
-                // Like double clicking, Ctrl+Click should reset the parameter
-                self.reset_param();
+                // And ctrl dragging should switch to a more granular input method
+                self.semi_granular_drag(ui, response.drag_delta());
                 response.mark_changed();
             } else if ui.input(|mem| mem.modifiers.shift) {
-                // And shift dragging should switch to a more granular input method
+                // And shift dragging should switch to a VERY granular input method
                 self.granular_drag(ui, response.drag_delta());
                 response.mark_changed();
             } else {
