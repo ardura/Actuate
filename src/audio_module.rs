@@ -38,7 +38,7 @@ pub(crate) mod frequency_modulation;
 pub(crate) mod AdditiveModule;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
-    actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, actuate_load_save_dialog::FileDialog, adv_scale_value, fx::{A4III_Filter::A4iiiFilter, A4II_Filter::A4iiFilter, A4I_Filter::A4iFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
+    actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, actuate_load_save_dialog::FileDialog, adv_scale_value, fx::{A4III_Filter::A4iiiFilter, A4II_Filter::A4iiFilter, A4IV_Filter::A4ivFilter, A4I_Filter::A4iFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
@@ -192,6 +192,12 @@ pub struct SingleVoice {
     A4III_l_2: A4iiiFilter,
     A4III_r_1: A4iiiFilter,
     A4III_r_2: A4iiiFilter,
+
+    // A4IV Filter
+    A4IV_l_1: A4ivFilter,
+    A4IV_l_2: A4ivFilter,
+    A4IV_r_1: A4ivFilter,
+    A4IV_r_2: A4ivFilter,
 
     cutoff_modulation: f32,
     resonance_modulation: f32,
@@ -3097,10 +3103,10 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             V4F_r_1: V4FilterStruct::default(),
                             V4F_r_2: V4FilterStruct::default(),
                             // A4I Filter
-                            A4I_l_1: A4iFilter::new(raw_cutoff_1, raw_cutoff_1, self.filter_resonance),
-                            A4I_l_2: A4iFilter::new(raw_cutoff_2, raw_cutoff_2, self.filter_resonance_2),
-                            A4I_r_1: A4iFilter::new(raw_cutoff_1, raw_cutoff_1, self.filter_resonance),
-                            A4I_r_2: A4iFilter::new(raw_cutoff_2, raw_cutoff_2, self.filter_resonance_2),
+                            A4I_l_1: A4iFilter::new(self.sample_rate, raw_cutoff_1, self.filter_resonance),
+                            A4I_l_2: A4iFilter::new(self.sample_rate, raw_cutoff_2, self.filter_resonance_2),
+                            A4I_r_1: A4iFilter::new(self.sample_rate, raw_cutoff_1, self.filter_resonance),
+                            A4I_r_2: A4iFilter::new(self.sample_rate, raw_cutoff_2, self.filter_resonance_2),
                             // A4II Filter
                             A4II_l_1: A4iiFilter::new(raw_cutoff_1, self.sample_rate, self.filter_resonance),
                             A4II_l_2: A4iiFilter::new(raw_cutoff_2, self.sample_rate, self.filter_resonance_2),
@@ -3111,6 +3117,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             A4III_l_2: A4iiiFilter::new(raw_cutoff_2, self.sample_rate, self.filter_resonance_2),
                             A4III_r_1: A4iiiFilter::new(raw_cutoff_1, self.sample_rate, self.filter_resonance),
                             A4III_r_2: A4iiiFilter::new(raw_cutoff_2, self.sample_rate, self.filter_resonance_2),
+                            // A4IV Filter
+                            A4IV_l_1: A4ivFilter::new(raw_cutoff_1, self.filter_resonance, self.sample_rate),
+                            A4IV_l_2: A4ivFilter::new(raw_cutoff_2, self.filter_resonance_2, self.sample_rate),
+                            A4IV_r_1: A4ivFilter::new(raw_cutoff_1, self.filter_resonance, self.sample_rate),
+                            A4IV_r_2: A4ivFilter::new(raw_cutoff_2, self.filter_resonance_2, self.sample_rate),
 
                             cutoff_modulation: cutoff_mod,
                             cutoff_modulation_2: cutoff_mod_2,
@@ -3130,7 +3141,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 + (
                                     // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II | FilterAlgorithms::A4III => self.filter_env_peak,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II | FilterAlgorithms::A4III | FilterAlgorithms::A4IV=> self.filter_env_peak,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak,
                                             -19980.0,
@@ -3152,7 +3163,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 + (
                                     // This scales the peak env to be much gentler for the TILT filter
                                     match self.filter_alg_type_2 {
-                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II | FilterAlgorithms::A4III => self.filter_env_peak_2,
+                                        FilterAlgorithms::SVF | FilterAlgorithms::VCF | FilterAlgorithms::V4 | FilterAlgorithms::A4I | FilterAlgorithms::A4II | FilterAlgorithms::A4III | FilterAlgorithms::A4IV => self.filter_env_peak_2,
                                         FilterAlgorithms::TILT => adv_scale_value(
                                             self.filter_env_peak_2,
                                             -19980.0,
@@ -3624,6 +3635,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 A4III_l_2: A4iiiFilter::new(20000.0, 44100.0, 0.0),
                 A4III_r_1: A4iiiFilter::new(20000.0, 44100.0, 0.0),
                 A4III_r_2: A4iiiFilter::new(20000.0, 44100.0, 0.0),
+                // A4IV Filter
+                A4IV_l_1: A4ivFilter::new(20000.0, 0.0, 44100.0),
+                A4IV_l_2: A4ivFilter::new(20000.0, 0.0, 44100.0),
+                A4IV_r_1: A4ivFilter::new(20000.0, 0.0, 44100.0),
+                A4IV_r_2: A4ivFilter::new(20000.0, 0.0, 44100.0),
                 cutoff_modulation: cutoff_mod,
                 cutoff_modulation_2: cutoff_mod_2,
                 resonance_modulation: 0.0,
@@ -4177,6 +4193,11 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         A4III_l_2: A4iiiFilter::new(raw_cutoff_2, self.sample_rate, 0.0),
                         A4III_r_1: A4iiiFilter::new(raw_cutoff_1, self.sample_rate, 0.0),
                         A4III_r_2: A4iiiFilter::new(raw_cutoff_2, self.sample_rate, 0.0),
+                        // A4IV Filter
+                        A4IV_l_1: A4ivFilter::new(raw_cutoff_1, 0.0, self.sample_rate),
+                        A4IV_l_2: A4ivFilter::new(raw_cutoff_2, 0.0, self.sample_rate),
+                        A4IV_r_1: A4ivFilter::new(raw_cutoff_1, 0.0, self.sample_rate),
+                        A4IV_r_2: A4ivFilter::new(raw_cutoff_2, 0.0, self.sample_rate),
                         cutoff_modulation: cutoff_mod,
                         cutoff_modulation_2: cutoff_mod_2,
                         resonance_modulation: 0.0,
@@ -4798,16 +4819,6 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         }
                     }
                 }
-
-                // Blending when multi-voiced
-                /*
-                if self.osc_unison > 1 {
-                    let l = left_output;
-                    let r = right_output;
-                    left_output = (l + r * 0.8)/2.0;
-                    right_output = (r + l * 0.8)/2.0;
-                }
-                */
 
                 // Stereo Spreading code
                 let width_coeff = match stereo_algorithm {
@@ -5759,14 +5770,6 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                     }
                 }
 
-
-
-
-
-
-
-
-
                 // Sum our voices for output
                 summed_voices_l += left_output;
                 summed_voices_r += right_output;
@@ -6621,6 +6624,23 @@ fn filter_process_1(
                 right_input_filter1 * (1.0 - filter_wet);
             (left_output,right_output)
         }
+        FilterAlgorithms::A4IV => {
+            voice.A4IV_l_1.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            voice.A4IV_r_1.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            let a4iii_out_l = voice.A4IV_l_1.process(left_input_filter1);
+            let a4iii_out_r = voice.A4IV_r_1.process(right_input_filter1);
+            let left_output = a4iii_out_l * filter_wet + 
+                left_input_filter1 * (1.0 - filter_wet);
+            let right_output = a4iii_out_r * filter_wet + 
+                right_input_filter1 * (1.0 - filter_wet);
+            (left_output,right_output)
+        }
     }
 }
 
@@ -6755,8 +6775,8 @@ fn filter_process_2(
                 next_filter_step,
                 filter_resonance,
                 sample_rate);
-            let a4ii_out_l = voice.A4II_l_1.process(left_input_filter2);
-            let a4ii_out_r = voice.A4II_r_1.process(right_input_filter2);
+            let a4ii_out_l = voice.A4II_l_2.process(left_input_filter2);
+            let a4ii_out_r = voice.A4II_r_2.process(right_input_filter2);
             let left_output = a4ii_out_l * filter_wet + 
                 left_input_filter2 * (1.0 - filter_wet);
             let right_output = a4ii_out_r * filter_wet + 
@@ -6772,8 +6792,25 @@ fn filter_process_2(
                 next_filter_step,
                 filter_resonance,
                 sample_rate);
-            let a4iii_out_l = voice.A4III_l_1.process(left_input_filter2);
-            let a4iii_out_r = voice.A4III_r_1.process(right_input_filter2);
+            let a4iii_out_l = voice.A4III_l_2.process(left_input_filter2);
+            let a4iii_out_r = voice.A4III_r_2.process(right_input_filter2);
+            let left_output = a4iii_out_l * filter_wet + 
+                left_input_filter2 * (1.0 - filter_wet);
+            let right_output = a4iii_out_r * filter_wet + 
+                right_input_filter2 * (1.0 - filter_wet);
+            (left_output,right_output)
+        }
+        FilterAlgorithms::A4IV => {
+            voice.A4IV_l_2.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            voice.A4IV_r_2.update(
+                next_filter_step,
+                filter_resonance,
+                sample_rate);
+            let a4iii_out_l = voice.A4IV_l_2.process(left_input_filter2);
+            let a4iii_out_r = voice.A4IV_r_2.process(right_input_filter2);
             let left_output = a4iii_out_l * filter_wet + 
                 left_input_filter2 * (1.0 - filter_wet);
             let right_output = a4iii_out_r * filter_wet + 
