@@ -9,13 +9,21 @@ pub struct FileDialog {
     selected: Option<PathBuf>,
     input_filename: String,
     pub open: bool,
-    save_mode: bool,
+    dialog_mode: DialogMode,
     result: Option<PathBuf>,
     id: Id,
 }
 
+#[derive(PartialEq)]
+pub enum DialogMode {
+    OpenPreset,
+    ExportPreset,
+    OpenSample,
+    ExportSample,
+}
+
 impl FileDialog {
-    pub fn new(start_path: PathBuf, save_mode: bool) -> Self {
+    pub fn new(start_path: PathBuf, dialog_mode: DialogMode) -> Self {
         let dir = if start_path.is_dir() {
             start_path
         } else {
@@ -26,8 +34,8 @@ impl FileDialog {
             current_dir: dir,
             selected: None,
             input_filename: String::new(),
-            open: true,
-            save_mode,
+            open: false,
+            dialog_mode,
             result: None,
             id: egui::Id::new(format!("file_dialog_{}", rand::random::<u64>()))
         }
@@ -37,7 +45,12 @@ impl FileDialog {
         let mut result = None;
 
         if self.open {
-            egui::Window::new(if self.save_mode { "Save File" } else { "Open File" })
+            egui::Window::new(match self.dialog_mode {
+                DialogMode::ExportPreset => { "Export Preset" },
+                DialogMode::OpenPreset => { "Open Preset" },
+                DialogMode::ExportSample => { "Export Sample" },
+                DialogMode::OpenSample => { "Open Sample" },
+            })
                 .collapsible(false)
                 .resizable(true)
                  .id(self.id)
@@ -55,7 +68,7 @@ impl FileDialog {
                             Some(PathBuf::new());
                         }
 
-                        if self.save_mode {
+                        if self.dialog_mode == DialogMode::ExportPreset || self.dialog_mode == DialogMode::ExportSample {
                             if ui.button("Save").clicked() {
                                 if !self.input_filename.is_empty() {
                                     let path = self.current_dir.join(&self.input_filename);
@@ -132,7 +145,7 @@ impl FileDialog {
             }
         });
 
-        if self.save_mode {
+        if self.dialog_mode == DialogMode::ExportPreset || self.dialog_mode == DialogMode::ExportSample {
             ui.separator();
             ui.label("File name:");
             ui.scope(|ui| {
@@ -140,7 +153,6 @@ impl FileDialog {
                     ui.text_edit_singleline(&mut self.input_filename);
                 });
             });
-            //ui.text_edit_singleline(&mut self.input_filename);
         }
     }
 }

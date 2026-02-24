@@ -38,7 +38,7 @@ pub(crate) mod frequency_modulation;
 pub(crate) mod AdditiveModule;
 use self::Oscillator::{DeterministicWhiteNoiseGenerator, OscState, RetriggerStyle, SmoothStyle};
 use crate::{
-    actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, actuate_load_save_dialog::FileDialog, adv_scale_value, fx::{A4III_Filter::A4iiiFilter, A4II_Filter::A4iiFilter, A4IV_Filter::A4ivFilter, A4I_Filter::A4iFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}, ActuateParams, CustomWidgets::{ui_knob::{self, KnobLayout}, CustomVerticalSlider}, PitchRouting, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, SMALLER_FONT, WIDTH, YELLOW_MUSTARD
+    ActuateParams, CustomWidgets::{CustomVerticalSlider, ui_knob::{self, KnobLayout}}, DARK_GREY_UI_COLOR, FONT_COLOR, LIGHTER_GREY_UI_COLOR, MEDIUM_GREY_UI_COLOR, PitchRouting, SMALLER_FONT, TEAL_GREEN, WIDTH, YELLOW_MUSTARD, actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, StereoAlgorithm}, actuate_load_save_dialog::FileDialog, adv_scale_value, fx::{A4I_Filter::A4iFilter, A4II_Filter::A4iiFilter, A4III_Filter::A4iiiFilter, A4IV_Filter::A4ivFilter, StateVariableFilter::{ResonanceType, StateVariableFilter}, TiltFilter::{self, ResponseType, TiltFilterStruct}, V4Filter::V4FilterStruct, VCFilter::{ResponseType as VCFResponseType, VCFilter}}
 };
 use crate::{CustomWidgets::{BeizerButton::{self, ButtonLayout}, BoolButton}, DARKER_GREY_UI_COLOR};
 use CustomVerticalSlider::ParamSlider as VerticalParamSlider;
@@ -1060,12 +1060,26 @@ You may also know this as mixture, course, or unison".to_string());
                 ui.add_space(1.0);
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
-                        let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 1.0, SMALLER_FONT);
-                        if ui.add(load_sample_boolButton).clicked() || params.load_sample_1.value() || params.load_sample_2.value() || params.load_sample_3.value() {
+                        //let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 1.0, SMALLER_FONT);
+                        let load_sample_boolButton = ui.button(RichText::new("Load Sample")
+                            .font(SMALLER_FONT)
+                            .background_color(DARK_GREY_UI_COLOR)
+                            .color(TEAL_GREEN)
+                        );
+                        //if ui.add(load_sample_boolButton).clicked() {
+                        if load_sample_boolButton.clicked() {
                             dialog_open.open = true;
+                            match index {
+                                1 => {setter.set_parameter(&params.load_sample_1, true);},
+                                2 => {setter.set_parameter(&params.load_sample_2, true);},
+                                3 => {setter.set_parameter(&params.load_sample_3, true);},
+                                _ => {}
+                            }
                         }
+                        // This can technically not be used for null safety. Rust doesn't know that though
+                        #[allow(unused_assignments)]
                         let mut opened_file: PathBuf = PathBuf::new();
-                        if dialog_open.open {
+                         if dialog_open.open {
                             let mut selected_sample = PathBuf::new();
                             if let Some(path) = dialog_open.show(egui_ctx) {
                                 selected_sample = path;
@@ -1073,40 +1087,43 @@ You may also know this as mixture, course, or unison".to_string());
                             }
                             if !dialog_open.open {
                                 opened_file = selected_sample;
-                            }
-                            match index {
-                                1 => {
-                                    if params.load_sample_1.value() {
-                                        module1
-                                        .lock()
-                                        .unwrap()
-                                        .load_new_sample(opened_file);
-                                        *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
-                                        setter.set_parameter(&params.load_sample_1, false);
-                                    }
-                                },
-                                2 => {
-                                    if params.load_sample_2.value() {
-                                        module2
+                                
+                                match index {
+                                    1 => {
+                                        //if params.load_sample_1.value() {
+                                            module1
                                             .lock()
                                             .unwrap()
                                             .load_new_sample(opened_file);
-                                        *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
-                                        setter.set_parameter(&params.load_sample_2, false);
-                                    }
-                                },
-                                3 => {
-                                    if params.load_sample_3.value() {
-                                        module3
-                                            .lock()
-                                            .unwrap()
-                                            .load_new_sample(opened_file);
-                                        *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
-                                        setter.set_parameter(&params.load_sample_3, false);
-                                    }
-                                },
-                                _ => {}
+                                            *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
+                                            setter.set_parameter(&params.load_sample_1, false);
+                                        //}
+                                    },
+                                    2 => {
+                                        //if params.load_sample_2.value() {
+                                            module2
+                                                .lock()
+                                                .unwrap()
+                                                .load_new_sample(opened_file);
+                                            *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
+                                            setter.set_parameter(&params.load_sample_2, false);
+                                        //}
+                                    },
+                                    3 => {
+                                        //if params.load_sample_3.value() {
+                                            module3
+                                                .lock()
+                                                .unwrap()
+                                                .load_new_sample(opened_file);
+                                            *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
+                                            setter.set_parameter(&params.load_sample_3, false);
+                                        //}
+                                    },
+                                    _ => {}
+                                }
                             }
+                            // Fix extra open on sample preset load from open DAW
+                            //dialog_open.open = false;
                         }
                         let restretch_button = BoolButton::BoolButton::for_param(restretch, setter, 3.5, 1.0, SMALLER_FONT);
                         ui.add(restretch_button);
@@ -1295,10 +1312,18 @@ Random: Sample uses a new random position every note".to_string());
                 }
                 ui.vertical(|ui| {
                     ui.horizontal(|ui| {
-                        let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 0.8, SMALLER_FONT);
-                        if ui.add(load_sample_boolButton).clicked() || params.load_sample_1.value() || params.load_sample_2.value() || params.load_sample_3.value() {
+                        //let load_sample_boolButton = BoolButton::BoolButton::for_param(load_sample, setter, 3.5, 0.8, SMALLER_FONT);
+                        let load_sample_boolButton = ui.button(RichText::new("Load Sample")
+                            .font(SMALLER_FONT)
+                            .background_color(DARK_GREY_UI_COLOR)
+                            .color(TEAL_GREEN)
+                        );
+                        //if ui.add(load_sample_boolButton).clicked() {
+                        if load_sample_boolButton.clicked() {
                             dialog_open.open = true;
                         }
+                        // This can technically not be used for null safety. Rust doesn't know that though
+                        #[allow(unused_assignments)]
                         let mut opened_file: PathBuf = PathBuf::new();
                         if dialog_open.open {
                             let mut selected_sample = PathBuf::new();
@@ -1308,42 +1333,42 @@ Random: Sample uses a new random position every note".to_string());
                             }
                             if !dialog_open.open {
                                 opened_file = selected_sample;
+                                if Path::is_file(&opened_file) {
+                                    match index {
+                                        1 => {
+                                            //if params.load_sample_1.value() {
+                                                module1
+                                                    .lock()
+                                                    .unwrap()
+                                                    .load_new_sample(opened_file);
+                                                *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
+                                                setter.set_parameter(&params.load_sample_1, false);
+                                            //}
+                                        },
+                                        2 => {
+                                            //if params.load_sample_2.value() {
+                                                module2
+                                                    .lock()
+                                                    .unwrap()
+                                                    .load_new_sample(opened_file);
+                                                *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
+                                                setter.set_parameter(&params.load_sample_2, false);
+                                            //}
+                                        },
+                                        3 => {
+                                            //if params.load_sample_3.value() {
+                                                module3
+                                                    .lock()
+                                                    .unwrap()
+                                                    .load_new_sample(opened_file);
+                                                *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
+                                                setter.set_parameter(&params.load_sample_3, false);
+                                            //}
+                                        },
+                                        _ => {}
+                                    }
+                                }
                             }
-                            if Path::is_file(&opened_file) {
-                            match index {
-                                1 => {
-                                    if params.load_sample_1.value() {
-                                        module1
-                                            .lock()
-                                            .unwrap()
-                                            .load_new_sample(opened_file);
-                                        *params.am1_sample.lock().unwrap() = module1.lock().unwrap().loaded_sample.clone();
-                                        setter.set_parameter(&params.load_sample_1, false);
-                                    }
-                                },
-                                2 => {
-                                    if params.load_sample_2.value() {
-                                        module2
-                                            .lock()
-                                            .unwrap()
-                                            .load_new_sample(opened_file);
-                                        *params.am2_sample.lock().unwrap() = module2.lock().unwrap().loaded_sample.clone();
-                                        setter.set_parameter(&params.load_sample_2, false);
-                                    }
-                                },
-                                3 => {
-                                    if params.load_sample_3.value() {
-                                        module3
-                                            .lock()
-                                            .unwrap()
-                                            .load_new_sample(opened_file);
-                                        *params.am3_sample.lock().unwrap() = module3.lock().unwrap().loaded_sample.clone();
-                                        setter.set_parameter(&params.load_sample_3, false);
-                                    }
-                                },
-                                _ => {}
-                            }
-                        }
                         }
                         let loop_toggle = BoolButton::BoolButton::for_param(loop_sample, setter, 3.5, 0.8, SMALLER_FONT);
                         ui.add(loop_toggle);
@@ -2749,31 +2774,6 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 })
                                 .collect();
                             unison_notes = nunison_notes;
-
-                            /*
-                            for unison_voice in 0..(self.osc_unison as usize - 1) {
-                                // Create the detuned notes around the base note
-                                if unison_voice % 2 == 1 {
-                                    unison_notes[unison_voice] = util::f32_midi_note_to_freq(
-                                        base_note
-                                            + uni_detune_mod
-                                            + (uni_velocity_mod.clamp(0.0, 1.0) * velocity)
-                                            + detune_step * (unison_voice + 1) as f32
-                                            + pitch_mod_current
-                                            + pitch_mod_current_2,
-                                    );
-                                } else {
-                                    unison_notes[unison_voice] = util::f32_midi_note_to_freq(
-                                        base_note
-                                            - uni_detune_mod
-                                            - (uni_velocity_mod.clamp(0.0, 1.0) * velocity)
-                                            - detune_step * (unison_voice) as f32
-                                            - pitch_mod_current
-                                            - pitch_mod_current_2,
-                                    );
-                                }
-                            }
-                            */
                         }
 
                         let attack_smoother: Smoother<f32> = match self.osc_atk_curve {
@@ -3396,51 +3396,6 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             2 => shifted_note + 24 + semi_shift,
                             _ => shifted_note + semi_shift,
                         };
-
-                        /*
-                        if self.audio_module_type == AudioModuleType::Sine ||
-                        self.audio_module_type == AudioModuleType::Tri ||
-                        self.audio_module_type == AudioModuleType::Saw ||
-                        self.audio_module_type == AudioModuleType::RSaw ||
-                        self.audio_module_type == AudioModuleType::WSaw ||
-                        self.audio_module_type == AudioModuleType::SSaw ||
-                        self.audio_module_type == AudioModuleType::RASaw ||
-                        self.audio_module_type == AudioModuleType::Ramp ||
-                        self.audio_module_type == AudioModuleType::Square ||
-                        self.audio_module_type == AudioModuleType::RSquare ||
-                        self.audio_module_type == AudioModuleType::Pulse ||
-                        self.audio_module_type == AudioModuleType::Noise ||
-                        self.audio_module_type == AudioModuleType::Sampler ||
-                        self.audio_module_type == AudioModuleType::Additive {
-                            // Update the matching unison voices
-                            for unison_voice in self.unison_voices.voices.iter_mut() {
-                                if unison_voice.note == shifted_note
-                                    && unison_voice.state != OscState::Releasing
-                                {
-                                    // Start our release level from our current gain on the voice
-                                    unison_voice.osc_release.reset(unison_voice.amp_current);
-                                    // Set our new release target to 0.0 so the note fades
-                                    match unison_voice.osc_release.style {
-                                        SmoothingStyle::Logarithmic(_)
-                                        | SmoothingStyle::LogSteep(_) => {
-                                            unison_voice
-                                                .osc_release
-                                                .set_target(self.sample_rate, 0.0001);
-                                        }
-                                        _ => {
-                                            unison_voice
-                                                .osc_release
-                                                .set_target(self.sample_rate, 0.0);
-                                        }
-                                    }
-                                    // Update our current amp
-                                    unison_voice.amp_current = unison_voice.osc_release.next();
-                                    // Update our voice state
-                                    unison_voice.state = OscState::Releasing;
-                                }
-                            }
-                        }
-                        */
 
                         // Iterate through our voice vecdeque to find the one to update
                         //for voice in self.playing_voices.voices.iter_mut() {
@@ -6248,33 +6203,30 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
     // This method performs the sample recalculations when restretch is toggled
     pub fn regenerate_samples(&mut self) {
-        if !self.sample_lib.is_empty() {
-            if self.audio_module_type == AudioModuleType::Sampler {
-                // Compare our restretch change
-                if self.restretch != self.prev_restretch {
-                    self.prev_restretch = self.restretch;
-                }
-            } else if self.audio_module_type == AudioModuleType::Granulizer {
-                self.restretch = true;
-                self.prev_restretch = false;
-            } else {
-                return;
+        if self.audio_module_type == AudioModuleType::Sampler {
+            // Compare our restretch change
+            if self.restretch != self.prev_restretch {
+                self.prev_restretch = self.restretch;
             }
-
-            self.sample_lib.clear();
+        } else if self.audio_module_type == AudioModuleType::Granulizer {
+            self.restretch = true;
+            self.prev_restretch = false;
         }
+
+        self.sample_lib.clear();
 
         if self.restretch {
             match self.audio_module_type {
                 AudioModuleType::Granulizer | AudioModuleType::Sampler => {
                     let middle_c: f32 = 256.0;
                     // Generate our sample library from our sample
+                    let loaded_sample_len = self.loaded_sample[0].len();
                     for i in 0..127 {
                         let target_pitch_factor = util::f32_midi_note_to_freq(i as f32) / middle_c;
                     
                         // Calculate the number of samples in the shifted frame
                         let shifted_num_samples =
-                            (self.loaded_sample[0].len() as f32 / target_pitch_factor).round() as usize;
+                            (loaded_sample_len as f32 / target_pitch_factor).round() as usize;
                     
                         // Apply pitch shifting by interpolating between the original samples
                         let mut shifted_samples_l = Vec::with_capacity(shifted_num_samples);
@@ -6287,7 +6239,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             original_index = (j as f32 * target_pitch_factor).floor() as usize;
                             fractional_part = j as f32 * target_pitch_factor - original_index as f32;
                         
-                            if original_index < self.loaded_sample[0].len() - 1 {
+                            if original_index < loaded_sample_len - 1 {
                                 // Linear interpolation between adjacent samples
                                 let interpolated_sample_r;
                                 let interpolated_sample_l = (1.0 - fractional_part)
@@ -6305,7 +6257,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 shifted_samples_r.push(interpolated_sample_r);
                             } else {
                                 // If somehow through buffer shenanigans we are past our length we shouldn't do anything here
-                                if original_index < self.loaded_sample[0].len() {
+                                if original_index < loaded_sample_len {
                                     shifted_samples_l.push(self.loaded_sample[0][original_index]);
                                     if self.loaded_sample.len() > 1 {
                                         shifted_samples_r.push(self.loaded_sample[1][original_index]);

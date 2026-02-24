@@ -6,7 +6,7 @@ use std::{collections::HashMap, ffi::OsStr, ops::RangeInclusive, path::{Path, Pa
 use nih_plug::{context::gui::AsyncExecutor, editor::Editor, nih_log};
 use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, CornerRadius, ScrollArea, Vec2}, widgets::ParamSlider};
 use walkdir::WalkDir;
-use crate::actuate_load_save_dialog::FileDialog;
+use crate::actuate_load_save_dialog::{DialogMode, FileDialog};
 
 use crate::{actuate_enums::PresetBrowserEntry, release_downloader::ReleaseDownloader, CustomWidgets::ComboBoxParam};
 #[allow(unused_imports)]
@@ -100,7 +100,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
         let params: Arc<ActuateParams> = instance.params.clone();
         let arc_preset: Arc<Mutex<ActuatePresetV131>> = Arc::clone(&instance.current_loaded_params);
         let clear_voices: Arc<AtomicBool> = Arc::clone(&instance.clear_voices);
-        let reload_entire_preset: Arc<AtomicBool> = Arc::clone(&instance.reload_entire_preset);
         let browse_preset_active: Arc<AtomicBool> = Arc::clone(&instance.browsing_presets);
         let import_preset_active: Arc<AtomicBool> = Arc::clone(&instance.importing_presets);
         let export_preset_active: Arc<AtomicBool> = Arc::clone(&instance.exporting_presets);
@@ -171,30 +170,30 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
 
         // Open
         let dialog_main_open: Arc<Mutex<FileDialog>> = Arc::new(Mutex::new(if (default_dir).exists() {
-                FileDialog::new(default_dir.clone(), false)
+                FileDialog::new(default_dir.clone(), DialogMode::OpenPreset)
             } else {
-                FileDialog::new(home_dir.clone(), false)
+                FileDialog::new(home_dir.clone(), DialogMode::OpenPreset)
             }));
 
         // Save
         let dialog_main_save: Arc<Mutex<FileDialog>> = Arc::new(Mutex::new(if (default_dir).exists() {
-                FileDialog::new(default_dir.clone(), true)
+                FileDialog::new(default_dir.clone(), DialogMode::ExportPreset)
             } else {
-                FileDialog::new(home_dir.clone(), true)
+                FileDialog::new(home_dir.clone(), DialogMode::ExportPreset)
             }));
 
         // Export Last Sound
         let dialog_export_last_sound: Arc<Mutex<FileDialog>> = Arc::new(Mutex::new(if (default_dir).exists() {
-                FileDialog::new(default_dir.clone(), true)
+                FileDialog::new(default_dir.clone(), DialogMode::ExportSample)
             } else {
-                FileDialog::new(home_dir.clone(), true)
+                FileDialog::new(home_dir.clone(), DialogMode::ExportSample)
             }));
 
         // Open Samples
         let dialog_main_open_samples: Arc<Mutex<FileDialog>> = Arc::new(Mutex::new(if (default_dir).exists() {
-                FileDialog::new(default_dir.clone(), false)
+                FileDialog::new(default_dir.clone(), DialogMode::OpenSample)
             } else {
-                FileDialog::new(home_dir.clone(), false)
+                FileDialog::new(home_dir.clone(), DialogMode::OpenSample)
             }));
 
         // Do our GUI stuff. Store this to later get parent window handle from it
@@ -206,106 +205,113 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                 egui::CentralPanel::default()
                     .show(egui_ctx, |ui| {
                         if download_in_progress.load(Ordering::Relaxed) {
-                            recalculate_banks(&dir_files_map, &str_files_map, &lite_db, Path::new(&default_dir));
                             download_in_progress.store(false, Ordering::Relaxed);
+                            recalculate_banks(&dir_files_map, &str_files_map, &lite_db, Path::new(&default_dir));
                         }
 
-
-                        //let current_preset_index = current_preset.load(Ordering::SeqCst);
                         let filter_select = filter_select_outside.clone();
                         let lfo_select = lfo_select_outside.clone();
                         let clone_dir = default_dir.clone();
 
+                        let am1_type: AudioModuleType = AM1.lock().unwrap().audio_module_type.clone();
+                        let am2_type: AudioModuleType = AM2.lock().unwrap().audio_module_type.clone();
+                        let am3_type: AudioModuleType = AM3.lock().unwrap().audio_module_type.clone();
+
+                        let am1_loaded_sample_len = AM1.lock().unwrap().loaded_sample[0].len();
+                        let am2_loaded_sample_len = AM2.lock().unwrap().loaded_sample[0].len();
+                        let am3_loaded_sample_len = AM3.lock().unwrap().loaded_sample[0].len();
+
+                        // This scenario is: DAW reopens and loaded_sample has content but sample_lib needs to be regenerated!
                         // This happens on some plugin loads and crashes your DAW :(
                         // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
-                        if AM1.lock().unwrap().sample_lib.len() == 0 && 
-                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler || 
-                             AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer) {
+                        if (AM1.lock().unwrap().sample_lib.len() == 0 || am1_loaded_sample_len == 2) && 
+                            (am1_type == AudioModuleType::Sampler || am1_type == AudioModuleType::Granulizer) {
                             let mut AM1_Lock = AM1.lock().unwrap();
 
                             AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
 
                             AM1_Lock.regenerate_samples();
+                            setter.set_parameter(&params.load_sample_1, false);
+                        } 
                         // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
                         // It runs if there is peristent sample data but not sample data in the audio module
                         // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
                         // This would cause a deadlock and break Actuate :|
                         // Maybe in future this will become nicer
-                        } else if params.am1_sample.lock().unwrap()[0].len() > 1 && 
-                            AM1.lock().unwrap().loaded_sample[0].len() <= 2 &&
-                            (AM1.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                             AM1.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                        if params.am1_sample.lock().unwrap()[0].len() > 1 && 
+                            am1_loaded_sample_len <= 2 &&
+                            (am1_type == AudioModuleType::Sampler || am1_type == AudioModuleType::Granulizer)
                         {
-                            // This if is separate since previously when it was included in th eabove it could
+                            // This if is separate since previously when it was included in the above it could
                             // panic on length issues handled by [AM1.lock().unwrap().loaded_sample[0].len() <= 2]
-                            if AM1.lock().unwrap().sample_lib[0][0][0] == 0.0 {
+                            if AM1.lock().unwrap().sample_lib[0][0].len() != 127 {
                                 let mut AM1_Lock = AM1.lock().unwrap();
 
                                 AM1_Lock.loaded_sample = params.am1_sample.lock().unwrap().to_vec();
-
-                                AM1_Lock.regenerate_samples();
+                                AM1_Lock.sample_lib.clear();
+                                // Samples get regenerated next frame
                             }
                         }
 
                         // This happens on some plugin loads and crashes your DAW :(
                         // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
-                        if AM2.lock().unwrap().sample_lib.len() == 0 && 
-                            (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler || 
-                             AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer) {
+                        if (AM2.lock().unwrap().sample_lib.len() == 0 || am2_loaded_sample_len == 2) &&
+                            (am2_type == AudioModuleType::Sampler || am2_type == AudioModuleType::Granulizer) {
                             let mut AM2_Lock = AM2.lock().unwrap();
 
                             AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
 
                             AM2_Lock.regenerate_samples();
+                            setter.set_parameter(&params.load_sample_2, false);
+                        }
                         // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
                         // It runs if there is peristent sample data but not sample data in the audio module
                         // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
                         // This would cause a deadlock and break Actuate :|
                         // Maybe in future this will become nicer
-                        } else if params.am2_sample.lock().unwrap()[0].len() > 1 && 
-                            AM2.lock().unwrap().loaded_sample[0].len() <= 2 &&
-                            (AM2.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                             AM2.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                        if params.am2_sample.lock().unwrap()[0].len() > 1 && 
+                            am2_loaded_sample_len <= 2 &&
+                            (am2_type == AudioModuleType::Sampler || am2_type == AudioModuleType::Granulizer)
                         {
-                            // This if is separate since previously when it was included in th eabove it could
+                            // This if is separate since previously when it was included in the above it could
                             // panic on length issues handled by [AM1.lock().unwrap().loaded_sample[0].len() <= 2]
-                            if AM2.lock().unwrap().sample_lib[0][0][0] == 0.0 {
+                            if AM2.lock().unwrap().sample_lib[0][0].len() != 127 {
                                 let mut AM2_Lock = AM2.lock().unwrap();
 
                                 AM2_Lock.loaded_sample = params.am2_sample.lock().unwrap().to_vec();
-
-                                AM2_Lock.regenerate_samples();
+                                AM2_Lock.sample_lib.clear();
+                                // Samples get regenerated next frame
                             }
                         }
 
                         // This happens on some plugin loads and crashes your DAW :(
                         // These if statements are ordered this way to catch this scenario first and prevent crashing DAW
-                        if AM3.lock().unwrap().sample_lib.len() == 0 && 
-                            (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler || 
-                             AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer) {
+                        if (AM3.lock().unwrap().sample_lib.len() == 0 || am3_loaded_sample_len == 2) && 
+                            (am3_type == AudioModuleType::Sampler || am3_type == AudioModuleType::Granulizer) {
                             let mut AM3_Lock = AM3.lock().unwrap();
 
                             AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
 
                             AM3_Lock.regenerate_samples();
+                            setter.set_parameter(&params.load_sample_3, false);
+                        } 
                         // This lets the internal param track the current samples for when the plugin gets reopened/reloaded
                         // It runs if there is peristent sample data but not sample data in the audio module
                         // This is not very pretty looking but I couldn't allocate separately locked Audio Modules since somewhere
                         // This would cause a deadlock and break Actuate :|
                         // Maybe in future this will become nicer
-                        } else if params.am3_sample.lock().unwrap()[0].len() > 1 && 
-                            AM3.lock().unwrap().loaded_sample[0].len() <= 2 &&
-                            (AM3.lock().unwrap().audio_module_type == AudioModuleType::Sampler ||
-                             AM3.lock().unwrap().audio_module_type == AudioModuleType::Granulizer)
+                        if params.am3_sample.lock().unwrap()[0].len() > 1 && 
+                            am3_loaded_sample_len <= 2 &&
+                            (am3_type == AudioModuleType::Sampler || am3_type == AudioModuleType::Granulizer)
                         {
-                            // This if is separate since previously when it was included in th eabove it could
+                            // This if is separate since previously when it was included in the above it could
                             // panic on length issues handled by [AM1.lock().unwrap().loaded_sample[0].len() <= 2]
-                            if AM3.lock().unwrap().sample_lib[0][0][0] == 0.0 {
+                            if AM3.lock().unwrap().sample_lib[0][0].len() != 127 {
                                 let mut AM3_Lock = AM3.lock().unwrap();
 
                                 AM3_Lock.loaded_sample = params.am3_sample.lock().unwrap().to_vec();
-
-                                AM3_Lock.regenerate_samples();
+                                AM3_Lock.sample_lib.clear();
+                                // Samples get regenerated next frame
                             }
                         }
 
@@ -406,7 +412,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                     ui.label(RichText::new("Actuate")
                                         .font(FONT)
                                         .color(FONT_COLOR))
-                                        .on_hover_text("v1.4.1 by Ardura!");
+                                        .on_hover_text("v1.4.3 by Ardura!");
                                     ui.add_space(2.0);
                                     ui.separator();
 
@@ -549,7 +555,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                         }
                                                     }
                                                     ui.colored_label(YELLOW_MUSTARD, "Preset Banks");
-                                                    for (directory, _) in dir_files_map.lock().unwrap().iter() {
+                                                    let mut sorted_dirs: Vec<PathBuf> = dir_files_map.lock().unwrap().keys().cloned().collect();
+                                                    sorted_dirs.sort();
+                                                    for directory in sorted_dirs {
                                                         let name = directory.file_name().unwrap().to_str().unwrap().to_string();
                                                         ui.selectable_value(&mut *bank_current_value.write().unwrap(), name.clone(), 
                                                             RichText::new(name)
@@ -624,7 +632,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                                         if unserialized.is_some() {
                                                                                             let mut locked_lib = arc_preset.lock().unwrap();
                                                                                             *locked_lib = unserialized.unwrap();
-                                                                                            //let temp_preset = &locked_lib;
                                                                                             *params.preset_name_p.lock().unwrap() =  locked_lib.preset_name.clone();
                                                                                             *params.preset_info_p.lock().unwrap() = locked_lib.preset_info.clone();
                                                                                             setter.set_parameter(&params.preset_category, locked_lib.preset_category);
@@ -639,8 +646,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                                                 &mut AM1.lock().unwrap(),
                                                                                                 &mut AM2.lock().unwrap(),
                                                                                                 &mut AM3.lock().unwrap(),);
-                                                                                            // This is set for the process thread
-                                                                                            reload_entire_preset.store(true, Ordering::SeqCst);
                                                                                         }
                                                                                     }
                                                                                     // Tags
@@ -782,8 +787,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                                                                                     &mut AM1.lock().unwrap(),
                                                                                                                     &mut AM2.lock().unwrap(),
                                                                                                                     &mut AM3.lock().unwrap(),);
-                                                                                                                // This is set for the process thread
-                                                                                                                reload_entire_preset.store(true, Ordering::SeqCst);
                                                                                                             }
                                                                                                         }
                                                                                                         // Tags
@@ -936,8 +939,6 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                                     &mut AM1.lock().unwrap(),
                                                     &mut AM2.lock().unwrap(),
                                                     &mut AM3.lock().unwrap(),);
-                                                // This is set for the process thread
-                                                reload_entire_preset.store(true, Ordering::SeqCst);
                                             }
                                             import_preset_active.store(false, Ordering::Relaxed);
                                         }

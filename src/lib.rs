@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.4.2
+Version 1.4.3
 
 #####################################
 
@@ -97,7 +97,6 @@ pub struct Actuate {
     // Plugin control Arcs
     update_something: Arc<AtomicBool>,
     clear_voices: Arc<AtomicBool>,
-    reload_entire_preset: Arc<AtomicBool>,
     file_dialog: Arc<AtomicBool>,
     file_open_buffer_timer: Arc<AtomicU32>,
     browsing_presets: Arc<AtomicBool>,
@@ -225,7 +224,6 @@ impl Default for Actuate {
         // These are persistent fields to trigger updates like Diopser
         let update_something = Arc::new(AtomicBool::new(true));
         let clear_voices = Arc::new(AtomicBool::new(false));
-        let reload_entire_preset = Arc::new(AtomicBool::new(false));
         let file_dialog = Arc::new(AtomicBool::new(false));
         let file_open_buffer_timer = Arc::new(AtomicU32::new(0));
         let browsing_presets = Arc::new(AtomicBool::new(false));
@@ -256,7 +254,6 @@ impl Default for Actuate {
             // Plugin control ARCs
             update_something: update_something,
             clear_voices: clear_voices,
-            reload_entire_preset: reload_entire_preset,
             file_dialog: file_dialog,
             file_open_buffer_timer: file_open_buffer_timer,
             browsing_presets: browsing_presets,
@@ -5830,31 +5827,6 @@ impl Actuate {
         );
         setter.set_parameter(&params.filter_routing, loaded_preset.filter_routing.clone());
 
-        /*
-        #[allow(unreachable_patterns)]
-        let preset_category_override = match loaded_preset.preset_category {
-            PresetType::Bass
-            | PresetType::FX
-            | PresetType::Lead
-            | PresetType::Other
-            | PresetType::Pad
-            | PresetType::Percussion
-            | PresetType::Select
-            | PresetType::Synth
-            | PresetType::Atmosphere
-            | PresetType::Keys
-            | PresetType::Pluck => {
-                setter.set_parameter(
-                    &params.preset_category,
-                    loaded_preset.preset_category.clone(),
-                );
-                loaded_preset.preset_category.clone()
-            }
-            // This should be unreachable since unserialize will fail before we get here anyways actually
-            _ => PresetType::Select,
-        };
-        */
-
         // 1.2.1 Pitch update
         setter.set_parameter(&params.pitch_enable, loaded_preset.pitch_enable);
         setter.set_parameter(&params.pitch_env_peak, loaded_preset.pitch_env_peak);
@@ -6002,15 +5974,21 @@ impl Actuate {
 
         setter.set_parameter(&params.preset_category, loaded_preset.preset_category);
 
+        setter.set_parameter(&params.load_sample_1, false);
+        setter.set_parameter(&params.load_sample_2, false);
+        setter.set_parameter(&params.load_sample_3, false);
 
+        AMod1.audio_module_type = loaded_preset.mod1_audio_module_type.clone();
         AMod1.loaded_sample = loaded_preset.mod1_loaded_sample.clone();
         AMod1.sample_lib = loaded_preset.mod1_sample_lib.clone();
         AMod1.restretch = loaded_preset.mod1_restretch;
 
+        AMod2.audio_module_type = loaded_preset.mod2_audio_module_type.clone();
         AMod2.loaded_sample = loaded_preset.mod2_loaded_sample.clone();
         AMod2.sample_lib = loaded_preset.mod2_sample_lib.clone();
         AMod2.restretch = loaded_preset.mod2_restretch;
 
+        AMod3.audio_module_type = loaded_preset.mod3_audio_module_type.clone();
         AMod3.loaded_sample = loaded_preset.mod3_loaded_sample.clone();
         AMod3.sample_lib = loaded_preset.mod3_sample_lib.clone();
         AMod3.restretch = loaded_preset.mod3_restretch;
