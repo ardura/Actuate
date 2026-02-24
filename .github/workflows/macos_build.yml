@@ -22,7 +22,7 @@ jobs:
         path: target/bundled/*
         if-no-files-found: warn
   build_macos:
-    runs-on: macos-latest-large
+    runs-on: macos-14-large
     steps:
     - uses: actions/checkout@v3
     - name: Run bundler
