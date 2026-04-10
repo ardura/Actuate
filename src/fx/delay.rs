@@ -32,6 +32,10 @@ pub enum DelayType {
     Stereo,
     PingPongL,
     PingPongR,
+    PingPongL2,
+    PingPongR2,
+    PingPongL3,
+    PingPongR3,
 }
 
 #[derive(Clone)]
@@ -82,8 +86,8 @@ impl Delay {
         let delay_length = samples_per_note_type as usize;
 
         // Create delay buffers for left and right channels initialized with zeros
-        let delay_buffer_l = vec![0.0; delay_length];
-        let delay_buffer_r = vec![0.0; delay_length];
+        let delay_buffer_l = vec![0.0; delay_length * 2];
+        let delay_buffer_r = vec![0.0; delay_length * 2];
 
         Delay {
             sample_rate,
@@ -113,8 +117,8 @@ impl Delay {
             self.delay_length = length as usize;
 
             // Resize and reset the delay buffers
-            self.delay_buffer_l = vec![0.0; self.delay_length];
-            self.delay_buffer_r = vec![0.0; self.delay_length];
+            self.delay_buffer_l = vec![0.0; self.delay_length * 2];
+            self.delay_buffer_r = vec![0.0; self.delay_length * 2];
             self.current_index = 0;
         }
     }
@@ -156,6 +160,13 @@ impl Delay {
         divisor
     }
 
+    fn reset_buffers(&mut self) {
+        // Resize and reset the delay buffers
+        self.delay_buffer_l = vec![0.0; self.delay_length * 2];
+        self.delay_buffer_r = vec![0.0; self.delay_length * 2];
+        self.current_index = 0;
+    }
+
     pub fn set_length(&mut self, length: DelaySnapValues) {
         if self.length != length {
             let new_length =
@@ -164,10 +175,7 @@ impl Delay {
             // Recalculate delay length based on the new size
             self.delay_length = new_length as usize;
 
-            // Resize and reset the delay buffers
-            self.delay_buffer_l = vec![0.0; self.delay_length];
-            self.delay_buffer_r = vec![0.0; self.delay_length];
-            self.current_index = 0;
+            self.reset_buffers();
 
             //Reassign
             self.length = length;
@@ -175,7 +183,10 @@ impl Delay {
     }
 
     pub fn set_type(&mut self, delay_type: DelayType) {
-        self.delay_type = delay_type;
+        if delay_type != self.delay_type {
+            self.delay_type = delay_type;
+            self.reset_buffers();
+        }
     }
 
     pub fn set_feedback(&mut self, feedback: f32) {
@@ -200,35 +211,51 @@ impl Delay {
             DelayType::Stereo => {
                 delay_shift_l = 0;
                 delay_shift_r = 0;
-            }
+            },
             DelayType::PingPongL => {
                 delay_shift_l = self.delay_length / 2;
                 delay_shift_r = 0;
-            }
+            },
             DelayType::PingPongR => {
                 delay_shift_r = self.delay_length / 2;
                 delay_shift_l = 0;
-            }
+            },
+            DelayType::PingPongL2 => {
+                delay_shift_l = self.delay_length;
+                delay_shift_r = 0;
+            },
+            DelayType::PingPongR2 => {
+                delay_shift_r = self.delay_length;
+                delay_shift_l = 0;
+            },
+            DelayType::PingPongL3 => {
+                delay_shift_l = (self.delay_length as f32 * 0.95_f32) as usize;
+                delay_shift_r = self.delay_length / 2;
+            },
+            DelayType::PingPongR3 => {
+                delay_shift_r = (self.delay_length as f32 * 0.95_f32) as usize;
+                delay_shift_l = self.delay_length / 2;
+            },
         }
 
         // Store the outputs in the delay lines
         if self.delay_buffer_l.get(self.current_index + delay_shift_l) != None {
             self.delay_buffer_l[self.current_index + delay_shift_l] = output_l;
         } else {
-            self.delay_buffer_l[(self.current_index + delay_shift_l) % self.delay_length] =
+            self.delay_buffer_l[(self.current_index + delay_shift_l) % (self.delay_length * 2)] =
                 output_l;
         }
 
         if self.delay_buffer_r.get(self.current_index + delay_shift_r) != None {
             self.delay_buffer_r[self.current_index + delay_shift_r] = output_r;
         } else {
-            self.delay_buffer_r[(self.current_index + delay_shift_r) % self.delay_length] =
+            self.delay_buffer_r[(self.current_index + delay_shift_r) % (self.delay_length * 2)] =
                 output_r;
         }
 
         // Move the index to the next position in the delay lines
-        self.current_index = (self.current_index + 1) % self.delay_length;
-
+        self.current_index = (self.current_index + 1) % (self.delay_length * 2);
+        
         // Return the left and right outputs
         output_l = input_l * (1.0 - amount) + output_l * amount;
         output_r = input_r * (1.0 - amount) + output_r * amount;

@@ -30,7 +30,7 @@ use rand::Rng;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use AdditiveModule::{AdditiveHarmonic, AdditiveOscillator};
-use std::{f32::consts::SQRT_2, path::{Path, PathBuf}, sync::Arc};
+use std::{path::{Path, PathBuf}, sync::Arc};
 
 // Audio module files
 pub(crate) mod Oscillator;
@@ -288,7 +288,7 @@ pub struct AudioModule {
     // Stored sample rate in case the audio module needs it
     sample_rate: f32,
     pub audio_module_type: AudioModuleType,
-
+    
     // This flipflops stereo with 2 voices to make it make some sense to our ears
     two_voice_stereo_flipper: bool,
 
@@ -657,7 +657,6 @@ impl AudioModule {
         let osc_atk_curve;
         let osc_dec_curve;
         let osc_rel_curve;
-        let load_sample;
         let restretch;
         let loop_sample;
         let single_cycle;
@@ -699,7 +698,6 @@ impl AudioModule {
                 osc_atk_curve = &params.osc_1_atk_curve;
                 osc_dec_curve = &params.osc_1_dec_curve;
                 osc_rel_curve = &params.osc_1_rel_curve;
-                load_sample = &params.load_sample_1;
                 restretch = &params.restretch_1;
                 loop_sample = &params.loop_sample_1;
                 single_cycle = &params.single_cycle_1;
@@ -741,7 +739,6 @@ impl AudioModule {
                 osc_atk_curve = &params.osc_2_atk_curve;
                 osc_dec_curve = &params.osc_2_dec_curve;
                 osc_rel_curve = &params.osc_2_rel_curve;
-                load_sample = &params.load_sample_2;
                 restretch = &params.restretch_2;
                 loop_sample = &params.loop_sample_2;
                 single_cycle = &params.single_cycle_2;
@@ -783,7 +780,6 @@ impl AudioModule {
                 osc_atk_curve = &params.osc_3_atk_curve;
                 osc_dec_curve = &params.osc_3_dec_curve;
                 osc_rel_curve = &params.osc_3_rel_curve;
-                load_sample = &params.load_sample_3;
                 restretch = &params.restretch_3;
                 loop_sample = &params.loop_sample_3;
                 single_cycle = &params.single_cycle_3;
@@ -1951,36 +1947,22 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
 
     // Index proper params from knobs
     // This lets us have a copy for voices, and also track changes like restretch changing or ADR slopes
-    pub fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) -> AudioModuleType {
+    pub fn consume_params(&mut self, params: Arc<ActuateParams>, voice_index: usize) {
         match voice_index {
             1 => {
                 self.audio_module_type = params.audio_module_1_type.value();
                 if self.osc_octave != params.osc_1_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_1_octave.value();
                     for voice in self.playing_voices.iter_mut() {
-                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= (oct_shift * 12) as u8;
                     }
-                    /*
-                    for uni_voice in self.unison_voices.iter_mut() {
-                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
-                        uni_voice.note -= (oct_shift * 12) as u8;
-                    }
-                    */
                 }
                 self.osc_octave = params.osc_1_octave.value();
                 if self.osc_semitones != params.osc_1_semitones.value() {
                     let semi_shift = self.osc_semitones - params.osc_1_semitones.value();
                     for voice in self.playing_voices.iter_mut() {
-                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= semi_shift as u8;
                     }
-                    /*
-                    for uni_voice in self.unison_voices.iter_mut() {
-                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
-                        uni_voice.note -= semi_shift as u8;
-                    }
-                    */
                 }
                 match params.pitch_routing.value() {
                     PitchRouting::Osc1
@@ -2122,29 +2104,15 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 if self.osc_octave != params.osc_2_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_2_octave.value();
                     for voice in self.playing_voices.iter_mut() {
-                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= (oct_shift * 12) as u8;
                     }
-                    /*
-                    for uni_voice in self.unison_voices.iter_mut() {
-                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
-                        uni_voice.note -= (oct_shift * 12) as u8;
-                    }
-                    */
                 }
                 self.osc_octave = params.osc_2_octave.value();
                 if self.osc_semitones != params.osc_2_semitones.value() {
                     let semi_shift = self.osc_semitones - params.osc_2_semitones.value();
                     for voice in self.playing_voices.iter_mut() {
-                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= semi_shift as u8;
                     }
-                    /*
-                    for uni_voice in self.unison_voices.iter_mut() {
-                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
-                        uni_voice.note -= semi_shift as u8;
-                    }
-                    */
                 }
                 match params.pitch_routing.value() {
                     PitchRouting::Osc2
@@ -2282,29 +2250,15 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                 if self.osc_octave != params.osc_3_octave.value() {
                     let oct_shift = self.osc_octave - params.osc_3_octave.value();
                     for voice in self.playing_voices.iter_mut() {
-                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= (oct_shift * 12) as u8;
                     }
-                    /*
-                    for uni_voice in self.unison_voices.iter_mut() {
-                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
-                        uni_voice.note -= (oct_shift * 12) as u8;
-                    }
-                    */
                 }
                 self.osc_octave = params.osc_3_octave.value();
                 if self.osc_semitones != params.osc_3_semitones.value() {
                     let semi_shift = self.osc_semitones - params.osc_3_semitones.value();
                     for voice in self.playing_voices.iter_mut() {
-                    //self.playing_voices.voices.par_iter_mut().for_each(|voice|{
                         voice.note -= semi_shift as u8;
                     }
-                    /*
-                    for uni_voice in self.unison_voices.iter_mut() {
-                    //self.unison_voices.voices.par_iter_mut().for_each(|uni_voice|{
-                        uni_voice.note -= semi_shift as u8;
-                    }
-                    */
                 }
                 match params.pitch_routing.value() {
                     PitchRouting::Osc3
@@ -2439,7 +2393,12 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
             }
             _ => {}
         }
-        self.audio_module_type
+    }
+
+    pub fn update_sample_rate(&mut self, new_sample_rate: f32) {
+        // Since a lot of things use the sample rate on voice creation
+        // this (thankfully) updates all those
+        self.sample_rate = new_sample_rate;
     }
 
     // I was looking at the PolyModSynth Example and decided on this
@@ -3187,17 +3146,10 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 self.osc_unison - 1
                             };
                             
-                            /*
-                            let mut unison_angles = vec![0.0; unison_even_voices as usize];
-                            
-                            for i in 1..(unison_even_voices + 1) {
-                                let voice_angle = self.calculate_panning(i - 1, self.osc_unison, stereo_algorithm);
-                                unison_angles[(i - 1) as usize] = voice_angle;
-                            }
-                            */
                             let unison_angles: Vec<f32> = (0..unison_even_voices as usize)
-                                .map(|i| self.calculate_panning(i, self.osc_unison, stereo_algorithm))
-                                .collect();
+                                .map(|i| {
+                                    self.calculate_panning(i, self.osc_unison, stereo_algorithm)
+                                }).collect();
 
                             for unison_voice in 0..(self.osc_unison as usize - 1) {
                                 let uni_phase = match self.osc_retrigger {
@@ -4470,24 +4422,22 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                             },
                             AudioModuleType::Additive | AudioModuleType::Granulizer | AudioModuleType::Off | AudioModuleType::UnsetAm | AudioModuleType::Sampler => 0.0,
                         };
-                        // Create our stereo pan for unison
-                        // Our angle comes back as radians
-                        let pan = internal_unison_voice._angle;
+                        let pan = internal_unison_voice._angle; // 0 to 2π
 
-                        // Precompute sine and cosine of the angle
-                        let cos_pan = pan.cos();
-                        let sin_pan = pan.sin();
+                        // Map from [-0.25π, 0.25π] to [0, π/2]
+                        let pan_norm = (pan / (0.25 * std::f32::consts::PI) + 1.0) / 2.0;  // Now [0, 1]
+                        let pan_normalized = pan_norm * std::f32::consts::PI / 2.0;  // Now [0, π/2]
 
-                        // Calculate the amplitudes for the panned voice using vector operations
-                        let scale = SQRT_2 / 2.0;
-                        let temp_unison_voice_scaled = scale * temp_unison_voice_out;
+                        // Then use in constant-power panning
+                        let left_pan = (std::f32::consts::PI / 2.0 - pan_normalized).sin();
+                        let right_pan = pan_normalized.sin();
 
-                        let left_amp = temp_unison_voice_scaled * (cos_pan + sin_pan);
-                        let right_amp = temp_unison_voice_scaled * (cos_pan - sin_pan);
-                        
-                        // Add the voice to the sum of stereo voices
-                        stereo_voices_l += left_amp / (self.osc_unison - 1).clamp(1, 9) as f32;
-                        stereo_voices_r += right_amp / (self.osc_unison - 1).clamp(1, 9) as f32;
+                        let left_amp = temp_unison_voice_out * left_pan / (self.osc_unison - 1).clamp(1, 9) as f32;
+                        let right_amp = temp_unison_voice_out * right_pan / (self.osc_unison - 1).clamp(1, 9) as f32;
+
+                        stereo_voices_l += left_amp;
+                        stereo_voices_r += right_amp;
+
                     }
 
                     //////////////////////////////////////////////////////////////////////////
@@ -4953,20 +4903,18 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         let temp_unison_voice = self.additive_module.next_unison_sample(internal_unison_voice, self.sample_rate, uni_detune_mod) * internal_unison_voice.amp_current;
 
                         // Create our stereo pan for unison
+                        let pan = internal_unison_voice._angle; // 0 to 2π
+                        
+                        // Map from [-0.25π, 0.25π] to [0, π/2]
+                        let pan_norm = (pan / (0.25 * std::f32::consts::PI) + 1.0) / 2.0;  // Now [0, 1]
+                        let pan_normalized = pan_norm * std::f32::consts::PI / 2.0;  // Now [0, π/2]
 
-                        // Our angle comes back as radians
-                        let pan = internal_unison_voice._angle;
-                                            
-                        // Precompute sine and cosine of the angle
-                        let cos_pan = pan.cos();
-                        let sin_pan = pan.sin();
-                                            
-                        // Calculate the amplitudes for the panned voice using vector operations
-                        let scale = SQRT_2 / 2.0;
-                        let temp_unison_voice_scaled = scale * temp_unison_voice;
-                                            
-                        let left_amp = temp_unison_voice_scaled * (cos_pan + sin_pan);
-                        let right_amp = temp_unison_voice_scaled * (cos_pan - sin_pan);
+                        // Then use in constant-power panning
+                        let left_pan = (std::f32::consts::PI / 2.0 - pan_normalized).sin();
+                        let right_pan = pan_normalized.sin();
+
+                        let left_amp = temp_unison_voice * left_pan / (self.osc_unison - 1).clamp(1, 9) as f32;
+                        let right_amp = temp_unison_voice * right_pan / (self.osc_unison - 1).clamp(1, 9) as f32;
 
                         // Add the voice to the sum of stereo voices
                         stereo_voices_l += left_amp;
@@ -5415,26 +5363,24 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                                 unison_voice.state = OscState::Off;
                             }
                         }
-                            // Create our stereo pan for unison
+                        // Our angle comes back as radians
+                        // Create our stereo pan for unison
+                        let pan = unison_voice._angle;
+                        
+                        // Map from [-0.25π, 0.25π] to [0, π/2]
+                        let pan_norm = (pan / (0.25 * std::f32::consts::PI) + 1.0) / 2.0;  // Now [0, 1]
+                        let pan_normalized = pan_norm * std::f32::consts::PI / 2.0;  // Now [0, π/2]
 
-                            // Our angle comes back as radians
-                            let pan = unison_voice._angle;
+                        // Then use in constant-power panning
+                        let left_pan = (std::f32::consts::PI / 2.0 - pan_normalized).sin();
+                        let right_pan = pan_normalized.sin();
 
-                            // Precompute sine and cosine of the angle
-                            let cos_pan = pan.cos();
-                            let sin_pan = pan.sin();
+                        let left_amp = temp_unison_voice_l * left_pan / (self.osc_unison - 1).clamp(1, 9) as f32;
+                        let right_amp = temp_unison_voice_r * right_pan / (self.osc_unison - 1).clamp(1, 9) as f32;
 
-                            // Calculate the amplitudes for the panned voice using vector operations
-                            let scale = SQRT_2 / 2.0;
-                            let temp_unison_voice_scaled_l = scale * temp_unison_voice_l;
-                            let temp_unison_voice_scaled_r = scale * temp_unison_voice_r;
-
-                            let left_amp = temp_unison_voice_scaled_l * (cos_pan + sin_pan);
-                            let right_amp = temp_unison_voice_scaled_r * (cos_pan - sin_pan);
-
-                            // Add the voice to the sum of stereo voices
-                            stereo_voices_l += left_amp;
-                            stereo_voices_r += right_amp;
+                        // Add the voice to the sum of stereo voices
+                        stereo_voices_l += left_amp;
+                        stereo_voices_r += right_amp;
                     }
                 }
 
