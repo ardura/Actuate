@@ -15,7 +15,7 @@ If not, see https://www.gnu.org/licenses/.
 #####################################
 
 Actuate - Synthesizer + Sampler/Granulizer by Ardura
-Version 1.4.4
+Version 1.4.5
 
 #####################################
 
@@ -3553,6 +3553,9 @@ impl Plugin for Actuate {
         _context: &mut impl InitContext<Self>,
     ) -> bool {
         self.sample_rate = buffer_config.sample_rate;
+        self.audio_module_1.lock().unwrap().update_sample_rate(self.sample_rate);
+        self.audio_module_2.lock().unwrap().update_sample_rate(self.sample_rate);
+        self.audio_module_3.lock().unwrap().update_sample_rate(self.sample_rate);
 
         return true;
     }
