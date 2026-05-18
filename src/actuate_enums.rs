@@ -2,7 +2,7 @@
 
 use std::{fmt, path::PathBuf};
 
-use nih_plug::params::enums::Enum;
+use nice_plug::params::enums::Enum;
 use serde::{Deserialize, Serialize};
 
 // For internal preset browser to sort through without manually reading each file
@@ -163,7 +163,7 @@ pub enum StereoAlgorithm {
 }
 
 
-// These let us output ToString for the ComboBox stuff + Nih-Plug or string usage
+// These let us output ToString for the ComboBox stuff + Nice-Plug or string usage
 impl fmt::Display for PresetType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)

@@ -18,7 +18,7 @@ static DRAG_NORMALIZED_START_VALUE_MEMORY_ID: LazyLock<egui::Id> =
 static DRAG_AMOUNT_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 1)));
 static VALUE_ENTRY_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 2)));
 
-/// A slider widget similar to [`egui::widgets::Slider`] that knows about NIH-plug parameters ranges
+/// A slider widget similar to [`egui::widgets::Slider`] that knows about Nice-plug parameters ranges
 /// and can get values for it. The slider supports double click and control click to reset,
 /// shift+drag for granular dragging, text value entry by clicking on the value text.
 ///

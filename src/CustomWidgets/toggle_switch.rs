@@ -1,4 +1,4 @@
-// Ardura 2023 - Changing the toggle switch from egui demo to work with BoolParams for nih-plug
+// Ardura 2023 - Changing the toggle switch from egui demo to work with BoolParams for nice-plug
 // https://github.com/emilk/egui/blob/master/crates/egui_demo_lib/src/demo/toggle_switch.rs
 
 use nih_plug::prelude::{Param, ParamSetter};

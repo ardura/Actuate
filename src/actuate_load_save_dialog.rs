@@ -1,8 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nih_plug::nih_log;
-use nih_plug_egui::egui::{self, Id, Ui, Vec2};
+use nice_plug::nih_log;
+use nice_plug_egui::egui::{self, Id, Ui, Vec2};
 
 pub struct FileDialog {
     current_dir: PathBuf,

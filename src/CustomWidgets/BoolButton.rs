@@ -1,5 +1,5 @@
 // Ardura 2023 - Changing the toggle_switch.rs to be a Button now that I've proven that works as a param for sample loading
-// This lets me have buttons in nih-plug without using native egui (especially with turning off params for users)
+// This lets me have buttons in nice-plug without using native egui (especially with turning off params for users)
 
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{

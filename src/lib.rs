@@ -27,8 +27,8 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 #![allow(non_snake_case)]
 use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetBrowserEntry, PresetType, ReverbModel, StereoAlgorithm};
 use actuate_structs::{ActuatePresetV131, ModulationStruct};
-use nih_plug::prelude::*;
-use nih_plug_egui::{
+use nice_plug::prelude::*;
+use nice_plug::{
     egui::{Color32, FontId}, EguiState
 };
 use std::{

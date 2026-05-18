@@ -1,9 +1,7 @@
 # Actuate (Latest is v1.4.5)
 
-A Subtractive and Additive Synthesizer, Sampler, and Granulizer built in Rust + Nih-Plug
+A Subtractive and Additive Synthesizer, Sampler, and Granulizer built in Rust + Nice-Plug (fork of Nih-plug)
 Written by Ardura
-
-**Please note this project is still a work in progress/alpha - I got a lot of traction once I posted on KVR and wanted to clarify that!**
 
 Join the discord! https://discord.com/invite/hscQXkTdfz
 Check out the KVR Page: https://www.kvraudio.com/product/actuate-by-ardura

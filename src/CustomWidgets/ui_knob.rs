@@ -1,4 +1,4 @@
-// Ardura 2024 update - ui_knob.rs - egui + nih-plug parameter widget with customization
+// Ardura 2024 update - ui_knob.rs - egui + nice-plug parameter widget with customization
 //  this ui_knob.rs is built off a2aaron's knob base as part of nyasynth and Robbert's ParamSlider code
 // https://github.com/a2aaron/nyasynth/blob/canon/src/ui_knob.rs
 

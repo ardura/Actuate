@@ -3,8 +3,8 @@
 // Ardura
 
 use std::{collections::HashMap, ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, Ordering}, mpsc, Arc, Mutex, RwLock}, thread};
-use nih_plug::{context::gui::AsyncExecutor, editor::Editor, nih_log};
-use nih_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, CornerRadius, ScrollArea, Vec2}, widgets::ParamSlider};
+use nice_plug::{context::gui::AsyncExecutor, editor::Editor, nih_log};
+use nice_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, CornerRadius, ScrollArea, Vec2}, widgets::ParamSlider};
 use walkdir::WalkDir;
 use crate::actuate_load_save_dialog::{DialogMode, FileDialog};
 

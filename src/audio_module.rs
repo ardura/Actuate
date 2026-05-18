@@ -21,10 +21,10 @@ This is intended to be a generic implementation that can be extended for other a
 #####################################
 */
 
-use nih_plug::{
+use nice_plug::{
     prelude::{Enum, NoteEvent, ParamSetter, Smoother, SmoothingStyle}, util::{self, db_to_gain}
 };
-use nih_plug_egui::egui::{self, scroll_area::ScrollSource, CornerRadius, Pos2, Rect, RichText, ScrollArea, Ui};
+use nice_plug_egui::egui::{self, scroll_area::ScrollSource, CornerRadius, Pos2, Rect, RichText, ScrollArea, Ui};
 use pitch_shift::PitchShifter;
 use rand::Rng;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -2641,7 +2641,7 @@ MRandom: Every voice uses its own unique random phase every note".to_string());
                         // Shift our note per semitones
                         note += self.osc_semitones as u8;
                         // Shift our note per detune
-                        // I'm so glad nih-plug has this helper for f32 conversions!
+                        // I'm so glad nice-plug has this helper for f32 conversions!
                         let base_note = if velocity_mod <= 0.0 {
                             note as f32
                                 + self.osc_detune

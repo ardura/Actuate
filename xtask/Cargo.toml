@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-nih_plug_xtask = { git = "https://github.com/robbert-vdh/nih-plug.git" }
+nice-plug-xtask = { git = "https://codeberg.org/BillyDM/nice-plug.git"}
