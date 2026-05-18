@@ -3,7 +3,7 @@
 // Ardura
 
 use std::{collections::HashMap, ffi::OsStr, ops::RangeInclusive, path::{Path, PathBuf}, sync::{atomic::{AtomicBool, Ordering}, mpsc, Arc, Mutex, RwLock}, thread};
-use nice_plug::{context::gui::AsyncExecutor, editor::Editor, nih_log};
+use nice_plug::{context::gui::AsyncExecutor, editor::Editor, nice_log, nice_log};
 use nice_plug_egui::{create_egui_editor, egui::{self, Color32, Pos2, Rect, RichText, CornerRadius, ScrollArea, Vec2}, widgets::ParamSlider};
 use walkdir::WalkDir;
 use crate::actuate_load_save_dialog::{DialogMode, FileDialog};
@@ -29,7 +29,7 @@ fn recalculate_banks(dir_files_map: &Arc<Mutex<HashMap<PathBuf, Vec<PathBuf>>>>,
             let creation_attempt = std::fs::create_dir_all(default_dir_passed);
             if creation_attempt.is_ok() {
                 let stringpath = base_dir.as_path().to_str().unwrap();
-                nih_log!("Created DB at {}", stringpath);
+                nice_log!("Created DB at {}", stringpath);
             }
         }
         let root = base_dir;
@@ -158,9 +158,9 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
 
             // Print the directory-file structure
             for (dir, files) in instance.dir_files_map.lock().unwrap().iter() {
-                nih_log!("Directory: {:?}", dir);
+                nice_log!("Directory: {:?}", dir);
                 for file in files {
-                    nih_log!("  File: {:?}", file);
+                    nice_log!("  File: {:?}", file);
                 }
             }
         //}
@@ -912,14 +912,14 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             }
                                             selected_preset = path;
                                             dialog.open = false;
-                                            nih_log!("Selected a path! {}", selected_preset.display());
+                                            nice_log!("Selected a path! {}", selected_preset.display());
                                         }
                                         if !dialog.open && import_preset_active.load(Ordering::Relaxed) {
                                             let opened_file = selected_preset;
-                                            nih_log!("opened_file var is {}", opened_file.display());
+                                            nice_log!("opened_file var is {}", opened_file.display());
                                             let unserialized: Option<ActuatePresetV131>;
                                             (_, unserialized) = Actuate::import_preset(Some(opened_file));
-                                            nih_log!("Imported!");
+                                            nice_log!("Imported!");
 
                                             if unserialized.is_some() {
                                                 let mut locked_lib = arc_preset.lock().unwrap();
@@ -962,7 +962,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             }
                                             selected_file = path;
                                             dialog_export.open = false;
-                                            nih_log!("Selected a path! {}", selected_file.display());
+                                            nice_log!("Selected a path! {}", selected_file.display());
                                         }
                                         if !dialog_export.open && export_preset_active.load(Ordering::Relaxed) {
                                             let saved_file = Some(selected_file);
@@ -993,7 +993,7 @@ pub(crate) fn make_actuate_gui(instance: &mut Actuate, _async_executor: AsyncExe
                                             }
                                             selected_file = path;
                                             dialog_export_ls.open = false;
-                                            nih_log!("Selected a path! {}", selected_file.display());
+                                            nice_log!("Selected a path! {}", selected_file.display());
                                         }
                                         if !dialog_export_ls.open && export_last_sound.load(Ordering::Relaxed) {
                                             if selected_file.extension().map_or(true, |ext| ext != "wav") {

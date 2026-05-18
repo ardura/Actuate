@@ -5506,7 +5506,7 @@ impl Actuate {
                 .unwrap_or("Invalid Path")
                 .to_string();
 
-            nih_log!("import_preset() {}", return_name);
+            nice_log!("import_preset() {}", return_name);
 
             // Read the compressed data from the file
             let mut file_data = String::new();

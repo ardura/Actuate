@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use nice_plug::nih_log;
+use nice_plug::nice_log;
 use nice_plug_egui::egui::{self, Id, Ui, Vec2};
 
 pub struct FileDialog {
@@ -72,11 +72,11 @@ impl FileDialog {
                             if ui.button("Save").clicked() {
                                 if !self.input_filename.is_empty() {
                                     let path = self.current_dir.join(&self.input_filename);
-                                    nih_log!("Path: {:?}", path.clone());
+                                    nice_log!("Path: {:?}", path.clone());
                                     self.result = Some(path.clone());
                                     result = Some(path);
                                     self.selected = None;
-                                    nih_log!("Filename: {:?}", self.input_filename);
+                                    nice_log!("Filename: {:?}", self.input_filename);
                                 }
                             }
                         } else {
