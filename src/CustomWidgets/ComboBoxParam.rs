@@ -15,8 +15,18 @@ pub struct ParamComboBox<'a, P: Param> {
 }
 
 impl<'a, P: Param> ParamComboBox<'a, P> {
-    pub fn for_param(param: &'a P, setter: &'a ParamSetter<'a>, options: Vec<String>, id_name: String) -> Self {
-        Self { param, setter, options, id_name }
+    pub fn for_param(
+        param: &'a P,
+        setter: &'a ParamSetter<'a>,
+        options: Vec<String>,
+        id_name: String,
+    ) -> Self {
+        Self {
+            param,
+            setter,
+            options,
+            id_name,
+        }
     }
 
     fn set_selected_value(&self, selected_value: String) {
@@ -45,7 +55,10 @@ impl<'a, P: Param> Widget for ParamComboBox<'a, P> {
             .show_ui(ui, |ui| {
                 for option in &self.options {
                     // Update current_value and set changed flag if a new option is selected
-                    if ui.selectable_value(&mut current_value, option.clone(), option).clicked() {
+                    if ui
+                        .selectable_value(&mut current_value, option.clone(), option)
+                        .clicked()
+                    {
                         changed = true;
                     }
                 }
@@ -61,7 +74,6 @@ impl<'a, P: Param> Widget for ParamComboBox<'a, P> {
         response
     }
 }
-
 
 /*
 use nih_plug::prelude::{Param, ParamSetter};

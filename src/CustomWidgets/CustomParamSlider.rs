@@ -1,13 +1,14 @@
 // Copy of ParamSlider made custom by adding reversed bool to reverse drawing bar and empty section
 // Needed to make some weird import changes to get this to work...Definitely should find a better way to do this in future...
 // Ardura
-use std::sync::{Arc, LazyLock};
-use nih_plug::{
-    prelude::{Param, ParamSetter},
+use nih_plug::prelude::{Param, ParamSetter};
+use nih_plug_egui::egui::{
+    self, emath, vec2, Color32, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2,
+    Widget, WidgetText,
 };
-use nih_plug_egui::egui::{self, emath, vec2, Color32, Key, Response, Sense, Stroke, TextEdit, TextStyle, Ui, Vec2, Widget, WidgetText};
 use nih_plug_egui::widgets::util as nUtil;
 use parking_lot::Mutex;
+use std::sync::{Arc, LazyLock};
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
 /// noramlized parameter.
@@ -318,14 +319,14 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     response.rect,
                     0.0,
                     Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
-                    egui::StrokeKind::Middle
+                    egui::StrokeKind::Middle,
                 );
             } else {
                 ui.painter().rect_stroke(
                     response.rect,
                     0.0,
                     Stroke::new(1.0, self.background_set_color),
-                    egui::StrokeKind::Middle
+                    egui::StrokeKind::Middle,
                 );
             }
         }
@@ -350,25 +351,28 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         if keyboard_focus_id.is_some() {
             let keyboard_focus_id = keyboard_focus_id.unwrap();
             if self.keyboard_entry_active(ui) {
-                let value_entry_mutex = ui
-                    .memory_mut(|mem|mem.data.get_persisted_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID).clone());
+                let value_entry_mutex = ui.memory_mut(|mem| {
+                    mem.data
+                        .get_persisted_mut_or_default::<Arc<Mutex<String>>>(*VALUE_ENTRY_MEMORY_ID)
+                        .clone()
+                });
                 let mut value_entry = value_entry_mutex.lock();
-    
+
                 ui.add(
                     TextEdit::singleline(&mut *value_entry)
                         .id(keyboard_focus_id)
                         .font(TextStyle::Monospace),
                 );
-                if ui.input(|reader|reader.key_pressed(Key::Escape)) {
+                if ui.input(|reader| reader.key_pressed(Key::Escape)) {
                     // Cancel when pressing escape
-                    ui.memory_mut(|mem|mem.surrender_focus(keyboard_focus_id));
-                } else if ui.input(|reader|reader.key_pressed(Key::Enter)) {
+                    ui.memory_mut(|mem| mem.surrender_focus(keyboard_focus_id));
+                } else if ui.input(|reader| reader.key_pressed(Key::Enter)) {
                     // And try to set the value by string when pressing enter
                     self.begin_drag();
                     self.set_from_string(&value_entry);
                     self.end_drag();
-    
-                    ui.memory_mut(|mem|mem.surrender_focus(keyboard_focus_id));
+
+                    ui.memory_mut(|mem| mem.surrender_focus(keyboard_focus_id));
                 }
             } else {
                 text = WidgetText::from(text_label).into_galley(
@@ -398,7 +402,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                             visuals.corner_radius,
                             fill,
                             stroke,
-                            egui::StrokeKind::Middle
+                            egui::StrokeKind::Middle,
                         );
                     }
                     let text_pos = ui
@@ -440,7 +444,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                         visuals.corner_radius,
                         fill,
                         stroke,
-                        egui::StrokeKind::Middle
+                        egui::StrokeKind::Middle,
                     );
                 }
                 let text_pos = ui
@@ -456,7 +460,6 @@ impl<'a, P: Param> ParamSlider<'a, P> {
         }
     }
 }
-
 
 impl<P: Param> Widget for ParamSlider<'_, P> {
     fn ui(mut self, ui: &mut Ui) -> Response {
@@ -480,8 +483,9 @@ impl<P: Param> Widget for ParamSlider<'_, P> {
             let height = ui
                 .text_style_height(&TextStyle::Body)
                 .max(ui.spacing().interact_size.y * slimmer_scale);
-            
-            let slider_height = emath::GuiRounding::round_to_pixels(height * 0.8, ui.painter().pixels_per_point());
+
+            let slider_height =
+                emath::GuiRounding::round_to_pixels(height * 0.8, ui.painter().pixels_per_point());
             let mut response = ui
                 .vertical(|ui| {
                     ui.allocate_space(vec2(slider_width, (height - slider_height) / 2.0));

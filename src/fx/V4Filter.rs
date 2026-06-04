@@ -63,42 +63,49 @@ impl V4FilterStruct {
     }
 
     fn process_stage(&mut self, stage_value: f32, input_value: f32) -> f32 {
-        let intermediate_value1 = input_value / ((input_value.abs() - 0.9999925).max(0.0001) * self.adjustment_factor + 1.0);
+        let intermediate_value1 = input_value
+            / ((input_value.abs() - 0.9999925).max(0.0001) * self.adjustment_factor + 1.0);
         let mut filter_result = self.alpha * intermediate_value1 + (1.0 - self.alpha) * stage_value;
 
         // Nonlinearity funkiness that the integrator smooths out over stages when it happens
         if (filter_result - 0.25).abs() < 1.0e-6 {
             filter_result = (filter_result * 16.0).clamp(-1.0, 1.0);
         }
-        
+
         let mut intermediate_value2 = filter_result * self.feedback_factor + self.integrator;
         self.integrator = intermediate_value2.clamp(-1.0, 1.0);
-        
-        intermediate_value2 = (intermediate_value1 - intermediate_value2) - stage_value * filter_result;
+
+        intermediate_value2 =
+            (intermediate_value1 - intermediate_value2) - stage_value * filter_result;
         let output = stage_value * self.feedback_factor + intermediate_value2;
-        
+
         output.clamp(-1.0, 1.0)
     }
 
     fn scale_gain_from_cutoff(&mut self) {
         let output_min = 1.0;
         let output_max = 18.0;
-    
-        self.scale_gain = output_max - (self.cutoff_frequency.clamp(20.0, 20000.0) - 20.0) * (output_max - output_min) / 19980.0;
+
+        self.scale_gain = output_max
+            - (self.cutoff_frequency.clamp(20.0, 20000.0) - 20.0) * (output_max - output_min)
+                / 19980.0;
     }
-    
 
     fn scale_adjustment_from_cutoff(&mut self) {
         let output_min = 20000.0;
         let output_max = 0.0;
-    
-        self.adjustment_factor = output_min + (20000.0 - self.cutoff_frequency.clamp(20.0, 20000.0)) * (output_min - output_max) / 19980.0;
+
+        self.adjustment_factor = output_min
+            + (20000.0 - self.cutoff_frequency.clamp(20.0, 20000.0)) * (output_min - output_max)
+                / 19980.0;
     }
 
     fn scale_feedback_from_cutoff(&mut self) {
-        self.feedback_factor = ((self.cutoff_frequency.clamp(20.0, 20000.0) - 20.0) * (0.36) / 19980.0) + (1.0 - self.feedback_offset)*0.25;
+        self.feedback_factor = ((self.cutoff_frequency.clamp(20.0, 20000.0) - 20.0) * (0.36)
+            / 19980.0)
+            + (1.0 - self.feedback_offset) * 0.25;
     }
-    
+
     fn calculate_alpha(&mut self) {
         let dt = 1.0 / self.sample_rate;
         let rc = 1.0 / (std::f32::consts::TAU * self.cutoff_frequency);

@@ -25,46 +25,64 @@ This is the first synth I've ever written and first large Rust project. Thanks f
 */
 
 #![allow(non_snake_case)]
-use actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetBrowserEntry, PresetType, ReverbModel, StereoAlgorithm};
-use actuate_structs::{ActuatePresetV131, ModulationStruct};
-use nice_plug::prelude::*;
-use nice_plug::{
-    egui::{Color32, FontId}, EguiState
+use actuate_enums::{
+    AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource,
+    PitchRouting, PresetBrowserEntry, PresetType, ReverbModel, StereoAlgorithm,
 };
+use actuate_structs::{ActuatePresetV131, ModulationStruct};
+use egui::{Color32, FontId};
+use nice_plug::prelude::*;
+use nice_plug_egui::EguiState;
 use std::{
-    collections::HashMap, fs::File, io::Read, path::PathBuf, sync::{
+    collections::HashMap,
+    fs::File,
+    io::Read,
+    path::PathBuf,
+    sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
         Arc, Mutex, RwLock,
-    }
+    },
 };
 
 // My Files/crates
 use audio_module::{
-    AudioModule, AudioModuleType,
+    frequency_modulation, AudioModule, AudioModuleType,
     Oscillator::{self, OscState, RetriggerStyle, SmoothStyle},
-    frequency_modulation,
 };
 use fx::{
-    abass::a_bass_saturation, aw_galactic_reverb::GalacticReverb, biquad_filters::{self, FilterType}, buffermodulator::BufferModulator, chorus::ChorusEnsemble, compressor::Compressor, delay::{Delay, DelaySnapValues, DelayType}, flanger::StereoFlanger, limiter::StereoLimiter, phaser::StereoPhaser, reverb::StereoReverb, saturation::{Saturation, SaturationType}, simple_space_reverb::SimpleSpaceReverb, StateVariableFilter::{ResonanceType,StateVariableFilter}, TiltFilter::{self, ResponseType}, VCFilter::ResponseType as VCResponseType
+    abass::a_bass_saturation,
+    aw_galactic_reverb::GalacticReverb,
+    biquad_filters::{self, FilterType},
+    buffermodulator::BufferModulator,
+    chorus::ChorusEnsemble,
+    compressor::Compressor,
+    delay::{Delay, DelaySnapValues, DelayType},
+    flanger::StereoFlanger,
+    limiter::StereoLimiter,
+    phaser::StereoPhaser,
+    reverb::StereoReverb,
+    saturation::{Saturation, SaturationType},
+    simple_space_reverb::SimpleSpaceReverb,
+    StateVariableFilter::{ResonanceType, StateVariableFilter},
+    TiltFilter::{self, ResponseType},
+    VCFilter::ResponseType as VCResponseType,
 };
 
 // This is here in meantime until new Actuate versions past this one!
 #[allow(unused_imports)]
-use old_preset_structs::{
-    _load_unserialized_v130, ActuatePresetV130
-};
+use old_preset_structs::{_load_unserialized_v130, ActuatePresetV130};
 
-mod actuate_gui;
-mod actuate_enums;
-mod actuate_structs;
 mod CustomWidgets;
 mod LFOController;
+mod actuate_enums;
+mod actuate_gui;
+mod actuate_load_save_dialog;
+mod actuate_structs;
 mod audio_module;
 mod fx;
 mod old_preset_structs;
-mod release_downloader;
 mod recorder;
-mod actuate_load_save_dialog;
+mod release_downloader;
 
 // Plugin sizing
 const WIDTH: u32 = 920;
@@ -85,8 +103,8 @@ pub const YELLOW_MUSTARD: Color32 = Color32::from_rgb(172, 131, 25);
 pub const FONT_COLOR: Color32 = Color32::from_rgb(248, 248, 248);
 
 // Fonts
-const FONT: nih_plug_egui::egui::FontId = FontId::proportional(12.0);
-const SMALLER_FONT: nih_plug_egui::egui::FontId = FontId::proportional(11.0);
+const FONT: egui::FontId = FontId::proportional(12.0);
+const SMALLER_FONT: egui::FontId = FontId::proportional(11.0);
 
 // This is the struct of the actual plugin object that tracks everything
 //#[derive(Clone)]
@@ -159,7 +177,7 @@ pub struct Actuate {
     // Reverb
     reverb: [StereoReverb; 8],
     galactic_reverb: GalacticReverb,
-    simple_space: [SimpleSpaceReverb;4],
+    simple_space: [SimpleSpaceReverb; 4],
 
     // Phaser
     phaser: StereoPhaser,
@@ -202,14 +220,7 @@ pub struct Actuate {
     str_files_map: Arc<Mutex<HashMap<String, Vec<PathBuf>>>>,
 
     // Lite internal db
-    preset_browser_lite_db: 
-    Arc<
-        RwLock<
-            HashMap<String, 
-                HashMap<String, PresetBrowserEntry>
-            >
-        >
-    >,
+    preset_browser_lite_db: Arc<RwLock<HashMap<String, HashMap<String, PresetBrowserEntry>>>>,
 
     // Download controller
     download_in_progress: Arc<AtomicBool>,
@@ -240,8 +251,10 @@ impl Default for Actuate {
         let update_current_preset = Arc::new(AtomicBool::new(false));
 
         // HashMap to store directories and their files (two levels deep)
-        let dir_files_map: Arc<Mutex<HashMap<PathBuf, Vec<PathBuf>>>> = Arc::new(Mutex::new(HashMap::new()));
-        let str_files_map: Arc<Mutex<HashMap<String, Vec<PathBuf>>>> =  Arc::new(Mutex::new(HashMap::new()));
+        let dir_files_map: Arc<Mutex<HashMap<PathBuf, Vec<PathBuf>>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+        let str_files_map: Arc<Mutex<HashMap<String, Vec<PathBuf>>>> =
+            Arc::new(Mutex::new(HashMap::new()));
 
         Self {
             params: Arc::new(ActuateParams::new(
@@ -274,7 +287,6 @@ impl Default for Actuate {
             audio_module_1: Arc::new(Mutex::new(AudioModule::default())),
             audio_module_2: Arc::new(Mutex::new(AudioModule::default())),
             audio_module_3: Arc::new(Mutex::new(AudioModule::default())),
-
 
             //LFOs
             lfo_1: LFOController::LFOController::new(2.0, 1.0, LFOController::Waveform::Sine, 0.0),
@@ -1014,7 +1026,7 @@ pub struct ActuateParams {
     pub stereo_algorithm: EnumParam<StereoAlgorithm>,
 
     // UI Non-param Params
-    
+
     // I'm cursed to have these now that older actuates used them
     // They are not used
     #[id = "param_load_bank"]
@@ -1104,21 +1116,18 @@ impl ActuateParams {
                 .with_unit("%"),
             voice_limit: IntParam::new("Max Voices", 64, IntRange::Linear { min: 1, max: 512 }),
 
-            audio_module_1_type: EnumParam::new("Type", AudioModuleType::Sine)
-                .with_callback({
+            audio_module_1_type: EnumParam::new("Type", AudioModuleType::Sine).with_callback({
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-                }),
-            audio_module_2_type: EnumParam::new("Type", AudioModuleType::Sine)
-                .with_callback({
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-                }),
-            audio_module_3_type: EnumParam::new("Type", AudioModuleType::Sine)
-                .with_callback({
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-                }),
+            }),
+            audio_module_2_type: EnumParam::new("Type", AudioModuleType::Sine).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
+            audio_module_3_type: EnumParam::new("Type", AudioModuleType::Sine).with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
 
             audio_module_1_level: FloatParam::new(
                 "Level",
@@ -1142,23 +1151,27 @@ impl ActuateParams {
             .with_value_to_string(formatters::v2s_f32_percentage(0))
             .with_unit("%"),
 
-            audio_module_1_routing: EnumParam::new("Routing", AMFilterRouting::Filter1).with_callback({
+            audio_module_1_routing: EnumParam::new("Routing", AMFilterRouting::Filter1)
+                .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            audio_module_2_routing: EnumParam::new("Routing", AMFilterRouting::Filter1).with_callback({
+            audio_module_2_routing: EnumParam::new("Routing", AMFilterRouting::Filter1)
+                .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            audio_module_3_routing: EnumParam::new("Routing", AMFilterRouting::Filter1).with_callback({
+            audio_module_3_routing: EnumParam::new("Routing", AMFilterRouting::Filter1)
+                .with_callback({
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
 
-            filter_routing: EnumParam::new("Filter Routing", FilterRouting::Parallel).with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
+            filter_routing: EnumParam::new("Filter Routing", FilterRouting::Parallel)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
 
             // Oscillators
             ////////////////////////////////////////////////////////////////////////////////////
@@ -1788,10 +1801,12 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
-            vcf_filter_type: EnumParam::new("Filter Type", VCResponseType::Lowpass).with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
+            vcf_filter_type: EnumParam::new("Filter Type", VCResponseType::Lowpass).with_callback(
+                {
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                },
+            ),
 
             filter_env_peak: FloatParam::new(
                 "Env Mod",
@@ -1954,14 +1969,17 @@ impl ActuateParams {
                 let update_something = update_something.clone();
                 Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
             }),
-            tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass).with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
-            vcf_filter_type_2: EnumParam::new("Filter Type", VCResponseType::Lowpass).with_callback({
-                let update_something = update_something.clone();
-                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-            }),
+            tilt_filter_type_2: EnumParam::new("Filter Type", ResponseType::Lowpass).with_callback(
+                {
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                },
+            ),
+            vcf_filter_type_2: EnumParam::new("Filter Type", VCResponseType::Lowpass)
+                .with_callback({
+                    let update_something = update_something.clone();
+                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+                }),
 
             filter_env_peak_2: FloatParam::new(
                 "Env Mod",
@@ -3354,24 +3372,10 @@ impl ActuateParams {
                 FloatRange::Linear { min: 0.0, max: 1.0 },
             )
             .with_value_to_string(formatters::v2s_f32_rounded(3)),
-            chorus_range: FloatParam::new(
-                "Range", 
-                0.5, 
-                FloatRange::Linear { 
-                    min: 0.0, 
-                    max: 1.0 
-                }
-            )
-            .with_value_to_string(formatters::v2s_f32_rounded(3)),
-            chorus_speed: FloatParam::new(
-                "Speed",
-                0.5,
-                FloatRange::Linear {
-                    min: 0.0,
-                    max: 1.0,
-                },
-            )
-            .with_value_to_string(formatters::v2s_f32_rounded(3)),
+            chorus_range: FloatParam::new("Range", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(3)),
+            chorus_speed: FloatParam::new("Speed", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
+                .with_value_to_string(formatters::v2s_f32_rounded(3)),
 
             use_limiter: BoolParam::new("Limiter", false),
             limiter_threshold: FloatParam::new(
@@ -3382,77 +3386,101 @@ impl ActuateParams {
             .with_value_to_string(formatters::v2s_f32_rounded(2)),
             limiter_knee: FloatParam::new("Knee", 0.5, FloatRange::Linear { min: 0.0, max: 1.0 })
                 .with_value_to_string(formatters::v2s_f32_rounded(2)),
-            
+
             // FM
-            fm_one_to_two: FloatParam::new("FM 1 to 2", 0.0, FloatRange::Skewed { min: 0.0, max: 20.0, factor: 0.3 })
-                .with_value_to_string(formatters::v2s_f32_rounded(5)),
-            
-            fm_one_to_three: FloatParam::new("FM 1 to 3", 0.0, FloatRange::Skewed { min: 0.0, max: 20.0, factor: 0.3 })
-                .with_value_to_string(formatters::v2s_f32_rounded(5)),
-            
-            fm_two_to_three: FloatParam::new("FM 2 to 3", 0.0, FloatRange::Skewed { min: 0.0, max: 20.0, factor: 0.3 })
-                .with_value_to_string(formatters::v2s_f32_rounded(5)),
+            fm_one_to_two: FloatParam::new(
+                "FM 1 to 2",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 20.0,
+                    factor: 0.3,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(5)),
+
+            fm_one_to_three: FloatParam::new(
+                "FM 1 to 3",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 20.0,
+                    factor: 0.3,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(5)),
+
+            fm_two_to_three: FloatParam::new(
+                "FM 2 to 3",
+                0.0,
+                FloatRange::Skewed {
+                    min: 0.0,
+                    max: 20.0,
+                    factor: 0.3,
+                },
+            )
+            .with_value_to_string(formatters::v2s_f32_rounded(5)),
             fm_cycles: IntParam::new("Cycles", 1, IntRange::Linear { min: 1, max: 3 }),
             fm_attack: FloatParam::new(
-                    "FM Attack",
-                    0.0001,
-                    FloatRange::Skewed {
-                        min: 0.0001,
-                        max: 1999.9,
-                        factor: 0.2,
-                    },
-                )
-                .with_value_to_string(format_nothing())
-                .with_unit("A")
-                .with_callback({
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-                }),
+                "FM Attack",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 1999.9,
+                    factor: 0.2,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("A")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             fm_decay: FloatParam::new(
-                    "FM Decay",
-                    0.0001,
-                    FloatRange::Skewed {
-                        min: 0.0001,
-                        max: 1999.9,
-                        factor: 0.2,
-                    },
-                )
-                .with_value_to_string(format_nothing())
-                .with_unit("D")
-                .with_callback({
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-                }),
+                "FM Decay",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 1999.9,
+                    factor: 0.2,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("D")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             fm_sustain: FloatParam::new(
-                    "FM Sustain",
-                    1999.9,
-                    FloatRange::Skewed {
-                        min: 0.0001,
-                        max: 1999.9,
-                        factor: 0.2,
-                    },
-                )
-                .with_value_to_string(format_nothing())
-                .with_unit("S")
-                .with_callback({
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-                }),
+                "FM Sustain",
+                1999.9,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 1999.9,
+                    factor: 0.2,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("S")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             fm_release: FloatParam::new(
-                    "FM Release",
-                    0.0001,
-                    FloatRange::Skewed {
-                        min: 0.0001,
-                        max: 1999.9,
-                        factor: 0.2,
-                    },
-                )
-                .with_value_to_string(format_nothing())
-                .with_unit("R")
-                .with_callback({
-                    let update_something = update_something.clone();
-                    Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
-                }),
+                "FM Release",
+                0.0001,
+                FloatRange::Skewed {
+                    min: 0.0001,
+                    max: 1999.9,
+                    factor: 0.2,
+                },
+            )
+            .with_value_to_string(format_nothing())
+            .with_unit("R")
+            .with_callback({
+                let update_something = update_something.clone();
+                Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
+            }),
             fm_attack_curve: EnumParam::new("Atk Curve", Oscillator::SmoothStyle::Linear)
                 .with_callback({
                     let update_something = update_something.clone();
@@ -3468,7 +3496,7 @@ impl ActuateParams {
                     let update_something = update_something.clone();
                     Arc::new(move |_| update_something.store(true, Ordering::SeqCst))
                 }),
-            
+
             stereo_algorithm: EnumParam::new("Stereo Behavior", StereoAlgorithm::Original),
 
             // UI Non-Param Params are dummy params for my buttons
@@ -3553,9 +3581,18 @@ impl Plugin for Actuate {
         _context: &mut impl InitContext<Self>,
     ) -> bool {
         self.sample_rate = buffer_config.sample_rate;
-        self.audio_module_1.lock().unwrap().update_sample_rate(self.sample_rate);
-        self.audio_module_2.lock().unwrap().update_sample_rate(self.sample_rate);
-        self.audio_module_3.lock().unwrap().update_sample_rate(self.sample_rate);
+        self.audio_module_1
+            .lock()
+            .unwrap()
+            .update_sample_rate(self.sample_rate);
+        self.audio_module_2
+            .lock()
+            .unwrap()
+            .update_sample_rate(self.sample_rate);
+        self.audio_module_3
+            .lock()
+            .unwrap()
+            .update_sample_rate(self.sample_rate);
 
         return true;
     }
@@ -3569,9 +3606,18 @@ impl Plugin for Actuate {
     ) -> ProcessStatus {
         if context.transport().sample_rate != self.sample_rate {
             self.sample_rate = context.transport().sample_rate;
-            self.audio_module_1.lock().unwrap().update_sample_rate(self.sample_rate);
-            self.audio_module_2.lock().unwrap().update_sample_rate(self.sample_rate);
-            self.audio_module_3.lock().unwrap().update_sample_rate(self.sample_rate);
+            self.audio_module_1
+                .lock()
+                .unwrap()
+                .update_sample_rate(self.sample_rate);
+            self.audio_module_2
+                .lock()
+                .unwrap()
+                .update_sample_rate(self.sample_rate);
+            self.audio_module_3
+                .lock()
+                .unwrap()
+                .update_sample_rate(self.sample_rate);
         }
 
         // Clear any voices on change of module type (especially during play)
@@ -3778,20 +3824,20 @@ impl Actuate {
                 match am1_lock.audio_module_type {
                     AudioModuleType::Sampler | AudioModuleType::Granulizer => {
                         *self.params.am1_sample.lock().unwrap() = am1_lock.loaded_sample.clone();
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
                 match am2_lock.audio_module_type {
                     AudioModuleType::Sampler | AudioModuleType::Granulizer => {
                         *self.params.am2_sample.lock().unwrap() = am2_lock.loaded_sample.clone();
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
                 match am3_lock.audio_module_type {
                     AudioModuleType::Sampler | AudioModuleType::Granulizer => {
                         *self.params.am3_sample.lock().unwrap() = am3_lock.loaded_sample.clone();
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
             let mut am1_lock = self.audio_module_1.lock().unwrap();
@@ -3854,15 +3900,18 @@ impl Actuate {
                 am3_lock.consume_params(self.params.clone(), 3);
                 // Fix Auto restretch/repitch behavior
                 if self.prev_restretch_1.load(Ordering::SeqCst) != self.params.restretch_1.value() {
-                    self.prev_restretch_1.store(self.params.restretch_1.value(), Ordering::SeqCst);
+                    self.prev_restretch_1
+                        .store(self.params.restretch_1.value(), Ordering::SeqCst);
                     am1_lock.regenerate_samples();
                 }
                 if self.prev_restretch_2.load(Ordering::SeqCst) != self.params.restretch_2.value() {
-                    self.prev_restretch_2.store(self.params.restretch_2.value(), Ordering::SeqCst);
+                    self.prev_restretch_2
+                        .store(self.params.restretch_2.value(), Ordering::SeqCst);
                     am2_lock.regenerate_samples();
                 }
                 if self.prev_restretch_3.load(Ordering::SeqCst) != self.params.restretch_3.value() {
-                    self.prev_restretch_3.store(self.params.restretch_3.value(), Ordering::SeqCst);
+                    self.prev_restretch_3
+                        .store(self.params.restretch_3.value(), Ordering::SeqCst);
                     am3_lock.regenerate_samples();
                 }
 
@@ -4803,7 +4852,7 @@ impl Actuate {
                     wave1_r,
                     reset_filter_controller1,
                     note_off_filter_controller1,
-                    voices_1
+                    voices_1,
                 ) = am1_lock.process(
                     sample_id,
                     midi_event.clone(),
@@ -4839,10 +4888,10 @@ impl Actuate {
                         + modulations_4.temp_mod_cutoff_2,
                     self.hq_mode.load(Ordering::Relaxed),
                     self.params.filter_cutoff.value(),
-                    self.params.filter_cutoff_2.value()
+                    self.params.filter_cutoff_2.value(),
                 );
                 // Sum to MONO
-                fm_wave_1 = (wave1_l + wave1_r)/2.0;
+                fm_wave_1 = (wave1_l + wave1_r) / 2.0;
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
                 let levelAmp1 = self.params.audio_module_1_level.value();
                 wave1_l *= levelAmp1 * 0.33;
@@ -4896,10 +4945,10 @@ impl Actuate {
                         + modulations_4.temp_mod_cutoff_2,
                     self.hq_mode.load(Ordering::Relaxed),
                     self.params.filter_cutoff.value(),
-                    self.params.filter_cutoff_2.value()
+                    self.params.filter_cutoff_2.value(),
                 );
                 // Sum to MONO
-                fm_wave_2 = (wave2_l + wave2_r)/2.0;
+                fm_wave_2 = (wave2_l + wave2_r) / 2.0;
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
                 let levelAmp2 = self.params.audio_module_2_level.value();
                 wave2_l *= levelAmp2 * 0.33;
@@ -4917,7 +4966,7 @@ impl Actuate {
                     wave3_r,
                     reset_filter_controller3,
                     note_off_filter_controller3,
-                    voices_3
+                    voices_3,
                 ) = am3_lock.process(
                     sample_id,
                     midi_event.clone(),
@@ -4953,7 +5002,7 @@ impl Actuate {
                         + modulations_4.temp_mod_cutoff_2,
                     self.hq_mode.load(Ordering::Relaxed),
                     self.params.filter_cutoff.value(),
-                    self.params.filter_cutoff_2.value()
+                    self.params.filter_cutoff_2.value(),
                 );
                 // I know this isn't a perfect 3rd, but 0.01 is acceptable headroom
                 let levelAmp3 = self.params.audio_module_3_level.value();
@@ -4973,18 +5022,18 @@ impl Actuate {
             {
                 self.fm_state = OscState::Releasing;
                 self.fm_rel_smoother_1 = match self.params.fm_release_curve.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.fm_release.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.fm_release.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.fm_release.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.fm_release.value(),
-                    )),
+                    SmoothStyle::Linear => {
+                        Smoother::new(SmoothingStyle::Linear(self.params.fm_release.value()))
+                    }
+                    SmoothStyle::Logarithmic => {
+                        Smoother::new(SmoothingStyle::Logarithmic(self.params.fm_release.value()))
+                    }
+                    SmoothStyle::Exponential => {
+                        Smoother::new(SmoothingStyle::Exponential(self.params.fm_release.value()))
+                    }
+                    SmoothStyle::LogSteep => {
+                        Smoother::new(SmoothingStyle::LogSteep(self.params.fm_release.value()))
+                    }
                 };
                 self.fm_rel_smoother_2 = self.fm_rel_smoother_1.clone();
                 self.fm_rel_smoother_3 = self.fm_rel_smoother_1.clone();
@@ -5014,18 +5063,18 @@ impl Actuate {
                 self.fm_state = OscState::Attacking;
                 // Consume our params for smoothing
                 self.fm_atk_smoother_1 = match self.params.fm_attack_curve.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.fm_attack.value(),
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.fm_attack.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.fm_attack.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.fm_attack.value(),
-                    )),
+                    SmoothStyle::Linear => {
+                        Smoother::new(SmoothingStyle::Linear(self.params.fm_attack.value()))
+                    }
+                    SmoothStyle::Logarithmic => {
+                        Smoother::new(SmoothingStyle::Logarithmic(self.params.fm_attack.value()))
+                    }
+                    SmoothStyle::Exponential => {
+                        Smoother::new(SmoothingStyle::Exponential(self.params.fm_attack.value()))
+                    }
+                    SmoothStyle::LogSteep => {
+                        Smoother::new(SmoothingStyle::LogSteep(self.params.fm_attack.value()))
+                    }
                 };
                 self.fm_atk_smoother_2 = self.fm_atk_smoother_1.clone();
                 self.fm_atk_smoother_3 = self.fm_atk_smoother_1.clone();
@@ -5040,146 +5089,190 @@ impl Actuate {
                     self.fm_atk_smoother_3.reset(0.0001);
                 }
                 // Since we're in attack state at the start of our note we need to setup the attack going to the env peak
-                self.fm_atk_smoother_1.set_target(
-                    self.sample_rate, self.params.fm_one_to_two.value()
-                );
-                self.fm_atk_smoother_2.set_target(
-                    self.sample_rate, self.params.fm_one_to_three.value()
-                );
-                self.fm_atk_smoother_3.set_target(
-                    self.sample_rate, self.params.fm_two_to_three.value()
-                );
+                self.fm_atk_smoother_1
+                    .set_target(self.sample_rate, self.params.fm_one_to_two.value());
+                self.fm_atk_smoother_2
+                    .set_target(self.sample_rate, self.params.fm_one_to_three.value());
+                self.fm_atk_smoother_3
+                    .set_target(self.sample_rate, self.params.fm_two_to_three.value());
             }
             // If our attack has finished
-            if self.fm_atk_smoother_1.steps_left() == 0
-                && self.fm_state == OscState::Attacking
-            {
+            if self.fm_atk_smoother_1.steps_left() == 0 && self.fm_state == OscState::Attacking {
                 self.fm_state = OscState::Decaying;
                 self.fm_dec_smoother_1 = match self.params.fm_decay_curve.value() {
-                    SmoothStyle::Linear => Smoother::new(SmoothingStyle::Linear(
-                        self.params.fm_decay.value()
-                    )),
-                    SmoothStyle::Logarithmic => Smoother::new(SmoothingStyle::Logarithmic(
-                        self.params.fm_decay.value(),
-                    )),
-                    SmoothStyle::Exponential => Smoother::new(SmoothingStyle::Exponential(
-                        self.params.fm_decay.value(),
-                    )),
-                    SmoothStyle::LogSteep => Smoother::new(SmoothingStyle::LogSteep(
-                        self.params.fm_decay.value(),
-                    )),
+                    SmoothStyle::Linear => {
+                        Smoother::new(SmoothingStyle::Linear(self.params.fm_decay.value()))
+                    }
+                    SmoothStyle::Logarithmic => {
+                        Smoother::new(SmoothingStyle::Logarithmic(self.params.fm_decay.value()))
+                    }
+                    SmoothStyle::Exponential => {
+                        Smoother::new(SmoothingStyle::Exponential(self.params.fm_decay.value()))
+                    }
+                    SmoothStyle::LogSteep => {
+                        Smoother::new(SmoothingStyle::LogSteep(self.params.fm_decay.value()))
+                    }
                 };
                 self.fm_dec_smoother_2 = self.fm_dec_smoother_1.clone();
                 self.fm_dec_smoother_3 = self.fm_dec_smoother_1.clone();
                 // This makes our fm decay start at env peak point
-                self.fm_dec_smoother_1.reset(self.params.fm_one_to_two.value());
-                self.fm_dec_smoother_2.reset(self.params.fm_one_to_three.value());
-                self.fm_dec_smoother_3.reset(self.params.fm_two_to_three.value());
+                self.fm_dec_smoother_1
+                    .reset(self.params.fm_one_to_two.value());
+                self.fm_dec_smoother_2
+                    .reset(self.params.fm_one_to_three.value());
+                self.fm_dec_smoother_3
+                    .reset(self.params.fm_two_to_three.value());
                 // Set up the smoother for our filter movement to go from our decay point to our sustain point
-                self.fm_dec_smoother_1.set_target(
-                    self.sample_rate,
-                    self.params.fm_sustain.value() / 1999.9,
-                );
-                self.fm_dec_smoother_2.set_target(
-                    self.sample_rate,
-                    self.params.fm_sustain.value() / 1999.9,
-                );
-                self.fm_dec_smoother_3.set_target(
-                    self.sample_rate,
-                    self.params.fm_sustain.value() / 1999.9,
-                );
+                self.fm_dec_smoother_1
+                    .set_target(self.sample_rate, self.params.fm_sustain.value() / 1999.9);
+                self.fm_dec_smoother_2
+                    .set_target(self.sample_rate, self.params.fm_sustain.value() / 1999.9);
+                self.fm_dec_smoother_3
+                    .set_target(self.sample_rate, self.params.fm_sustain.value() / 1999.9);
             }
             // If our decay has finished move to sustain state
-            if self.fm_dec_smoother_1.steps_left() == 0
-                && self.fm_state == OscState::Decaying
-            {
+            if self.fm_dec_smoother_1.steps_left() == 0 && self.fm_state == OscState::Decaying {
                 self.fm_state = OscState::Sustaining;
             }
             let next_fm_step_1 = match self.fm_state {
-                OscState::Attacking => {
-                    self.fm_atk_smoother_1.next()
-                },
-                OscState::Decaying | OscState::Sustaining => {
-                    self.fm_dec_smoother_1.next()
-                },
-                OscState::Releasing => {
-                    self.fm_rel_smoother_1.next()
-                },
-                OscState::Off => {0.0},
+                OscState::Attacking => self.fm_atk_smoother_1.next(),
+                OscState::Decaying | OscState::Sustaining => self.fm_dec_smoother_1.next(),
+                OscState::Releasing => self.fm_rel_smoother_1.next(),
+                OscState::Off => 0.0,
             };
             let next_fm_step_2 = match self.fm_state {
-                OscState::Attacking => {
-                    self.fm_atk_smoother_2.next()
-                },
-                OscState::Decaying | OscState::Sustaining => {
-                    self.fm_dec_smoother_2.next()
-                },
-                OscState::Releasing => {
-                    self.fm_rel_smoother_2.next()
-                },
-                OscState::Off => {0.0},
+                OscState::Attacking => self.fm_atk_smoother_2.next(),
+                OscState::Decaying | OscState::Sustaining => self.fm_dec_smoother_2.next(),
+                OscState::Releasing => self.fm_rel_smoother_2.next(),
+                OscState::Off => 0.0,
             };
             let next_fm_step_3 = match self.fm_state {
-                OscState::Attacking => {
-                    self.fm_atk_smoother_3.next()
-                },
-                OscState::Decaying | OscState::Sustaining => {
-                    self.fm_dec_smoother_3.next()
-                },
-                OscState::Releasing => {
-                    self.fm_rel_smoother_3.next()
-                },
-                OscState::Off => {0.0},
+                OscState::Attacking => self.fm_atk_smoother_3.next(),
+                OscState::Decaying | OscState::Sustaining => self.fm_dec_smoother_3.next(),
+                OscState::Releasing => self.fm_rel_smoother_3.next(),
+                OscState::Off => 0.0,
             };
             let current_cycles = self.params.fm_cycles.value();
             if one_to_two > 0.0 {
                 match current_cycles {
                     1 => {
-                        wave2_l = frequency_modulation::frequency_modulation(fm_wave_1, wave2_l, next_fm_step_1);
-                        wave2_r = frequency_modulation::frequency_modulation(fm_wave_1, wave2_r, next_fm_step_1);
-                    },
+                        wave2_l = frequency_modulation::frequency_modulation(
+                            fm_wave_1,
+                            wave2_l,
+                            next_fm_step_1,
+                        );
+                        wave2_r = frequency_modulation::frequency_modulation(
+                            fm_wave_1,
+                            wave2_r,
+                            next_fm_step_1,
+                        );
+                    }
                     2 => {
-                        wave2_l = frequency_modulation::double_modulation(fm_wave_1, wave2_l, next_fm_step_1);
-                        wave2_r = frequency_modulation::double_modulation(fm_wave_1, wave2_r, next_fm_step_1);
-                    },
+                        wave2_l = frequency_modulation::double_modulation(
+                            fm_wave_1,
+                            wave2_l,
+                            next_fm_step_1,
+                        );
+                        wave2_r = frequency_modulation::double_modulation(
+                            fm_wave_1,
+                            wave2_r,
+                            next_fm_step_1,
+                        );
+                    }
                     3 => {
-                        wave2_l = frequency_modulation::triple_modulation(fm_wave_1, wave2_l, next_fm_step_1);
-                        wave2_r = frequency_modulation::triple_modulation(fm_wave_1, wave2_r, next_fm_step_1);
-                    },
+                        wave2_l = frequency_modulation::triple_modulation(
+                            fm_wave_1,
+                            wave2_l,
+                            next_fm_step_1,
+                        );
+                        wave2_r = frequency_modulation::triple_modulation(
+                            fm_wave_1,
+                            wave2_r,
+                            next_fm_step_1,
+                        );
+                    }
                     _ => {}
                 }
             }
             if one_to_three > 0.0 {
                 match current_cycles {
                     1 => {
-                        wave3_l = frequency_modulation::frequency_modulation(fm_wave_1, wave3_l, next_fm_step_2);
-                        wave3_r = frequency_modulation::frequency_modulation(fm_wave_1, wave3_r, next_fm_step_2);
-                    },
+                        wave3_l = frequency_modulation::frequency_modulation(
+                            fm_wave_1,
+                            wave3_l,
+                            next_fm_step_2,
+                        );
+                        wave3_r = frequency_modulation::frequency_modulation(
+                            fm_wave_1,
+                            wave3_r,
+                            next_fm_step_2,
+                        );
+                    }
                     2 => {
-                        wave3_l = frequency_modulation::double_modulation(fm_wave_1, wave3_l, next_fm_step_2);
-                        wave3_r = frequency_modulation::double_modulation(fm_wave_1, wave3_r, next_fm_step_2);
-                    },
+                        wave3_l = frequency_modulation::double_modulation(
+                            fm_wave_1,
+                            wave3_l,
+                            next_fm_step_2,
+                        );
+                        wave3_r = frequency_modulation::double_modulation(
+                            fm_wave_1,
+                            wave3_r,
+                            next_fm_step_2,
+                        );
+                    }
                     3 => {
-                        wave3_l = frequency_modulation::triple_modulation(fm_wave_1, wave3_l, next_fm_step_2);
-                        wave3_r = frequency_modulation::triple_modulation(fm_wave_1, wave3_r, next_fm_step_2);
-                    },
+                        wave3_l = frequency_modulation::triple_modulation(
+                            fm_wave_1,
+                            wave3_l,
+                            next_fm_step_2,
+                        );
+                        wave3_r = frequency_modulation::triple_modulation(
+                            fm_wave_1,
+                            wave3_r,
+                            next_fm_step_2,
+                        );
+                    }
                     _ => {}
                 }
             }
             if two_to_three > 0.0 {
                 match current_cycles {
                     1 => {
-                        wave3_l = frequency_modulation::frequency_modulation(fm_wave_2, wave3_l, next_fm_step_3);
-                        wave3_r = frequency_modulation::frequency_modulation(fm_wave_2, wave3_r, next_fm_step_3);
-                    },
+                        wave3_l = frequency_modulation::frequency_modulation(
+                            fm_wave_2,
+                            wave3_l,
+                            next_fm_step_3,
+                        );
+                        wave3_r = frequency_modulation::frequency_modulation(
+                            fm_wave_2,
+                            wave3_r,
+                            next_fm_step_3,
+                        );
+                    }
                     2 => {
-                        wave3_l = frequency_modulation::double_modulation(fm_wave_2, wave3_l, next_fm_step_3);
-                        wave3_r = frequency_modulation::double_modulation(fm_wave_2, wave3_r, next_fm_step_3);
-                    },
+                        wave3_l = frequency_modulation::double_modulation(
+                            fm_wave_2,
+                            wave3_l,
+                            next_fm_step_3,
+                        );
+                        wave3_r = frequency_modulation::double_modulation(
+                            fm_wave_2,
+                            wave3_r,
+                            next_fm_step_3,
+                        );
+                    }
                     3 => {
-                        wave3_l = frequency_modulation::triple_modulation(fm_wave_2, wave3_l, next_fm_step_3);
-                        wave3_r = frequency_modulation::triple_modulation(fm_wave_2, wave3_r, next_fm_step_3);
-                    },
+                        wave3_l = frequency_modulation::triple_modulation(
+                            fm_wave_2,
+                            wave3_l,
+                            next_fm_step_3,
+                        );
+                        wave3_r = frequency_modulation::triple_modulation(
+                            fm_wave_2,
+                            wave3_r,
+                            next_fm_step_3,
+                        );
+                    }
                     _ => {}
                 }
             }
@@ -5215,11 +5308,14 @@ impl Actuate {
             let mut left_output: f32;
             let mut right_output: f32;
 
-            left_output = (wave1_l + wave2_l + wave3_l)*0.33;
-            right_output = (wave1_r + wave2_r + wave3_r)*0.33;
+            left_output = (wave1_l + wave2_l + wave3_l) * 0.33;
+            right_output = (wave1_r + wave2_r + wave3_r) * 0.33;
 
             if (voices_1 + voices_2 + voices_3) > 0 {
-                self.recorder.lock().unwrap().push(left_output, right_output);
+                self.recorder
+                    .lock()
+                    .unwrap()
+                    .push(left_output, right_output);
             }
 
             // FX
@@ -5307,10 +5403,10 @@ impl Actuate {
                 // Chorus
                 if self.params.use_chorus.value() {
                     self.chorus.update(
-                        self.sample_rate, 
-                        self.params.chorus_range.value(), 
-                        self.params.chorus_speed.value(), 
-                        self.params.chorus_amount.value()
+                        self.sample_rate,
+                        self.params.chorus_range.value(),
+                        self.params.chorus_speed.value(),
+                        self.params.chorus_amount.value(),
                     );
                     (left_output, right_output) = self.chorus.process(left_output, right_output);
                 }
@@ -5363,16 +5459,26 @@ impl Actuate {
                         ReverbModel::Default => {
                             self.reverb[0]
                                 .set_size(self.params.reverb_size.value(), self.sample_rate);
-                            self.reverb[1]
-                                .set_size(self.params.reverb_size.value() * 0.546, self.sample_rate);
-                            self.reverb[2]
-                                .set_size(self.params.reverb_size.value() * 0.251, self.sample_rate);
-                            self.reverb[3]
-                                .set_size(self.params.reverb_size.value() * 0.735, self.sample_rate);
-                            self.reverb[4]
-                                .set_size(self.params.reverb_size.value() * 0.669, self.sample_rate);
-                            self.reverb[5]
-                                .set_size(self.params.reverb_size.value() * 0.374, self.sample_rate);
+                            self.reverb[1].set_size(
+                                self.params.reverb_size.value() * 0.546,
+                                self.sample_rate,
+                            );
+                            self.reverb[2].set_size(
+                                self.params.reverb_size.value() * 0.251,
+                                self.sample_rate,
+                            );
+                            self.reverb[3].set_size(
+                                self.params.reverb_size.value() * 0.735,
+                                self.sample_rate,
+                            );
+                            self.reverb[4].set_size(
+                                self.params.reverb_size.value() * 0.669,
+                                self.sample_rate,
+                            );
+                            self.reverb[5].set_size(
+                                self.params.reverb_size.value() * 0.374,
+                                self.sample_rate,
+                            );
                             self.reverb[6]
                                 .set_size(self.params.reverb_size.value() * 0.8, self.sample_rate);
                             self.reverb[7]
@@ -5382,45 +5488,56 @@ impl Actuate {
                                 (left_output, right_output) = verb.process_tdl(
                                     left_output,
                                     right_output,
-                                    self.params.reverb_amount.value());                    
+                                    self.params.reverb_amount.value(),
+                                );
                             }
-                        },
+                        }
                         ReverbModel::Galactic => {
                             // AW Galactic modified
                             self.galactic_reverb.update(
                                 self.sample_rate,
                                 self.params.reverb_size.value() / 2.0,
                                 self.params.reverb_feedback.value(),
-                                self.params.reverb_amount.value());
-                            (left_output, right_output) = self.galactic_reverb.process(left_output, right_output);
-                        },
+                                self.params.reverb_amount.value(),
+                            );
+                            (left_output, right_output) =
+                                self.galactic_reverb.process(left_output, right_output);
+                        }
                         ReverbModel::ASpace => {
                             // AW Galactic simplified and changed
                             self.simple_space[0].update(
                                 self.sample_rate,
                                 self.params.reverb_size.value() / 2.0,
                                 self.params.reverb_feedback.value(),
-                                self.params.reverb_amount.value());
-                            (left_output, right_output) = self.simple_space[0].process(left_output, right_output);
+                                self.params.reverb_amount.value(),
+                            );
+                            (left_output, right_output) =
+                                self.simple_space[0].process(left_output, right_output);
                             self.simple_space[1].update(
                                 self.sample_rate,
                                 self.params.reverb_size.value() / 2.5,
                                 self.params.reverb_feedback.value() + 0.2,
-                                self.params.reverb_amount.value());
-                            (left_output, right_output) = self.simple_space[1].process(left_output, right_output);
+                                self.params.reverb_amount.value(),
+                            );
+                            (left_output, right_output) =
+                                self.simple_space[1].process(left_output, right_output);
                             self.simple_space[2].update(
                                 self.sample_rate,
                                 self.params.reverb_size.value() / 3.0,
                                 self.params.reverb_feedback.value() + 0.4,
-                                self.params.reverb_amount.value());
-                            (left_output, right_output) = self.simple_space[2].process(left_output, right_output);
+                                self.params.reverb_amount.value(),
+                            );
+                            (left_output, right_output) =
+                                self.simple_space[2].process(left_output, right_output);
                             self.simple_space[3].update(
                                 self.sample_rate,
                                 self.params.reverb_size.value() / 4.0,
                                 self.params.reverb_feedback.value() + 0.6,
-                                self.params.reverb_amount.value());
-                            (left_output, right_output) = self.simple_space[3].process(left_output, right_output);
-                        },
+                                self.params.reverb_amount.value(),
+                            );
+                            (left_output, right_output) =
+                                self.simple_space[3].process(left_output, right_output);
+                        }
                     }
                 }
                 // Limiter
@@ -5451,17 +5568,20 @@ impl Actuate {
 
             if *self.safety_clip_output.lock().unwrap() {
                 // Reassign our output signal
-                *channel_samples.get_mut(0).unwrap() = (left_output * self.params.master_level.value()).clamp(-1.0, 1.0);
-                *channel_samples.get_mut(1).unwrap() = (right_output * self.params.master_level.value()).clamp(-1.0, 1.0);
+                *channel_samples.get_mut(0).unwrap() =
+                    (left_output * self.params.master_level.value()).clamp(-1.0, 1.0);
+                *channel_samples.get_mut(1).unwrap() =
+                    (right_output * self.params.master_level.value()).clamp(-1.0, 1.0);
             } else {
                 // Reassign our output signal
-                *channel_samples.get_mut(0).unwrap() = left_output * self.params.master_level.value();
-                *channel_samples.get_mut(1).unwrap() = right_output * self.params.master_level.value();
+                *channel_samples.get_mut(0).unwrap() =
+                    left_output * self.params.master_level.value();
+                *channel_samples.get_mut(1).unwrap() =
+                    right_output * self.params.master_level.value();
             }
         }
     }
 
-    
     fn export_preset(saving_preset: Option<PathBuf>, mut preset: ActuatePresetV131) {
         if let Some(mut location) = saving_preset {
             if let Some(extension_check) = location.extension() {
@@ -5518,7 +5638,8 @@ impl Actuate {
             }
 
             // Deserialize into preset struct - return default empty lib if error
-            let unserialized: ActuatePresetV131 = serde_json::from_slice(file_data.as_bytes()).unwrap_or(ERROR_PRESET.clone());
+            let unserialized: ActuatePresetV131 =
+                serde_json::from_slice(file_data.as_bytes()).unwrap_or(ERROR_PRESET.clone());
 
             // This if cascade tries to load each predecessor format of presets
             if unserialized.preset_name.contains("Error") {
@@ -6009,20 +6130,20 @@ impl Actuate {
         match AMod1.audio_module_type {
             AudioModuleType::Sampler | AudioModuleType::Granulizer => {
                 *params.am1_sample.lock().unwrap() = AMod1.loaded_sample.clone();
-            },
-            _ => {},
+            }
+            _ => {}
         }
         match AMod2.audio_module_type {
             AudioModuleType::Sampler | AudioModuleType::Granulizer => {
                 *params.am2_sample.lock().unwrap() = AMod2.loaded_sample.clone();
-            },
-            _ => {},
+            }
+            _ => {}
         }
         match AMod3.audio_module_type {
             AudioModuleType::Sampler | AudioModuleType::Granulizer => {
                 *params.am3_sample.lock().unwrap() = AMod3.loaded_sample.clone();
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -6036,350 +6157,349 @@ impl Actuate {
         let AM1 = AM1c.lock().unwrap();
         let AM2 = AM2c.lock().unwrap();
         let AM3 = AM3c.lock().unwrap();
-        *arc_lib.lock().unwrap() =
-            ActuatePresetV131 {
-                preset_name: self.params.preset_name_p.lock().unwrap().clone(),
-                preset_info: self.params.preset_info_p.lock().unwrap().clone(),
-                preset_category: self.params.preset_category.value(),
-                tag_acid: self.params.tag_acid.value(),
-                tag_analog: self.params.tag_analog.value(),
-                tag_bright: self.params.tag_bright.value(),
-                tag_chord: self.params.tag_chord.value(),
-                tag_crisp: self.params.tag_crisp.value(),
-                tag_deep: self.params.tag_deep.value(),
-                tag_delicate: self.params.tag_delicate.value(),
-                tag_hard: self.params.tag_hard.value(),
-                tag_harsh: self.params.tag_harsh.value(),
-                tag_lush: self.params.tag_lush.value(),
-                tag_mellow: self.params.tag_mellow.value(),
-                tag_resonant: self.params.tag_resonant.value(),
-                tag_rich: self.params.tag_rich.value(),
-                tag_sharp: self.params.tag_sharp.value(),
-                tag_silky: self.params.tag_silky.value(),
-                tag_smooth: self.params.tag_smooth.value(),
-                tag_soft: self.params.tag_soft.value(),
-                tag_stab: self.params.tag_stab.value(),
-                tag_warm: self.params.tag_warm.value(),
-                // Modules 1
-                ///////////////////////////////////////////////////////////
-                mod1_audio_module_type: self.params.audio_module_1_type.value(),
-                mod1_audio_module_level: self.params.audio_module_1_level.value(),
-                mod1_audio_module_routing: self.params.audio_module_1_routing.value(),
-                // Granulizer/Sampler
-                mod1_loaded_sample: AM1.loaded_sample.clone(),
-                mod1_sample_lib: AM1.sample_lib.clone(),
-                mod1_loop_wavetable: AM1.loop_wavetable,
-                mod1_single_cycle: AM1.single_cycle,
-                mod1_restretch: AM1.restretch,
-                mod1_prev_restretch: AM1.prev_restretch,
-                mod1_start_position: AM1.start_position,
-                mod1_end_position: AM1._end_position,
-                mod1_grain_crossfade: AM1.grain_crossfade,
-                mod1_grain_gap: AM1.grain_gap,
-                mod1_grain_hold: AM1.grain_hold,
+        *arc_lib.lock().unwrap() = ActuatePresetV131 {
+            preset_name: self.params.preset_name_p.lock().unwrap().clone(),
+            preset_info: self.params.preset_info_p.lock().unwrap().clone(),
+            preset_category: self.params.preset_category.value(),
+            tag_acid: self.params.tag_acid.value(),
+            tag_analog: self.params.tag_analog.value(),
+            tag_bright: self.params.tag_bright.value(),
+            tag_chord: self.params.tag_chord.value(),
+            tag_crisp: self.params.tag_crisp.value(),
+            tag_deep: self.params.tag_deep.value(),
+            tag_delicate: self.params.tag_delicate.value(),
+            tag_hard: self.params.tag_hard.value(),
+            tag_harsh: self.params.tag_harsh.value(),
+            tag_lush: self.params.tag_lush.value(),
+            tag_mellow: self.params.tag_mellow.value(),
+            tag_resonant: self.params.tag_resonant.value(),
+            tag_rich: self.params.tag_rich.value(),
+            tag_sharp: self.params.tag_sharp.value(),
+            tag_silky: self.params.tag_silky.value(),
+            tag_smooth: self.params.tag_smooth.value(),
+            tag_soft: self.params.tag_soft.value(),
+            tag_stab: self.params.tag_stab.value(),
+            tag_warm: self.params.tag_warm.value(),
+            // Modules 1
+            ///////////////////////////////////////////////////////////
+            mod1_audio_module_type: self.params.audio_module_1_type.value(),
+            mod1_audio_module_level: self.params.audio_module_1_level.value(),
+            mod1_audio_module_routing: self.params.audio_module_1_routing.value(),
+            // Granulizer/Sampler
+            mod1_loaded_sample: AM1.loaded_sample.clone(),
+            mod1_sample_lib: AM1.sample_lib.clone(),
+            mod1_loop_wavetable: AM1.loop_wavetable,
+            mod1_single_cycle: AM1.single_cycle,
+            mod1_restretch: AM1.restretch,
+            mod1_prev_restretch: AM1.prev_restretch,
+            mod1_start_position: AM1.start_position,
+            mod1_end_position: AM1._end_position,
+            mod1_grain_crossfade: AM1.grain_crossfade,
+            mod1_grain_gap: AM1.grain_gap,
+            mod1_grain_hold: AM1.grain_hold,
 
-                // Osc module knob storage
-                mod1_osc_octave: AM1.osc_octave,
-                mod1_osc_semitones: AM1.osc_semitones,
-                mod1_osc_detune: AM1.osc_detune,
-                mod1_osc_attack: AM1.osc_attack,
-                mod1_osc_decay: AM1.osc_decay,
-                mod1_osc_sustain: AM1.osc_sustain,
-                mod1_osc_release: AM1.osc_release,
-                mod1_osc_retrigger: AM1.osc_retrigger,
-                mod1_osc_atk_curve: AM1.osc_atk_curve,
-                mod1_osc_dec_curve: AM1.osc_dec_curve,
-                mod1_osc_rel_curve: AM1.osc_rel_curve,
-                mod1_osc_unison: AM1.osc_unison,
-                mod1_osc_unison_detune: AM1.osc_unison_detune,
-                mod1_osc_stereo: AM1.osc_stereo,
+            // Osc module knob storage
+            mod1_osc_octave: AM1.osc_octave,
+            mod1_osc_semitones: AM1.osc_semitones,
+            mod1_osc_detune: AM1.osc_detune,
+            mod1_osc_attack: AM1.osc_attack,
+            mod1_osc_decay: AM1.osc_decay,
+            mod1_osc_sustain: AM1.osc_sustain,
+            mod1_osc_release: AM1.osc_release,
+            mod1_osc_retrigger: AM1.osc_retrigger,
+            mod1_osc_atk_curve: AM1.osc_atk_curve,
+            mod1_osc_dec_curve: AM1.osc_dec_curve,
+            mod1_osc_rel_curve: AM1.osc_rel_curve,
+            mod1_osc_unison: AM1.osc_unison,
+            mod1_osc_unison_detune: AM1.osc_unison_detune,
+            mod1_osc_stereo: AM1.osc_stereo,
 
-                // Modules 2
-                ///////////////////////////////////////////////////////////
-                mod2_audio_module_type: self.params.audio_module_2_type.value(),
-                mod2_audio_module_level: self.params.audio_module_2_level.value(),
-                mod2_audio_module_routing: self.params.audio_module_2_routing.value(),
-                // Granulizer/Sampler
-                mod2_loaded_sample: AM2.loaded_sample.clone(),
-                mod2_sample_lib: AM2.sample_lib.clone(),
-                mod2_loop_wavetable: AM2.loop_wavetable,
-                mod2_single_cycle: AM2.single_cycle,
-                mod2_restretch: AM2.restretch,
-                mod2_prev_restretch: AM2.prev_restretch,
-                mod2_start_position: AM2.start_position,
-                mod2_end_position: AM2._end_position,
-                mod2_grain_crossfade: AM2.grain_crossfade,
-                mod2_grain_gap: AM2.grain_gap,
-                mod2_grain_hold: AM2.grain_hold,
+            // Modules 2
+            ///////////////////////////////////////////////////////////
+            mod2_audio_module_type: self.params.audio_module_2_type.value(),
+            mod2_audio_module_level: self.params.audio_module_2_level.value(),
+            mod2_audio_module_routing: self.params.audio_module_2_routing.value(),
+            // Granulizer/Sampler
+            mod2_loaded_sample: AM2.loaded_sample.clone(),
+            mod2_sample_lib: AM2.sample_lib.clone(),
+            mod2_loop_wavetable: AM2.loop_wavetable,
+            mod2_single_cycle: AM2.single_cycle,
+            mod2_restretch: AM2.restretch,
+            mod2_prev_restretch: AM2.prev_restretch,
+            mod2_start_position: AM2.start_position,
+            mod2_end_position: AM2._end_position,
+            mod2_grain_crossfade: AM2.grain_crossfade,
+            mod2_grain_gap: AM2.grain_gap,
+            mod2_grain_hold: AM2.grain_hold,
 
-                // Osc module knob storage
-                mod2_osc_octave: AM2.osc_octave,
-                mod2_osc_semitones: AM2.osc_semitones,
-                mod2_osc_detune: AM2.osc_detune,
-                mod2_osc_attack: AM2.osc_attack,
-                mod2_osc_decay: AM2.osc_decay,
-                mod2_osc_sustain: AM2.osc_sustain,
-                mod2_osc_release: AM2.osc_release,
-                mod2_osc_retrigger: AM2.osc_retrigger,
-                mod2_osc_atk_curve: AM2.osc_atk_curve,
-                mod2_osc_dec_curve: AM2.osc_dec_curve,
-                mod2_osc_rel_curve: AM2.osc_rel_curve,
-                mod2_osc_unison: AM2.osc_unison,
-                mod2_osc_unison_detune: AM2.osc_unison_detune,
-                mod2_osc_stereo: AM2.osc_stereo,
+            // Osc module knob storage
+            mod2_osc_octave: AM2.osc_octave,
+            mod2_osc_semitones: AM2.osc_semitones,
+            mod2_osc_detune: AM2.osc_detune,
+            mod2_osc_attack: AM2.osc_attack,
+            mod2_osc_decay: AM2.osc_decay,
+            mod2_osc_sustain: AM2.osc_sustain,
+            mod2_osc_release: AM2.osc_release,
+            mod2_osc_retrigger: AM2.osc_retrigger,
+            mod2_osc_atk_curve: AM2.osc_atk_curve,
+            mod2_osc_dec_curve: AM2.osc_dec_curve,
+            mod2_osc_rel_curve: AM2.osc_rel_curve,
+            mod2_osc_unison: AM2.osc_unison,
+            mod2_osc_unison_detune: AM2.osc_unison_detune,
+            mod2_osc_stereo: AM2.osc_stereo,
 
-                // Modules 3
-                ///////////////////////////////////////////////////////////
-                mod3_audio_module_type: self.params.audio_module_3_type.value(),
-                mod3_audio_module_level: self.params.audio_module_3_level.value(),
-                mod3_audio_module_routing: self.params.audio_module_3_routing.value(),
-                // Granulizer/Sampler
-                mod3_loaded_sample: AM3.loaded_sample.clone(),
-                mod3_sample_lib: AM3.sample_lib.clone(),
-                mod3_loop_wavetable: AM3.loop_wavetable,
-                mod3_single_cycle: AM3.single_cycle,
-                mod3_restretch: AM3.restretch,
-                mod3_prev_restretch: AM3.prev_restretch,
-                mod3_start_position: AM3.start_position,
-                mod3_end_position: AM3._end_position,
-                mod3_grain_crossfade: AM3.grain_crossfade,
-                mod3_grain_gap: AM3.grain_gap,
-                mod3_grain_hold: AM3.grain_hold,
+            // Modules 3
+            ///////////////////////////////////////////////////////////
+            mod3_audio_module_type: self.params.audio_module_3_type.value(),
+            mod3_audio_module_level: self.params.audio_module_3_level.value(),
+            mod3_audio_module_routing: self.params.audio_module_3_routing.value(),
+            // Granulizer/Sampler
+            mod3_loaded_sample: AM3.loaded_sample.clone(),
+            mod3_sample_lib: AM3.sample_lib.clone(),
+            mod3_loop_wavetable: AM3.loop_wavetable,
+            mod3_single_cycle: AM3.single_cycle,
+            mod3_restretch: AM3.restretch,
+            mod3_prev_restretch: AM3.prev_restretch,
+            mod3_start_position: AM3.start_position,
+            mod3_end_position: AM3._end_position,
+            mod3_grain_crossfade: AM3.grain_crossfade,
+            mod3_grain_gap: AM3.grain_gap,
+            mod3_grain_hold: AM3.grain_hold,
 
-                // Osc module knob storage
-                mod3_osc_octave: AM3.osc_octave,
-                mod3_osc_semitones: AM3.osc_semitones,
-                mod3_osc_detune: AM3.osc_detune,
-                mod3_osc_attack: AM3.osc_attack,
-                mod3_osc_decay: AM3.osc_decay,
-                mod3_osc_sustain: AM3.osc_sustain,
-                mod3_osc_release: AM3.osc_release,
-                mod3_osc_retrigger: AM3.osc_retrigger,
-                mod3_osc_atk_curve: AM3.osc_atk_curve,
-                mod3_osc_dec_curve: AM3.osc_dec_curve,
-                mod3_osc_rel_curve: AM3.osc_rel_curve,
-                mod3_osc_unison: AM3.osc_unison,
-                mod3_osc_unison_detune: AM3.osc_unison_detune,
-                mod3_osc_stereo: AM3.osc_stereo,
+            // Osc module knob storage
+            mod3_osc_octave: AM3.osc_octave,
+            mod3_osc_semitones: AM3.osc_semitones,
+            mod3_osc_detune: AM3.osc_detune,
+            mod3_osc_attack: AM3.osc_attack,
+            mod3_osc_decay: AM3.osc_decay,
+            mod3_osc_sustain: AM3.osc_sustain,
+            mod3_osc_release: AM3.osc_release,
+            mod3_osc_retrigger: AM3.osc_retrigger,
+            mod3_osc_atk_curve: AM3.osc_atk_curve,
+            mod3_osc_dec_curve: AM3.osc_dec_curve,
+            mod3_osc_rel_curve: AM3.osc_rel_curve,
+            mod3_osc_unison: AM3.osc_unison,
+            mod3_osc_unison_detune: AM3.osc_unison_detune,
+            mod3_osc_stereo: AM3.osc_stereo,
 
-                // Filter storage - gotten from params
-                filter_wet: self.params.filter_wet.value(),
-                filter_cutoff: self.params.filter_cutoff.value(),
-                filter_resonance: self.params.filter_resonance.value(),
-                filter_res_type: self.params.filter_res_type.value(),
-                filter_lp_amount: self.params.filter_lp_amount.value(),
-                filter_hp_amount: self.params.filter_hp_amount.value(),
-                filter_bp_amount: self.params.filter_bp_amount.value(),
-                filter_env_peak: self.params.filter_env_peak.value(),
-                filter_env_attack: self.params.filter_env_attack.value(),
-                filter_env_decay: self.params.filter_env_decay.value(),
-                filter_env_sustain: self.params.filter_env_sustain.value(),
-                filter_env_release: self.params.filter_env_release.value(),
-                filter_env_atk_curve: self.params.filter_env_atk_curve.value(),
-                filter_env_dec_curve: self.params.filter_env_dec_curve.value(),
-                filter_env_rel_curve: self.params.filter_env_rel_curve.value(),
-                filter_alg_type: self.params.filter_alg_type.value(),
-                tilt_filter_type: self.params.tilt_filter_type.value(),
+            // Filter storage - gotten from params
+            filter_wet: self.params.filter_wet.value(),
+            filter_cutoff: self.params.filter_cutoff.value(),
+            filter_resonance: self.params.filter_resonance.value(),
+            filter_res_type: self.params.filter_res_type.value(),
+            filter_lp_amount: self.params.filter_lp_amount.value(),
+            filter_hp_amount: self.params.filter_hp_amount.value(),
+            filter_bp_amount: self.params.filter_bp_amount.value(),
+            filter_env_peak: self.params.filter_env_peak.value(),
+            filter_env_attack: self.params.filter_env_attack.value(),
+            filter_env_decay: self.params.filter_env_decay.value(),
+            filter_env_sustain: self.params.filter_env_sustain.value(),
+            filter_env_release: self.params.filter_env_release.value(),
+            filter_env_atk_curve: self.params.filter_env_atk_curve.value(),
+            filter_env_dec_curve: self.params.filter_env_dec_curve.value(),
+            filter_env_rel_curve: self.params.filter_env_rel_curve.value(),
+            filter_alg_type: self.params.filter_alg_type.value(),
+            tilt_filter_type: self.params.tilt_filter_type.value(),
 
-                filter_wet_2: self.params.filter_wet_2.value(),
-                filter_cutoff_2: self.params.filter_cutoff_2.value(),
-                filter_resonance_2: self.params.filter_resonance_2.value(),
-                filter_res_type_2: self.params.filter_res_type_2.value(),
-                filter_lp_amount_2: self.params.filter_lp_amount_2.value(),
-                filter_hp_amount_2: self.params.filter_hp_amount_2.value(),
-                filter_bp_amount_2: self.params.filter_bp_amount_2.value(),
-                filter_env_peak_2: self.params.filter_env_peak_2.value(),
-                filter_env_attack_2: self.params.filter_env_attack_2.value(),
-                filter_env_decay_2: self.params.filter_env_decay_2.value(),
-                filter_env_sustain_2: self.params.filter_env_sustain_2.value(),
-                filter_env_release_2: self.params.filter_env_release_2.value(),
-                filter_env_atk_curve_2: self.params.filter_env_atk_curve_2.value(),
-                filter_env_dec_curve_2: self.params.filter_env_dec_curve_2.value(),
-                filter_env_rel_curve_2: self.params.filter_env_rel_curve_2.value(),
-                filter_alg_type_2: self.params.filter_alg_type_2.value(),
-                tilt_filter_type_2: self.params.tilt_filter_type_2.value(),
+            filter_wet_2: self.params.filter_wet_2.value(),
+            filter_cutoff_2: self.params.filter_cutoff_2.value(),
+            filter_resonance_2: self.params.filter_resonance_2.value(),
+            filter_res_type_2: self.params.filter_res_type_2.value(),
+            filter_lp_amount_2: self.params.filter_lp_amount_2.value(),
+            filter_hp_amount_2: self.params.filter_hp_amount_2.value(),
+            filter_bp_amount_2: self.params.filter_bp_amount_2.value(),
+            filter_env_peak_2: self.params.filter_env_peak_2.value(),
+            filter_env_attack_2: self.params.filter_env_attack_2.value(),
+            filter_env_decay_2: self.params.filter_env_decay_2.value(),
+            filter_env_sustain_2: self.params.filter_env_sustain_2.value(),
+            filter_env_release_2: self.params.filter_env_release_2.value(),
+            filter_env_atk_curve_2: self.params.filter_env_atk_curve_2.value(),
+            filter_env_dec_curve_2: self.params.filter_env_dec_curve_2.value(),
+            filter_env_rel_curve_2: self.params.filter_env_rel_curve_2.value(),
+            filter_alg_type_2: self.params.filter_alg_type_2.value(),
+            tilt_filter_type_2: self.params.tilt_filter_type_2.value(),
 
-                filter_routing: self.params.filter_routing.value(),
-                filter_cutoff_link: self.params.filter_cutoff_link.value(),
+            filter_routing: self.params.filter_routing.value(),
+            filter_cutoff_link: self.params.filter_cutoff_link.value(),
 
-                // Pitch
-                pitch_enable: self.params.pitch_enable.value(),
-                pitch_env_atk_curve: self.params.pitch_env_atk_curve.value(),
-                pitch_env_dec_curve: self.params.pitch_env_dec_curve.value(),
-                pitch_env_rel_curve: self.params.pitch_env_rel_curve.value(),
-                pitch_env_attack: self.params.pitch_env_attack.value(),
-                pitch_env_decay: self.params.pitch_env_decay.value(),
-                pitch_env_sustain: self.params.pitch_env_sustain.value(),
-                pitch_env_release: self.params.pitch_env_release.value(),
-                pitch_env_peak: self.params.pitch_env_peak.value(),
-                pitch_routing: self.params.pitch_routing.value(),
+            // Pitch
+            pitch_enable: self.params.pitch_enable.value(),
+            pitch_env_atk_curve: self.params.pitch_env_atk_curve.value(),
+            pitch_env_dec_curve: self.params.pitch_env_dec_curve.value(),
+            pitch_env_rel_curve: self.params.pitch_env_rel_curve.value(),
+            pitch_env_attack: self.params.pitch_env_attack.value(),
+            pitch_env_decay: self.params.pitch_env_decay.value(),
+            pitch_env_sustain: self.params.pitch_env_sustain.value(),
+            pitch_env_release: self.params.pitch_env_release.value(),
+            pitch_env_peak: self.params.pitch_env_peak.value(),
+            pitch_routing: self.params.pitch_routing.value(),
 
-                pitch_enable_2: self.params.pitch_enable_2.value(),
-                pitch_env_atk_curve_2: self.params.pitch_env_atk_curve_2.value(),
-                pitch_env_dec_curve_2: self.params.pitch_env_dec_curve_2.value(),
-                pitch_env_rel_curve_2: self.params.pitch_env_rel_curve_2.value(),
-                pitch_env_attack_2: self.params.pitch_env_attack_2.value(),
-                pitch_env_decay_2: self.params.pitch_env_decay_2.value(),
-                pitch_env_sustain_2: self.params.pitch_env_sustain_2.value(),
-                pitch_env_release_2: self.params.pitch_env_release_2.value(),
-                pitch_env_peak_2: self.params.pitch_env_peak_2.value(),
-                pitch_routing_2: self.params.pitch_routing_2.value(),
+            pitch_enable_2: self.params.pitch_enable_2.value(),
+            pitch_env_atk_curve_2: self.params.pitch_env_atk_curve_2.value(),
+            pitch_env_dec_curve_2: self.params.pitch_env_dec_curve_2.value(),
+            pitch_env_rel_curve_2: self.params.pitch_env_rel_curve_2.value(),
+            pitch_env_attack_2: self.params.pitch_env_attack_2.value(),
+            pitch_env_decay_2: self.params.pitch_env_decay_2.value(),
+            pitch_env_sustain_2: self.params.pitch_env_sustain_2.value(),
+            pitch_env_release_2: self.params.pitch_env_release_2.value(),
+            pitch_env_peak_2: self.params.pitch_env_peak_2.value(),
+            pitch_routing_2: self.params.pitch_routing_2.value(),
 
-                // LFOs
-                lfo1_enable: self.params.lfo1_enable.value(),
-                lfo2_enable: self.params.lfo2_enable.value(),
-                lfo3_enable: self.params.lfo3_enable.value(),
+            // LFOs
+            lfo1_enable: self.params.lfo1_enable.value(),
+            lfo2_enable: self.params.lfo2_enable.value(),
+            lfo3_enable: self.params.lfo3_enable.value(),
 
-                lfo1_freq: self.params.lfo1_freq.value(),
-                lfo1_retrigger: self.params.lfo1_retrigger.value(),
-                lfo1_sync: self.params.lfo1_sync.value(),
-                lfo1_snap: self.params.lfo1_snap.value(),
-                lfo1_waveform: self.params.lfo1_waveform.value(),
-                lfo1_phase: self.params.lfo1_phase.value(),
+            lfo1_freq: self.params.lfo1_freq.value(),
+            lfo1_retrigger: self.params.lfo1_retrigger.value(),
+            lfo1_sync: self.params.lfo1_sync.value(),
+            lfo1_snap: self.params.lfo1_snap.value(),
+            lfo1_waveform: self.params.lfo1_waveform.value(),
+            lfo1_phase: self.params.lfo1_phase.value(),
 
-                lfo2_freq: self.params.lfo2_freq.value(),
-                lfo2_retrigger: self.params.lfo2_retrigger.value(),
-                lfo2_sync: self.params.lfo2_sync.value(),
-                lfo2_snap: self.params.lfo2_snap.value(),
-                lfo2_waveform: self.params.lfo2_waveform.value(),
-                lfo2_phase: self.params.lfo2_phase.value(),
+            lfo2_freq: self.params.lfo2_freq.value(),
+            lfo2_retrigger: self.params.lfo2_retrigger.value(),
+            lfo2_sync: self.params.lfo2_sync.value(),
+            lfo2_snap: self.params.lfo2_snap.value(),
+            lfo2_waveform: self.params.lfo2_waveform.value(),
+            lfo2_phase: self.params.lfo2_phase.value(),
 
-                lfo3_freq: self.params.lfo3_freq.value(),
-                lfo3_retrigger: self.params.lfo3_retrigger.value(),
-                lfo3_sync: self.params.lfo3_sync.value(),
-                lfo3_snap: self.params.lfo3_snap.value(),
-                lfo3_waveform: self.params.lfo3_waveform.value(),
-                lfo3_phase: self.params.lfo3_phase.value(),
+            lfo3_freq: self.params.lfo3_freq.value(),
+            lfo3_retrigger: self.params.lfo3_retrigger.value(),
+            lfo3_sync: self.params.lfo3_sync.value(),
+            lfo3_snap: self.params.lfo3_snap.value(),
+            lfo3_waveform: self.params.lfo3_waveform.value(),
+            lfo3_phase: self.params.lfo3_phase.value(),
 
-                mod_source_1: self.params.mod_source_1.value(),
-                mod_source_2: self.params.mod_source_2.value(),
-                mod_source_3: self.params.mod_source_3.value(),
-                mod_source_4: self.params.mod_source_4.value(),
-                mod_dest_1: self.params.mod_destination_1.value(),
-                mod_dest_2: self.params.mod_destination_2.value(),
-                mod_dest_3: self.params.mod_destination_3.value(),
-                mod_dest_4: self.params.mod_destination_4.value(),
-                mod_amount_1: self.params.mod_amount_knob_1.value(),
-                mod_amount_2: self.params.mod_amount_knob_2.value(),
-                mod_amount_3: self.params.mod_amount_knob_3.value(),
-                mod_amount_4: self.params.mod_amount_knob_4.value(),
+            mod_source_1: self.params.mod_source_1.value(),
+            mod_source_2: self.params.mod_source_2.value(),
+            mod_source_3: self.params.mod_source_3.value(),
+            mod_source_4: self.params.mod_source_4.value(),
+            mod_dest_1: self.params.mod_destination_1.value(),
+            mod_dest_2: self.params.mod_destination_2.value(),
+            mod_dest_3: self.params.mod_destination_3.value(),
+            mod_dest_4: self.params.mod_destination_4.value(),
+            mod_amount_1: self.params.mod_amount_knob_1.value(),
+            mod_amount_2: self.params.mod_amount_knob_2.value(),
+            mod_amount_3: self.params.mod_amount_knob_3.value(),
+            mod_amount_4: self.params.mod_amount_knob_4.value(),
 
-                fm_one_to_two: self.params.fm_one_to_two.value(),
-                fm_one_to_three: self.params.fm_one_to_three.value(),
-                fm_two_to_three: self.params.fm_two_to_three.value(),
-                fm_cycles: self.params.fm_cycles.value(),
-                fm_attack: self.params.fm_attack.value(),
-                fm_decay: self.params.fm_decay.value(),
-                fm_sustain: self.params.fm_sustain.value(),
-                fm_release: self.params.fm_release.value(),
-                fm_attack_curve: self.params.fm_attack_curve.value(),
-                fm_decay_curve: self.params.fm_decay_curve.value(),
-                fm_release_curve: self.params.fm_release_curve.value(),
+            fm_one_to_two: self.params.fm_one_to_two.value(),
+            fm_one_to_three: self.params.fm_one_to_three.value(),
+            fm_two_to_three: self.params.fm_two_to_three.value(),
+            fm_cycles: self.params.fm_cycles.value(),
+            fm_attack: self.params.fm_attack.value(),
+            fm_decay: self.params.fm_decay.value(),
+            fm_sustain: self.params.fm_sustain.value(),
+            fm_release: self.params.fm_release.value(),
+            fm_attack_curve: self.params.fm_attack_curve.value(),
+            fm_decay_curve: self.params.fm_decay_curve.value(),
+            fm_release_curve: self.params.fm_release_curve.value(),
 
-                pre_use_eq: self.params.pre_use_eq.value(),
-                pre_low_freq: self.params.pre_low_freq.value(),
-                pre_mid_freq: self.params.pre_mid_freq.value(),
-                pre_high_freq: self.params.pre_high_freq.value(),
-                pre_low_gain: self.params.pre_low_gain.value(),
-                pre_mid_gain: self.params.pre_mid_gain.value(),
-                pre_high_gain: self.params.pre_high_gain.value(),
+            pre_use_eq: self.params.pre_use_eq.value(),
+            pre_low_freq: self.params.pre_low_freq.value(),
+            pre_mid_freq: self.params.pre_mid_freq.value(),
+            pre_high_freq: self.params.pre_high_freq.value(),
+            pre_low_gain: self.params.pre_low_gain.value(),
+            pre_mid_gain: self.params.pre_mid_gain.value(),
+            pre_high_gain: self.params.pre_high_gain.value(),
 
-                stereo_algorithm: self.params.stereo_algorithm.value().clone(),
+            stereo_algorithm: self.params.stereo_algorithm.value().clone(),
 
-                use_fx: self.params.use_fx.value(),
-                use_compressor: self.params.use_compressor.value(),
-                comp_amt: self.params.comp_amt.value(),
-                comp_atk: self.params.comp_atk.value(),
-                comp_rel: self.params.comp_rel.value(),
-                comp_drive: self.params.comp_drive.value(),
-                use_abass: self.params.use_abass.value(),
-                abass_amount: self.params.abass_amount.value(),
-                use_saturation: self.params.use_saturation.value(),
-                sat_amount: self.params.sat_amt.value(),
-                sat_type: self.params.sat_type.value(),
-                use_delay: self.params.use_delay.value(),
-                delay_amount: self.params.delay_amount.value(),
-                delay_time: self.params.delay_time.value(),
-                delay_decay: self.params.delay_decay.value(),
-                delay_type: self.params.delay_type.value(),
-                use_reverb: self.params.use_reverb.value(),
-                reverb_model: self.params.reverb_model.value(),
-                reverb_amount: self.params.reverb_amount.value(),
-                reverb_size: self.params.reverb_size.value(),
-                reverb_feedback: self.params.reverb_feedback.value(),
-                use_chorus: self.params.use_chorus.value(),
-                chorus_amount: self.params.chorus_amount.value(),
-                chorus_range: self.params.chorus_range.value(),
-                chorus_speed: self.params.chorus_speed.value(),
-                use_phaser: self.params.use_phaser.value(),
-                phaser_amount: self.params.phaser_amount.value(),
-                phaser_depth: self.params.phaser_depth.value(),
-                phaser_rate: self.params.phaser_rate.value(),
-                phaser_feedback: self.params.phaser_feedback.value(),
-                use_buffermod: self.params.use_buffermod.value(),
-                buffermod_amount: self.params.buffermod_amount.value(),
-                buffermod_depth: self.params.buffermod_depth.value(),
-                buffermod_rate: self.params.buffermod_rate.value(),
-                buffermod_spread: self.params.buffermod_spread.value(),
-                buffermod_timing: self.params.buffermod_timing.value(),
-                use_flanger: self.params.use_flanger.value(),
-                flanger_amount: self.params.flanger_amount.value(),
-                flanger_depth: self.params.flanger_depth.value(),
-                flanger_rate: self.params.flanger_rate.value(),
-                flanger_feedback: self.params.flanger_feedback.value(),
-                use_limiter: self.params.use_limiter.value(),
-                limiter_threshold: self.params.limiter_threshold.value(),
-                limiter_knee: self.params.limiter_knee.value(),
+            use_fx: self.params.use_fx.value(),
+            use_compressor: self.params.use_compressor.value(),
+            comp_amt: self.params.comp_amt.value(),
+            comp_atk: self.params.comp_atk.value(),
+            comp_rel: self.params.comp_rel.value(),
+            comp_drive: self.params.comp_drive.value(),
+            use_abass: self.params.use_abass.value(),
+            abass_amount: self.params.abass_amount.value(),
+            use_saturation: self.params.use_saturation.value(),
+            sat_amount: self.params.sat_amt.value(),
+            sat_type: self.params.sat_type.value(),
+            use_delay: self.params.use_delay.value(),
+            delay_amount: self.params.delay_amount.value(),
+            delay_time: self.params.delay_time.value(),
+            delay_decay: self.params.delay_decay.value(),
+            delay_type: self.params.delay_type.value(),
+            use_reverb: self.params.use_reverb.value(),
+            reverb_model: self.params.reverb_model.value(),
+            reverb_amount: self.params.reverb_amount.value(),
+            reverb_size: self.params.reverb_size.value(),
+            reverb_feedback: self.params.reverb_feedback.value(),
+            use_chorus: self.params.use_chorus.value(),
+            chorus_amount: self.params.chorus_amount.value(),
+            chorus_range: self.params.chorus_range.value(),
+            chorus_speed: self.params.chorus_speed.value(),
+            use_phaser: self.params.use_phaser.value(),
+            phaser_amount: self.params.phaser_amount.value(),
+            phaser_depth: self.params.phaser_depth.value(),
+            phaser_rate: self.params.phaser_rate.value(),
+            phaser_feedback: self.params.phaser_feedback.value(),
+            use_buffermod: self.params.use_buffermod.value(),
+            buffermod_amount: self.params.buffermod_amount.value(),
+            buffermod_depth: self.params.buffermod_depth.value(),
+            buffermod_rate: self.params.buffermod_rate.value(),
+            buffermod_spread: self.params.buffermod_spread.value(),
+            buffermod_timing: self.params.buffermod_timing.value(),
+            use_flanger: self.params.use_flanger.value(),
+            flanger_amount: self.params.flanger_amount.value(),
+            flanger_depth: self.params.flanger_depth.value(),
+            flanger_rate: self.params.flanger_rate.value(),
+            flanger_feedback: self.params.flanger_feedback.value(),
+            use_limiter: self.params.use_limiter.value(),
+            limiter_threshold: self.params.limiter_threshold.value(),
+            limiter_knee: self.params.limiter_knee.value(),
 
-                additive_amp_1_0: self.params.additive_amp_1_0.value(),
-                additive_amp_1_1: self.params.additive_amp_1_1.value(),
-                additive_amp_1_2: self.params.additive_amp_1_2.value(),
-                additive_amp_1_3: self.params.additive_amp_1_3.value(),
-                additive_amp_1_4: self.params.additive_amp_1_4.value(),
-                additive_amp_1_5: self.params.additive_amp_1_5.value(),
-                additive_amp_1_6: self.params.additive_amp_1_6.value(),
-                additive_amp_1_7: self.params.additive_amp_1_7.value(),
-                additive_amp_1_8: self.params.additive_amp_1_8.value(),
-                additive_amp_1_9: self.params.additive_amp_1_9.value(),
-                additive_amp_1_10: self.params.additive_amp_1_10.value(),
-                additive_amp_1_11: self.params.additive_amp_1_11.value(),
-                additive_amp_1_12: self.params.additive_amp_1_12.value(),
-                additive_amp_1_13: self.params.additive_amp_1_13.value(),
-                additive_amp_1_14: self.params.additive_amp_1_14.value(),
-                additive_amp_1_15: self.params.additive_amp_1_15.value(),
-                additive_amp_2_0: self.params.additive_amp_2_0.value(),
-                additive_amp_2_1: self.params.additive_amp_2_1.value(),
-                additive_amp_2_2: self.params.additive_amp_2_2.value(),
-                additive_amp_2_3: self.params.additive_amp_2_3.value(),
-                additive_amp_2_4: self.params.additive_amp_2_4.value(),
-                additive_amp_2_5: self.params.additive_amp_2_5.value(),
-                additive_amp_2_6: self.params.additive_amp_2_6.value(),
-                additive_amp_2_7: self.params.additive_amp_2_7.value(),
-                additive_amp_2_8: self.params.additive_amp_2_8.value(),
-                additive_amp_2_9: self.params.additive_amp_2_9.value(),
-                additive_amp_2_10: self.params.additive_amp_2_10.value(),
-                additive_amp_2_11: self.params.additive_amp_2_11.value(),
-                additive_amp_2_12: self.params.additive_amp_2_12.value(),
-                additive_amp_2_13: self.params.additive_amp_2_13.value(),
-                additive_amp_2_14: self.params.additive_amp_2_14.value(),
-                additive_amp_2_15: self.params.additive_amp_2_15.value(),
-                additive_amp_3_0: self.params.additive_amp_3_0.value(),
-                additive_amp_3_1: self.params.additive_amp_3_1.value(),
-                additive_amp_3_2: self.params.additive_amp_3_2.value(),
-                additive_amp_3_3: self.params.additive_amp_3_3.value(),
-                additive_amp_3_4: self.params.additive_amp_3_4.value(),
-                additive_amp_3_5: self.params.additive_amp_3_5.value(),
-                additive_amp_3_6: self.params.additive_amp_3_6.value(),
-                additive_amp_3_7: self.params.additive_amp_3_7.value(),
-                additive_amp_3_8: self.params.additive_amp_3_8.value(),
-                additive_amp_3_9: self.params.additive_amp_3_9.value(),
-                additive_amp_3_10: self.params.additive_amp_3_10.value(),
-                additive_amp_3_11: self.params.additive_amp_3_11.value(),
-                additive_amp_3_12: self.params.additive_amp_3_12.value(),
-                additive_amp_3_13: self.params.additive_amp_3_13.value(),
-                additive_amp_3_14: self.params.additive_amp_3_14.value(),
-                additive_amp_3_15: self.params.additive_amp_3_15.value(),
-            };
+            additive_amp_1_0: self.params.additive_amp_1_0.value(),
+            additive_amp_1_1: self.params.additive_amp_1_1.value(),
+            additive_amp_1_2: self.params.additive_amp_1_2.value(),
+            additive_amp_1_3: self.params.additive_amp_1_3.value(),
+            additive_amp_1_4: self.params.additive_amp_1_4.value(),
+            additive_amp_1_5: self.params.additive_amp_1_5.value(),
+            additive_amp_1_6: self.params.additive_amp_1_6.value(),
+            additive_amp_1_7: self.params.additive_amp_1_7.value(),
+            additive_amp_1_8: self.params.additive_amp_1_8.value(),
+            additive_amp_1_9: self.params.additive_amp_1_9.value(),
+            additive_amp_1_10: self.params.additive_amp_1_10.value(),
+            additive_amp_1_11: self.params.additive_amp_1_11.value(),
+            additive_amp_1_12: self.params.additive_amp_1_12.value(),
+            additive_amp_1_13: self.params.additive_amp_1_13.value(),
+            additive_amp_1_14: self.params.additive_amp_1_14.value(),
+            additive_amp_1_15: self.params.additive_amp_1_15.value(),
+            additive_amp_2_0: self.params.additive_amp_2_0.value(),
+            additive_amp_2_1: self.params.additive_amp_2_1.value(),
+            additive_amp_2_2: self.params.additive_amp_2_2.value(),
+            additive_amp_2_3: self.params.additive_amp_2_3.value(),
+            additive_amp_2_4: self.params.additive_amp_2_4.value(),
+            additive_amp_2_5: self.params.additive_amp_2_5.value(),
+            additive_amp_2_6: self.params.additive_amp_2_6.value(),
+            additive_amp_2_7: self.params.additive_amp_2_7.value(),
+            additive_amp_2_8: self.params.additive_amp_2_8.value(),
+            additive_amp_2_9: self.params.additive_amp_2_9.value(),
+            additive_amp_2_10: self.params.additive_amp_2_10.value(),
+            additive_amp_2_11: self.params.additive_amp_2_11.value(),
+            additive_amp_2_12: self.params.additive_amp_2_12.value(),
+            additive_amp_2_13: self.params.additive_amp_2_13.value(),
+            additive_amp_2_14: self.params.additive_amp_2_14.value(),
+            additive_amp_2_15: self.params.additive_amp_2_15.value(),
+            additive_amp_3_0: self.params.additive_amp_3_0.value(),
+            additive_amp_3_1: self.params.additive_amp_3_1.value(),
+            additive_amp_3_2: self.params.additive_amp_3_2.value(),
+            additive_amp_3_3: self.params.additive_amp_3_3.value(),
+            additive_amp_3_4: self.params.additive_amp_3_4.value(),
+            additive_amp_3_5: self.params.additive_amp_3_5.value(),
+            additive_amp_3_6: self.params.additive_amp_3_6.value(),
+            additive_amp_3_7: self.params.additive_amp_3_7.value(),
+            additive_amp_3_8: self.params.additive_amp_3_8.value(),
+            additive_amp_3_9: self.params.additive_amp_3_9.value(),
+            additive_amp_3_10: self.params.additive_amp_3_10.value(),
+            additive_amp_3_11: self.params.additive_amp_3_11.value(),
+            additive_amp_3_12: self.params.additive_amp_3_12.value(),
+            additive_amp_3_13: self.params.additive_amp_3_13.value(),
+            additive_amp_3_14: self.params.additive_amp_3_14.value(),
+            additive_amp_3_15: self.params.additive_amp_3_15.value(),
+        };
     }
 }
 
@@ -6388,22 +6508,17 @@ impl ClapPlugin for Actuate {
     const CLAP_DESCRIPTION: Option<&'static str> = Some("Sampler + Synth");
     const CLAP_MANUAL_URL: Option<&'static str> = Some(Self::URL);
     const CLAP_SUPPORT_URL: Option<&'static str> = None;
-    const CLAP_FEATURES: &'static [ClapFeature] = &[
-        ClapFeature::Instrument,
-        ClapFeature::Sampler,
-    ];
+    const CLAP_FEATURES: &'static [ClapFeature] = &[ClapFeature::Instrument, ClapFeature::Sampler];
 }
 
 impl Vst3Plugin for Actuate {
     const VST3_CLASS_ID: [u8; 16] = *b"ActuateArduraAAA";
-    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] = &[
-        Vst3SubCategory::Instrument, 
-        Vst3SubCategory::Sampler
-    ];
+    const VST3_SUBCATEGORIES: &'static [Vst3SubCategory] =
+        &[Vst3SubCategory::Instrument, Vst3SubCategory::Sampler];
 }
 
-nih_export_clap!(Actuate);
-nih_export_vst3!(Actuate);
+nice_export_clap!(Actuate);
+nice_export_vst3!(Actuate);
 
 // I use this when I want to remove label and unit from a param in gui
 pub fn format_nothing() -> Arc<dyn Fn(f32) -> String + Send + Sync> {
@@ -6419,7 +6534,6 @@ fn adv_scale_value(input: f32, in_min: f32, in_max: f32, out_min: f32, out_max: 
 
     scaled_value
 }
-
 
 lazy_static::lazy_static!(
     static ref ERROR_PRESETV130: ActuatePresetV130 = ActuatePresetV130 {
@@ -7407,4 +7521,3 @@ lazy_static::lazy_static!(
         additive_amp_3_15: 0.0,
     };
 );
-

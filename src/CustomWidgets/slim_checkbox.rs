@@ -3,9 +3,15 @@
 
 // ----------------------------------------------------------------------------
 
-use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
 use nih_plug_egui::egui::{
-    self, epaint::{self, Brush}, pos2, vec2, NumExt, Response, Sense, Shape, TextStyle, TextureId, Ui, Vec2, Widget, WidgetInfo, WidgetText, WidgetType
+    self,
+    epaint::{self, Brush},
+    pos2, vec2, NumExt, Response, Sense, Shape, TextStyle, TextureId, Ui, Vec2, Widget, WidgetInfo,
+    WidgetText, WidgetType,
+};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
 // TODO(emilk): allow checkbox without a text label
@@ -62,8 +68,10 @@ impl<'a> Widget for AtomicSlimCheckbox<'a> {
 
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             //This is the only piece I changed -Ardura
-            desired_size =
-                desired_size.at_least(vec2(spacing.interact_size.x * 0.45, spacing.interact_size.y));
+            desired_size = desired_size.at_least(vec2(
+                spacing.interact_size.x * 0.45,
+                spacing.interact_size.y,
+            ));
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
             (Some(text), desired_size)
@@ -159,8 +167,10 @@ impl<'a> Widget for SlimCheckbox<'a> {
 
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
             //This is the only piece I changed -Ardura
-            desired_size =
-                desired_size.at_least(vec2(spacing.interact_size.x * 0.45, spacing.interact_size.y));
+            desired_size = desired_size.at_least(vec2(
+                spacing.interact_size.x * 0.45,
+                spacing.interact_size.y,
+            ));
             /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
             (Some(text), desired_size)
@@ -198,7 +208,7 @@ impl<'a> Widget for SlimCheckbox<'a> {
                     fill_texture_id: TextureId::default(),
                     uv: big_icon_rect.expand(visuals.expansion),
                 })),
-                stroke_kind: egui::StrokeKind::Middle
+                stroke_kind: egui::StrokeKind::Middle,
             });
 
             if *checked {

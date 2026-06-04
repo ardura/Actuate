@@ -61,10 +61,7 @@ impl Saturation {
     // Individual processing functions for each saturation type
     fn process_tape(input_l: f32, input_r: f32, idrive: f32) -> (f32, f32) {
         let factor = 10.0 * idrive + 1.0;
-        (
-            (input_l * factor).tanh(),
-            (input_r * factor).tanh(),
-        )
+        ((input_l * factor).tanh(), (input_r * factor).tanh())
     }
 
     fn process_clip(input_l: f32, input_r: f32, amount: f32) -> (f32, f32) {

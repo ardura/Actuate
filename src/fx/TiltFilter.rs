@@ -26,12 +26,8 @@ impl TiltFilterStruct {
         let lowpass = SimpleFilter::lowpass(sample_rate, initial_cutoff);
         let highpass = SimpleFilter::highpass(sample_rate, initial_cutoff);
         let current_tilt_val = match response_type_value {
-            ResponseType::Lowpass => {
-                0.8
-            },
-            ResponseType::Highpass => {
-                0.2
-            }
+            ResponseType::Lowpass => 0.8,
+            ResponseType::Highpass => 0.2,
         };
 
         Self {
@@ -64,12 +60,8 @@ impl TiltFilterStruct {
     pub fn set_tilt(&mut self, tilt: ResponseType) {
         self.current_tilt = tilt.clone();
         self.current_tilt_val = match tilt {
-            ResponseType::Lowpass => {
-                0.8
-            },
-            ResponseType::Highpass => {
-                0.2
-            }
+            ResponseType::Lowpass => 0.8,
+            ResponseType::Highpass => 0.2,
         }
     }
 }
@@ -124,7 +116,7 @@ impl SimpleFilter {
                 let output = self.a * input + self.b * self.prev_output;
                 self.prev_output = output;
                 output
-            },
+            }
             ResponseType::Highpass => {
                 let output = self.b * (self.prev_output + input - self.prev_input);
                 self.prev_input = input;

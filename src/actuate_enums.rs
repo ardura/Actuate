@@ -162,7 +162,6 @@ pub enum StereoAlgorithm {
     ExpSpread,
 }
 
-
 // These let us output ToString for the ComboBox stuff + Nice-Plug or string usage
 impl fmt::Display for PresetType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

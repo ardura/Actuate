@@ -211,31 +211,31 @@ impl Delay {
             DelayType::Stereo => {
                 delay_shift_l = 0;
                 delay_shift_r = 0;
-            },
+            }
             DelayType::PingPongL => {
                 delay_shift_l = self.delay_length / 2;
                 delay_shift_r = 0;
-            },
+            }
             DelayType::PingPongR => {
                 delay_shift_r = self.delay_length / 2;
                 delay_shift_l = 0;
-            },
+            }
             DelayType::PingPongL2 => {
                 delay_shift_l = self.delay_length;
                 delay_shift_r = 0;
-            },
+            }
             DelayType::PingPongR2 => {
                 delay_shift_r = self.delay_length;
                 delay_shift_l = 0;
-            },
+            }
             DelayType::PingPongL3 => {
                 delay_shift_l = (self.delay_length as f32 * 0.95_f32) as usize;
                 delay_shift_r = self.delay_length / 2;
-            },
+            }
             DelayType::PingPongR3 => {
                 delay_shift_r = (self.delay_length as f32 * 0.95_f32) as usize;
                 delay_shift_l = self.delay_length / 2;
-            },
+            }
         }
 
         // Store the outputs in the delay lines
@@ -255,7 +255,7 @@ impl Delay {
 
         // Move the index to the next position in the delay lines
         self.current_index = (self.current_index + 1) % (self.delay_length * 2);
-        
+
         // Return the left and right outputs
         output_l = input_l * (1.0 - amount) + output_l * amount;
         output_r = input_r * (1.0 - amount) + output_r * amount;

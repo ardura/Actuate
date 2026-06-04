@@ -43,8 +43,10 @@ impl A4ivFilter {
     }
 
     pub fn process(&mut self, input: f32) -> f32 {
-                          // Weird Average                          Feedback                        Low bump
-        let output = (self.a * input + self.a2 * input)/2.0 + self.b * self.previous_output + ((input * 0.5) * self.resonance * 0.5)*0.25;
+        // Weird Average                          Feedback                        Low bump
+        let output = (self.a * input + self.a2 * input) / 2.0
+            + self.b * self.previous_output
+            + ((input * 0.5) * self.resonance * 0.5) * 0.25;
         self.previous_input = input;
         self.previous_output = output;
 

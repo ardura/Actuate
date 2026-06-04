@@ -1,4 +1,3 @@
-
 use nih_plug::params::enums::Enum;
 use serde::{Deserialize, Serialize};
 
@@ -52,7 +51,9 @@ impl VCFilter {
         sample_rate: f32,
     ) {
         let mut recalculate = false;
-        if (self.center_freq.clamp(20.0, 17000.0) != center_freq.clamp(20.0, 17000.0) ) || ( center_freq > 17000.0 && self.center_freq != center_freq ) {
+        if (self.center_freq.clamp(20.0, 17000.0) != center_freq.clamp(20.0, 17000.0))
+            || (center_freq > 17000.0 && self.center_freq != center_freq)
+        {
             self.center_freq = center_freq.clamp(20.0, 17000.0);
             recalculate = true;
         }
@@ -79,10 +80,15 @@ impl VCFilter {
     pub fn process(&mut self, input: f32) -> f32 {
         // Catch coming from another filter
         if self.center_freq > 17000.0 {
-            self.update(self.center_freq, self.resonance, self.shape.clone(), self.sample_rate);
+            self.update(
+                self.center_freq,
+                self.resonance,
+                self.shape.clone(),
+                self.sample_rate,
+            );
         }
         let x = input - self.r * self.y[3];
-        self.y[0] = x         * self.p + self.olds[0] * self.p - self.k * self.y[0];
+        self.y[0] = x * self.p + self.olds[0] * self.p - self.k * self.y[0];
         self.y[1] = self.y[0] * self.p + self.olds[1] * self.p - self.k * self.y[1];
         self.y[2] = self.y[1] * self.p + self.olds[2] * self.p - self.k * self.y[2];
         self.y[3] = self.y[2] * self.p + self.olds[3] * self.p - self.k * self.y[3];

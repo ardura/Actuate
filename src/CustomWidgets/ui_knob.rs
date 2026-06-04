@@ -4,15 +4,16 @@
 
 use std::{
     f32::consts::TAU,
-    ops::{Add, Mul, Sub}, sync::LazyLock,
+    ops::{Add, Mul, Sub},
+    sync::LazyLock,
 };
 
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
     self,
     epaint::{CircleShape, PathShape, PathStroke},
-    pos2, Align2, Color32, FontId, Pos2, Rect, Response, Rgba, CornerRadius, Sense, Shape, Stroke, Ui,
-    Vec2, Widget,
+    pos2, Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, Rgba, Sense, Shape, Stroke,
+    Ui, Vec2, Widget,
 };
 
 /// When shift+dragging a parameter, one pixel dragged corresponds to this much change in the
@@ -21,7 +22,8 @@ const GRANULAR_DRAG_MULTIPLIER: f32 = 0.00001;
 const SEMI_GRANULAR_DRAG_MULTIPLIER: f32 = 0.0001;
 const NORMAL_DRAG_MULTIPLIER: f32 = 0.005;
 
-static DRAG_NORMALIZED_START_VALUE_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 0)));
+static DRAG_NORMALIZED_START_VALUE_MEMORY_ID: LazyLock<egui::Id> =
+    LazyLock::new(|| egui::Id::new((file!(), 0)));
 static DRAG_AMOUNT_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 1)));
 
 struct SliderRegion<'a, P: Param> {
@@ -463,16 +465,10 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
             };
 
             // Background Rect
-            ui.painter().rect_filled(
-                response.rect,
-                CornerRadius::from(4.0),
-                self.black01,
-            );
-            ui.painter().rect_filled(
-                response.rect,
-                CornerRadius::from(4.0),
-                self.fill04,
-            );
+            ui.painter()
+                .rect_filled(response.rect, CornerRadius::from(4.0), self.black01);
+            ui.painter()
+                .rect_filled(response.rect, CornerRadius::from(4.0), self.fill04);
 
             // Draw the outside ring around the control
             if self.outline {
@@ -708,7 +704,8 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                 ui.allocate_rect(
                     Rect::from_center_size(center, Vec2::new(self.radius * 2.0, self.radius * 2.0)),
                     Sense::hover(),
-                ).on_hover_text_at_pointer(self.hover_text_content);
+                )
+                .on_hover_text_at_pointer(self.hover_text_content);
             }
 
             // Label text from response rect bound
@@ -726,7 +723,7 @@ impl<'a, P: Param> Widget for ArcKnob<'a, P> {
                         // it's in the enum. Hence these making no sense
                         value_pos = response.rect.center();
                         label_pos = response.rect.center();
-                    },
+                    }
                     KnobLayout::Default => {
                         if self.swap_label_and_value {
                             // Newer rearranged positions to put value at bottom of knob
@@ -953,8 +950,8 @@ fn get_arc_points(
         (arc_length.abs() / max_arc_distance).ceil() as usize
     } else {
         1 // Ensure at least one point even for zero-length arcs.
-    }).max(1);
-
+    })
+    .max(1);
 
     // Pre-calculate TAU multipliers and center offset
     let start_angle = start_turns * TAU;
@@ -962,8 +959,8 @@ fn get_arc_points(
     let center_vec = center.to_vec2();
 
     // Use a pre-allocated vector for better performance
-    let mut points_vec = Vec::with_capacity(points + 1);  // +1 because of the <= in the original range
-    
+    let mut points_vec = Vec::with_capacity(points + 1); // +1 because of the <= in the original range
+
     // Iterate and calculate points
     for i in 0..=points {
         let t = i as f32 / points as f32; // Simplified division, no need for points - 1

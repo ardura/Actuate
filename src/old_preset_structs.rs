@@ -1,10 +1,17 @@
 use crate::{
-    actuate_enums::StereoAlgorithm, audio_module::{
+    actuate_enums::StereoAlgorithm,
+    audio_module::{
         AudioModuleType,
         Oscillator::{self, RetriggerStyle, SmoothStyle},
-    }, fx::{
-        delay::{DelaySnapValues, DelayType}, saturation::SaturationType, StateVariableFilter::ResonanceType, TiltFilter::{self}
-    }, AMFilterRouting, ActuatePresetV131, FilterAlgorithms, FilterRouting, LFOController, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel
+    },
+    fx::{
+        delay::{DelaySnapValues, DelayType},
+        saturation::SaturationType,
+        StateVariableFilter::ResonanceType,
+        TiltFilter::{self},
+    },
+    AMFilterRouting, ActuatePresetV131, FilterAlgorithms, FilterRouting, LFOController,
+    ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel,
 };
 use serde::{Deserialize, Serialize};
 

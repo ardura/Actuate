@@ -42,32 +42,34 @@ impl A4iiiFilter {
         let mut feedback_signal: f32 = 0.0;
         let mut driven_val: f32;
 
-        let pre_sat_0 = self.integrators[0] + self.alpha * (input - self.integrators[0] + feedback_signal);
+        let pre_sat_0 =
+            self.integrators[0] + self.alpha * (input - self.integrators[0] + feedback_signal);
         driven_val = pre_sat_0 * (self.resonance + 0.6);
         self.integrators[0] = driven_val / (1.0 + driven_val.abs());
         feedback_signal = self.integrators[0] * self.feedback;
 
-        let pre_sat_1 = self.integrators[1] + self.alpha * (self.integrators[0] - self.integrators[1] + feedback_signal);
+        let pre_sat_1 = self.integrators[1]
+            + self.alpha * (self.integrators[0] - self.integrators[1] + feedback_signal);
         driven_val = pre_sat_1 * (self.resonance + 0.45);
         self.integrators[1] = driven_val / (1.0 + driven_val.abs());
         feedback_signal = self.integrators[1] * self.feedback;
 
-        let pre_sat_2 = self.integrators[2] + self.alpha * (self.integrators[1] - self.integrators[2] + feedback_signal);
+        let pre_sat_2 = self.integrators[2]
+            + self.alpha * (self.integrators[1] - self.integrators[2] + feedback_signal);
         driven_val = pre_sat_2 * (self.resonance + 0.3);
         self.integrators[2] = driven_val / (1.0 + driven_val.abs());
         feedback_signal = self.integrators[2] * self.feedback;
 
-        let pre_sat_3 = self.integrators[3] + self.alpha * (self.integrators[2] - self.integrators[3] + feedback_signal);
+        let pre_sat_3 = self.integrators[3]
+            + self.alpha * (self.integrators[2] - self.integrators[3] + feedback_signal);
         driven_val = pre_sat_3 * (self.resonance + 0.15);
         self.integrators[3] = driven_val / (1.0 + driven_val.abs());
 
         // Average the outputs
-        let output = (self.integrators[0]
-            + self.integrators[1]
-            + self.integrators[2]
-            + self.integrators[3])
-            / 4.0;
-        
+        let output =
+            (self.integrators[0] + self.integrators[1] + self.integrators[2] + self.integrators[3])
+                / 4.0;
+
         // Apply final bump
         output * 1.3
     }

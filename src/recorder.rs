@@ -42,7 +42,7 @@ impl Recorder {
         let mut writer = hound::WavWriter::create(path.as_path(), spec)?;
         let mut silence_tracker: Vec<f32> = Vec::new();
         if self.buffer.len() <= 1 {
-            return Ok(())
+            return Ok(());
         }
         for &sample in &self.buffer {
             if sample == 0.0 {

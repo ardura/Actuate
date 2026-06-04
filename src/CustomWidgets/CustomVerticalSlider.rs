@@ -1,10 +1,11 @@
 // Copy of CustomParamSlider from Canopy Reverb modified further into verticality
 // Needed to make some weird import changes to get this to work...Definitely should find a better way to do this in future...
 // Ardura
-use nih_plug::{
-    prelude::{Param, ParamSetter},
+use nih_plug::prelude::{Param, ParamSetter};
+use nih_plug_egui::egui::{
+    self, vec2, Color32, Galley, Response, RichText, Sense, Stroke, TextStyle, Ui, Vec2, Widget,
+    WidgetText,
 };
-use nih_plug_egui::egui::{self, vec2, Color32, Galley, Response, RichText, Sense, Stroke, TextStyle, Ui, Vec2, Widget, WidgetText};
 use nih_plug_egui::{
     egui::{Pos2, Rect},
     widgets::util as nUtil,
@@ -16,7 +17,8 @@ use std::sync::{Arc, LazyLock};
 /// noramlized parameter.
 const GRANULAR_DRAG_MULTIPLIER: f32 = 0.0015;
 
-static DRAG_NORMALIZED_START_VALUE_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 0)));
+static DRAG_NORMALIZED_START_VALUE_MEMORY_ID: LazyLock<egui::Id> =
+    LazyLock::new(|| egui::Id::new((file!(), 0)));
 static DRAG_AMOUNT_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 1)));
 static VALUE_ENTRY_MEMORY_ID: LazyLock<egui::Id> = LazyLock::new(|| egui::Id::new((file!(), 2)));
 
@@ -332,14 +334,14 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     response.rect,
                     4.0,
                     Stroke::new(1.0, ui.visuals().widgets.active.bg_fill),
-                    egui::StrokeKind::Middle
+                    egui::StrokeKind::Middle,
                 );
             } else {
                 ui.painter().rect_stroke(
                     response.rect,
                     4.0,
                     Stroke::new(1.0, self.background_set_color),
-                    egui::StrokeKind::Middle
+                    egui::StrokeKind::Middle,
                 );
             }
         }
@@ -356,12 +358,14 @@ impl<'a, P: Param> ParamSlider<'a, P> {
 
         let text: Arc<Galley>;
         if self.override_text_size != -1.0 {
-            text = WidgetText::from(RichText::new(self.string_value()).size(self.override_text_size)).into_galley(
-                ui,
-                None,
-                ui.available_width() - (padding.x * 2.0),
-                TextStyle::Button,
-            );
+            text =
+                WidgetText::from(RichText::new(self.string_value()).size(self.override_text_size))
+                    .into_galley(
+                        ui,
+                        None,
+                        ui.available_width() - (padding.x * 2.0),
+                        TextStyle::Button,
+                    );
         } else {
             text = WidgetText::from(self.string_value()).into_galley(
                 ui,
@@ -385,7 +389,7 @@ impl<'a, P: Param> ParamSlider<'a, P> {
                     visuals.corner_radius,
                     fill,
                     stroke,
-                    egui::StrokeKind::Middle
+                    egui::StrokeKind::Middle,
                 );
             }
 

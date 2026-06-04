@@ -7,10 +7,10 @@ use nih_plug::util;
 pub fn a_bass_saturation(signal: f32, harmonic_strength: f32) -> f32 {
     let mut output = custom_sincos_saturation(
         signal,
-        harmonic_strength * 31.422043, 
-        harmonic_strength * 189.29568, 
-        harmonic_strength * 25.0, 
-        harmonic_strength * 26.197401
+        harmonic_strength * 31.422043,
+        harmonic_strength * 189.29568,
+        harmonic_strength * 25.0,
+        harmonic_strength * 26.197401,
     );
     let h_l = (output * 2.0) - output.powf(2.0);
     output += h_l * 0.0070118904;
@@ -19,7 +19,13 @@ pub fn a_bass_saturation(signal: f32, harmonic_strength: f32) -> f32 {
     chebyshev_tape(output, 0.0093) * util::db_to_gain(-9.0)
 }
 
-fn custom_sincos_saturation(signal: f32, harmonic_strength1: f32, harmonic_strength2: f32, harmonic_strength3: f32, harmonic_strength4: f32) -> f32 {
+fn custom_sincos_saturation(
+    signal: f32,
+    harmonic_strength1: f32,
+    harmonic_strength2: f32,
+    harmonic_strength3: f32,
+    harmonic_strength4: f32,
+) -> f32 {
     let mut summed: f32 = 0.0;
 
     let harmonic_component: f32 = harmonic_strength1 * (signal * 1.0).cos() - signal;

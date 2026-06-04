@@ -3,7 +3,10 @@
 
 use nih_plug::prelude::{Param, ParamSetter};
 use nih_plug_egui::egui::{
-    self, epaint::{CircleShape, CubicBezierShape}, style::WidgetVisuals, Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, Shape, Stroke, Ui, Vec2, Widget
+    self,
+    epaint::{CircleShape, CubicBezierShape},
+    style::WidgetVisuals,
+    Align2, Color32, CornerRadius, FontId, Pos2, Rect, Response, Shape, Stroke, Ui, Vec2, Widget,
 };
 
 // This allow is here since Actuate ended up only using HorizontalInline
@@ -37,7 +40,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
             background_color,
             line_color,
             button_layout,
-            img_flip
+            img_flip,
         }
     }
 
@@ -51,81 +54,83 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         let spacer = 12.0;
         let hspacer = 6.0;
         let mut control_points = match self.img_flip {
-                true => {
-                    match self.button_layout {
-                        ButtonLayout::Vertical => {[
-                            Pos2 {
-                                x: rect.right_top().x - spacer,
-                                y: rect.left_top().y + spacer,
-                            },
-                            rect.center(),
-                            Pos2 {
-                                x: rect.left_bottom().x + spacer,
-                                y: rect.right_bottom().y - 10.0 - spacer,
-                            },
-                            Pos2 {
-                                x: rect.left_bottom().x + spacer,
-                                y:rect.right_bottom().y - 10.0 - spacer,
-                            },
-                        ]},
-                        ButtonLayout::HorizontalInline => {[
-                            Pos2 {
-                                x: rect.right_top().x - hspacer,
-                                y: rect.right_top().y + hspacer,
-                            },
-                            Pos2 {
-                                x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
-                                y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
-                            },
-                            Pos2 {
-                                x: rect.right_bottom().x + hspacer - rect.height(),
-                                y: rect.right_bottom().y - 2.0 - hspacer,
-                            },
-                            Pos2 {
-                                x: rect.right_bottom().x + hspacer - rect.height(),
-                                y: rect.right_bottom().y - 2.0 - hspacer,
-                            },
-                        ]},
-                    }
-                },
-                false => {
-                    match self.button_layout {
-                        ButtonLayout::Vertical => {[
-                            Pos2 {
-                                x: rect.left_top().x + spacer,
-                                y: rect.left_top().y + spacer,
-                            },
-                            rect.center(),
-                            Pos2 {
-                                x: rect.right_bottom().x - spacer,
-                                y: rect.right_bottom().y - 10.0 - spacer,
-                            },
-                            Pos2 {
-                                x: rect.right_bottom().x - spacer,
-                                y: rect.right_bottom().y - 10.0 - spacer,
-                            },
-                        ]},
-                        ButtonLayout::HorizontalInline => {[
-                            Pos2 {
-                                x: rect.right_top().x + hspacer - rect.height(),
-                                y: rect.right_top().y + hspacer,
-                            },
-                            Pos2 {
-                                x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
-                                y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
-                            },
-                            Pos2 {
-                                x: rect.right_bottom().x - hspacer,
-                                y: rect.right_bottom().y - 2.0 - hspacer,
-                            },
-                            Pos2 {
-                                x: rect.right_bottom().x - hspacer,
-                                y: rect.right_bottom().y - 2.0 - hspacer,
-                            },
-                        ]},
-                    }
-                }
-            };
+            true => match self.button_layout {
+                ButtonLayout::Vertical => [
+                    Pos2 {
+                        x: rect.right_top().x - spacer,
+                        y: rect.left_top().y + spacer,
+                    },
+                    rect.center(),
+                    Pos2 {
+                        x: rect.left_bottom().x + spacer,
+                        y: rect.right_bottom().y - 10.0 - spacer,
+                    },
+                    Pos2 {
+                        x: rect.left_bottom().x + spacer,
+                        y: rect.right_bottom().y - 10.0 - spacer,
+                    },
+                ],
+                ButtonLayout::HorizontalInline => [
+                    Pos2 {
+                        x: rect.right_top().x - hspacer,
+                        y: rect.right_top().y + hspacer,
+                    },
+                    Pos2 {
+                        x: ((rect.right_bottom().x - hspacer)
+                            + (rect.right_top().x + hspacer - rect.height()))
+                            * 0.5,
+                        y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer))
+                            * 0.5,
+                    },
+                    Pos2 {
+                        x: rect.right_bottom().x + hspacer - rect.height(),
+                        y: rect.right_bottom().y - 2.0 - hspacer,
+                    },
+                    Pos2 {
+                        x: rect.right_bottom().x + hspacer - rect.height(),
+                        y: rect.right_bottom().y - 2.0 - hspacer,
+                    },
+                ],
+            },
+            false => match self.button_layout {
+                ButtonLayout::Vertical => [
+                    Pos2 {
+                        x: rect.left_top().x + spacer,
+                        y: rect.left_top().y + spacer,
+                    },
+                    rect.center(),
+                    Pos2 {
+                        x: rect.right_bottom().x - spacer,
+                        y: rect.right_bottom().y - 10.0 - spacer,
+                    },
+                    Pos2 {
+                        x: rect.right_bottom().x - spacer,
+                        y: rect.right_bottom().y - 10.0 - spacer,
+                    },
+                ],
+                ButtonLayout::HorizontalInline => [
+                    Pos2 {
+                        x: rect.right_top().x + hspacer - rect.height(),
+                        y: rect.right_top().y + hspacer,
+                    },
+                    Pos2 {
+                        x: ((rect.right_bottom().x - hspacer)
+                            + (rect.right_top().x + hspacer - rect.height()))
+                            * 0.5,
+                        y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer))
+                            * 0.5,
+                    },
+                    Pos2 {
+                        x: rect.right_bottom().x - hspacer,
+                        y: rect.right_bottom().y - 2.0 - hspacer,
+                    },
+                    Pos2 {
+                        x: rect.right_bottom().x - hspacer,
+                        y: rect.right_bottom().y - 2.0 - hspacer,
+                    },
+                ],
+            },
+        };
 
         // Check if our button is clicked
         if response.clicked() {
@@ -143,82 +148,75 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                         self.param_setter.set_parameter_normalized(self.param, 1.0);
                         control_points[1] = Pos2 {
                             x: rect.left_center().x + spacer,
-                            y: rect.left_center().y + match self.img_flip {
-                                true => { -40.0 },
-                                false => { 40.0 },
-                            },
+                            y: rect.left_center().y
+                                + match self.img_flip {
+                                    true => -40.0,
+                                    false => 40.0,
+                                },
                         };
                     } else if value == 1.0 {
                         self.param_setter.set_parameter_normalized(self.param, 0.0);
                         control_points[1] = rect.right_center();
                     }
-                },
+                }
                 ButtonLayout::HorizontalInline => {
                     if value == 0.0 {
                         self.param_setter
                             .set_parameter_normalized(self.param, 0.333333343);
                         control_points[1] = match self.img_flip {
-                            false => {
-                                Pos2 {
-                                    x: rect.center_bottom().x + rect.height()*0.5,
-                                    y: rect.center_bottom().y
-                                }
+                            false => Pos2 {
+                                x: rect.center_bottom().x + rect.height() * 0.5,
+                                y: rect.center_bottom().y,
                             },
-                            true => {
-                                Pos2 {
-                                    x: rect.center_top().x + rect.height()*0.5,
-                                    y: rect.center_top().y
-                                }
-                            }
+                            true => Pos2 {
+                                x: rect.center_top().x + rect.height() * 0.5,
+                                y: rect.center_top().y,
+                            },
                         };
                     } else if value == 0.333333343 {
                         self.param_setter
                             .set_parameter_normalized(self.param, 0.666666687);
                         control_points[1] = match self.img_flip {
-                            false => {
-                                Pos2 {
-                                    x: rect.center_bottom().x + rect.height()*0.2,
-                                    y: rect.center_bottom().y
-                                }
+                            false => Pos2 {
+                                x: rect.center_bottom().x + rect.height() * 0.2,
+                                y: rect.center_bottom().y,
                             },
-                            true => {
-                                Pos2 {
-                                    x: rect.center_top().x + rect.height()*0.5 - 18.0,
-                                    y: rect.center_top().y
-                                }
-                            }
+                            true => Pos2 {
+                                x: rect.center_top().x + rect.height() * 0.5 - 18.0,
+                                y: rect.center_top().y,
+                            },
                         };
                     } else if value == 0.666666687 {
                         self.param_setter.set_parameter_normalized(self.param, 1.0);
                         control_points[1] = match self.img_flip {
-                            false => {
-                                Pos2 {
-                                    x: rect.right_top().x - rect.height()*0.25,
-                                    y: rect.right_top().y
-                                }
+                            false => Pos2 {
+                                x: rect.right_top().x - rect.height() * 0.25,
+                                y: rect.right_top().y,
                             },
-                            true => {
-                                Pos2 {
-                                    x: rect.right_center().x - rect.height()*0.25 + 10.0,
-                                    y: rect.right_center().y + 16.0
-                                }
-                            }
+                            true => Pos2 {
+                                x: rect.right_center().x - rect.height() * 0.25 + 10.0,
+                                y: rect.right_center().y + 16.0,
+                            },
                         };
                     } else if value == 1.0 {
                         self.param_setter.set_parameter_normalized(self.param, 0.0);
-                        control_points[1] =  match self.img_flip {
-                            false => {
-                                Pos2 {
-                                    x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x + hspacer - rect.height())) * 0.5,
-                                    y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y + hspacer)) * 0.5,
-                                }
+                        control_points[1] = match self.img_flip {
+                            false => Pos2 {
+                                x: ((rect.right_bottom().x - hspacer)
+                                    + (rect.right_top().x + hspacer - rect.height()))
+                                    * 0.5,
+                                y: ((rect.right_bottom().y - hspacer)
+                                    + (rect.right_top().y + hspacer))
+                                    * 0.5,
                             },
-                            true => {
-                                Pos2 {
-                                    x: ((rect.right_bottom().x + hspacer) + (rect.right_top().x - hspacer - rect.height())) * 0.5,
-                                    y: ((rect.right_bottom().y + hspacer) + (rect.right_top().y - hspacer)) * 0.5,
-                                }
-                            }
+                            true => Pos2 {
+                                x: ((rect.right_bottom().x + hspacer)
+                                    + (rect.right_top().x - hspacer - rect.height()))
+                                    * 0.5,
+                                y: ((rect.right_bottom().y + hspacer)
+                                    + (rect.right_top().y - hspacer))
+                                    * 0.5,
+                            },
                         };
                     }
                 }
@@ -234,106 +232,94 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                     } else if value == 0.666666687 {
                         control_points[1] = Pos2 {
                             x: rect.left_center().x,
-                            y: rect.left_center().y + match self.img_flip {
-                                true => { -40.0 },
-                                false => { 40.0 },
-                            },
+                            y: rect.left_center().y
+                                + match self.img_flip {
+                                    true => -40.0,
+                                    false => 40.0,
+                                },
                         };
                     } else if value == 1.0 {
                         control_points[1] = rect.right_center();
                     }
-                },
+                }
                 ButtonLayout::HorizontalInline => {
                     if value == 0.0 {
-                        control_points[1] = 
-                            match self.img_flip {
-                                false => {
-                                    Pos2 {
-                                        x: ((rect.right_bottom().x - hspacer) + (rect.right_top().x - hspacer - rect.height())) * 0.5,
-                                        y: ((rect.right_bottom().y - hspacer) + (rect.right_top().y - hspacer)) * 0.5,
-                                    }
-                                },
-                                true => {
-                                    Pos2 {
-                                        x: ((rect.right_bottom().x + hspacer) + (rect.right_top().x - hspacer - rect.height())) * 0.5,
-                                        y: ((rect.right_bottom().y + hspacer) + (rect.right_top().y - hspacer)) * 0.5,
-                                    }
-                                }
-                            };
+                        control_points[1] = match self.img_flip {
+                            false => Pos2 {
+                                x: ((rect.right_bottom().x - hspacer)
+                                    + (rect.right_top().x - hspacer - rect.height()))
+                                    * 0.5,
+                                y: ((rect.right_bottom().y - hspacer)
+                                    + (rect.right_top().y - hspacer))
+                                    * 0.5,
+                            },
+                            true => Pos2 {
+                                x: ((rect.right_bottom().x + hspacer)
+                                    + (rect.right_top().x - hspacer - rect.height()))
+                                    * 0.5,
+                                y: ((rect.right_bottom().y + hspacer)
+                                    + (rect.right_top().y - hspacer))
+                                    * 0.5,
+                            },
+                        };
                     } else if value == 0.333333343 {
                         control_points[1] = match self.img_flip {
-                            false => {
-                                Pos2 {
-                                    x: rect.center_bottom().x + rect.height()*0.5,
-                                    y: rect.center_bottom().y
-                                }
+                            false => Pos2 {
+                                x: rect.center_bottom().x + rect.height() * 0.5,
+                                y: rect.center_bottom().y,
                             },
-                            true => {
-                                Pos2 {
-                                    x: rect.center_top().x + rect.height()*0.5,
-                                    y: rect.center_top().y
-                                }
-                            }
+                            true => Pos2 {
+                                x: rect.center_top().x + rect.height() * 0.5,
+                                y: rect.center_top().y,
+                            },
                         };
                     } else if value == 0.666666687 {
                         control_points[1] = match self.img_flip {
-                            false => {
-                                Pos2 {
-                                    x: rect.center_bottom().x + rect.height()*0.2,
-                                    y: rect.center_bottom().y
-                                }
+                            false => Pos2 {
+                                x: rect.center_bottom().x + rect.height() * 0.2,
+                                y: rect.center_bottom().y,
                             },
-                            true => {
-                                Pos2 {
-                                    x: rect.center_top().x + rect.height()*0.5 - 18.0,
-                                    y: rect.center_top().y
-                                }
-                            }
+                            true => Pos2 {
+                                x: rect.center_top().x + rect.height() * 0.5 - 18.0,
+                                y: rect.center_top().y,
+                            },
                         };
                     } else if value == 1.0 {
                         control_points[1] = match self.img_flip {
-                            false => {
-                                Pos2 {
-                                    x: rect.right_top().x - rect.height()*0.25,
-                                    y: rect.right_top().y
-                                }
+                            false => Pos2 {
+                                x: rect.right_top().x - rect.height() * 0.25,
+                                y: rect.right_top().y,
                             },
-                            true => {
-                                Pos2 {
-                                    x: rect.right_center().x - rect.height()*0.25 + 10.0,
-                                    y: rect.right_center().y + 16.0
-                                }
-                            }
+                            true => Pos2 {
+                                x: rect.right_center().x - rect.height() * 0.25 + 10.0,
+                                y: rect.right_center().y + 16.0,
+                            },
                         };
                     }
                 }
             }
-            
         }
 
         // DRAWING
         ui.painter().rect(
             match self.button_layout {
-                ButtonLayout::Vertical => {
-                    Rect {
-                        min: rect.left_top(),
-                        max: Pos2 {
-                            x: rect.right_bottom().x,
-                            y: rect.right_bottom().y - 16.0,
-                        },
-                    }
+                ButtonLayout::Vertical => Rect {
+                    min: rect.left_top(),
+                    max: Pos2 {
+                        x: rect.right_bottom().x,
+                        y: rect.right_bottom().y - 16.0,
+                    },
                 },
-                ButtonLayout::HorizontalInline => {
-                    Rect {
-                        min: Pos2 { 
-                            x: rect.right_top().x - rect.height(),
-                            y: rect.right_top().y },
-                        max: Pos2 {
-                            x: rect.right_bottom().x,
-                            y: rect.right_bottom().y,
-                        },
-                    }
-                }
+                ButtonLayout::HorizontalInline => Rect {
+                    min: Pos2 {
+                        x: rect.right_top().x - rect.height(),
+                        y: rect.right_top().y,
+                    },
+                    max: Pos2 {
+                        x: rect.right_bottom().x,
+                        y: rect.right_bottom().y,
+                    },
+                },
             },
             CornerRadius::from(4.0),
             if self.background_color == Color32::PLACEHOLDER {
@@ -353,7 +339,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                 self.background_color.linear_multiply(0.8)
             },
             visuals.bg_stroke,
-            egui::StrokeKind::Middle
+            egui::StrokeKind::Middle,
         );
         let start_ball = Shape::Circle(CircleShape {
             center: control_points[0],
@@ -403,7 +389,7 @@ impl<'a, P: Param> SliderRegion<'a, P> {
                     FontId::proportional(11.0),
                     Color32::WHITE.linear_multiply(0.5),
                 );
-            },
+            }
             ButtonLayout::HorizontalInline => {
                 ui.painter().text(
                     Pos2 {

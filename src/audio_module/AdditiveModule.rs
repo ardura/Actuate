@@ -1,5 +1,5 @@
-use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use nih_plug::util;
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 use super::{SingleUnisonVoice, SingleVoice};
 
@@ -17,7 +17,13 @@ pub struct AdditiveOscillator {
 impl AdditiveOscillator {
     pub fn default() -> Self {
         AdditiveOscillator {
-            harmonics: vec![AdditiveHarmonic { index: 0, amplitude: 0.0 }; 15],
+            harmonics: vec![
+                AdditiveHarmonic {
+                    index: 0,
+                    amplitude: 0.0
+                };
+                15
+            ],
         }
     }
 
@@ -25,12 +31,21 @@ impl AdditiveOscillator {
         self.harmonics = harmonics;
     }
 
-    pub fn next_sample(&mut self, voice: &mut SingleVoice, sample_rate: f32, detune_mod: f32) -> f32 {
+    pub fn next_sample(
+        &mut self,
+        voice: &mut SingleVoice,
+        sample_rate: f32,
+        detune_mod: f32,
+    ) -> f32 {
         let mut sample = 0.0;
         let nyquist = sample_rate / 2.0;
-        
+
         if voice.amp_current != 0.0 {
-            let base_note = voice.note as f32 + voice._detune + detune_mod + voice.pitch_current + voice.pitch_current_2;
+            let base_note = voice.note as f32
+                + voice._detune
+                + detune_mod
+                + voice.pitch_current
+                + voice.pitch_current_2;
             let instant_frequency = util::f32_midi_note_to_freq(base_note).min(nyquist);
             voice.phase_delta = instant_frequency / sample_rate;
 
@@ -51,12 +66,21 @@ impl AdditiveOscillator {
         sample
     }
 
-    pub fn next_unison_sample(&mut self, voice: &mut SingleUnisonVoice, sample_rate: f32, detune_mod: f32) -> f32 {
+    pub fn next_unison_sample(
+        &mut self,
+        voice: &mut SingleUnisonVoice,
+        sample_rate: f32,
+        detune_mod: f32,
+    ) -> f32 {
         let mut sample = 0.0;
         let nyquist = sample_rate / 2.0;
-        
+
         if voice.amp_current != 0.0 {
-            let base_note = voice.note as f32 + voice._unison_detune_value + detune_mod + voice.pitch_current + voice.pitch_current_2;
+            let base_note = voice.note as f32
+                + voice._unison_detune_value
+                + detune_mod
+                + voice.pitch_current
+                + voice.pitch_current_2;
             let instant_frequency = util::f32_midi_note_to_freq(base_note).min(nyquist);
             voice.phase_delta = instant_frequency / sample_rate;
 

@@ -2,7 +2,23 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{actuate_enums::{AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource, PitchRouting, PresetType, ReverbModel, StereoAlgorithm}, audio_module::{AudioModuleType, Oscillator::{self, RetriggerStyle, SmoothStyle}}, fx::{delay::{DelaySnapValues, DelayType}, saturation::SaturationType, TiltFilter, StateVariableFilter::ResonanceType}, LFOController};
+use crate::{
+    actuate_enums::{
+        AMFilterRouting, FilterAlgorithms, FilterRouting, ModulationDestination, ModulationSource,
+        PitchRouting, PresetType, ReverbModel, StereoAlgorithm,
+    },
+    audio_module::{
+        AudioModuleType,
+        Oscillator::{self, RetriggerStyle, SmoothStyle},
+    },
+    fx::{
+        delay::{DelaySnapValues, DelayType},
+        saturation::SaturationType,
+        StateVariableFilter::ResonanceType,
+        TiltFilter,
+    },
+    LFOController,
+};
 
 /// Modulation struct for passing mods to audio modules
 #[derive(Serialize, Deserialize, Clone)]

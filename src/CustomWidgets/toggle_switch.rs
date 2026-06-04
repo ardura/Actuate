@@ -2,7 +2,9 @@
 // https://github.com/emilk/egui/blob/master/crates/egui_demo_lib/src/demo/toggle_switch.rs
 
 use nih_plug::prelude::{Param, ParamSetter};
-use nih_plug_egui::egui::{self, style::WidgetVisuals, Color32, Rect, Response, Stroke, Ui, Widget};
+use nih_plug_egui::egui::{
+    self, style::WidgetVisuals, Color32, Rect, Response, Stroke, Ui, Widget,
+};
 
 struct SliderRegion<'a, P: Param> {
     param: &'a P,
@@ -46,13 +48,26 @@ impl<'a, P: Param> SliderRegion<'a, P> {
         // DRAWING
         let rect = rect.expand(visuals.expansion);
         let radius = 0.5 * rect.height();
-        ui.painter()
-            .rect(rect, radius, visuals.bg_fill, visuals.bg_stroke, egui::StrokeKind::Middle);
+        ui.painter().rect(
+            rect,
+            radius,
+            visuals.bg_fill,
+            visuals.bg_stroke,
+            egui::StrokeKind::Middle,
+        );
         // Paint the circle, animating it from left to right with `how_on`:
         let circle_x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
         let center = egui::pos2(circle_x, rect.center().y);
-        ui.painter()
-            .circle(center, 0.75 * radius, visuals.bg_fill, if how_on > 0.0 { Stroke::new(1.0, Color32::BLACK) } else { visuals.fg_stroke });
+        ui.painter().circle(
+            center,
+            0.75 * radius,
+            visuals.bg_fill,
+            if how_on > 0.0 {
+                Stroke::new(1.0, Color32::BLACK)
+            } else {
+                visuals.fg_stroke
+            },
+        );
 
         value
     }

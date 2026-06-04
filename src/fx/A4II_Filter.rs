@@ -26,7 +26,7 @@ impl A4iiFilter {
             sample_rate,
             alpha,
             resonance,
-            feedback
+            feedback,
         }
     }
 
@@ -48,19 +48,19 @@ impl A4iiFilter {
         // Process the input through four integrators
         self.integrators[0] += self.alpha * (input - self.integrators[0] + feedback_signal);
         feedback_signal = self.integrators[0] * self.feedback; //Feedback from first stage
-        self.integrators[1] += self.alpha * (self.integrators[0] - self.integrators[1] + feedback_signal);
+        self.integrators[1] +=
+            self.alpha * (self.integrators[0] - self.integrators[1] + feedback_signal);
         feedback_signal = self.integrators[1] * self.feedback; //Feedback from second stage
-        self.integrators[2] += self.alpha * (self.integrators[1] - self.integrators[2] + feedback_signal);
+        self.integrators[2] +=
+            self.alpha * (self.integrators[1] - self.integrators[2] + feedback_signal);
         feedback_signal = self.integrators[2] * self.feedback; //Feedback from third stage
-        self.integrators[3] += self.alpha * (self.integrators[2] - self.integrators[3] + feedback_signal);
-
+        self.integrators[3] +=
+            self.alpha * (self.integrators[2] - self.integrators[3] + feedback_signal);
 
         // Average the outputs of the four integrators
-        let output = (self.integrators[0]
-            + self.integrators[1]
-            + self.integrators[2]
-            + self.integrators[3])
-            / 4.0;
+        let output =
+            (self.integrators[0] + self.integrators[1] + self.integrators[2] + self.integrators[3])
+                / 4.0;
 
         output
     }

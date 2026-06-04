@@ -1,7 +1,7 @@
-use std::fs;
-use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use serde_json::Value;
+use std::fs;
+use std::path::{Path, PathBuf};
 use ureq;
 use zip::read::ZipArchive;
 
@@ -40,9 +40,7 @@ impl ReleaseDownloader {
             .context("No assets found in the latest release")?;
 
         for asset in assets {
-            let asset_name = asset["name"]
-                .as_str()
-                .unwrap_or("unknown_asset");
+            let asset_name = asset["name"].as_str().unwrap_or("unknown_asset");
             if !asset_name.contains("Source") {
                 self.download_asset(asset)?;
             }
@@ -56,21 +54,27 @@ impl ReleaseDownloader {
             .as_str()
             .context("Invalid download URL")?;
 
-        let asset_name = asset["name"]
-            .as_str()
-            .unwrap_or("unknown_asset");
+        let asset_name = asset["name"].as_str().unwrap_or("unknown_asset");
 
         let mut response = ureq::get(download_url).call()?;
 
         if !response.status().is_success() {
-            bail!("Failed to download asset '{}': {}", asset_name, response.status());
+            bail!(
+                "Failed to download asset '{}': {}",
+                asset_name,
+                response.status()
+            );
         }
 
         let mut reader = response.body_mut().as_reader();
         let output_path = self.download_path.join(asset_name);
         let mut outfile = fs::File::create(&output_path)?;
-        std::io::copy(&mut reader, &mut outfile)
-            .with_context(|| format!("Failed to write downloaded file to '{}'", output_path.display()))?;
+        std::io::copy(&mut reader, &mut outfile).with_context(|| {
+            format!(
+                "Failed to write downloaded file to '{}'",
+                output_path.display()
+            )
+        })?;
 
         if asset_name.ends_with(".zip") {
             self.extract_zip(&output_path)?;

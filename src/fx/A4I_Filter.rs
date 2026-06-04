@@ -21,22 +21,13 @@ impl A4iFilter {
             OnePoleLowPassFilter::new(sample_rate, cutoff_freq, resonance),
         ];
 
-        A4iFilter { poles, iter: 0, osc_table_burst: [
-                1.0,
-                1.0,
-                1.0001,
-                1.0,
-                1.0,
-                1.0,
-                1.002,
-                1.0,
-                1.003,
-                1.0,
-                1.0,
-                1.001,
-                1.0001
+        A4iFilter {
+            poles,
+            iter: 0,
+            osc_table_burst: [
+                1.0, 1.0, 1.0001, 1.0, 1.0, 1.0, 1.002, 1.0, 1.003, 1.0, 1.0, 1.001, 1.0001,
             ],
-            scale_gain: 1.0
+            scale_gain: 1.0,
         }
     }
 
@@ -67,11 +58,10 @@ impl A4iFilter {
     fn scale_gain_from_cutoff(&mut self, cutoff_freq: f32) {
         let output_min = 1.0;
         let output_max = 10.0;
-    
-        self.scale_gain = output_max - (cutoff_freq.clamp(20.0, 20000.0) - 20.0) * (output_max - output_min) / 19980.0;
+
+        self.scale_gain = output_max
+            - (cutoff_freq.clamp(20.0, 20000.0) - 20.0) * (output_max - output_min) / 19980.0;
     }
-    
-    
 }
 
 #[derive(Clone)]
